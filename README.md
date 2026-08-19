@@ -4,29 +4,20 @@ Encois — Enterprise Context Intelligence System — turns fragmented company a
 
 It connects signals from systems such as GitHub, Jira, Google Workspace, Stripe, and operational monitoring, then uses specialized agents to understand what changed, why it matters, and what deserves attention. The initial product is read-oriented: observe, correlate, explain, and recommend. It does not autonomously run the company.
 
-## Current status
-
-This repository is an early pnpm/TypeScript monorepo scaffold. The product idea and MVP are described in [`docs/IDEA.md`](docs/IDEA.md). The architecture, runtime/product flows, cross-language contracts, security baseline, and canonical terminology are described in [`docs/architecture.md`](docs/architecture.md), [`docs/flows.md`](docs/flows.md), [`docs/contracts.md`](docs/contracts.md), [`docs/security.md`](docs/security.md), and [`docs/dictionary.md`](docs/dictionary.md). The hackathon constraints and submission checklist are in [`docs/hackaton.md`](docs/hackaton.md).
-
-The first vertical slice should answer a question such as:
-
-> Are we on track for the August 30 release, and what evidence explains the risk?
-
-The intended flow is:
+## How it works
 
 ```text
-source signals -> normalized facts -> agent investigation -> evidence-backed insight -> dashboard/query
+company systems
+  -> integrations and normalized facts
+  -> Spanner Graph and raw evidence storage
+  -> Temporal durable investigation workflow
+  -> Go Agent Runtime with Google ADK
+  -> scoped agent memory and Gemini synthesis
+  -> Gateway API
+  -> React UI and future MCP clients
 ```
 
-## Planned MVP
-
-- A simple dashboard: Company Overview → Teams → Risks → Agent Activity.
-- A natural-language query interface for release risk, blockers, velocity changes, and deployment regressions.
-- Small integrations for GitHub, Jira or simulated project data, Google Workspace, and one operational source.
-- Gemini 3.5+ through Gemini API or Vertex AI.
-- Google ADK or another eligible Google agent framework.
-- Google Cloud deployment with asynchronous investigation runs, durable state, and observable agent activity.
-- Organization-aware context: Company → Department → Team → Project → Person/System.
+The public Gateway API handles users, organization scope, permissions, registry operations, and workflow control. Temporal manages durable execution, waits, retries, Signals, and recovery. The private Agent Gateway enforces policy before agents access provider APIs or MCP tools. The system is designed for organization and tenant isolation from the beginning.
 
 ## Repository layout
 
@@ -36,9 +27,10 @@ The workspace is intentionally small today. As packages are added, use the bound
 apps/web       React SPA
 apps/api       Hono API and webhook ingress
 apps/agent-runtime Go Temporal workers and Google ADK agents
+apps/agent-gateway Private Go policy and tool broker
 packages/*     domain, contracts, agents, integrations, persistence, observability, config
 infra/         Google Cloud deployment configuration
-docs/          source-of-truth product and hackathon documents
+docs/          product, architecture, security, and flow documentation
 ```
 
 Architecture references:
@@ -92,23 +84,9 @@ The actual environment variables, local emulators, seed data, and deployment com
 - Keep agent tools narrow, bounded, observable, and read-only unless an explicit approval flow exists.
 - Preserve source IDs, timestamps, freshness, and evidence with every insight.
 - Use structured logs, trace IDs, agent-run IDs, and redaction. Do not log secrets or chain-of-thought.
-- Prefer synthetic or authorized data for local development and the hackathon demo.
+- Prefer synthetic or authorized data for local development.
 
 See [`AGENTS.md`](AGENTS.md) for the full contribution and engineering guide.
-
-## Deployment and hackathon proof
-
-The target is a small Google Cloud deployment suitable for a demo: a React SPA, Gateway API on Cloud Run, a private Agent Gateway, Temporal Cloud for durable execution, Go Temporal/ADK workers, Vertex AI Memory Bank for scoped agent memory, Spanner Graph for company relationships, and Cloud Storage for raw artifacts. The Gateway API owns any control-plane Postgres/Drizzle schema; the Go runtime receives versioned execution context and data references rather than querying that database.
-
-Before submission, the repository must provide:
-
-1. Reproducible local setup and cloud spin-up instructions.
-2. An architecture diagram matching the deployed system.
-3. A working demonstration of autonomous or asynchronous agent behavior.
-4. Visible proof in the demo that Gemini, the Google agent framework, and Google Cloud are used.
-5. A public English demonstration video no longer than four minutes.
-
-The complete requirement digest and readiness checklist are in [`docs/hackaton.md`](docs/hackaton.md).
 
 ## License
 
