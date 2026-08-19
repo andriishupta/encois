@@ -1,0 +1,373 @@
+# Encois Product and Runtime Flows
+
+**Status:** proposed final flow baseline
+
+This document describes what a person sees and what the system does. It complements [`architecture.md`](architecture.md), which defines the components and deployment model.
+
+Cross-language payloads and generation rules are defined in [`contracts.md`](contracts.md). The public API uses OpenAPI; Temporal and private Agent Gateway payloads use versioned JSON Schema.
+
+## 1. Shared flow rules
+
+- Every flow begins with an authenticated actor or an approved system trigger.
+- The Gateway API resolves organization and effective scope before data is loaded.
+- Long-running work is a Temporal Workflow and returns a `workflowId`/`investigationId`.
+- Agents delegate only to approved Agent Definitions and call tools only through the Agent Gateway.
+- Temporal owns execution state, waits, retries, Signals, and recovery.
+- Memory Bank owns scoped agent context; Spanner Graph owns shared company relationships and normalized facts.
+- Every conclusion distinguishes observed facts, model inference, and recommendation.
+- Every visible conclusion has evidence IDs, source timestamps, freshness, confidence, and limitations.
+- External writes are disabled in the MVP.
+
+The execution vocabulary is defined in [`dictionary.md`](dictionary.md). In particular, a Worker is a deployable Go process, an Activity is a registered function executed by that Worker, and a specialist Agent is a logical role rather than a separate server.
+
+## 2. Request-to-worker flow
+
+The normal path from a dashboard action to running code is:
+
+```text
+React SPA
+  -> Gateway API
+  -> Temporal Client in the API
+  -> Temporal Cloud Workflow ID and task queue
+  -> Go Agent Runtime Worker polling the task queue
+  -> Workflow and Activities
+  -> private Agent Gateway
+  -> API/MCP Integration
+```
+
+Temporal Cloud stores the Workflow history and schedules tasks. It does not execute Go code. The Go Agent Runtime opens the connection and polls the task queue. The Gateway API starts and controls the Workflow but does not execute long Gemini or provider calls inside the HTTP request.
+
+The Agent Gateway is a private east-west service (or an equivalent in-process Go module for the first slice); it is not a browser-facing route. The Go Runtime sends it a small, validated execution context rather than fetching control-plane data from Postgres.
+
+For a release investigation, use a stable business ID such as:
+
+```text
+release-risk:acme:release-aug-30
+```
+
+The Gateway API uses `SignalWithStart` or an equivalent idempotent start rule. If the Workflow is already running, the request is attached to the existing investigation or returns its current projection. This prevents repeated clicks from creating duplicate release investigations.
+
+## 3. Scheduled or event-triggered investigation
+
+```mermaid
+sequenceDiagram
+    participant Trigger as Scheduler/Webhook/Eventarc
+    participant API as Gateway API
+    participant Temporal as Temporal Cloud
+    participant Runtime as Go Agent Runtime
+    participant Memory as Memory Bank
+    participant Gateway as Private Agent Gateway
+    participant Sources as Jira/GitHub/Monitoring
+    participant Graph as Spanner Graph
+    participant Gemini as Gemini
+    participant UI as React SPA
+
+    Trigger->>API: release-risk event
+    API->>API: authenticate trigger and resolve organization scope
+    API->>Temporal: start ReleaseRiskWorkflow
+    API-->>UI: workflowId + queued status
+    Runtime-->>Temporal: poll workflow task queue
+    Temporal-->>Runtime: deliver workflow task
+    Runtime->>Memory: retrieve scoped agent memory
+    Runtime->>Runtime: ADK coordinator delegates specialists
+
+    par Jira specialist
+        Runtime->>Gateway: request approved Jira tool
+        Gateway->>Sources: read Jira API/MCP
+        Sources-->>Gateway: provider data
+    and GitHub specialist
+        Runtime->>Gateway: request approved GitHub tool
+        Gateway->>Sources: read GitHub API/MCP
+        Sources-->>Gateway: provider data
+    and Monitoring specialist
+        Runtime->>Gateway: request approved monitoring tool
+        Gateway->>Sources: read monitoring API/MCP
+        Sources-->>Gateway: provider data
+    end
+
+    Gateway-->>Runtime: validated evidence references
+    Gateway->>Gateway: persist raw provider snapshots to Cloud Storage
+    Runtime->>Graph: write normalized facts and relationships
+    Runtime->>Gemini: synthesize structured insight
+    Gemini-->>Runtime: risk, confidence, explanation, evidence IDs
+    Runtime->>Graph: write insight projection and provenance
+    Temporal-->>API: workflow result/status
+    API-->>UI: scoped status, graph path, evidence, and insight
+```
+
+The Go runtime does not pass large raw provider responses between agents. Activities persist or reference evidence, and agents exchange small structured results.
+
+## 3.1 Communication, policy, and data flow
+
+Every external read follows the same boundary sequence:
+
+```text
+1. Gateway API authenticates the actor and computes effective organization scope.
+2. Gateway API starts/signals Temporal with a versioned execution context.
+3. Go Runtime polls Temporal and runs the Workflow/Activity.
+4. Activity asks the private Agent Gateway for a registered tool.
+5. Agent Gateway validates tool, actor, scope, integration grant, policy version,
+   host, method, timeout, and payload limits.
+6. Agent Gateway resolves a short-lived credential and calls the provider API/MCP.
+7. Raw response is stored in Cloud Storage when needed; normalized facts go to
+   Spanner Graph; selective agent context goes to Memory Bank.
+8. Activity returns IDs/references and a small normalized result to the Workflow.
+9. Gateway API reads the safe projection and React renders it.
+```
+
+The last policy check happens in the Agent Gateway immediately before the external call. For a revoked permission or disabled integration, the call stops there and the Workflow receives a typed policy/capability error. For a sensitive or future write operation, the gateway re-checks current policy even if the Workflow has an older policy snapshot.
+
+The data ownership is deliberately split:
+
+```text
+Temporal        = execution state, retries, waits, Signals, references
+Cloud Storage   = raw provider snapshots and large artifacts
+Spanner Graph   = normalized company entities, facts, edges, provenance
+Memory Bank     = selective agent-specific semantic memory
+Gateway API DB  = control-plane registry, projections, memberships, audit
+```
+
+If the Gateway API uses Postgres and Drizzle, only the TypeScript control plane owns that database and its migrations. The Go Runtime does not query it. It receives IDs, scope, policy version, and data references through contracts.
+
+## 4. Release investigation with missing release context
+
+Example request:
+
+```text
+User: “Чи зробимо ми реліз до кінця тижня?”
+```
+
+### 4.1 Start or reuse
+
+```text
+React sends POST /investigations
+  -> Gateway API authenticates actor and resolves scope
+  -> API derives release-risk:acme:next-release
+  -> API uses SignalWithStart in Temporal Cloud
+  -> existing active Workflow is reused, or a new Workflow starts
+  -> API returns investigationId and status
+```
+
+The Workflow ID is the logical investigation. A Temporal Run ID is one execution of that Workflow. A refresh can continue the existing Workflow, use `continue-as-new`, or start a child run while preserving one user-facing investigation.
+
+### 4.2 Missing release
+
+The first Activity, `ResolveReleaseActivity`, checks the graph, configured integrations, and existing projections.
+
+```text
+Release found
+  -> continue to specialist Workflows
+
+Release not found
+  -> Workflow state = WAITING_FOR_INPUT
+  -> reason = RELEASE_NOT_FOUND
+  -> Gateway API exposes requiredInput to React
+  -> Workflow waits for release-context-provided Signal
+```
+
+This is a business pause, not a retryable infrastructure error. The UI can ask the user to select a Jira release, enter a project and target date, or cancel the investigation.
+
+If the user wants Encois to create a Jira release, that is a separate write operation requiring explicit approval. The MVP may instead save the release context in Encois and continue in read-only mode.
+
+### 4.3 Resume the same Workflow
+
+```text
+User supplies release context
+  -> React sends POST /investigations/:id/signals
+  -> Gateway API validates actor and payload
+  -> API sends release-context-provided Signal
+  -> Temporal wakes the existing Workflow
+  -> Workflow checks evidence freshness
+  -> only missing or stale Activities run
+  -> specialist Workflows execute in parallel
+```
+
+The system does not create a new agent process after the pause. The same Go Worker can execute the resumed Workflow, potentially on a different container instance after a restart.
+
+## 5. Natural-language question
+
+Example: “Are we on track for the August 30 release, and what changed after yesterday’s deployment?”
+
+```text
+User
+  -> React sends question to Gateway API
+  -> API authenticates user and resolves scope
+  -> API starts or queries a Temporal Workflow
+  -> Go Agent Runtime Worker polls and executes the Workflow
+  -> ADK coordinator retrieves relevant Memory Bank context
+  -> specialists query permitted tools through Agent Gateway
+  -> Activities read/write Spanner Graph and evidence references
+  -> Gemini produces structured answer
+  -> API returns answer + graph path + evidence + freshness
+  -> React renders the answer and workflow progress
+```
+
+If fresh evidence already exists, the workflow can answer quickly. If evidence is missing or stale, the same query becomes an asynchronous investigation. The UI must make that distinction visible.
+
+## 6. Specialist and integration flow
+
+A specialist is a logical agent definition. An Integration Pack provides the connector and tools. The MVP does not deploy one server per specialist or repository.
+
+```text
+ReleaseRiskWorkflow
+  -> JiraInvestigationWorkflow
+      -> CollectJiraActivity(project/team)
+  -> GitHubInvestigationWorkflow
+      -> CollectRepositoryActivity(repo-a)
+      -> CollectRepositoryActivity(repo-b)
+  -> MonitoringInvestigationWorkflow
+      -> CollectMonitoringActivity(service)
+```
+
+The same Go Worker deployment can execute all these Workflow and Activity instances. A separate Worker deployment is introduced only when operational isolation or independent scaling justifies it.
+
+When a required capability is not installed:
+
+```text
+Workflow asks Registry for github.issues.read
+  -> capability unavailable
+  -> Workflow state = WAITING_FOR_CAPABILITY
+  -> UI shows “Install or connect GitHub Issues Pack”
+  -> administrator enables a versioned Pack
+  -> API sends capability-enabled Signal
+  -> same Workflow resumes
+```
+
+The Registry reports approved definitions and capabilities. It does not represent running processes.
+
+## 7. Waiting and resuming
+
+### Waiting for permissions or human approval
+
+```text
+ADK agent requests a sensitive operation
+  -> Temporal Workflow enters waiting state
+  -> Gateway API shows approval request to authorized user
+  -> user approves or rejects
+  -> API sends Temporal Signal
+  -> same Workflow resumes
+  -> Activity executes only after policy re-check
+```
+
+### Waiting for an external status
+
+```text
+Temporal Workflow starts a wait
+  -> Jira/GitHub/monitoring webhook arrives
+  -> Gateway API verifies signature and scope
+  -> API sends correlated Temporal Signal
+  -> Workflow resumes from the wait point
+```
+
+If a provider has no webhook, a Temporal timer can schedule bounded polling. A new agent is not created for every check.
+
+## 8. Integration Pack installation
+
+```text
+Admin opens Integrations
+  -> selects a pack and reviews requested scopes
+  -> Gateway API validates the pack version and organization policy
+  -> credential flow stores a Secret Manager reference
+  -> connector health check runs with the granted scope
+  -> pack becomes enabled only after the check succeeds
+  -> Agent Registry exposes tools and specialist definitions
+  -> private Agent Gateway receives the enabled pack policy and connector binding
+  -> scheduled sync or webhook ingestion begins
+```
+
+The UI shows connection state, granted scope, last successful read, last error, and exposed data types. It never shows raw tokens.
+
+For a connector without a usable API, a browser worker may be introduced later. It follows the same pack contract and policy boundary; it is not a way around authorization.
+
+## 9. Organization and permissions flow
+
+```mermaid
+flowchart LR
+    A[Identity provider] --> B[Gateway API authentication]
+    B --> C[Organization membership]
+    C --> D[Role + explicit scope grants]
+    D --> E[Effective request scope]
+    E --> F[Graph query filter]
+    E --> G[Memory Bank scope]
+    E --> H[Temporal workflow scope]
+    E --> I[Tool invocation policy]
+```
+
+Example: a Team A manager may see Team A and explicitly shared dependencies. A company-level lead may see Departments A, B, and C. A specialist receives only the intersection of user scope, workflow scope, agent policy, and connector grant.
+
+The server computes this scope for every request, graph query, memory retrieval, and tool call. A client-supplied `organizationId`, `teamId`, or “admin” flag is never trusted.
+
+## 10. Canvas and observability flow
+
+The canvas is a projection of Temporal execution, Spanner Graph relationships, and safe telemetry. It is not a second execution engine.
+
+```text
+Gateway API loads:
+  - organization graph from Spanner Graph
+  - workflow visibility from Temporal
+  - safe agent/memory references from the control plane
+
+React renders:
+  - Company / Department / Team / Project structure
+  - graph paths between risks and owners
+  - active workflows and specialist branches
+  - queued, running, waiting, partial, failed, and completed states
+  - evidence, timestamps, retries, Signals, Activities, and trace links
+```
+
+The first canvas should show a release investigation and its graph-backed specialist steps. A full free-form graph editor is deferred; the initial goal is operational understanding.
+
+## 11. Failure, retry, and recovery
+
+```text
+Activity fails
+  -> Temporal applies timeout and retry policy
+  -> failure is classified: auth | rate-limit | timeout | provider | validation | policy
+  -> completed Activities are not re-run
+  -> retryable Activity is retried with bounded backoff
+  -> non-retryable failure becomes visible in the workflow
+  -> usable evidence may produce a PARTIAL result
+  -> user/operator may cancel or signal a recovery path
+```
+
+Activities that call external systems must be idempotent. Large payloads and sensitive data should be stored outside Temporal history and referenced by ID.
+
+## 12. First UI contract
+
+The first vertical slice needs these API-level projections:
+
+- `GET /overview` — scoped health, active workflows, warnings, freshness.
+- `GET /investigations/:id` — workflow status, specialist branches, evidence, graph references, insight, errors.
+- `POST /investigations` — start a user-requested Temporal Workflow.
+- `POST /investigations/:id/signals` — send an authorized release-context, approval, cancellation, or external-event Signal.
+- `POST /queries` — start a bounded question or return a fresh answer.
+- `GET /agents` — approved definitions and current activity projection.
+- `GET /integrations` — packs, health, granted scopes, and last sync.
+- `GET /org` — hierarchy and permitted scope projection.
+- `GET /graph/paths` — scoped relationship paths for canvas and evidence explanations.
+
+These are intent-level contracts, not final routes. They should be validated and versioned in `packages/contracts` once the API is implemented.
+
+## 13. Product boundary for the MVP
+
+Included:
+
+- one organization hierarchy;
+- synthetic or authorized GitHub, Jira, and monitoring data;
+- scheduled or event-triggered release-risk investigation;
+- delegated read-only specialists in Go ADK;
+- Temporal durable execution with waits, retries, Signals, and parallel branches;
+- scoped Agent Engine Memory Bank context;
+- Spanner Graph organization and relationship context;
+- evidence-backed dashboard, canvas projection, and natural-language query;
+- visible logs/traces and bounded failures.
+
+Deferred:
+
+- autonomous writes to Jira, GitHub, Slack, or infrastructure;
+- arbitrary user-created agents;
+- unrestricted browser automation;
+- a marketplace for third-party packs;
+- customer-specific physical deployment;
+- enterprise SSO and complex policy administration;
+- advanced graph algorithms and full GraphRAG document pipelines.

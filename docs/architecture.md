@@ -1,0 +1,577 @@
+# Encois Architecture Specification
+
+**Status:** proposed implementation baseline  
+**Scope:** MVP and the evolution path immediately around it  
+**Category target:** Fortified Enterprise Fleet
+
+## 1. Purpose
+
+Encois is an organizational intelligence layer. It reads signals from company systems, normalizes them, delegates bounded investigations to specialized agents, preserves evidence and history, and exposes scoped insights to people.
+
+The system is read-oriented. It can recommend an action, but it must not change an external system without a separate approval, authorization, audit, and rollback path.
+
+The architecture has four distinct responsibilities:
+
+```text
+Gateway API       -> users, auth, organization scope, registry, UI access
+Temporal          -> durable workflow execution
+Agent Runtime     -> Go workers, Google ADK agents, Activities, integrations
+Memory/Graph      -> agent context and company relationships
+```
+
+The system does not build a custom durable-execution engine on Firestore. Temporal is the execution source of truth; company knowledge and agent memory live in purpose-built services.
+
+The security properties for these boundaries, including tenant isolation, secret handling, agent policy, and execution-scoped capabilities, are defined in [`docs/security.md`](security.md).
+
+## 2. Architectural position
+
+The recommended initial deployment is a multi-tenant SaaS control plane with strict organization and scope isolation. The same contracts can later be deployed in a dedicated Google Cloud project for a customer that requires stronger isolation or data residency.
+
+The selected platform shape is:
+
+- React SPA for the authenticated product UI.
+- Hono Gateway API for clients, authentication, authorization, organization scope, registry, and UI projections.
+- Temporal Cloud for durable workflows, timers, retries, signals, cancellation, parallel branches, and workflow history.
+- Go Agent Runtime using the Temporal Go SDK and Google ADK integration.
+- Vertex AI / Gemini for model calls and evidence synthesis.
+- Vertex AI Agent Engine Sessions and Memory Bank for session and agent-specific semantic memory.
+- Spanner Graph for the shared company knowledge graph, organization relationships, and normalized connected facts.
+- Cloud Storage for large raw payloads and investigation artifacts, with retention limits.
+- Secret Manager for connector credentials.
+- Cloud Logging, Cloud Trace, and OpenTelemetry-compatible instrumentation.
+
+Temporal Cloud is the execution platform, not the company data store. Spanner Graph is the company context store, not the workflow engine. Memory Bank is agent context, not the canonical source of company relationships.
+
+## 3. System context
+
+```mermaid
+flowchart LR
+    User[User] --> Web[React SPA]
+    Web --> API[Gateway API\nAuth, scope, query, registry]
+
+    API --> Temporal[Temporal Cloud\nDurable workflows + history]
+    Runtime[Go Agent Runtime\nworker process] -. polls task queues .-> Temporal
+
+    Runtime --> Gemini[Vertex AI\nGemini]
+    Runtime --> Memory[Agent Engine\nSessions + Memory Bank]
+    Runtime --> ToolGateway[Private Agent Gateway\npolicy + tool broker]
+    ToolGateway --> MCP[MCP servers or API adapters]
+    MCP --> Sources[GitHub / Jira / Google Workspace / Monitoring]
+    ToolGateway --> Browser[Isolated browser worker\nlast-resort read-only path]
+
+    Runtime --> Graph[Spanner Graph\ncompany graph + facts]
+    Runtime --> Files[(Cloud Storage\nraw data and artifacts)]
+    API --> Graph
+
+    API --> Telemetry[OpenTelemetry]
+    Temporal --> Telemetry
+    Runtime --> Telemetry
+    ToolGateway --> Telemetry
+    Telemetry --> Ops[Cloud Logging / Trace / metrics]
+```
+
+The Gateway API is the public north-south application boundary. Temporal Cloud is the durable execution and task-delivery boundary. The Go Agent Runtime is a deployable worker application that opens an outbound connection and polls Temporal task queues; Temporal Cloud does not execute Go code. The private Agent Gateway is the east-west policy and tool boundary. It is not exposed to the browser or public MCP clients. For the first vertical slice it may be an in-process Go module behind the same interface, but the target deployment is a separately deployable internal service.
+
+## 4. Core components
+
+### 4.1 Web application
+
+Use a React SPA. Astro is not part of the product architecture.
+
+- React owns dashboard state, canvas interactions, chat/query state, and live run updates.
+- Vite or an equivalent build tool produces a static client bundle.
+- React Router or TanStack Router handles client-side routes.
+- A typed API client and query/cache layer handle Gateway API data.
+- Business rules, credentials, provider SDKs, and authorization decisions stay outside the browser.
+- The UI receives only scoped projections and never queries Temporal, Spanner Graph, Memory Bank, or providers directly.
+
+Primary screens:
+
+1. Company Overview — health, active investigations, warnings, freshness, and scope.
+2. Intelligence Canvas — organization structure, dependencies, graph relationships, agent runs, queues, and transitions.
+3. Risks and Goals — releases, blockers, trends, owners, confidence, and evidence.
+4. Agent Activity — investigations, workflow steps, tool calls, retries, signals, and traces.
+5. Integrations — installed packs, health, granted scopes, last sync, and errors.
+6. Organization and Permissions — company, departments, teams, projects, memberships, and grants.
+7. Ask Encois — scoped natural-language questions and historical conversations.
+
+Every intelligence view must show scope, observed time, freshness, confidence, evidence links, and limitations.
+
+### 4.2 Gateway API and control plane
+
+The Gateway API is a thin application boundary, initially implemented with Hono and TypeScript. It serves browser clients and trusted system callbacks.
+
+It owns:
+
+- authentication and organization membership;
+- deterministic authorization and effective scope calculation;
+- organization hierarchy and permission administration;
+- the Agent Registry;
+- Integration Pack registration and health;
+- starting, signalling, querying, cancelling, and listing Temporal workflows;
+- workflow identity and idempotency rules, such as one active release investigation per organization and release;
+- Memory Bank retrieval requests and scoped memory operations;
+- graph query projections for the UI;
+- audit events and user-visible run projections;
+- request IDs, rate limits, CORS, validation, and redaction.
+
+The Gateway API does not execute long model or provider calls in an HTTP request. It starts or signals a Temporal Workflow and returns a workflow/investigation identifier.
+
+The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in `packages/contracts`.
+
+The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_release_investigation`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
+
+### 4.3 Temporal Cloud and durable execution
+
+Temporal Cloud is the execution source of truth for investigations and long-lived agent processes. It stores workflow history and schedules work, but it does not run the application's workflow or Activity code.
+
+Temporal provides:
+
+- durable workflow state and history;
+- timers and waits lasting days or weeks;
+- retries and timeout policies for Activities;
+- Signals for external events, permissions, and human approvals;
+- parallel branches and child workflows;
+- cancellation and cooperative termination;
+- workflow visibility and execution IDs;
+- recovery after worker restarts or deployment changes.
+
+The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, and cancel workflows. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls Temporal Cloud; Temporal Cloud never reaches into the runtime to execute code.
+
+The business workflow is defined in code, but Workflow code must remain deterministic. Gemini calls, database calls, graph writes, Memory Bank calls, and MCP/API calls run as Temporal Activities. Activities are functions registered in a Worker, not independently deployed microservices.
+
+Workflow inputs, Signals, and results are small, versioned contract objects. They contain identifiers, scope, policy version, and references to external data, not raw tickets, provider payloads, secrets, or large model responses. Large or sensitive data is persisted in its owning store and passed between steps by a validated reference.
+
+The UI reads a safe projection of Temporal execution through the Gateway API. Temporal history is not the same thing as company memory; it explains how a result was produced.
+
+### 4.4 Go Agent Runtime
+
+The Go Agent Runtime is one deployable Go application in the MVP. It runs Temporal Workers and hosts Google ADK agents, specialist definitions, Activities, and integration clients. It is isolated from the TypeScript Gateway API by versioned contracts and Temporal task queues. It reaches external systems through the private Agent Gateway. The runtime does not need the Gateway API's control-plane database; it receives stateless execution context and data references through Workflow/Activity inputs.
+
+The Temporal/Google ADK integration provides the intended execution model:
+
+- the ADK agent loop runs inside a Temporal Workflow;
+- Gemini/model calls run as durable Activities;
+- I/O tools and MCP calls run as Activities;
+- ADK `SubAgents` provide coordinator-to-specialist delegation;
+- human approval can pause the Workflow and resume it through a Signal;
+- long conversations can use `continue-as-new` to keep history bounded.
+
+The runtime contains:
+
+```text
+Temporal Workflows
+  -> coordinator agents
+  -> specialist agents
+  -> Activity implementations
+  -> Memory Bank client
+  -> Spanner Graph client
+  -> private Agent Gateway client
+```
+
+The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
+
+The runtime is not a permanent “head agent,” and a specialist is not a server per repository. A parent Workflow such as `ReleaseRiskWorkflow` is the manager of one durable investigation. It can start child specialist Workflows or Activities for Jira, GitHub, and monitoring. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
+
+For the first vertical slice, use the official integration pattern or an equivalent boundary in which model calls and external tools are Activities. Do not make arbitrary network calls from deterministic Workflow code. ADK provides agent reasoning, delegation, and structured output; Temporal provides durable state, waiting, retries, Signals, and recovery.
+
+The model cannot invent a tool, widen scope, select a different organization, or bypass the Agent Gateway.
+
+### 4.5 Agent Registry
+
+The registry contains approved, versioned definitions. A definition includes:
+
+- stable ID and version;
+- role and purpose;
+- accepted input and output schemas;
+- allowed tools and required scopes;
+- model configuration and budget;
+- timeout, retry, and concurrency limits;
+- owning Integration Pack or domain;
+- lifecycle status: draft, approved, disabled, retired.
+
+The registry is configuration, not a list of running processes.
+
+An Agent Run is one execution of an approved definition. It is represented by workflow/run identifiers and projections; it does not require a new container. The Registry can report a missing capability without treating it as an infrastructure crash. The workflow may enter `WAITING_FOR_CAPABILITY` and ask an administrator to enable the required Integration Pack.
+
+### 4.6 Integration Packs
+
+An Integration Pack is the canonical name for what the product UI may call a “Jira agent manager” or “GitHub manager.” It packages:
+
+- connector configuration and health checks;
+- API adapters and/or MCP servers;
+- normalized fact mappers;
+- read-only tool definitions;
+- source-specific evidence types;
+- one or more approved specialist Agent Definitions.
+
+Packs may be implemented in Go, TypeScript, or another language. They must expose the same versioned tool and evidence contracts to the Agent Gateway.
+
+For example, a Jira Pack can expose `search_issues`, `read_issue`, and `read_sprint`. A Jira specialist run may use those tools, but it is not a permanently running Jira manager.
+
+The same rule applies to repositories. A GitHub Pack provides one GitHub connector and a GitHub specialist definition. A workflow fans out Activities over the authorized repositories; it does not deploy one GitHub agent server per repository.
+
+### 4.7 Private Agent Gateway, policy, and MCP
+
+The Agent Gateway is a private policy-enforcing tool broker. It is a separate internal Go service in the target architecture, reachable only from the Agent Runtime over authenticated service-to-service communication. A first-slice in-process implementation is acceptable, but browsers, public MCP clients, and models must never call provider systems directly.
+
+The invocation path is:
+
+```text
+ADK agent
+  -> validate registered tool and input
+  -> resolve actor, organization, scope, and agent policy
+  -> acquire scoped connector credential
+  -> call MCP server or typed API adapter
+  -> validate, normalize, redact, and record result
+  -> return minimum required data to the agent
+```
+
+- Read tools are the default and are separate from write tools.
+- The model never receives long-lived provider credentials.
+- The model cannot choose the organization, user identity, or host through tool arguments.
+- Outbound hosts, methods, payload sizes, timeouts, and concurrency are allowlisted.
+- Provider text is treated as untrusted data, not as instructions or policy.
+- Browser automation is a last-resort connector behind a sandbox, domain allowlist, short-lived credentials, and read-only policy for the MVP.
+- A future write tool must require explicit human approval and produce an audit record before execution.
+
+The execution context passed through Temporal contains the actor, organization, effective scope, integration grant, request ID, and policy version. The Agent Gateway validates that context and re-checks current policy for sensitive operations or when the policy version is stale. A model-supplied organization, user, host, credential, or permission is never trusted. Connector credentials are resolved by the Agent Gateway from Secret Manager and are never placed in Temporal history or model context.
+
+The communication boundary is intentionally asymmetric:
+
+```text
+Gateway API -> Temporal Cloud       start/signal/query/cancel workflows
+Go Runtime  -> Temporal Cloud       poll task queues and report execution
+Go Runtime  -> Agent Gateway        private tool request with execution context
+Agent Gateway -> provider/MCP       scoped API or MCP call
+Agent Gateway -> Cloud Storage      raw response/artifact, when required
+Agent Gateway -> Spanner Graph      normalized facts and relationships
+```
+
+The Agent Gateway does not own workflow state, replace Temporal, or become a second public API. It enforces policy at the last point before an external call and returns a minimal normalized result plus evidence/data references.
+
+MCP is an integration boundary, not the system's source of truth. The Gateway API and deterministic policy layer own identity, authorization, and organization scope.
+
+The first UI may call the Gateway API directly to start a named workflow. MCP can later expose the same capability to a conversational client, for example `start_release_investigation` or `get_investigation_status`; it is not required to be the UI's primary transport.
+
+### 4.8 Shared contracts and ownership
+
+Use different contract formats for different boundaries instead of trying to share implementation code between TypeScript and Go:
+
+| Boundary | Canonical format | Consumers | Purpose |
+|---|---|---|---|
+| Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
+| Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
+| Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
+| Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |
+| Database schema | SQL migration source owned by its service | TypeScript control plane or data service | Persistence implementation; never a shared DTO |
+
+The source of truth is the schema, not generated code. Generate TypeScript types for the API/UI and Go types for the runtime/gateway from the same versioned schemas. Keep generated artifacts local to each language package. Do not import TypeScript source into Go, expose database client types in contracts, or pass provider SDK payloads across the boundary. Protobuf and gRPC can be added later if service count or throughput justifies them; they are not required for the MVP.
+
+The detailed layout, naming, validation, compatibility rules, and examples live in [`docs/contracts.md`](contracts.md).
+
+### 4.9 Memory, graph, and data model
+
+Encois uses purpose-specific memory layers instead of one universal database.
+
+#### Temporal execution memory
+
+Temporal stores the workflow history required to resume an investigation: current workflow state, Activity results, timers, Signals, retries, and child workflow relationships. It is operational history, not a company knowledge base.
+
+#### Agent Engine Sessions and Memory Bank
+
+Agent Engine Sessions hold conversation/session context. Memory Bank holds agent-specific semantic memories such as recurring preferences, prior conclusions, working context, and important outcomes.
+
+Memories are scoped explicitly, for example:
+
+```text
+organization_id = acme
+agent_id = release-risk
+user_id = user-123       # optional
+team_id = platform       # optional
+```
+
+Memory retrieval must use the exact authorized scope. Agent-specific memory must not become invisible cross-team knowledge.
+
+Memory Bank is a managed semantic memory service. It is not the canonical source of truth for company entities, relationships, permissions, or evidence.
+
+#### Spanner Graph
+
+Spanner Graph is the canonical shared company context layer. It stores organization structure, entities, relationships, normalized facts, and temporal/provenance metadata.
+
+Example graph model:
+
+```text
+Person       - MEMBER_OF      -> Team
+Team         - PART_OF        -> Department
+Team         - OWNS           -> Project
+Ticket       - BLOCKS         -> Release
+Commit       - IMPLEMENTS     -> Ticket
+Deployment   - AFFECTS        -> Service
+Incident     - RELATED_TO     -> Release
+Person       - RESPONSIBLE_FOR-> Ticket
+```
+
+Every graph node and edge should preserve:
+
+```text
+organization scope
+source system
+source record ID
+observed_at
+valid_at / invalid_at
+ingested_at
+transformation version
+confidence
+visibility scope
+```
+
+Agents may propose a relationship, but deterministic ingestion and validation code decides whether it becomes a canonical graph fact.
+
+#### Raw artifacts and retrieval
+
+Cloud Storage holds large raw provider payloads, exports, and artifacts under organization-scoped paths. Vertex AI RAG Engine or another approved retrieval layer may index documents when semantic document search is needed. Raw payloads are not copied wholesale into prompts, Temporal history, Memory Bank, or graph properties.
+
+The normal data path is:
+
+```text
+provider API / MCP
+  -> Agent Gateway validates and captures the response
+  -> Cloud Storage keeps the raw, organization-scoped snapshot
+  -> adapter validates and normalizes source facts
+  -> Spanner Graph stores durable entities, relationships, provenance, and freshness
+  -> Memory Bank stores a small agent-specific distillation when useful
+  -> Temporal keeps only execution state and references
+  -> Gateway API returns a scoped projection to React
+```
+
+The raw snapshot is evidence and replay material; the graph is the shared structured context; Memory Bank is selective agent context; Temporal is operational execution history. A model may summarize or propose facts, but deterministic adapters and policy checks decide what is persisted as canonical data.
+
+Initial logical entities:
+
+```text
+Organization
+OrgUnit(company | department | team | project)
+Membership
+ScopeGrant
+Integration
+IntegrationPackVersion
+AgentDefinitionVersion
+Investigation
+WorkflowReference
+SourceFact
+GraphNode
+GraphEdge
+Evidence
+Insight
+ConversationSession
+AgentMemoryReference
+AuditEvent
+```
+
+### 4.10 Identity and authorization
+
+Authorization is deterministic and never delegated to Gemini. A request is evaluated using:
+
+```text
+actor identity
+  + organization membership
+  + role and explicit scope grants
+  + requested resource scope
+  + agent/tool policy
+  + integration grant
+```
+
+The hierarchy is:
+
+```text
+Company
+  └─ Department
+      └─ Team
+          └─ Project
+              └─ Person / System
+```
+
+A specialist receives the intersection of the user scope, investigation scope, agent policy, and connector grant. The model never gets to enlarge that intersection.
+
+### 4.11 Observability
+
+Each request and run carries:
+
+```text
+correlationId, traceId, organizationId, actorId,
+workflowId, runId, agentRunId, activityId
+```
+
+Trace spans cover trigger, planning, delegation, workflow wait, Activity execution, tool call, memory retrieval, graph write, evidence persistence, synthesis, and user-visible result.
+
+Logs contain event names, status, duration, provider, model, retry count, and error class. They do not contain tokens, authorization headers, full prompts, chain-of-thought, or unrestricted provider payloads.
+
+## 5. Investigation lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created --> Running: Temporal Workflow started
+    Running --> Waiting: timer, signal, permission, or child workflow
+    Waiting --> Running: Temporal resumes workflow
+    Running --> Succeeded
+    Running --> Partial: bounded failure with usable evidence
+    Running --> Failed: terminal failure
+    Created --> Cancelled
+    Running --> Cancelled: user or policy cancellation
+    Partial --> [*]
+    Succeeded --> [*]
+    Failed --> [*]
+    Cancelled --> [*]
+```
+
+The lifecycle also includes business pauses that are not failures:
+
+```text
+RUNNING
+  -> WAITING_FOR_INPUT       missing release or ambiguous target
+  -> WAITING_FOR_CAPABILITY  required Integration Pack is disabled
+  -> WAITING_FOR_APPROVAL    a write or sensitive operation needs consent
+  -> RUNNING                 correlated Signal arrives
+```
+
+Use a stable business Workflow ID, for example `release-risk:acme:release-aug-30`, to prevent duplicate active investigations. Temporal's Run ID identifies one execution of that Workflow ID. A refresh can resume the existing Workflow, use `continue-as-new`, or create a child run while preserving the same investigation projection.
+
+Each external call is an Activity with a timeout, retry policy, idempotency key, and optional heartbeat. An Activity failure does not require restarting completed Activities. A workflow waiting for permission or an external status does not consume an active agent process.
+
+## 6. Deployment modes
+
+### MVP: shared SaaS
+
+- React SPA is deployed as a static client.
+- Gateway API runs on Cloud Run.
+- A private Agent Gateway runs as an internal Cloud Run service, or remains an in-process Go module until the first slice needs independent scaling.
+- Go Agent Runtime runs Temporal workers on Cloud Run or another supported worker environment.
+- Temporal Cloud manages durable execution.
+- If a relational control-plane store is needed, Postgres is owned by the Gateway API and migrated with Drizzle; the Go Runtime does not access it.
+- Spanner Graph stores organization data and company relationships.
+- Agent Engine Memory Bank stores scoped agent memories.
+- Connector credentials are isolated by organization and stored as Secret Manager references.
+- Synthetic data is used for the demo.
+
+### Later: dedicated customer deployment
+
+The same contracts can be deployed into a customer-owned Google Cloud project with dedicated Gateway API, Go Agent Runtime, Spanner Graph, Memory Bank configuration, secrets, and service accounts. This is a deployment profile, not a second product architecture.
+
+## 7. MVP vertical slice
+
+The first demonstrable slice is one release-risk investigation:
+
+1. Synthetic Jira, GitHub, and monitoring facts are ingested or seeded.
+2. The Gateway API authenticates the actor and starts a Temporal Workflow.
+3. A Go ADK coordinator delegates Jira, GitHub, and monitoring specialists.
+4. Specialists use only registered read tools through the Agent Gateway.
+5. Activities normalize evidence and update Spanner Graph with source references.
+6. The coordinator retrieves scoped agent memory from Memory Bank.
+7. Gemini synthesizes a structured risk insight with confidence and evidence references.
+8. The Gateway API exposes the result to React with graph relationships, source records, scope, workflow status, and trace links.
+
+The first runtime deployment is intentionally small:
+
+```text
+    Cloud Run:      Gateway API
+    Cloud Run:      private Agent Gateway (internal ingress)
+    Cloud Run/GKE:  one Go Agent Runtime Worker deployment
+    Temporal Cloud: namespace + task queues + workflow history
+    Google Cloud:   Vertex AI, Spanner, Cloud Storage, Secret Manager
+```
+
+Additional Worker deployments are an operational scaling choice. They can be introduced later for isolation, for example `integration-worker` and `synthesis-worker`, without changing the product concepts.
+
+This proves the required Google stack, delegation, asynchronous behavior, durable execution, agent-specific memory, company graph context, policy boundary, and evidence-backed UX.
+
+## 8. End-to-end example: release investigation
+
+### User request
+
+```text
+User: “Are we on track for the August 30 release, and what changed after yesterday’s deployment?”
+```
+
+### Execution
+
+```text
+1. React sends the question to the Gateway API.
+
+2. Gateway API authenticates the user and resolves:
+   organization = acme
+   scope = engineering/platform
+   actor = user-123
+
+3. Gateway API uses `SignalWithStart` with the stable Workflow ID:
+   release-risk:acme:release-aug-30
+   If no active execution exists, Temporal starts:
+   ReleaseRiskWorkflow(acme, release-aug-30, platform, user-123)
+
+4. The Go Worker polls the task queue, receives the workflow task, and runs the ADK coordinator.
+   The coordinator reads the approved agent registry and delegates:
+   - Jira specialist
+   - GitHub specialist
+   - Monitoring specialist
+
+5. Each specialist calls only registered read-only Activities. The same Worker process may run these Activities for many repositories:
+   - Jira: unfinished critical tickets and blockers
+   - GitHub: commit activity, pull requests, review delays
+   - Monitoring: deployment timestamp and error-rate changes
+
+6. The private Agent Gateway checks every call against:
+   user scope + workflow scope + agent policy + integration grant.
+
+7. Activities write normalized facts and evidence references to Spanner Graph:
+   Ticket BLOCKS Release
+   Commit IMPLEMENTS Ticket
+   Deployment AFFECTS Service
+   Incident RELATED_TO Release
+
+8. The coordinator retrieves scoped release-risk memories from Memory Bank:
+   prior investigation conclusions, recurring blockers, and relevant context.
+
+9. Gemini synthesizes a structured result:
+   risk = HIGH
+   confidence = 0.87
+   observed facts = [...]
+   inferred explanation = [...]
+   recommendation = [...]
+   evidence = [jira-123, github-pr-44, deployment-2026-08-19]
+
+10. The result is persisted as an insight projection and returned by Gateway API.
+
+11. React shows:
+   - release risk and confidence;
+   - graph path explaining the dependency;
+   - evidence and timestamps;
+   - Temporal workflow status;
+   - specialist steps and Activity results;
+   - warnings, stale data, and limitations.
+
+12. If no release exists, the Workflow enters `WAITING_FOR_INPUT` and the API shows the missing context request.
+   A later user Signal supplies the release ID and resumes the same Workflow.
+
+13. If the workflow must wait for a Jira status or approval, Temporal pauses it.
+   A later Signal resumes the same workflow without creating a replacement agent.
+```
+
+### Example visible insight
+
+> **Release risk: High.** Three critical Jira tickets remain incomplete, QA has not started, and the latest deployment correlates with an increase in production errors. The highest-risk dependency connects `PAYMENTS-142` to the August 30 release and the `checkout-api` deployment. This conclusion is based on evidence observed between August 19 and August 20; monitoring data is currently five minutes stale.
+
+## 9. Deferred decisions
+
+- Final identity provider and SSO protocol.
+- Temporal Cloud versus self-hosted Temporal for customer deployments.
+- Exact Spanner Graph edition, region, and cost profile.
+- Exact Go Memory Bank client/API integration from the Temporal ADK runtime.
+- Graph schema evolution and entity-resolution strategy.
+- Data retention, deletion, export, and residency controls.
+- Model Armor or equivalent policy service integration.
+- Approval workflow and write-capable tools.
+- Formal plugin packaging and marketplace/distribution model.
+- Exact read-model implementation for high-volume Agent Activity projections.
+- Whether the first Agent Gateway implementation remains in-process or is extracted to a private Cloud Run service after the vertical slice.
+- Whether internal Agent Gateway communication should move from the MVP's authenticated HTTP/JSON to gRPC/protobuf at higher scale.

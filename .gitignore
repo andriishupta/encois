@@ -1,0 +1,130 @@
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.pnp.*
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.test.example
+!.env.local.example
+!.env.production.example
+.secrets/
+secrets/
+credentials/
+*.secret
+*.secrets
+*-credentials.json
+credentials*.json
+service-account*.json
+google-application-credentials*.json
+.google-credentials/
+
+# Private keys, certificates, and local auth material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+
+# JavaScript/TypeScript build output and framework caches
+dist/
+build/
+out/
+coverage/
+.astro/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+.turbo/
+.parcel-cache/
+.cache/
+.eslintcache
+.stylelintcache
+.storybook-out/
+
+# Frontend and browser-test artifacts
+playwright-report/
+test-results/
+blob-report/
+cypress/videos/
+cypress/screenshots/
+
+# Go build, test, and tooling artifacts
+bin/
+*.exe
+*.exe~
+*.test
+*.out
+*.prof
+*.coverprofile
+
+# Runtime logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+.tmp/
+.local/
+*.pid
+*.pid.lock
+
+# Local databases, queues, and generated storage
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.rdb
+.data/
+storage/
+
+# Cloud and infrastructure local state
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+.pulumi/
+.serverless/
+.aws-sam/
+.wrangler/
+.vercel/
+.firebase/
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.history/
+
+# Generated local reports and archives
+*.bak
+*.orig
+*.rej
+*.zip
+*.tar
+*.tar.gz
