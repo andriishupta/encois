@@ -169,6 +169,37 @@ An agent responsible for planning or delegating a bounded investigation to appro
 
 The coordinator cannot invent capabilities, widen organization scope, or bypass tool policy.
 
+### Coordinator Workflow
+
+The long-lived Temporal Workflow that owns one organization/project
+coordination loop. It coordinates onboarding, bootstrap, workflow proposals,
+reconciliation, and waits for Signals or schedules. It is logically persistent
+but uses Continue-As-New to keep each concrete Run History bounded.
+
+### Onboarding
+
+The required setup state in which an organization or project connects approved
+sources or uploads documents, establishes initial scope, and builds enough
+context for the dashboard. A project is not dashboard-ready until its
+onboarding state is `READY`.
+
+### Workflow Blueprint
+
+A versioned, typed configuration describing an approved workflow intent:
+trigger, workflow type, tools, required scopes, input parameters, schedule,
+budget, and approval requirements. A blueprint is not executable Go code.
+
+### Workflow Creator
+
+The Coordinator capability that proposes and reconciles Workflow Blueprints.
+It may use Gemini/ADK for discovery and proposal, but deterministic validation,
+registry rules, authorization, and the Gateway API decide whether a blueprint
+can be persisted or started.
+
+The Coordinator and Workflow Creator use the high-reasoning model profile;
+specialists may use a lower-latency profile. This is a model-routing policy,
+not an authorization decision.
+
 ### Specialist Agent
 
 An agent focused on one domain, such as Jira, GitHub, Monitoring, or Google Workspace.

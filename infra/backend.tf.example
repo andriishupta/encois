@@ -1,0 +1,10 @@
+# Copy this file to backend.tf only after infra/bootstrap has created the bucket.
+# Backend blocks cannot use Terraform variables.
+
+terraform {
+  backend "gcs" {
+    bucket = "replace-with-terraform-state-bucket"
+    prefix = "encois/demo"
+  }
+}
+

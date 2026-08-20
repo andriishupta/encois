@@ -1,0 +1,23 @@
+project_id   = "replace-with-gcp-project-id"
+region       = "europe-west1"
+environment  = "demo"
+domain_name  = "encois.com"
+
+# Keep these false until container images and the GCP project are ready.
+enable_identity_platform = false
+enable_cloud_sql         = false
+enable_dashboard         = false
+enable_api               = false
+enable_agent_runtime     = false
+enable_agent_gateway     = false
+enable_edge              = false
+enable_spanner           = false
+
+# This must be globally unique if artifact storage is enabled.
+artifact_bucket_name = "replace-with-globally-unique-artifact-bucket"
+
+# Set these only when the corresponding service is enabled.
+dashboard_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"
+api_image           = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
+agent_runtime_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
+agent_gateway_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"

@@ -104,6 +104,8 @@ The Gateway API must:
 
 Roles are policy inputs, not permissions by themselves. A role must be combined with organization and resource scope. Typical identities include platform operator, organization administrator, manager, member, integration service identity, and agent-run identity. No role should automatically grant access to all tenants or all providers.
 
+For the Google Cloud baseline, Identity Platform/Firebase ID tokens establish the external identity only. The Gateway verifies the token with Application Default Credentials, maps the subject to the local `users` and `organization_memberships` tables, and computes effective scope from local roles and hierarchy grants. Do not treat arbitrary token claims, email domains, or client-selected organization IDs as authorization.
+
 Never let the model select a role, organization, user identity, connector, or scope. Never infer authorization from a natural-language request.
 
 ## 5. Database and persistence security
@@ -122,6 +124,8 @@ Database requirements:
 - restrict backups, exports, replicas, and admin consoles to authorized operators;
 - define retention and deletion behavior for raw data, facts, memories, projections, and audit records;
 - treat database errors and timing as potentially sensitive; do not expose query details to clients.
+
+The initial Google Cloud implementation follows this boundary with Cloud SQL PostgreSQL and Drizzle. The migration connection is separate from the API runtime connection. The runtime capability role has no DDL, role-management, row-delete, or table-delete privileges and must not be the database owner. Tenant-scoped requests set a transaction-local organization context before queries; PostgreSQL RLS is defense in depth, not a replacement for Gateway authorization.
 
 Spanner Graph, Cloud Storage, Memory Bank, and any vector or retrieval system follow the same tenant, scope, retention, and service-identity rules. A graph edge or memory retrieved without an authorization filter is a security defect even if the UI later hides it.
 

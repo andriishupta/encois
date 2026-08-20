@@ -42,6 +42,8 @@ The selected platform shape is:
 
 Temporal Cloud is the execution platform, not the company data store. Spanner Graph is the company context store, not the workflow engine. Memory Bank is agent context, not the canonical source of company relationships.
 
+The first concrete GCP deployment baseline is documented in [`docs/infra.md`](infra.md). It uses Cloud Run for the Gateway API and future Go workers, a global HTTPS Application Load Balancer with serverless NEGs for `/dashboard/*` and `/api/*`, Cloud Identity Platform for user authentication, Secret Manager for connector credentials, and optional Cloud Storage/Spanner resources. The Terraform stack is an explicit provider adapter; it does not create projects, manage Temporal Cloud, or run automatically from the repository.
+
 ## 3. System context
 
 ```mermaid
@@ -117,9 +119,32 @@ It owns:
 
 The Gateway API does not execute long model or provider calls in an HTTP request. It starts or signals a Temporal Workflow and returns a workflow/investigation identifier.
 
+The first Node.js blueprint exposes `POST /api/v1/workflows` and
+`GET /api/v1/workflows/:workflowId`. The API derives a tenant-prefixed workflow
+ID from the authenticated organization, workflow type, and request key, then
+uses the Temporal TypeScript Client to start or describe the execution. A local
+in-memory adapter is used only when Temporal is not configured; it is not a
+durable execution substitute. The Go runtime remains the worker and owns the
+actual workflow implementation.
+
 The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in `packages/contracts`.
 
 The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_release_investigation`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
+
+#### Initial Google Cloud control-plane implementation
+
+The initial control plane uses Cloud Run for the Hono Gateway API, Google Cloud Identity Platform for human identity, Cloud SQL for PostgreSQL control-plane state, Drizzle ORM/migrations for schema ownership, Cloud Storage for large artifacts, Secret Manager for credentials, and Temporal Cloud for durable workflow execution. The browser talks only to the Gateway API; it does not access Cloud SQL, Cloud Storage, Temporal, or provider APIs directly.
+
+Identity Platform verifies the caller and provides an external subject. The Gateway maps that subject to an Encois `users` row, organization membership, role, and hierarchy scope in Cloud SQL. Identity tokens do not grant organization access by themselves. The database uses a separate privileged migration connection and a restricted `api_gateway` runtime capability role. Tenant tables use PostgreSQL row-level security as defense in depth, while deterministic authorization remains in the Gateway.
+
+RLS is intentionally limited to the database tenant boundary. The Gateway also
+performs object-level checks before reading or mutating an integration or
+workflow: active membership, organization-unit scope, role permission, and (for
+workflow reads) ownership or read permission. This keeps dynamic permission
+logic in typed application code while preserving RLS as a second barrier if a
+query is accidentally under-scoped.
+
+The initial schema and operational details are documented in [`GCP.md`](GCP.md). Redis is intentionally deferred because it is not required as a source of truth for the first vertical slice.
 
 ### 4.3 Temporal Cloud and durable execution
 
@@ -177,7 +202,96 @@ For the first vertical slice, use the official integration pattern or an equival
 
 The model cannot invent a tool, widen scope, select a different organization, or bypass the Agent Gateway.
 
-### 4.5 Agent Registry
+Model policy is role-specific. High-volume specialists and routine synthesis
+use the lower-latency `GEMINI_MODEL` profile. The Coordinator and Workflow
+Creator use a separate reasoning profile (`GEMINI_COORDINATOR_MODEL`, default
+`gemini-3.1-pro-preview`) with `thinking_level=high`, because they make
+cross-source plans and propose changes to the workflow catalog. Thinking output
+is not exposed as chain-of-thought in logs or the UI; only validated decisions,
+evidence references, and structured results leave the agent boundary.
+
+### 4.5 Project onboarding and Coordinator
+
+Onboarding is a required product state, not an optional setup wizard. A new
+organization or project is not ready for the intelligence dashboard until it
+has enough connected sources or uploaded documents to build an initial context.
+Before that point the UI shows onboarding progress, missing integrations, and
+data requirements rather than empty or misleading intelligence panels.
+
+Each organization/project scope has one logical long-lived Coordinator. The
+Coordinator is represented by a Temporal Workflow instance and an approved
+Coordinator Agent definition; it is not a permanently running process or a
+special container. Its responsibilities are:
+
+- coordinate onboarding and initial project bootstrap;
+- collect source availability, integration health, and document readiness;
+- request deterministic ingestion and memory-building Activities;
+- ask Gemini/ADK to propose bounded workflow changes from an approved blueprint catalog;
+- start, update, pause, deprecate, or reconcile workflow executions through control-plane contracts;
+- monitor workflow outcomes and periodically reconcile stale or obsolete workflows.
+
+The Coordinator has broad read/discovery access to the authorized organization
+or project context so it can detect missing capabilities and propose useful
+workflows. This does not mean unrestricted authority: it still goes through
+the Agent Gateway, cannot read connector secrets, cannot widen tenant scope,
+and cannot perform external writes without the normal authorization and
+approval boundary. “Full memory” means the complete authorized project
+context, not a bypass of permissions.
+
+The lifecycle is:
+
+```text
+CREATED
+  -> ONBOARDING
+  -> BOOTSTRAPPING
+  -> READY
+  -> RECONCILING
+  -> READY
+```
+
+The Coordinator waits in Temporal between signals, schedules, and external
+events. Typical signals are integration connected, document uploaded, refresh
+requested, workflow completed, provider changed, and approval resolved. A
+short `BootstrapProjectWorkflow` performs the initial phase; the long-lived
+`CoordinatorWorkflow` remains the logical owner afterwards.
+
+Temporal does not create new Go code from a prompt. A Workflow Creator may
+produce a typed `WorkflowChangePlan`, but a deterministic validator and the
+Gateway API must approve it against registered workflow types and versioned
+blueprints. Temporal can then start a pre-registered generic workflow or a
+known standard workflow, and can create/update/pause schedules through its
+Schedule API. A stored blueprint alone cannot become an executable Temporal
+Workflow unless a compatible Workflow implementation is already registered by
+a Worker.
+
+For the manual workflow builder, the compatible implementation is the
+pre-registered `encois.user-blueprint.v1` generic Workflow. The blueprint is a
+validated DAG of tool steps: steps with the same satisfied dependencies run in
+parallel, while dependencies create ordering. The Agent Gateway can validate
+the tool catalog and derive required permissions, but the API Gateway remains
+the authoritative owner of persisted definitions, user grants, idempotency,
+and Temporal start/signal/schedule operations.
+
+The Coordinator is logically endless but must not accumulate one unbounded
+history. It uses Temporal Continue-As-New when history or reconciliation
+iterations reach a safe threshold, carrying compact Coordinator state into a
+new Run ID under the same Workflow ID. The logical Coordinator therefore never
+stops during normal operation while each concrete execution remains bounded.
+
+The memory layers remain separate:
+
+```text
+Temporal          = Coordinator state, waits, signals, execution history
+Spanner Graph     = canonical organization/project facts and relationships
+Cloud Storage     = raw source snapshots and large documents
+Memory Bank       = scoped semantic context and bootstrap distillations
+Gateway API DB    = onboarding state, registry, blueprint versions, projections
+```
+
+Memory generation is an explicit Activity or service call. ADK/Memory Bank
+does not implicitly extract durable memories merely because an agent ran.
+
+### 4.6 Agent Registry
 
 The registry contains approved, versioned definitions. A definition includes:
 
@@ -194,7 +308,7 @@ The registry is configuration, not a list of running processes.
 
 An Agent Run is one execution of an approved definition. It is represented by workflow/run identifiers and projections; it does not require a new container. The Registry can report a missing capability without treating it as an infrastructure crash. The workflow may enter `WAITING_FOR_CAPABILITY` and ask an administrator to enable the required Integration Pack.
 
-### 4.6 Integration Packs
+### 4.7 Integration Packs
 
 An Integration Pack is the canonical name for what the product UI may call a “Jira agent manager” or “GitHub manager.” It packages:
 
@@ -211,9 +325,17 @@ For example, a Jira Pack can expose `search_issues`, `read_issue`, and `read_spr
 
 The same rule applies to repositories. A GitHub Pack provides one GitHub connector and a GitHub specialist definition. A workflow fans out Activities over the authorized repositories; it does not deploy one GitHub agent server per repository.
 
-### 4.7 Private Agent Gateway, policy, and MCP
+### 4.8 Private Agent Gateway, policy, and MCP
 
 The Agent Gateway is a private policy-enforcing tool broker. It is a separate internal Go service in the target architecture, reachable only from the Agent Runtime over authenticated service-to-service communication. A first-slice in-process implementation is acceptable, but browsers, public MCP clients, and models must never call provider systems directly.
+
+The initial implementation is a Gin-based internal HTTP service in
+`apps/agent-gateway`. Its MVP boundary is intentionally small: authorization
+checks, registered-tool invocation, a Spanner Graph query boundary, and a
+Cloud Storage artifact boundary. The policy implementation is explicitly
+allow-all for the hackathon scaffold, while Jira and GitHub tool responses are
+synthetic read-only fixtures. Replacing that policy with deterministic
+organization- and scope-aware authorization must happen before production.
 
 The invocation path is:
 
@@ -254,7 +376,7 @@ MCP is an integration boundary, not the system's source of truth. The Gateway AP
 
 The first UI may call the Gateway API directly to start a named workflow. MCP can later expose the same capability to a conversational client, for example `start_release_investigation` or `get_investigation_status`; it is not required to be the UI's primary transport.
 
-### 4.8 Shared contracts and ownership
+### 4.9 Shared contracts and ownership
 
 Use different contract formats for different boundaries instead of trying to share implementation code between TypeScript and Go:
 
@@ -270,7 +392,7 @@ The source of truth is the schema, not generated code. Generate TypeScript types
 
 The detailed layout, naming, validation, compatibility rules, and examples live in [`docs/contracts.md`](contracts.md).
 
-### 4.9 Memory, graph, and data model
+### 4.10 Memory, graph, and data model
 
 Encois uses purpose-specific memory layers instead of one universal database.
 
@@ -369,7 +491,7 @@ AgentMemoryReference
 AuditEvent
 ```
 
-### 4.10 Identity and authorization
+### 4.11 Identity and authorization
 
 Authorization is deterministic and never delegated to Gemini. A request is evaluated using:
 
@@ -394,7 +516,7 @@ Company
 
 A specialist receives the intersection of the user scope, investigation scope, agent policy, and connector grant. The model never gets to enlarge that intersection.
 
-### 4.11 Observability
+### 4.12 Observability
 
 Each request and run carries:
 

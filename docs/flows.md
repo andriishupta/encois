@@ -20,6 +20,111 @@ Cross-language payloads and generation rules are defined in [`contracts.md`](con
 
 The execution vocabulary is defined in [`dictionary.md`](dictionary.md). In particular, a Worker is a deployable Go process, an Activity is a registered function executed by that Worker, and a specialist Agent is a logical role rather than a separate server.
 
+## 2.1 Mandatory onboarding and Coordinator bootstrap
+
+Every new organization or project starts with a Coordinator, but it does not
+become dashboard-ready until onboarding produces enough context for useful
+read-only intelligence.
+
+```mermaid
+sequenceDiagram
+    participant User as User/Admin
+    participant API as Gateway API
+    participant Temporal as Temporal Cloud
+    participant Runtime as Go Agent Runtime
+    participant AgentGW as Private Agent Gateway
+    participant Sources as Jira/GitHub/Documents
+    participant Graph as Spanner Graph
+    participant Memory as Memory Bank
+    participant Gemini as Gemini + ADK
+
+    User->>API: create organization/project
+    API->>API: create scope, onboarding state, idempotency key
+    API->>Temporal: start CoordinatorWorkflow
+    API-->>User: onboarding_required + coordinatorId
+    Runtime-->>Temporal: poll CoordinatorWorkflow
+
+    User->>API: connect Jira/GitHub or upload documents
+    API->>Temporal: signal source-ready / integration-connected
+    Temporal-->>Runtime: run BootstrapProjectWorkflow
+    Runtime->>AgentGW: request approved read tools
+    AgentGW->>Sources: collect source metadata and facts
+    Sources-->>AgentGW: validated source data
+    AgentGW-->>Runtime: evidence/data references
+    Runtime->>Graph: persist normalized facts and provenance
+    Runtime->>Memory: explicitly generate/retrieve scoped bootstrap memory
+    Runtime->>Gemini: propose typed WorkflowChangePlan
+    Gemini-->>Runtime: standard blueprint proposals
+    Runtime->>API: submit plan for deterministic validation
+    API->>Temporal: start/update approved workflows or schedules
+    API-->>User: onboarding_ready + enabled workflow catalog
+```
+
+The Coordinator is a long-lived logical Workflow. It waits on Temporal timers,
+Signals, and workflow events; it does not hold a Worker process in memory. A
+periodic Temporal Schedule or a source event can wake reconciliation. If a
+provider changes from Jira to Linear, the Coordinator proposes a new version,
+marks the old workflow for deprecation, and waits for approval when the change
+could alter behavior or external side effects. It does not silently delete the
+old workflow or copy provider instructions into policy.
+
+The dashboard gate is deterministic:
+
+```text
+onboarding state != READY -> show setup/progress and missing context
+onboarding state == READY  -> show scoped dashboard and proposed workflows
+```
+
+“Coordinator has all memory” means all authorized project/org context is
+available for discovery. Every underlying read still passes current scope and
+policy checks, and secrets remain inside the Agent Gateway.
+
+## 2.2 Coordinator reconciliation loop
+
+```text
+CoordinatorWorkflow
+  -> wait for onboarding signal, Temporal Schedule, source event, or workflow result
+  -> inspect freshness and enabled Integration Packs
+  -> retrieve relevant scoped Graph/Memory Bank references
+  -> ask ADK/Gemini for a typed change proposal
+  -> validate workflow type, tools, scope, budget, and approval requirements deterministically
+  -> Gateway API persists the blueprint/projection
+  -> Temporal starts or updates a registered Workflow/Schedule
+  -> wait again
+  -> Continue-As-New when history becomes large
+```
+
+Temporal can execute only Workflow types registered by a Worker. The creator
+can select a pre-registered standard workflow or a generic blueprint-driven
+workflow; it cannot invent and deploy new Go code at runtime. Blueprint
+creation is therefore configuration plus validation, not dynamic code
+generation.
+
+## 2.3 User-created workflow builder
+
+The builder represents a workflow as a versioned directed acyclic graph. For
+example, Jira and GitHub steps with no dependency run in parallel, and an email
+step depending on both runs afterwards.
+
+```text
+POST /v1/workflows (Gateway API)
+  -> authenticate user and resolve organization/project scope
+  -> send blueprint to private Agent Gateway for capability and permission validation
+  -> persist draft/version in the control plane
+  -> create or update the Temporal execution/schedule
+  -> return workflowId and permission/approval requirements
+
+Temporal start:
+  workflowType = encois.user-blueprint.v1
+  input        = validated blueprint + execution context
+```
+
+The Agent Gateway scaffold exposes the corresponding private validation and
+in-memory registration endpoints, but it intentionally does not become a
+second workflow registry or Temporal client. External-write nodes such as
+`email.send` produce an approval requirement; MVP allow-all policy does not
+remove that approval boundary.
+
 ## 2. Request-to-worker flow
 
 The normal path from a dashboard action to running code is:

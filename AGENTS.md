@@ -104,7 +104,7 @@ pnpm -r typecheck
 pnpm -r lint
 pnpm -r test
 pnpm --filter @encois/web dev
-pnpm --filter @encois/api dev
+pnpm --filter @encois/api-gateway dev
 go run ./apps/agent-runtime
 ```
 

@@ -1,0 +1,28 @@
+{
+  "name": "@encois/api-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@encois/persistence": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "@temporalio/client": "^1.22.0",
+    "drizzle-orm": "^0.44.7",
+    "firebase-admin": "^13.5.0",
+    "hono": "^4.13.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

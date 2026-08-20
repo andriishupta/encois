@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @encois/dashboard dev",
+    "dev:api-gateway": "pnpm --filter @encois/api-gateway dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
   },
   "keywords": [],
   "author": "",
@@ -12,9 +17,10 @@
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11.22.0",
+      "version": "11.22.0",
       "onFail": "download"
     }
   },
-  "type": "module"
+  "type": "module",
+  "packageManager": "pnpm@11.22.0"
 }

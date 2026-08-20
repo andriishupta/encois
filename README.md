@@ -25,7 +25,7 @@ The workspace is intentionally small today. As packages are added, use the bound
 
 ```text
 apps/web       React SPA
-apps/api       Hono API and webhook ingress
+apps/api-gateway Hono API and webhook ingress
 apps/agent-runtime Go Temporal workers and Google ADK agents
 apps/agent-gateway Private Go policy and tool broker
 packages/*     domain, contracts, agents, integrations, persistence, observability, config
@@ -36,18 +36,19 @@ docs/          product, architecture, security, and flow documentation
 Architecture references:
 
 - [`docs/architecture.md`](docs/architecture.md) — system boundaries, runtime, memory, authorization, and deployment.
+- [`docs/infra.md`](docs/infra.md) — initial GCP/Terraform deployment blueprint, state, IAM, and rollout procedure.
+- [`docs/CI-CD.md`](docs/CI-CD.md) — proposed local/manual, GitHub Actions, and GCP-native CI/CD approaches.
 - [`docs/flows.md`](docs/flows.md) — user, integration, investigation, query, permission, and recovery flows.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI, JSON Schema, shared DTO rules, and TypeScript/Go boundaries.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
+- [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical meanings for Worker, Workflow, Activity, Agent, Integration, MCP, and related terms.
 
 ## Prerequisites
 
 - Node.js current LTS compatible with pnpm 11.
 - pnpm 11. The repository declares the expected package-manager family in `package.json`.
-- Google Cloud access for the deployed agent path once cloud services are added.
-
-Before the first app is added, pin the Node version in the repository and add the final root scripts. Until then, this repository is only a scaffold and has no runnable web or API app.
+- Google Cloud access is only required for the later deployed path, not for the local dashboard/API scaffold.
 
 ## Install and run
 
@@ -57,13 +58,21 @@ From the repository root:
 pnpm install
 ```
 
-When the workspace apps exist, use the web/API package filters and the Go runtime command:
+Start the current dashboard from the repository root:
 
 ```bash
-pnpm --filter @encois/web dev
-pnpm --filter @encois/api dev
-go run ./apps/agent-runtime
+pnpm dev
 ```
+
+The dashboard is available at `http://localhost:5173`. Run the API in a second terminal:
+
+```bash
+pnpm --filter @encois/api-gateway dev
+```
+
+The API listens on `http://127.0.0.1:8787`. Its local health checks are available at `/health/live` and `/health/ready`. The Go Agent Runtime and Agent Gateway are not implemented yet, so they are intentionally not part of the local start command.
+
+Terraform does not run the application locally. It provisions cloud resources and references container images; it does not replace `pnpm dev`, build Docker images, or start a local Temporal server. The local Docker/Compose setup and Temporal runtime are pending until the worker/runtime contracts and container entrypoints exist.
 
 For a full validation pass:
 
@@ -87,6 +96,10 @@ The actual environment variables, local emulators, seed data, and deployment com
 - Prefer synthetic or authorized data for local development.
 
 See [`AGENTS.md`](AGENTS.md) for the full contribution and engineering guide.
+
+## Deployment scaffold
+
+The initial infrastructure blueprint lives in [`infra/`](infra/) and is intentionally opt-in. It does not contact GCP or deploy anything until Terraform is explicitly initialized and applied with project-specific variables. Start with [`docs/infra.md`](docs/infra.md), then use `infra/bootstrap/` for the remote state bucket and dedicated infrastructure deployer.
 
 ## License
 

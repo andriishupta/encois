@@ -1,0 +1,41 @@
+resource "google_secret_manager_secret" "application" {
+  for_each = var.secret_names
+
+  secret_id = "${local.name_prefix}-${each.key}"
+
+  replication {
+    auto {}
+  }
+
+  labels = local.common_labels
+}
+
+resource "google_secret_manager_secret_iam_member" "gateway_accessor" {
+  for_each = google_secret_manager_secret.application
+
+  secret_id = each.value.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.agent_gateway.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_database_accessor" {
+  for_each = {
+    for name in var.secret_names : name => name
+    if name == "cloud-sql-runtime-url"
+  }
+
+  secret_id = google_secret_manager_secret.application[each.key].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "runtime_temporal_accessor" {
+  for_each = {
+    for name in var.secret_names : name => name
+    if name == var.temporal_secret_name
+  }
+
+  secret_id = google_secret_manager_secret.application[each.key].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.agent_runtime.email}"
+}

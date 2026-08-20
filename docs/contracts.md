@@ -91,6 +91,78 @@ The object contains IDs and authorization context, not the contents of Jira tick
 
 Temporal history should remain small, replayable, and safe to inspect. Large results belong in Cloud Storage or a purpose-built data store, with only a reference in the Workflow.
 
+## Coordinator and workflow blueprint payloads
+
+Onboarding creates one logical Coordinator Workflow for the organization or
+project scope. Its input and Signals contain identifiers and state, not raw
+provider data:
+
+```json
+{
+  "contractVersion": "coordinator-start.v1",
+  "coordinatorId": "coord_acme_checkout",
+  "organizationId": "acme",
+  "projectId": "checkout",
+  "scopeType": "project",
+  "policyVersion": "policy-17",
+  "state": {
+    "status": "ONBOARDING",
+    "version": 0,
+    "onboardingComplete": false,
+    "reconciliationCount": 0
+  }
+}
+```
+
+The Workflow Creator returns a typed proposal that is validated against the
+Agent Registry and approved blueprint catalog before the Gateway API persists
+or starts anything:
+
+```json
+{
+  "contractVersion": "workflow-change-plan.v1",
+  "planId": "plan_123",
+  "coordinatorId": "coord_acme_checkout",
+  "organizationId": "acme",
+  "projectId": "checkout",
+  "changes": [
+    {
+      "kind": "create",
+      "blueprint": {
+        "contractVersion": "workflow-blueprint.v1",
+        "blueprintId": "release-risk",
+        "version": "1.0.0",
+        "name": "Release risk",
+        "workflowType": "ReleaseRiskWorkflow",
+        "purpose": "Investigate release readiness",
+        "enabled": true,
+        "steps": [
+          {
+            "id": "jira",
+            "kind": "tool",
+            "tool": "jira.release_tasks"
+          },
+          {
+            "id": "github",
+            "kind": "tool",
+            "tool": "github.release_activity"
+          }
+        ],
+        "requiredScopes": ["project:checkout"],
+        "allowedTools": ["jira.release_tasks", "github.release_activity"],
+        "requiresApproval": false
+      },
+      "reason": "Initial project bootstrap",
+      "requiresApproval": false
+    }
+  ]
+}
+```
+
+Gemini may propose this object, but it cannot approve it. Temporal can start
+only workflow types already registered by a Worker; a blueprint selects and
+configures executable code rather than generating new Go code at runtime.
+
 ## Private Agent Gateway
 
 The Agent Runtime sends a request like:
@@ -111,6 +183,20 @@ The Agent Runtime sends a request like:
 ```
 
 The private gateway then validates the registered tool, checks the effective scope and current policy, resolves a short-lived connector credential, calls the provider API or MCP server, validates the response, stores raw data when required, and returns normalized data plus references. It does not accept authority from model output. A disabled pack or revoked scope returns a typed policy error rather than an arbitrary provider error.
+
+The initial internal HTTP surface is:
+
+```text
+POST /v1/authorize or /v1/permissions/check
+GET  /v1/tools
+POST /v1/tools/invoke
+POST /v1/graph/query
+POST /v1/artifacts
+```
+
+The first two tool fixtures are `jira.release_tasks` and
+`github.release_activity`. They are synthetic and read-only; the graph and
+artifact routes remain reserved boundaries until their adapters are added.
 
 ## Compatibility rules
 
