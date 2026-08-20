@@ -23,6 +23,13 @@ The system does not build a custom durable-execution engine on Firestore. Tempor
 
 The security properties for these boundaries, including tenant isolation, secret handling, agent policy, and execution-scoped capabilities, are defined in [`docs/security.md`](security.md).
 
+The maintained visual map of the current system, including service boundaries, implementation status, and the release investigation path, is [`docs/system-diagram.md`](system-diagram.md). Keep it synchronized with the repository when a boundary or deployment path changes.
+
+The current implementation review and ordered engineering backlog are in
+[`docs/next-steps.md`](next-steps.md). This architecture document describes
+the intended baseline; the review document explicitly distinguishes working
+scaffolds from production boundaries.
+
 ## 2. Architectural position
 
 The recommended initial deployment is a multi-tenant SaaS control plane with strict organization and scope isolation. The same contracts can later be deployed in a dedicated Google Cloud project for a customer that requires stronger isolation or data residency.
@@ -42,7 +49,7 @@ The selected platform shape is:
 
 Temporal Cloud is the execution platform, not the company data store. Spanner Graph is the company context store, not the workflow engine. Memory Bank is agent context, not the canonical source of company relationships.
 
-The first concrete GCP deployment baseline is documented in [`docs/infra.md`](infra.md). It uses Cloud Run for the Gateway API and future Go workers, a global HTTPS Application Load Balancer with serverless NEGs for `/dashboard/*` and `/api/*`, Cloud Identity Platform for user authentication, Secret Manager for connector credentials, and optional Cloud Storage/Spanner resources. The Terraform stack is an explicit provider adapter; it does not create projects, manage Temporal Cloud, or run automatically from the repository.
+The first concrete GCP deployment baseline is documented in [`docs/infra.md`](infra.md). It uses Cloud Run for the Gateway API and the planned Go worker deployment, a global HTTPS Application Load Balancer with serverless NEGs for `/dashboard/*` and `/api/*`, Cloud Identity Platform for user authentication, Secret Manager for connector credentials, and optional Cloud Storage/Spanner resources. The Terraform stack is an explicit provider adapter; it does not create projects, manage Temporal Cloud, or run automatically from the repository.
 
 ## 3. System context
 
@@ -111,7 +118,7 @@ It owns:
 - the Agent Registry;
 - Integration Pack registration and health;
 - starting, signalling, querying, cancelling, and listing Temporal workflows;
-- workflow identity and idempotency rules, such as one active release investigation per organization and release;
+- workflow identity and idempotency rules, such as one active execution per organization, Blueprint, and business key;
 - Memory Bank retrieval requests and scoped memory operations;
 - graph query projections for the UI;
 - audit events and user-visible run projections;
@@ -127,9 +134,9 @@ in-memory adapter is used only when Temporal is not configured; it is not a
 durable execution substitute. The Go runtime remains the worker and owns the
 actual workflow implementation.
 
-The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in `packages/contracts`.
+The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It will map those systems into stable, versioned contracts in the planned `packages/contracts` package; until that package exists, the current app-local DTOs are temporary implementation scaffolding.
 
-The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_release_investigation`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
+The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_workflow` or `get_workflow_status`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
 
 #### Initial Google Cloud control-plane implementation
 
@@ -175,11 +182,11 @@ The Go Agent Runtime is one deployable Go application in the MVP. It runs Tempor
 
 The Temporal/Google ADK integration provides the intended execution model:
 
-- the ADK agent loop runs inside a Temporal Workflow;
-- Gemini/model calls run as durable Activities;
-- I/O tools and MCP calls run as Activities;
-- ADK `SubAgents` provide coordinator-to-specialist delegation;
-- human approval can pause the Workflow and resume it through a Signal;
+- the registered generic Blueprint Workflow interprets validated step kinds;
+- ADK runs approved agent steps and provides reasoning, delegation, and structured output;
+- Gemini/model calls, I/O tools, MCP/API calls, and data-store operations cross a Temporal Activity boundary;
+- ADK sub-agents provide logical specialist delegation inside an execution;
+- human approval can pause the Workflow and resume it through a Signal or Update;
 - long conversations can use `continue-as-new` to keep history bounded.
 
 The runtime contains:
@@ -196,7 +203,14 @@ Temporal Workflows
 
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
 
-The runtime is not a permanent “head agent,” and a specialist is not a server per repository. A parent Workflow such as `ReleaseRiskWorkflow` is the manager of one durable investigation. It can start child specialist Workflows or Activities for Jira, GitHub, and monitoring. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
+Current code status: the worker registers `encois.user-blueprint.v1`, the
+Coordinator, and bootstrap workflows; it does not register provider-specific
+Temporal Workflow types. The generic interpreter and tool Activity are tested
+locally, but shared schemas, complete scope propagation, authenticated
+Runtime-to-Gateway calls, and real Temporal/Cloud Run deployment are not yet
+complete.
+
+The runtime is not a permanent “head agent,” and a specialist is not a server per repository. The registered `encois.user-blueprint.v1` Workflow interprets one validated company-specific Blueprint. It can execute agent or tool steps for Jira, GitHub, monitoring, or any other enabled pack. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
 
 For the first vertical slice, use the official integration pattern or an equivalent boundary in which model calls and external tools are Activities. Do not make arbitrary network calls from deterministic Workflow code. ADK provides agent reasoning, delegation, and structured output; Temporal provides durable state, waiting, retries, Signals, and recovery.
 
@@ -257,20 +271,20 @@ short `BootstrapProjectWorkflow` performs the initial phase; the long-lived
 
 Temporal does not create new Go code from a prompt. A Workflow Creator may
 produce a typed `WorkflowChangePlan`, but a deterministic validator and the
-Gateway API must approve it against registered workflow types and versioned
-blueprints. Temporal can then start a pre-registered generic workflow or a
-known standard workflow, and can create/update/pause schedules through its
-Schedule API. A stored blueprint alone cannot become an executable Temporal
-Workflow unless a compatible Workflow implementation is already registered by
-a Worker.
+Gateway API must approve it against the tool/agent catalog, organization
+scope, policy, and versioned Blueprint schemas. Temporal starts the
+pre-registered generic `encois.user-blueprint.v1` Workflow and can
+create/update/pause schedules through its Schedule API. A stored Blueprint is
+configuration interpreted by that generic Workflow; it is not executable code.
 
 For the manual workflow builder, the compatible implementation is the
-pre-registered `encois.user-blueprint.v1` generic Workflow. The blueprint is a
-validated DAG of tool steps: steps with the same satisfied dependencies run in
-parallel, while dependencies create ordering. The Agent Gateway can validate
-the tool catalog and derive required permissions, but the API Gateway remains
-the authoritative owner of persisted definitions, user grants, idempotency,
-and Temporal start/signal/schedule operations.
+pre-registered `encois.user-blueprint.v1` generic Workflow. The Blueprint is a
+validated DAG of typed steps such as tool, agent, transform, condition, wait,
+and approval. Steps with the same satisfied dependencies run in parallel,
+while dependencies create ordering. The Agent Gateway can validate the tool
+catalog and derive required permissions, but the API Gateway remains the
+authoritative owner of persisted definitions, user grants, idempotency, and
+Temporal start/signal/schedule operations.
 
 The Coordinator is logically endless but must not accumulate one unbounded
 history. It uses Temporal Continue-As-New when history or reconciliation
@@ -372,9 +386,16 @@ Agent Gateway -> Spanner Graph      normalized facts and relationships
 
 The Agent Gateway does not own workflow state, replace Temporal, or become a second public API. It enforces policy at the last point before an external call and returns a minimal normalized result plus evidence/data references.
 
-MCP is an integration boundary, not the system's source of truth. The Gateway API and deterministic policy layer own identity, authorization, and organization scope.
+MCP is the standard tool discovery/invocation boundary, not the system's
+workflow or data source of truth. The Gateway API and deterministic policy
+layer own identity, authorization, and organization scope. The internal Agent
+Gateway may expose MCP-shaped JSON over authenticated HTTP first and add a
+full MCP JSON-RPC adapter later if external clients need it.
 
-The first UI may call the Gateway API directly to start a named workflow. MCP can later expose the same capability to a conversational client, for example `start_release_investigation` or `get_investigation_status`; it is not required to be the UI's primary transport.
+The first UI may call the Gateway API directly to start a Blueprint execution.
+MCP can later expose the same application capabilities to a conversational
+client, for example `start_workflow` or `get_workflow_status`; it is not
+required to be the UI's primary transport.
 
 ### 4.9 Shared contracts and ownership
 
@@ -384,6 +405,7 @@ Use different contract formats for different boundaries instead of trying to sha
 |---|---|---|---|
 | Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
 | Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
+| Workflow Blueprints | JSON Schema with MCP-shaped tool references | Coordinator, Creator, Gateway API, Go Runtime, UI builder | Company-specific executable configuration for the generic Workflow |
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |
 | Database schema | SQL migration source owned by its service | TypeScript control plane or data service | Persistence implementation; never a shared DTO |
@@ -391,6 +413,7 @@ Use different contract formats for different boundaries instead of trying to sha
 The source of truth is the schema, not generated code. Generate TypeScript types for the API/UI and Go types for the runtime/gateway from the same versioned schemas. Keep generated artifacts local to each language package. Do not import TypeScript source into Go, expose database client types in contracts, or pass provider SDK payloads across the boundary. Protobuf and gRPC can be added later if service count or throughput justifies them; they are not required for the MVP.
 
 The detailed layout, naming, validation, compatibility rules, and examples live in [`docs/contracts.md`](contracts.md).
+The standard-selection and generic communication model live in [`docs/protocols.md`](protocols.md).
 
 ### 4.10 Memory, graph, and data model
 
@@ -408,7 +431,7 @@ Memories are scoped explicitly, for example:
 
 ```text
 organization_id = acme
-agent_id = release-risk
+agent_id = context-synthesizer
 user_id = user-123       # optional
 team_id = platform       # optional
 ```
@@ -558,7 +581,7 @@ RUNNING
   -> RUNNING                 correlated Signal arrives
 ```
 
-Use a stable business Workflow ID, for example `release-risk:acme:release-aug-30`, to prevent duplicate active investigations. Temporal's Run ID identifies one execution of that Workflow ID. A refresh can resume the existing Workflow, use `continue-as-new`, or create a child run while preserving the same investigation projection.
+Use a stable business Workflow ID, for example `workflow:acme:release-readiness:checkout:aug-30`, to prevent duplicate active executions for the same Blueprint and business key. Temporal's Run ID identifies one execution of that Workflow ID. A refresh can resume the existing Workflow, use `continue-as-new`, or create a child run while preserving the same workflow projection.
 
 Each external call is an Activity with a timeout, retry policy, idempotency key, and optional heartbeat. An Activity failure does not require restarting completed Activities. A workflow waiting for permission or an external status does not consume an active agent process.
 
@@ -583,16 +606,20 @@ The same contracts can be deployed into a customer-owned Google Cloud project wi
 
 ## 7. MVP vertical slice
 
-The first demonstrable slice is one release-risk investigation:
+The first demonstrable slice is one company-specific Blueprint, using release
+readiness as the example rather than as a platform workflow type:
 
-1. Synthetic Jira, GitHub, and monitoring facts are ingested or seeded.
-2. The Gateway API authenticates the actor and starts a Temporal Workflow.
-3. A Go ADK coordinator delegates Jira, GitHub, and monitoring specialists.
-4. Specialists use only registered read tools through the Agent Gateway.
-5. Activities normalize evidence and update Spanner Graph with source references.
-6. The coordinator retrieves scoped agent memory from Memory Bank.
-7. Gemini synthesizes a structured risk insight with confidence and evidence references.
-8. The Gateway API exposes the result to React with graph relationships, source records, scope, workflow status, and trace links.
+1. Synthetic Jira, GitHub, and monitoring tools are registered in the catalog.
+2. The Gateway API authenticates the actor, validates the Blueprint, and starts `encois.user-blueprint.v1`.
+3. The Go Runtime interprets the Blueprint and runs tool/agent steps through Activities.
+4. Specialists use only MCP-shaped registered read tools through the Agent Gateway.
+5. Activities persist a small workflow projection and evidence references in the control plane.
+6. Gemini/ADK synthesizes a structured result with confidence and evidence references.
+7. The Gateway API exposes the result to React with scope, workflow status, and trace links.
+
+Spanner Graph, Memory Bank, Cloud Storage raw evidence, and real provider
+adapters are subsequent capabilities. They extend the same contracts; they do
+not define a new workflow type.
 
 The first runtime deployment is intentionally small:
 
@@ -627,12 +654,12 @@ User: “Are we on track for the August 30 release, and what changed after yeste
    actor = user-123
 
 3. Gateway API uses `SignalWithStart` with the stable Workflow ID:
-   release-risk:acme:release-aug-30
+   workflow:acme:release-readiness:checkout:aug-30
    If no active execution exists, Temporal starts:
-   ReleaseRiskWorkflow(acme, release-aug-30, platform, user-123)
+   encois.user-blueprint.v1 with the approved Blueprint snapshot.
 
-4. The Go Worker polls the task queue, receives the workflow task, and runs the ADK coordinator.
-   The coordinator reads the approved agent registry and delegates:
+4. The Go Worker polls the task queue, receives the workflow task, and interprets the Blueprint.
+   The selected agent step delegates to approved capabilities:
    - Jira specialist
    - GitHub specialist
    - Monitoring specialist
@@ -651,7 +678,7 @@ User: “Are we on track for the August 30 release, and what changed after yeste
    Deployment AFFECTS Service
    Incident RELATED_TO Release
 
-8. The coordinator retrieves scoped release-risk memories from Memory Bank:
+8. The workflow may later retrieve scoped agent memory from Memory Bank:
    prior investigation conclusions, recurring blockers, and relevant context.
 
 9. Gemini synthesizes a structured result:

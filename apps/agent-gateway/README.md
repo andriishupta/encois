@@ -21,7 +21,7 @@ Endpoints:
 
 - `GET /health/live` and `GET /health/ready` — service and dependency status;
 - `POST /v1/authorize` or `/v1/permissions/check` — MVP allow-all decision;
-- `GET /v1/tools` — registered tool blueprint;
+- `GET /v1/tools` — MCP-shaped registered tool catalog;
 - `POST /v1/tools/invoke` — mock `jira.release_tasks` and
   `github.release_activity` tools;
 - `POST /v1/graph/query` — reserved Spanner Graph boundary;
@@ -51,8 +51,10 @@ Future gateway code will:
 - persist large raw responses and artifacts in Cloud Storage; and
 - read or write normalized, authorized company context through Spanner.
 
-The gateway is an internal east-west boundary. It must not be browser-facing,
-an unrestricted HTTP fetcher, or a replacement for Temporal workflow state.
+The gateway is an internal east-west boundary. Its tool catalog and invocation
+payloads follow the MCP shape, wrapped in an Encois execution context. It must
+not be browser-facing, an unrestricted HTTP fetcher, or a replacement for
+Temporal workflow state.
 The current mock tools are deliberately read-only and return synthetic data.
 
 ## Dependencies

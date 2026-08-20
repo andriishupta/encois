@@ -1,12 +1,11 @@
 import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
-import { IntegrationsService } from "../services/integrations.service.js";
+import { listIntegrationsForPrincipal } from "../services/integrations.service.js";
 
-export function listIntegrationsRoute(integrationsService: IntegrationsService): Handler<GatewayEnv> {
-  return async (context) => {
+export const listIntegrationsRoute: Handler<GatewayEnv> = async (context) => {
     const principal = context.get("principal");
     try {
-      const data = await integrationsService.listForPrincipal(principal);
+      const data = await listIntegrationsForPrincipal(principal);
 
       return context.json({ data });
     } catch (error) {
@@ -18,5 +17,4 @@ export function listIntegrationsRoute(integrationsService: IntegrationsService):
       }
       throw error;
     }
-  };
-}
+};

@@ -65,7 +65,20 @@ describe("API Gateway", () => {
     });
 
     const startResponse = await app.request("/api/v1/workflows", {
-      body: JSON.stringify({ workflowType: "release-investigation", key: "release-1", input: { release: "1" } }),
+      body: JSON.stringify({
+        workflowType: "encois.user-blueprint.v1",
+        key: "release-1",
+        input: {
+          blueprint: {
+            contractVersion: "workflow-blueprint.v1",
+            blueprintId: "release-readiness",
+            version: "1.0.0",
+            name: "Release readiness",
+            workflowType: "encois.user-blueprint.v1",
+            steps: [],
+          },
+        },
+      }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
@@ -75,7 +88,7 @@ describe("API Gateway", () => {
     const getResponse = await app.request(`/api/v1/workflows/${started.data.workflowId}`);
     expect(getResponse.status).toBe(200);
     await expect(getResponse.json()).resolves.toMatchObject({
-      data: { organizationId: "org-1", status: "queued", workflowType: "release-investigation" },
+      data: { organizationId: "org-1", status: "queued", workflowType: "encois.user-blueprint.v1" },
     });
   });
 });

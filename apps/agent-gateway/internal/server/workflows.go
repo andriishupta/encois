@@ -131,14 +131,31 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 		if _, exists := steps[step.ID]; exists {
 			return nil, nil, fmt.Errorf("duplicate step id %q", step.ID)
 		}
-		if step.Kind != "tool" {
-			return nil, nil, fmt.Errorf("step %q has unsupported kind %q; only tool steps are scaffolded", step.ID, step.Kind)
-		}
-		if step.Tool == "" {
-			return nil, nil, fmt.Errorf("tool step %q requires a tool", step.ID)
-		}
-		if !knownCapability(step.Tool) {
-			return nil, nil, fmt.Errorf("tool %q is not in the registered capability catalog", step.Tool)
+		switch step.Kind {
+		case "tool":
+			if step.Tool == "" {
+				return nil, nil, fmt.Errorf("tool step %q requires a tool", step.ID)
+			}
+			if !knownCapability(step.Tool) {
+				return nil, nil, fmt.Errorf("tool %q is not in the registered capability catalog", step.Tool)
+			}
+		case "agent":
+			if strings.TrimSpace(step.AgentDefinition) == "" {
+				return nil, nil, fmt.Errorf("agent step %q requires an agentDefinition", step.ID)
+			}
+		case "transform", "condition", "wait", "approval":
+			if step.Kind == "condition" {
+				if _, ok := step.Input["condition"].(bool); !ok {
+					return nil, nil, fmt.Errorf("condition step %q requires boolean input.condition", step.ID)
+				}
+			}
+			if step.Kind == "wait" {
+				if duration, ok := step.Input["duration"].(string); !ok || strings.TrimSpace(duration) == "" {
+					return nil, nil, fmt.Errorf("wait step %q requires input.duration", step.ID)
+				}
+			}
+		default:
+			return nil, nil, fmt.Errorf("step %q has unsupported kind %q", step.ID, step.Kind)
 		}
 		steps[step.ID] = step
 	}
@@ -155,6 +172,9 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 			}
 		}
 
+		if step.Kind != "tool" {
+			continue
+		}
 		permission := capabilityPermission(step.Tool, blueprint.RequiresApproval || step.RequiresApproval)
 		key := permission.Resource + ":" + permission.Action
 		if _, exists := seenPermissions[key]; !exists {

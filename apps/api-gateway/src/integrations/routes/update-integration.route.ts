@@ -1,9 +1,17 @@
 import type { Handler } from "hono";
+import { integrationStatus, type IntegrationStatus } from "@encois/persistence";
 import type { GatewayEnv } from "../../middleware/aos.js";
-import { IntegrationsService, type IntegrationUpdate } from "../services/integrations.service.js";
+import {
+  updateIntegrationForPrincipal,
+  type IntegrationUpdate,
+} from "../services/integrations.service.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isIntegrationStatus(value: unknown): value is IntegrationStatus {
+  return typeof value === "string" && integrationStatus.enumValues.includes(value as IntegrationStatus);
 }
 
 function parseUpdate(value: unknown): IntegrationUpdate | null {
@@ -15,15 +23,14 @@ function parseUpdate(value: unknown): IntegrationUpdate | null {
     update.displayName = value.displayName.trim();
   }
   if (value.status !== undefined) {
-    if (value.status !== "active" && value.status !== "disabled" && value.status !== "pending") return null;
+    if (!isIntegrationStatus(value.status)) return null;
     update.status = value.status;
   }
 
   return Object.keys(update).length > 0 ? update : null;
 }
 
-export function updateIntegrationRoute(integrationsService: IntegrationsService): Handler<GatewayEnv> {
-  return async (context) => {
+export const updateIntegrationRoute: Handler<GatewayEnv> = async (context) => {
     const update = parseUpdate(await context.req.json().catch(() => null));
     if (!update) {
       return context.json(
@@ -37,7 +44,7 @@ export function updateIntegrationRoute(integrationsService: IntegrationsService)
       if (!integrationId) {
         return context.json({ error: { code: "INVALID_REQUEST", message: "Integration id is required." } }, 400);
       }
-      const integration = await integrationsService.updateForPrincipal(
+      const integration = await updateIntegrationForPrincipal(
         context.get("principal"),
         integrationId,
         update,
@@ -55,5 +62,4 @@ export function updateIntegrationRoute(integrationsService: IntegrationsService)
       }
       throw error;
     }
-  };
-}
+};

@@ -18,8 +18,9 @@ Configuration is environment-based:
 - `TEMPORAL_TASK_QUEUE` — defaults to `encois-agent-runtime`;
 - `TEMPORAL_API_KEY` — optional Temporal Cloud API key;
 - `AGENT_GATEWAY_URL` — defaults to `http://127.0.0.1:8080`;
-- `GEMINI_API_KEY` or `GOOGLE_API_KEY` — optional; without it synthesis uses
-  the deterministic fixture result;
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` — optional for the local scaffold;
+  without it ADK agent steps return a deferred status instead of calling
+  Gemini;
 - `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.
 - `GEMINI_COORDINATOR_MODEL` — defaults to `gemini-3.1-pro-preview`; used by
   the Coordinator and Workflow Creator instead of the lower-latency specialist
@@ -30,36 +31,40 @@ Configuration is environment-based:
 The current skeleton:
 
 - connect to Temporal Cloud and poll named task queues;
-- hosts a coordinator and Jira/GitHub specialist ADK agents when Gemini is
-  configured;
+- hosts the Coordinator and Workflow Creator ADK capabilities with a stronger
+  reasoning profile when Gemini is configured; user workflow agents are loaded
+  from approved Agent Definitions at Blueprint execution time;
 - keeps model calls and external I/O inside Activities;
 - use versioned Temporal payloads and the private Agent Gateway boundary; and
 - emit scoped, redacted runtime telemetry.
 
 Registered workflows:
 
-- `ReleaseRiskWorkflow` — parent workflow that fans out to Jira and GitHub
-  child workflows, then synthesizes an evidence-linked insight;
-- `JiraReleaseWorkflow` — Jira specialist boundary;
-- `GitHubReleaseWorkflow` — GitHub specialist boundary.
+- `encois.user-blueprint.v1` — generic workflow that interprets a validated
+  company-specific Blueprint and executes typed tool/agent steps;
 - `CoordinatorWorkflow` — long-lived organization/project onboarding and
   reconciliation loop; uses Signals, timers, and Continue-As-New;
 - `BootstrapProjectWorkflow` — short initial bootstrap phase.
-- `encois.user-blueprint.v1` — generic dynamic workflow registration for
-  validated user-created step graphs. Steps are data and execute through
-  Activities; no Go code is generated at runtime.
 
-The Coordinator's `WorkflowCreator` emits typed plans only for workflow types
-already registered by the Worker. The Gateway API owns blueprint persistence,
-authorization, and Temporal Schedule API operations.
+The Coordinator's `WorkflowCreator` emits typed Blueprint plans. The Gateway
+API validates tool/agent references, scope, policy, and compatibility before
+persisting a Blueprint and starting `encois.user-blueprint.v1`.
 
 Coordinator and Workflow Creator responses use the stronger model plus the
 highest supported Gemini thinking level. Intermediate thoughts are not emitted
 to users or logs; only the validated result is retained.
 
-Jira and GitHub Activities call the Agent Gateway over HTTP. The gateway's
-current tools are in-memory fixtures: 10 Jira tasks with 8 completed, plus
-mock GitHub pull-request/check data.
+Tool Activities call the Agent Gateway over HTTP. The gateway currently
+exposes two in-memory, read-only fixtures: 10 Jira tasks with 8 completed,
+plus mock GitHub pull-request/check data. Agent steps currently run ADK
+reasoning over their validated input and prior step results; provider tools
+are invoked by explicit `tool` steps.
+
+The generic interpreter currently supports dependency ordering, parallel ready
+steps, tool and agent Activities, deterministic transform/condition steps,
+wait timers, and approval Signals. Shared JSON Schema validation, runtime
+scope propagation into every Activity, explicit retry policies, and the API
+route for approval Signals are the next implementation boundaries.
 
 The runtime must not connect directly to the TypeScript control-plane database
 or expose a public HTTP API.

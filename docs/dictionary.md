@@ -58,7 +58,7 @@ In Encois, the primary Worker is a Go application in apps/agent-runtime.
 A named Temporal queue from which Workers receive Workflow or Activity tasks. Examples:
 
 ~~~text
-release-investigation
+encois.user-blueprint.v1
 integration-activities
 synthesis
 ~~~
@@ -69,10 +69,10 @@ Task queues are used to route work to compatible Worker deployments.
 
 Deterministic code that describes a durable business process. A Workflow coordinates Activities, timers, Signals, child Workflows, retries, and state transitions.
 
-Example:
+The MVP's generic executable Workflow is:
 
 ~~~text
-ReleaseRiskWorkflow
+encois.user-blueprint.v1
 ~~~
 
 Workflow code must not make arbitrary network calls, call Gemini directly, or read a database directly. Those operations belong in Activities.
@@ -83,11 +83,17 @@ One running or completed execution of a Workflow definition with a specific inpu
 
 ### Parent Workflow
 
-A Workflow that coordinates a larger investigation. ReleaseRiskWorkflow is the parent for the release-risk example.
+A Workflow that coordinates a larger execution or investigation. In the MVP,
+the generic Blueprint Workflow coordinates company-specific steps; release
+readiness is only one example Blueprint.
 
 ### Child Workflow
 
-A durable Workflow started by another Workflow. Encois may use child Workflows for Jira, GitHub, and Monitoring investigations when they need independent retries, visibility, or long waits.
+A durable Workflow started by another Workflow. The MVP does not create
+provider-specific child Workflow types for Jira, GitHub, or Monitoring. A
+Blueprint uses Activities or agent steps; child Workflows remain an option for
+future platform-owned sub-executions that need independent retries, visibility,
+or long waits.
 
 ### Activity
 
@@ -96,12 +102,11 @@ A bounded, side-effecting or non-deterministic operation executed by a Worker on
 Examples:
 
 ~~~text
-ResolveReleaseActivity
-CollectJiraActivity
-CollectRepositoryActivity
+ExecuteBlueprintToolActivity
+RunBlueprintAgentActivity
 QueryMemoryBankActivity
 WriteGraphActivity
-SynthesizeInsightActivity
+PersistWorkflowResultActivity
 ~~~
 
 Activities have timeouts, retry policies, idempotency rules, and optional heartbeats. An Activity is a function registered in a Worker, not a separate server.
@@ -138,7 +143,7 @@ The stable business identifier for a logical Workflow. It is used for deduplicat
 Example:
 
 ~~~text
-release-risk:acme:release-aug-30
+workflow:acme:release-readiness:checkout:aug-30
 ~~~
 
 ### Run ID
@@ -147,7 +152,7 @@ The identifier of one concrete execution of a Workflow ID. A continue-as-new ope
 
 ### SignalWithStart
 
-A Temporal operation that sends a Signal if the Workflow exists or starts the Workflow and sends the Signal if it does not. It is useful for idempotent user requests and long-lived release investigations.
+A Temporal operation that sends a Signal if the Workflow exists or starts the Workflow and sends the Signal if it does not. It is useful for idempotent Blueprint executions and long-lived Coordinator workflows.
 
 ### Idempotency
 
@@ -186,8 +191,17 @@ onboarding state is `READY`.
 ### Workflow Blueprint
 
 A versioned, typed configuration describing an approved workflow intent:
-trigger, workflow type, tools, required scopes, input parameters, schedule,
-budget, and approval requirements. A blueprint is not executable Go code.
+trigger, step graph, input/output schemas, tool and Agent Definition references,
+required scopes, schedule, budget, retry, and approval requirements. A
+Blueprint is not executable Go code; it is interpreted by the registered
+`encois.user-blueprint.v1` Workflow.
+
+### Workflow Step
+
+A typed node in a Workflow Blueprint. The first generic interpreter supports
+`tool`, `agent`, `transform`, `condition`, `wait`, and `approval` steps. A step
+has an ID, optional dependencies, validated input mapping, output schema, and
+bounded execution policy.
 
 ### Workflow Creator
 
@@ -256,7 +270,10 @@ The pack is the preferred term for what the UI may call a Jira Agent Manager or 
 
 ### Tool
 
-A narrowly scoped callable operation exposed to an agent. Tools have an input schema, output schema, side-effect declaration, required scopes, and policy.
+A narrowly scoped callable operation exposed to an agent or Blueprint step.
+Tools have an input schema, output schema, side-effect annotations, required
+scopes, and policy. The catalog follows the MCP tool shape even when the
+implementation is a typed API adapter.
 
 Examples:
 
@@ -268,7 +285,23 @@ read_deployment_status
 
 ### MCP
 
-Model Context Protocol, a protocol for exposing tools or resources to an agent client. MCP standardizes the interface; it does not decide authorization, organization scope, or business truth.
+Model Context Protocol, an open protocol for exposing tools, resources, and
+prompts to an agent client. For Encois, MCP is the standard tool discovery and
+invocation shape. It does not decide authorization, organization scope,
+durable execution, or business truth.
+
+### Tool Manifest
+
+The MCP-shaped description of a registered tool: name, description,
+`inputSchema`, optional `outputSchema`, behavior annotations, and Encois
+capability metadata. Tool annotations are hints and never replace the Agent
+Gateway policy check.
+
+### Tool Invocation
+
+A request to execute one registered tool. It contains the tool name and
+arguments plus an Encois Execution Context with workflow, actor, organization,
+scope, request ID, and policy version.
 
 ### MCP Server
 
@@ -310,7 +343,9 @@ The canonical description of the public Gateway API: routes, request/response DT
 
 ### JSON Schema
 
-The canonical description of Temporal payloads, private Agent Gateway requests/results, integration manifests, and evidence events. It allows TypeScript and Go types to be generated from the same source.
+The canonical description of Workflow Blueprints, Temporal payloads, private
+Agent Gateway requests/results, integration manifests, and evidence events. It
+allows TypeScript and Go types to be generated from the same source.
 
 ### Execution Context
 

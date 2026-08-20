@@ -9,6 +9,9 @@ type WorkflowCreator struct {
 }
 
 func NewWorkflowCreator(allowedWorkflowTypes []string) WorkflowCreator {
+	if len(allowedWorkflowTypes) == 0 {
+		allowedWorkflowTypes = []string{UserBlueprintWorkflowType}
+	}
 	allowed := make(map[string]struct{}, len(allowedWorkflowTypes))
 	for _, workflowType := range allowedWorkflowTypes {
 		allowed[workflowType] = struct{}{}
@@ -35,6 +38,9 @@ func (c WorkflowCreator) ValidatePlan(plan WorkflowChangePlan) error {
 		if change.Kind == ChangeCreate || change.Kind == ChangeUpdate {
 			if change.Blueprint.BlueprintID == "" || change.Blueprint.Version == "" {
 				return fmt.Errorf("change %d has an incomplete blueprint", index)
+			}
+			if change.Blueprint.WorkflowType != UserBlueprintWorkflowType {
+				return fmt.Errorf("change %d must use generic workflow type %q", index, UserBlueprintWorkflowType)
 			}
 			if _, ok := c.allowedWorkflowTypes[change.Blueprint.WorkflowType]; !ok {
 				return fmt.Errorf("workflow type %q is not registered", change.Blueprint.WorkflowType)

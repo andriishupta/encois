@@ -40,14 +40,14 @@ Each feature owns its router, routes, and services:
 
 ```text
 src/
-  api/v1/router.ts
+  app.ts                 active API version and version router
   integrations/{router.ts,routes/,services/}
   workflows/{router.ts,routes/,services/,temporal-client.ts,types.ts}
-  webhooks/{router.ts,routes/,services/}
+  webhooks/{router.ts,routes/}
   health/router.ts
+  database.ts
   middleware/{aos.ts,error-handler.ts,request-logging.ts}
   auth/identity-platform.ts
-  app.ts
   config.ts
   server.ts
 ```

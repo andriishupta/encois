@@ -5,6 +5,7 @@ const (
 	BootstrapProjectWorkflowName = "BootstrapProjectWorkflow"
 	CoordinatorContractVersion   = "coordinator.v1"
 	WorkflowChangePlanVersion    = "workflow-change-plan.v1"
+	UserBlueprintWorkflowType    = "encois.user-blueprint.v1"
 	SignalIntegrationConnected   = "integration-connected"
 	SignalSourceReady            = "source-ready"
 	SignalReconcile              = "reconcile-requested"

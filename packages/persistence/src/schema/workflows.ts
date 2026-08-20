@@ -17,6 +17,7 @@ export const workflowDefinitionStatus = pgEnum("workflow_definition_status", [
   "disabled",
   "retired",
 ]);
+export type WorkflowDefinitionStatus = (typeof workflowDefinitionStatus.enumValues)[number];
 
 export const workflowRunStatus = pgEnum("workflow_run_status", [
   "queued",
@@ -27,6 +28,7 @@ export const workflowRunStatus = pgEnum("workflow_run_status", [
   "completed",
   "cancelled",
 ]);
+export type WorkflowRunStatus = (typeof workflowRunStatus.enumValues)[number];
 
 export const workflowDefinitions = pgTable(
   "workflow_definitions",

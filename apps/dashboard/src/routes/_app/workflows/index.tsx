@@ -13,7 +13,7 @@ function WorkflowsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Current workflows"
+        title="Workflows"
         description="Track investigations, delegated agents, and workflow progress."
         actions={
           <Button asChild>

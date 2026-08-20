@@ -1,17 +1,34 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, HeartPulse, PlugZap, Server, Sparkles, TriangleAlert } from 'lucide-react'
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, CircleDashed, GitBranch, HeartPulse, PlugZap, Server, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
-import { EmptyPanel } from '@/components/empty-panel'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 
 export const Route = createFileRoute('/_app/')({
   component: DashboardPage,
 })
+
+const dashboardWorkflows = [
+  { id: 'release-risk-aug-30', title: 'Release risk investigation', status: 'Waiting for input', detail: 'Release context is missing', icon: CircleDashed },
+  { id: 'deployment-regression-001', title: 'Deployment regression', status: 'Running', detail: 'Collecting monitoring evidence', icon: Activity },
+  { id: 'weekly-delivery-health', title: 'Weekly delivery health', status: 'Completed', detail: 'Last run 2 hours ago', icon: CheckCircle2 },
+] as const
+
+const recentActivity = [
+  { title: 'GitHub evidence collected', detail: 'Release risk investigation', time: '12 min ago', icon: GitBranch },
+  { title: 'Jira context needs input', detail: 'Release risk investigation', time: '28 min ago', icon: CircleDashed },
+  { title: 'Delivery health completed', detail: 'Weekly delivery health', time: '2 hours ago', icon: CheckCircle2 },
+] as const
+
+const workflowRuns = [
+  { title: 'Deployment regression', status: 'Running', time: 'Today, 10:42', icon: Activity },
+  { title: 'Weekly delivery health', status: 'Completed', time: 'Today, 08:00', icon: CheckCircle2 },
+  { title: 'Release risk investigation', status: 'Waiting', time: 'Yesterday, 16:18', icon: CircleDashed },
+] as const
 
 function DashboardPage() {
   const queryClient = useQueryClient()
@@ -27,6 +44,10 @@ function DashboardPage() {
     }, 1200)
   }
 
+  function dismissReadyBanner() {
+    queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ initializationBannerDismissed: true }))
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -34,13 +55,13 @@ function DashboardPage() {
         description="A clear view of your organization’s current context and active work."
       />
 
-      {workspace ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} starting={startingInitialization} /> : null}
+      {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewCard icon={Activity} label="Active workflows" value="—" detail="No workflows running" />
-        <OverviewCard icon={PlugZap} label="Integrations" value="—" detail="No integrations connected" />
-        <OverviewCard icon={GitBranch} label="Recent signals" value="—" detail="No signals collected yet" />
-        <OverviewCard icon={TriangleAlert} label="Active issues" value="—" detail="No issue data available" />
+        <OverviewCard icon={Activity} label="Active workflows" value="2" detail="1 running · 1 waiting" />
+        <OverviewCard icon={PlugZap} label="Integrations" value="1" detail="GitHub connected" />
+        <OverviewCard icon={GitBranch} label="Recent signals" value="24" detail="Across the last 24 hours" />
+        <OverviewCard icon={TriangleAlert} label="Active issues" value="3" detail="2 need attention" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
@@ -48,14 +69,14 @@ function DashboardPage() {
           <CardHeader>
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col gap-1.5">
-                <CardTitle>Current workflows</CardTitle>
+                <CardTitle>Workflows</CardTitle>
                 <CardDescription>Investigations that need attention.</CardDescription>
               </div>
-              <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden="true" />
+              <Link to="/workflows" aria-label="View all workflows" className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link>
             </div>
           </CardHeader>
-          <CardContent>
-            <EmptyPanel icon={CircleDashed} title="No active workflows" description="Running investigations will appear here." />
+          <CardContent className="flex flex-col gap-2">
+            {dashboardWorkflows.map((workflow) => <DashboardWorkflowRow key={workflow.id} {...workflow} />)}
           </CardContent>
         </Card>
 
@@ -64,8 +85,8 @@ function DashboardPage() {
             <CardTitle>Recent activity</CardTitle>
             <CardDescription>Evidence and system events from your workspace.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <EmptyPanel icon={Activity} title="No recent activity" description="Activity will appear as your workspace starts receiving signals." />
+          <CardContent className="flex flex-col gap-2">
+            {recentActivity.map((item) => <ActivityRow key={item.title} {...item} />)}
           </CardContent>
         </Card>
       </div>
@@ -88,8 +109,8 @@ function DashboardPage() {
             <CardTitle>Workflow runs</CardTitle>
             <CardDescription>Runs today and over the last seven days.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <EmptyPanel icon={Activity} title="No run data yet" description="A run history chart will appear when workflow projections are available." />
+          <CardContent className="flex flex-col gap-2">
+            {workflowRuns.map((run) => <RunRow key={`${run.title}-${run.time}`} {...run} />)}
           </CardContent>
         </Card>
       </div>
@@ -102,12 +123,14 @@ function InitializationCard({
   workspaceName,
   selectedWorkflows,
   onStart,
+  onDismiss,
   starting,
 }: {
   status: WorkspaceInitializationStatus
   workspaceName?: string
   selectedWorkflows: number
   onStart: () => void
+  onDismiss: () => void
   starting: boolean
 }) {
   const isReady = status === 'ready'
@@ -127,9 +150,22 @@ function InitializationCard({
           {!isReady ? <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? 'Starting Coordinator…' : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button> : <span className="text-sm font-medium text-primary">Coordinator ready</span>}
           {!isReady ? <Link to="/onboarding/workflows" className="text-center text-xs text-muted-foreground underline underline-offset-4 sm:text-right">Review workflow selection</Link> : null}
         </div>
+        {isReady ? <Button type="button" variant="ghost" size="icon" aria-label="Dismiss workspace ready message" onClick={onDismiss}><X /></Button> : null}
       </CardContent>
     </Card>
   )
+}
+
+function DashboardWorkflowRow({ id, title, status, detail, icon: Icon }: { id: string; title: string; status: string; detail: string; icon: typeof Activity }) {
+  return <Link to="/workflows/$workflowId" params={{ workflowId: id }} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="hidden rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground sm:block">{status}</span><ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>
+}
+
+function ActivityRow({ title, detail, time, icon: Icon }: { title: string; detail: string; time: string; icon: typeof Activity }) {
+  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="shrink-0 text-xs text-muted-foreground">{time}</span></div>
+}
+
+function RunRow({ title, status, time, icon: Icon }: { title: string; status: string; time: string; icon: typeof Activity }) {
+  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{time}</span></span><span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"><Timer className="size-3.5" aria-hidden="true" />{status}</span></div>
 }
 
 function OverviewCard({

@@ -48,15 +48,9 @@ func main() {
 
 	activities := workflows.NewActivities(agentBundle, cfg.AgentGatewayURL)
 	w := worker.New(temporalClient, cfg.TaskQueue, worker.Options{})
-	w.RegisterWorkflow(workflows.ReleaseRiskWorkflow)
-	w.RegisterWorkflow(workflows.JiraReleaseWorkflow)
-	w.RegisterWorkflow(workflows.GitHubReleaseWorkflow)
 	w.RegisterWorkflow(coordinator.CoordinatorWorkflow)
 	w.RegisterWorkflow(coordinator.BootstrapProjectWorkflow)
 	w.RegisterDynamicWorkflow(workflows.DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
-	w.RegisterActivity(activities.CollectJiraEvidence)
-	w.RegisterActivity(activities.CollectGitHubEvidence)
-	w.RegisterActivity(activities.SynthesizeReleaseRisk)
 	w.RegisterActivity(activities.ExecuteBlueprintStep)
 
 	logger.Info("agent runtime worker starting", "taskQueue", cfg.TaskQueue)

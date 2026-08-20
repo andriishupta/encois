@@ -6,12 +6,15 @@ This repository is a pnpm workspace with a TypeScript Gateway API/UI and a Go ag
 
 This file is the working guide for contributors and coding agents. The source of truth for product intent, the first architecture baseline, and the competition constraints is:
 
-- [`docs/IDEA.md`](docs/IDEA.md) — product vision, users, MVP, and positioning.
+- [`docs/idea.md`](docs/idea.md) — product vision, users, MVP, and positioning.
 - [`docs/architecture.md`](docs/architecture.md) — proposed system boundaries, runtime, state, and deployment.
 - [`docs/flows.md`](docs/flows.md) — proposed product and runtime flows.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI/JSON Schema boundaries and cross-language type generation.
+- [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint, MCP-shaped tools, ADK, and Temporal communication model.
 - [`docs/security.md`](docs/security.md) — repository-wide security baseline, trust boundaries, and security invariants.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
+- [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state service and execution diagram.
+- [`docs/next-steps.md`](docs/next-steps.md) — current implementation review and ordered next-step backlog.
 - [`docs/hackaton.md`](docs/hackaton.md) — the local digest of the All Things Agentic hackathon requirements.
 
 Do not invent product requirements that conflict with those documents. If implementation reveals a meaningful architectural decision, update the relevant document or add a decision record rather than hiding the decision in code. The architecture documents are a baseline and should evolve with the first working vertical slice.
@@ -46,8 +49,8 @@ Use this layout as the repository grows. Empty directories do not need to be cre
 
 ```text
 apps/
-  web/                 React SPA
-  api/                 Hono HTTP API and webhook ingress
+  dashboard/           React SPA
+  api-gateway/         Hono HTTP API and webhook ingress
   agent-runtime/       Go Temporal workers and Google ADK agents
   agent-gateway/       private Go policy/tool broker; may start in-process with agent-runtime
 packages/
@@ -69,11 +72,11 @@ docs/                  product, hackathon, and later architecture decisions
 The exact names may change, but dependency direction should remain close to:
 
 ```text
-web -> api -> domain/contracts
-api -> Temporal workflows and domain/contracts
+dashboard -> api-gateway -> domain/contracts
+api-gateway -> Temporal workflows and domain/contracts
 agent-runtime -> Temporal workflows, Google ADK, versioned contracts, private agent-gateway
 agent-gateway -> integrations, policy, Secret Manager, and versioned contracts
-api -> control-plane persistence, integrations, observability
+api-gateway -> control-plane persistence, integrations, observability
 integrations/persistence -> domain ports
 ```
 
@@ -85,6 +88,13 @@ Use scoped package names such as `@encois/domain` and `@encois/contracts`. Keep 
 
 ## pnpm and TypeScript conventions
 
+- Prefer a functional style in TypeScript application code: use modules and
+  functions for services, handlers, factories, and state transitions. Avoid
+  application-defined classes unless an external SDK or framework requires a
+  class; keep such SDK classes hidden behind a small functional adapter.
+- Keep shared resources such as the API runtime database in a dedicated module
+  and import them where needed. Do not pass the database through service
+  constructors or route factories.
 - Keep one root `pnpm-lock.yaml` and one workspace definition. Do not use npm or yarn lockfiles.
 - Prefer `workspace:*` for internal dependencies.
 - Pin or constrain tool versions consistently; document upgrades in the root changelog or a decision record when they affect runtime behavior.
@@ -103,9 +113,9 @@ pnpm install
 pnpm -r typecheck
 pnpm -r lint
 pnpm -r test
-pnpm --filter @encois/web dev
+pnpm --filter @encois/dashboard dev
 pnpm --filter @encois/api-gateway dev
-go run ./apps/agent-runtime
+(cd apps/agent-runtime && go run .)
 ```
 
 Prefer the narrowest filter while iterating, then run the full checks before handoff.

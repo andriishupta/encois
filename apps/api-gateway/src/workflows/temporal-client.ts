@@ -1,11 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Client, Connection } from "@temporalio/client";
 import type { AppConfig } from "../config.js";
-import type {
-  WorkflowExecutionProjection,
-  WorkflowStartCommand,
-  WorkflowRunStatus,
-} from "./types.js";
+import type { WorkflowExecutionProjection, WorkflowRunStatus, WorkflowStartCommand } from "./types.js";
 
 export type WorkflowClient = {
   start(command: WorkflowStartCommand, namespace: string): Promise<WorkflowExecutionProjection>;
@@ -25,33 +21,35 @@ function temporalStatus(value: string): WorkflowRunStatus {
   return "running";
 }
 
-export class InMemoryWorkflowClient implements WorkflowClient {
-  private readonly executions = new Map<string, WorkflowExecutionProjection>();
+function createInMemoryWorkflowClient(): WorkflowClient {
+  const executions = new Map<string, WorkflowExecutionProjection>();
 
-  async start(command: WorkflowStartCommand, namespace: string): Promise<WorkflowExecutionProjection> {
-    const timestamp = now();
-    const execution: WorkflowExecutionProjection = {
-      workflowId: command.workflowId,
-      workflowType: command.workflowType,
-      namespace,
-      taskQueue: command.taskQueue,
-      status: "queued",
-      organizationId: command.input.organizationId,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+  return {
+    async start(command, namespace) {
+      const timestamp = now();
+      const execution: WorkflowExecutionProjection = {
+        workflowId: command.workflowId,
+        workflowType: command.workflowType,
+        namespace,
+        taskQueue: command.taskQueue,
+        status: "queued",
+        organizationId: command.input.organizationId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
 
-    this.executions.set(command.workflowId, execution);
-    return execution;
-  }
+      executions.set(command.workflowId, execution);
+      return execution;
+    },
 
-  async get(workflowId: string, organizationId: string, _namespace: string): Promise<WorkflowExecutionProjection | null> {
-    const execution = this.executions.get(workflowId);
-    return execution?.organizationId === organizationId ? execution : null;
-  }
+    async get(workflowId, organizationId) {
+      const execution = executions.get(workflowId);
+      return execution?.organizationId === organizationId ? execution : null;
+    },
+  };
 }
 
-export type TemporalWorkflowClientOptions = {
+type TemporalWorkflowClientOptions = {
   address: string;
   apiKey?: string;
   tlsClientCertPath?: string;
@@ -59,84 +57,89 @@ export type TemporalWorkflowClientOptions = {
   defaultNamespace: string;
 };
 
-export class TemporalWorkflowClient implements WorkflowClient {
-  private connectionPromise?: Promise<Connection>;
+function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): WorkflowClient {
+  let connectionPromise: Promise<Connection> | undefined;
+  let clientPromise: Promise<Client> | undefined;
 
-  public constructor(private readonly options: TemporalWorkflowClientOptions) {}
-
-  private async client(): Promise<Client> {
-    const hasCert = Boolean(this.options.tlsClientCertPath || this.options.tlsClientKeyPath);
-    if (hasCert && (!this.options.tlsClientCertPath || !this.options.tlsClientKeyPath)) {
-      throw new Error("Both Temporal TLS client certificate and key paths are required.");
+  const getClient = async (): Promise<Client> => {
+    const certPath = options.tlsClientCertPath;
+    const keyPath = options.tlsClientKeyPath;
+    let tls: boolean | { clientCertPair: { crt: Buffer; key: Buffer } } = Boolean(options.apiKey);
+    if (certPath || keyPath) {
+      if (!certPath || !keyPath) {
+        throw new Error("Both Temporal TLS client certificate and key paths are required.");
+      }
+      tls = {
+        clientCertPair: {
+          crt: readFileSync(certPath),
+          key: readFileSync(keyPath),
+        },
+      };
     }
 
-    this.connectionPromise ??= Connection.connect({
-      address: this.options.address,
-      apiKey: this.options.apiKey,
-      tls: hasCert
-        ? {
-            clientCertPair: {
-              crt: readFileSync(this.options.tlsClientCertPath as string),
-              key: readFileSync(this.options.tlsClientKeyPath as string),
-            },
-          }
-        : Boolean(this.options.apiKey),
+    connectionPromise ??= Connection.connect({
+      address: options.address,
+      apiKey: options.apiKey,
+      tls,
     });
+    clientPromise ??= connectionPromise.then((connection) => new Client({
+      connection,
+      namespace: options.defaultNamespace,
+    }));
 
-    return new Client({
-      connection: await this.connectionPromise,
-      namespace: this.options.defaultNamespace,
-    });
-  }
+    return clientPromise;
+  };
 
-  async start(command: WorkflowStartCommand, namespace: string): Promise<WorkflowExecutionProjection> {
-    const client = await this.client();
-    const handle = await client.workflow.start(command.workflowType, {
-      args: [command.input],
-      taskQueue: command.taskQueue,
-      workflowId: command.workflowId,
-    });
-    const timestamp = now();
+  return {
+    async start(command, namespace) {
+      const client = await getClient();
+      const handle = await client.workflow.start(command.workflowType, {
+        args: [command.input],
+        taskQueue: command.taskQueue,
+        workflowId: command.workflowId,
+      });
+      const timestamp = now();
 
-    return {
-      workflowId: handle.workflowId,
-      runId: handle.firstExecutionRunId,
-      workflowType: command.workflowType,
-      namespace,
-      taskQueue: command.taskQueue,
-      status: "queued",
-      organizationId: command.input.organizationId,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  }
+      return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+        workflowType: command.workflowType,
+        namespace,
+        taskQueue: command.taskQueue,
+        status: "queued",
+        organizationId: command.input.organizationId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    },
 
-  async get(workflowId: string, organizationId: string, namespace: string): Promise<WorkflowExecutionProjection | null> {
-    if (!workflowId.startsWith(`workflow:${organizationId}:`)) return null;
+    async get(workflowId, organizationId, namespace) {
+      if (!workflowId.startsWith(`workflow:${organizationId}:`)) return null;
 
-    const client = await this.client();
-    const handle = client.workflow.getHandle(workflowId);
-    const description = await handle.describe();
-    const timestamp = now();
+      const client = await getClient();
+      const handle = client.workflow.getHandle(workflowId);
+      const description = await handle.describe();
+      const timestamp = now();
 
-    return {
-      workflowId,
-      runId: description.runId,
-      workflowType: description.type,
-      namespace,
-      taskQueue: description.taskQueue,
-      status: temporalStatus(description.status.name),
-      organizationId,
-      createdAt: description.startTime?.toISOString() ?? timestamp,
-      updatedAt: timestamp,
-    };
-  }
+      return {
+        workflowId,
+        runId: description.runId,
+        workflowType: description.type,
+        namespace,
+        taskQueue: description.taskQueue,
+        status: temporalStatus(description.status.name),
+        organizationId,
+        createdAt: description.startTime?.toISOString() ?? timestamp,
+        updatedAt: timestamp,
+      };
+    },
+  };
 }
 
 export function createWorkflowClient(config: AppConfig): WorkflowClient {
-  if (!config.temporalAddress) return new InMemoryWorkflowClient();
+  if (!config.temporalAddress) return createInMemoryWorkflowClient();
 
-  return new TemporalWorkflowClient({
+  return createTemporalWorkflowClient({
     address: config.temporalAddress,
     apiKey: config.temporalApiKey,
     tlsClientCertPath: config.temporalTlsClientCertPath,

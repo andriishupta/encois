@@ -1,7 +1,12 @@
 import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
-import { WorkflowService, WorkflowServiceError } from "../services/workflow.service.js";
+import {
+  isWorkflowServiceError,
+  startWorkflow,
+  type WorkflowServiceOptions,
+} from "../services/workflow.service.js";
 import type { WorkflowStartRequest } from "../types.js";
+import { PLATFORM_WORKFLOW_TYPES } from "../types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -9,7 +14,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseRequest(value: unknown): WorkflowStartRequest | null {
   if (!isRecord(value) || typeof value.workflowType !== "string") return null;
-  if (!/^[a-zA-Z0-9._-]{1,128}$/.test(value.workflowType)) return null;
+  if (!PLATFORM_WORKFLOW_TYPES.includes(value.workflowType as (typeof PLATFORM_WORKFLOW_TYPES)[number])) return null;
 
   const request: WorkflowStartRequest = { workflowType: value.workflowType };
   for (const field of ["version", "key"] as const) {
@@ -23,7 +28,7 @@ function parseRequest(value: unknown): WorkflowStartRequest | null {
   return request;
 }
 
-export function createWorkflowRoute(service: WorkflowService): Handler<GatewayEnv> {
+export function createWorkflowRoute(options: WorkflowServiceOptions): Handler<GatewayEnv> {
   return async (context) => {
     const request = parseRequest(await context.req.json().catch(() => null));
     if (!request) {
@@ -34,10 +39,10 @@ export function createWorkflowRoute(service: WorkflowService): Handler<GatewayEn
     }
 
     try {
-      const data = await service.start(context.get("principal"), request, context.get("requestId"));
+      const data = await startWorkflow(context.get("principal"), request, context.get("requestId"), options);
       return context.json({ data }, 202);
     } catch (error) {
-      if (error instanceof WorkflowServiceError) {
+      if (isWorkflowServiceError(error)) {
         const status = error.code === "FORBIDDEN" ? 403 : error.code === "WORKFLOW_DEFINITION_NOT_FOUND" ? 422 : 401;
         return context.json({ error: { code: error.code, message: error.message } }, status);
       }
@@ -45,4 +50,3 @@ export function createWorkflowRoute(service: WorkflowService): Handler<GatewayEn
     }
   };
 }
-

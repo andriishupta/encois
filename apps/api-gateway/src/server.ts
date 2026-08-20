@@ -1,11 +1,9 @@
 import { serve } from "@hono/node-server";
-import { createDatabase } from "@encois/persistence";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 
 const config = loadConfig();
-const database = process.env.DATABASE_RUNTIME_URL || process.env.DATABASE_URL ? createDatabase().db : undefined;
-const app = createApp({ config, database });
+const app = createApp({ config });
 
 console.info(
   JSON.stringify({

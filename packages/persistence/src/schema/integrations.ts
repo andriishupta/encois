@@ -12,8 +12,10 @@ import { organizationUnits, organizations } from "./organizations.js";
 import { users } from "./identity.js";
 
 export const integrationStatus = pgEnum("integration_status", ["pending", "active", "disabled", "error"]);
+export type IntegrationStatus = (typeof integrationStatus.enumValues)[number];
 
 export const integrationBindingStatus = pgEnum("integration_binding_status", ["active", "revoked"]);
+export type IntegrationBindingStatus = (typeof integrationBindingStatus.enumValues)[number];
 
 export const integrations = pgTable(
   "integrations",

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, CheckCircle2, Clock3, Github, PlugZap, Save, ShieldCheck } from 'lucide-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { CheckCircle2, Clock3, Github, PlugZap, Save, ShieldCheck } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,21 +14,11 @@ function IntegrationDetailPage() {
   const [enabled, setEnabled] = useState(integrationId === 'github')
   const Icon = integrationId === 'github' ? Github : PlugZap
   const providerName = integrationId === 'github' ? 'GitHub' : integrationId === 'jira' ? 'Jira' : 'Google Workspace'
+  const pageTitle = `${providerName} integration`
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/integrations">
-            <ArrowLeft data-icon="inline-start" />
-            Integrations
-          </Link>
-        </Button>
-        <span>/</span>
-        <span className="font-mono">{integrationId}</span>
-      </div>
-
-      <PageHeader title={providerName} description="Provider connection, scope, and read permissions." actions={<Button disabled><Save data-icon="inline-start" />Save changes</Button>} />
+      <PageHeader title={pageTitle} description="Provider connection, scope, and read permissions." actions={<Button disabled><Save data-icon="inline-start" />Save changes</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard icon={Icon} label="Provider" value={providerName} />

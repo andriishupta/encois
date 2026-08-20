@@ -10,14 +10,16 @@ import { requestLoggingMiddleware } from "./middleware/request-logging.js";
 import type { AppConfig } from "./config.js";
 import { loadConfig } from "./config.js";
 import { healthRouter } from "./health/router.js";
-import { createV1Router } from "./api/v1/router.js";
-import type { PersistenceDatabase } from "@encois/persistence";
+import { createIntegrationsRouter } from "./integrations/router.js";
+import { webhooksRouter } from "./webhooks/router.js";
 import { createWorkflowClient, type WorkflowClient } from "./workflows/temporal-client.js";
+import { createWorkflowsRouter } from "./workflows/router.js";
+
+const ACTIVE_API_VERSION = "v1" as const;
 
 export type CreateAppOptions = {
   authenticate?: AosAuthenticator;
   config?: AppConfig;
-  database?: PersistenceDatabase;
   workflowClient?: WorkflowClient;
 };
 
@@ -51,14 +53,22 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
 
   const apiRouter = new Hono<GatewayEnv>();
   apiRouter.use("*", aosMiddleware({ authenticate: options.authenticate }));
-  apiRouter.route(
-    "/v1",
-    createV1Router({
-      config,
-      database: options.database,
+
+  const v1Router = new Hono<GatewayEnv>();
+  v1Router.route("/integrations", createIntegrationsRouter());
+  v1Router.route(
+    "/workflows",
+    createWorkflowsRouter(
+      {
+        temporalNamespace: config.temporalNamespace,
+        temporalTaskQueue: config.temporalTaskQueue,
+      },
       workflowClient,
-    }),
+    ),
   );
+  v1Router.route("/webhooks", webhooksRouter);
+
+  apiRouter.route(`/${ACTIVE_API_VERSION}`, v1Router);
   app.route("/api", apiRouter);
 
   app.notFound(notFoundHandler);

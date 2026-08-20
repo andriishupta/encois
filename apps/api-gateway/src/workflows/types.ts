@@ -1,11 +1,16 @@
-export type WorkflowRunStatus =
-  | "queued"
-  | "running"
-  | "waiting"
-  | "partial"
-  | "failed"
-  | "completed"
-  | "cancelled";
+import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
+
+export type WorkflowRunStatus = PersistenceWorkflowRunStatus;
+
+export const USER_BLUEPRINT_WORKFLOW_TYPE = "encois.user-blueprint.v1";
+export const COORDINATOR_WORKFLOW_TYPE = "CoordinatorWorkflow";
+export const BOOTSTRAP_WORKFLOW_TYPE = "BootstrapProjectWorkflow";
+
+export const PLATFORM_WORKFLOW_TYPES = [
+  USER_BLUEPRINT_WORKFLOW_TYPE,
+  COORDINATOR_WORKFLOW_TYPE,
+  BOOTSTRAP_WORKFLOW_TYPE,
+] as const;
 
 export type WorkflowStartRequest = {
   workflowType: string;
@@ -26,6 +31,7 @@ export type WorkflowStartCommand = {
     workflowId: string;
     scope: readonly string[];
     userId?: string;
+    blueprint?: Record<string, unknown>;
     payload: Record<string, unknown>;
     workflowScope: Record<string, unknown>;
   };

@@ -4,6 +4,7 @@ export type WorkspaceInitializationStatus = 'pending-initialization' | 'initiali
 
 export type MockOnboardingState = {
   onboardingComplete: boolean
+  initializationBannerDismissed?: boolean
   email?: string
   workspaceName?: string
   teamSize?: string
@@ -20,6 +21,7 @@ const STORAGE_KEY = 'encois.mock.onboarding'
 
 const emptyState: MockOnboardingState = {
   onboardingComplete: false,
+  initializationBannerDismissed: false,
   selectedWorkflows: [],
   status: 'pending-initialization',
 }

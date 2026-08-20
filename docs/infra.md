@@ -4,6 +4,18 @@
 
 This document describes the smallest deployment that can host the Encois dashboard and Gateway API while leaving a clean path for the Go Temporal/ADK workers. It is a blueprint, not a live deployment: no GCP API call is made by creating these files, and no credentials are stored in the repository.
 
+## Current deployment blockers
+
+The Terraform scaffold is ahead of the Go worker container contract and must
+not be applied as a working Agent Runtime deployment yet. In particular,
+Terraform currently names Temporal variables as `TEMPORAL_ADDRESS` and
+`TEMPORAL_CLIENT_CREDENTIALS`, while the Go runtime reads
+`TEMPORAL_HOST_PORT` and `TEMPORAL_API_KEY`. The worker also has no HTTP
+readiness endpoint although the Cloud Run service reserves port 8080. Align
+these names, add a worker health model or use a worker-appropriate deployment,
+and add the private Agent Gateway URL/auth configuration before enabling the
+runtime service in Cloud Run.
+
 The broader release options are documented in [`docs/CI-CD.md`](CI-CD.md). This file stays focused on the infrastructure resources and their manual bootstrap.
 
 ## Target shape
@@ -92,10 +104,10 @@ The following pieces are intentionally pending rather than being guessed now:
 
 - `Dockerfile`/Compose definitions for dashboard, API, Go Agent Runtime, and private Agent Gateway.
 - A local PostgreSQL strategy that matches the Cloud SQL/Drizzle permissions model.
-- A local Temporal option or a documented Temporal Cloud namespace flow for the future worker. The worker does not exist yet, so there is no useful Temporal command to standardize today.
+- A local Temporal option or a documented Temporal Cloud namespace flow for the existing worker. The remaining work is the container entrypoint, health endpoint, and a repeatable command that starts the worker against the selected Temporal environment.
 - A local end-to-end command that starts all services and synthetic data together.
 
-Once the Go runtime exists, the likely options are either a local Temporal development server for offline work or Temporal Cloud credentials injected through environment/Secret Manager for a cloud-connected demo. That decision should be made together with the worker's Temporal client configuration, not encoded prematurely in Terraform.
+For the existing Go runtime, the remaining choice is either a local Temporal development server for offline work or Temporal Cloud credentials injected through environment/Secret Manager for a cloud-connected demo. That decision should be made together with the worker's Temporal client configuration, not encoded prematurely in Terraform.
 
 For the hackathon, the practical progression is: prove dashboard/API locally, add worker/runtime containers, build immutable images in CI, deploy the same images to Cloud Run, and show the hosted Cloud Run/API/agent run evidence in the demo. Local Docker is useful for reproducibility but is not a substitute for the required Google Cloud deployment proof.
 

@@ -190,16 +190,16 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt }: { refreshCount: n
           }}
         />
         <Panel position="top-left">
-          <div className="flex items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
-            <span className="workflow-live-dot" aria-hidden="true" />
-            <span className="font-medium">Live execution</span>
-            <span className="text-muted-foreground">{lastPolledAt ? 'Updated just now' : 'Watching for updates'}</span>
-          </div>
-        </Panel>
-        <Panel position="bottom-left">
-          <div className="flex items-center gap-3 rounded-md border bg-background/95 px-3 py-2 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-            <span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span>
-            <span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-pending" />Pending</span>
+          <div className="flex flex-col gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+            <div className="flex items-center gap-2">
+              <span className="workflow-live-dot" aria-hidden="true" />
+              <span className="font-medium">Live execution</span>
+              <span className="text-muted-foreground">{lastPolledAt ? 'Updated just now' : 'Watching for updates'}</span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span>
+              <span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-pending" />Pending</span>
+            </div>
           </div>
         </Panel>
       </ReactFlow>

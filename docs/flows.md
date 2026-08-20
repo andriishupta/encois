@@ -4,7 +4,13 @@
 
 This document describes what a person sees and what the system does. It complements [`architecture.md`](architecture.md), which defines the components and deployment model.
 
-Cross-language payloads and generation rules are defined in [`contracts.md`](contracts.md). The public API uses OpenAPI; Temporal and private Agent Gateway payloads use versioned JSON Schema.
+The current repository implements the generic Workflow Blueprint skeleton and
+synthetic Agent Gateway tools. The flows below describe the target behavior as
+well as the current direction; real authentication, provider APIs, Graph,
+Memory Bank, and production policy enforcement are intentionally marked as
+later steps rather than treated as implemented.
+
+Cross-language payloads and generation rules are defined in [`contracts.md`](contracts.md). The generic MCP/ADK/Temporal communication model is defined in [`protocols.md`](protocols.md). The public API uses OpenAPI; Temporal and private Agent Gateway payloads use versioned JSON Schema.
 
 ## 1. Shared flow rules
 
@@ -87,7 +93,7 @@ CoordinatorWorkflow
   -> inspect freshness and enabled Integration Packs
   -> retrieve relevant scoped Graph/Memory Bank references
   -> ask ADK/Gemini for a typed change proposal
-  -> validate workflow type, tools, scope, budget, and approval requirements deterministically
+  -> validate Blueprint version, step graph, tools, scope, budget, and approval requirements deterministically
   -> Gateway API persists the blueprint/projection
   -> Temporal starts or updates a registered Workflow/Schedule
   -> wait again
@@ -95,10 +101,9 @@ CoordinatorWorkflow
 ```
 
 Temporal can execute only Workflow types registered by a Worker. The creator
-can select a pre-registered standard workflow or a generic blueprint-driven
-workflow; it cannot invent and deploy new Go code at runtime. Blueprint
-creation is therefore configuration plus validation, not dynamic code
-generation.
+selects the pre-registered generic Blueprint Workflow; it cannot invent and
+deploy new Go code at runtime. Blueprint creation is therefore configuration
+plus validation, not dynamic code generation.
 
 ## 2.3 User-created workflow builder
 
@@ -144,15 +149,15 @@ Temporal Cloud stores the Workflow history and schedules tasks. It does not exec
 
 The Agent Gateway is a private east-west service (or an equivalent in-process Go module for the first slice); it is not a browser-facing route. The Go Runtime sends it a small, validated execution context rather than fetching control-plane data from Postgres.
 
-For a release investigation, use a stable business ID such as:
+For any company-specific Blueprint, use a stable business ID such as:
 
 ```text
-release-risk:acme:release-aug-30
+workflow:acme:release-readiness:checkout:aug-30
 ```
 
-The Gateway API uses `SignalWithStart` or an equivalent idempotent start rule. If the Workflow is already running, the request is attached to the existing investigation or returns its current projection. This prevents repeated clicks from creating duplicate release investigations.
+The Gateway API uses `SignalWithStart` or an equivalent idempotent start rule. If the Workflow is already running, the request is attached to the existing execution or returns its current projection. This prevents repeated clicks from creating duplicate work for the same Blueprint and business key.
 
-## 3. Scheduled or event-triggered investigation
+## 3. Scheduled or event-triggered Blueprint execution
 
 ```mermaid
 sequenceDiagram
@@ -160,21 +165,19 @@ sequenceDiagram
     participant API as Gateway API
     participant Temporal as Temporal Cloud
     participant Runtime as Go Agent Runtime
-    participant Memory as Memory Bank
     participant Gateway as Private Agent Gateway
     participant Sources as Jira/GitHub/Monitoring
-    participant Graph as Spanner Graph
+    participant Data as Evidence and projection stores
     participant Gemini as Gemini
     participant UI as React SPA
 
-    Trigger->>API: release-risk event
+    Trigger->>API: Blueprint trigger/event
     API->>API: authenticate trigger and resolve organization scope
-    API->>Temporal: start ReleaseRiskWorkflow
+    API->>Temporal: start encois.user-blueprint.v1
     API-->>UI: workflowId + queued status
     Runtime-->>Temporal: poll workflow task queue
     Temporal-->>Runtime: deliver workflow task
-    Runtime->>Memory: retrieve scoped agent memory
-    Runtime->>Runtime: ADK coordinator delegates specialists
+    Runtime->>Runtime: generic Blueprint interpreter schedules steps
 
     par Jira specialist
         Runtime->>Gateway: request approved Jira tool
@@ -191,16 +194,16 @@ sequenceDiagram
     end
 
     Gateway-->>Runtime: validated evidence references
-    Gateway->>Gateway: persist raw provider snapshots to Cloud Storage
-    Runtime->>Graph: write normalized facts and relationships
+    Gateway->>Data: persist evidence references and raw artifacts when enabled
     Runtime->>Gemini: synthesize structured insight
     Gemini-->>Runtime: risk, confidence, explanation, evidence IDs
-    Runtime->>Graph: write insight projection and provenance
+    Runtime->>Data: persist result projection and provenance
     Temporal-->>API: workflow result/status
-    API-->>UI: scoped status, graph path, evidence, and insight
+    API-->>UI: scoped status, evidence, and insight
 ```
 
 The Go runtime does not pass large raw provider responses between agents. Activities persist or reference evidence, and agents exchange small structured results.
+Graph facts and Agent Memory are optional later projections of the same evidence and result contracts.
 
 ## 3.1 Communication, policy, and data flow
 
@@ -234,7 +237,7 @@ Gateway API DB  = control-plane registry, projections, memberships, audit
 
 If the Gateway API uses Postgres and Drizzle, only the TypeScript control plane owns that database and its migrations. The Go Runtime does not query it. It receives IDs, scope, policy version, and data references through contracts.
 
-## 4. Release investigation with missing release context
+## 4. Example Blueprint: release readiness with missing context
 
 Example request:
 
@@ -245,46 +248,50 @@ User: “Чи зробимо ми реліз до кінця тижня?”
 ### 4.1 Start or reuse
 
 ```text
-React sends POST /investigations
+React sends POST /v1/workflows
   -> Gateway API authenticates actor and resolves scope
-  -> API derives release-risk:acme:next-release
+  -> API derives workflow:acme:release-readiness:next-release
   -> API uses SignalWithStart in Temporal Cloud
-  -> existing active Workflow is reused, or a new Workflow starts
-  -> API returns investigationId and status
+  -> existing active execution is reused, or a new generic Workflow starts
+  -> API returns workflowId and status
 ```
 
 The Workflow ID is the logical investigation. A Temporal Run ID is one execution of that Workflow. A refresh can continue the existing Workflow, use `continue-as-new`, or start a child run while preserving one user-facing investigation.
 
 ### 4.2 Missing release
 
-The first Activity, `ResolveReleaseActivity`, checks the graph, configured integrations, and existing projections.
+The first Blueprint step, `resolve-context`, checks configured integrations and
+existing projections. A later implementation may use Graph or Memory Bank as
+additional context sources.
 
 ```text
 Release found
-  -> continue to specialist Workflows
+  -> continue to the Blueprint's specialist/tool steps
 
 Release not found
   -> Workflow state = WAITING_FOR_INPUT
   -> reason = RELEASE_NOT_FOUND
   -> Gateway API exposes requiredInput to React
-  -> Workflow waits for release-context-provided Signal
+  -> Workflow waits for context-provided Signal
 ```
 
 This is a business pause, not a retryable infrastructure error. The UI can ask the user to select a Jira release, enter a project and target date, or cancel the investigation.
 
-If the user wants Encois to create a Jira release, that is a separate write operation requiring explicit approval. The MVP may instead save the release context in Encois and continue in read-only mode.
+If the user wants Encois to create a Jira release, that is a separate write
+operation requiring explicit approval. The MVP may instead save the context in
+Encois and continue in read-only mode.
 
 ### 4.3 Resume the same Workflow
 
 ```text
 User supplies release context
-  -> React sends POST /investigations/:id/signals
+  -> React sends POST /v1/workflows/:id/signals
   -> Gateway API validates actor and payload
-  -> API sends release-context-provided Signal
+  -> API sends context-provided Signal
   -> Temporal wakes the existing Workflow
   -> Workflow checks evidence freshness
   -> only missing or stale Activities run
-  -> specialist Workflows execute in parallel
+  -> independent Blueprint steps execute in parallel
 ```
 
 The system does not create a new agent process after the pause. The same Go Worker can execute the resumed Workflow, potentially on a different container instance after a restart.
@@ -297,11 +304,10 @@ Example: “Are we on track for the August 30 release, and what changed after ye
 User
   -> React sends question to Gateway API
   -> API authenticates user and resolves scope
-  -> API starts or queries a Temporal Workflow
+  -> API starts or queries a generic Temporal Workflow
   -> Go Agent Runtime Worker polls and executes the Workflow
-  -> ADK coordinator retrieves relevant Memory Bank context
-  -> specialists query permitted tools through Agent Gateway
-  -> Activities read/write Spanner Graph and evidence references
+  -> ADK agent step uses permitted tools through Agent Gateway
+  -> Activities persist evidence references; Graph/Memory are optional later stores
   -> Gemini produces structured answer
   -> API returns answer + graph path + evidence + freshness
   -> React renders the answer and workflow progress
@@ -314,14 +320,11 @@ If fresh evidence already exists, the workflow can answer quickly. If evidence i
 A specialist is a logical agent definition. An Integration Pack provides the connector and tools. The MVP does not deploy one server per specialist or repository.
 
 ```text
-ReleaseRiskWorkflow
-  -> JiraInvestigationWorkflow
-      -> CollectJiraActivity(project/team)
-  -> GitHubInvestigationWorkflow
-      -> CollectRepositoryActivity(repo-a)
-      -> CollectRepositoryActivity(repo-b)
-  -> MonitoringInvestigationWorkflow
-      -> CollectMonitoringActivity(service)
+encois.user-blueprint.v1
+  -> tool step: jira.search_issues
+  -> tool step: github.search_pull_requests
+  -> tool step: monitoring.query_errors
+  -> agent step: context-synthesizer
 ```
 
 The same Go Worker deployment can execute all these Workflow and Activity instances. A separate Worker deployment is introduced only when operational isolation or independent scaling justifies it.
@@ -420,7 +423,9 @@ React renders:
   - evidence, timestamps, retries, Signals, Activities, and trace links
 ```
 
-The first canvas should show a release investigation and its graph-backed specialist steps. A full free-form graph editor is deferred; the initial goal is operational understanding.
+The first canvas may show a release-readiness Blueprint and its tool/agent
+steps. A full free-form graph editor is deferred; the initial goal is
+operational understanding.
 
 ## 11. Failure, retry, and recovery
 
@@ -442,16 +447,16 @@ Activities that call external systems must be idempotent. Large payloads and sen
 The first vertical slice needs these API-level projections:
 
 - `GET /overview` — scoped health, active workflows, warnings, freshness.
-- `GET /investigations/:id` — workflow status, specialist branches, evidence, graph references, insight, errors.
-- `POST /investigations` — start a user-requested Temporal Workflow.
-- `POST /investigations/:id/signals` — send an authorized release-context, approval, cancellation, or external-event Signal.
+- `GET /workflows/:id` — workflow status, steps, evidence references, result, and errors.
+- `POST /workflows` — start a user-requested Blueprint execution.
+- `POST /workflows/:id/signals` — send an authorized context, approval, cancellation, or external-event Signal.
 - `POST /queries` — start a bounded question or return a fresh answer.
 - `GET /agents` — approved definitions and current activity projection.
 - `GET /integrations` — packs, health, granted scopes, and last sync.
 - `GET /org` — hierarchy and permitted scope projection.
 - `GET /graph/paths` — scoped relationship paths for canvas and evidence explanations.
 
-These are intent-level contracts, not final routes. They should be validated and versioned in `packages/contracts` once the API is implemented.
+These are intent-level contracts, not final routes. They should be validated and versioned in the planned `packages/contracts` package when the first public vertical-slice routes are promoted from scaffold to stable API.
 
 ## 13. Product boundary for the MVP
 
@@ -459,12 +464,10 @@ Included:
 
 - one organization hierarchy;
 - synthetic or authorized GitHub, Jira, and monitoring data;
-- scheduled or event-triggered release-risk investigation;
+- scheduled or event-triggered company-specific Blueprint execution;
 - delegated read-only specialists in Go ADK;
 - Temporal durable execution with waits, retries, Signals, and parallel branches;
-- scoped Agent Engine Memory Bank context;
-- Spanner Graph organization and relationship context;
-- evidence-backed dashboard, canvas projection, and natural-language query;
+- evidence-backed dashboard, canvas projection, and natural-language query using control-plane projections;
 - visible logs/traces and bounded failures.
 
 Deferred:
@@ -475,4 +478,5 @@ Deferred:
 - a marketplace for third-party packs;
 - customer-specific physical deployment;
 - enterprise SSO and complex policy administration;
-- advanced graph algorithms and full GraphRAG document pipelines.
+- advanced graph algorithms and full GraphRAG document pipelines;
+- Agent Engine Memory Bank and Spanner Graph integrations beyond the generic store boundaries;

@@ -130,7 +130,7 @@ PR checks
   -> record revision, image digest, migration, and run evidence
 ```
 
-For the future worker path, add the Go runtime image and Temporal configuration to the same release only after the worker has a stable health endpoint and bounded startup behavior. Do not make the API deploy wait for an undeveloped worker service.
+For the Go worker deployment path, add the runtime image and Temporal configuration to the same release only after the worker has a stable health endpoint and bounded startup behavior. Do not make the API deploy wait for a worker service that is not yet deployable.
 
 ## Environment model
 

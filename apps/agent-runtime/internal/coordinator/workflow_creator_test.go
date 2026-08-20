@@ -3,7 +3,7 @@ package coordinator
 import "testing"
 
 func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
-	creator := NewWorkflowCreator([]string{"ReleaseRiskWorkflow"})
+	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-1",
@@ -24,7 +24,7 @@ func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
 }
 
 func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
-	creator := NewWorkflowCreator([]string{"ReleaseRiskWorkflow"})
+	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-1",
@@ -35,7 +35,7 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 			Blueprint: WorkflowBlueprint{
 				BlueprintID:  "release-risk",
 				Version:      "1.0.0",
-				WorkflowType: "ReleaseRiskWorkflow",
+				WorkflowType: UserBlueprintWorkflowType,
 			},
 		}},
 	})

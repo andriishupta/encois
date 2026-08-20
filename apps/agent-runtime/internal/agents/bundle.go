@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/model/gemini"
 	"google.golang.org/adk/v2/runner"
 	"google.golang.org/genai"
@@ -22,6 +23,7 @@ type Config struct {
 type Bundle struct {
 	Coordinator              agent.Agent
 	WorkflowCreator          agent.Agent
+	AgentModel               model.LLM
 	Runner                   *runner.Runner
 	WorkflowCreatorRunner    *runner.Runner
 	ModelName                string
@@ -64,30 +66,11 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		ThinkingConfig: &genai.ThinkingConfig{ThinkingLevel: thinkingLevel},
 	}
 
-	jiraSpecialist, err := llmagent.New(llmagent.Config{
-		Name:        "jira_specialist",
-		Description: "Reads Jira release task evidence through the Agent Gateway.",
-		Model:       model,
-		Instruction: "Analyze only Jira release task evidence supplied through approved tools. Do not invent facts or permissions.",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create Jira specialist: %w", err)
-	}
-	githubSpecialist, err := llmagent.New(llmagent.Config{
-		Name:        "github_specialist",
-		Description: "Reads GitHub release activity evidence through the Agent Gateway.",
-		Model:       model,
-		Instruction: "Analyze only GitHub release evidence supplied through approved tools. Do not invent facts or permissions.",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create GitHub specialist: %w", err)
-	}
 	coordinator, err := llmagent.New(llmagent.Config{
-		Name:        "release_risk_coordinator",
-		Description: "Coordinates Jira and GitHub specialists for a release-risk investigation.",
+		Name:        "coordinator",
+		Description: "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
 		Model:       coordinatorModel,
-		Instruction: "Synthesize evidence from Jira and GitHub specialists into a concise, evidence-linked release-risk assessment.",
-		SubAgents:   []agent.Agent{jiraSpecialist, githubSpecialist},
+		Instruction: "Coordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
 		// The coordinator owns cross-source planning and must use the deeper
 		// reasoning profile configured for high-responsibility agents.
 		GenerateContentConfig: deepThinkingConfig,
@@ -100,7 +83,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
 		Model:                 coordinatorModel,
-		Instruction:           "Propose only typed workflow changes using registered workflow types, allowed tools, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
+		Instruction:           "Propose only typed changes to the generic user Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
 		GenerateContentConfig: deepThinkingConfig,
 	})
 	if err != nil {
@@ -117,10 +100,51 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	}
 	bundle.Coordinator = coordinator
 	bundle.WorkflowCreator = workflowCreator
+	bundle.AgentModel = model
 	bundle.Runner = adkRunner
 	bundle.WorkflowCreatorRunner = workflowCreatorRunner
 	bundle.Enabled = true
 	return bundle, nil
+}
+
+// RunAgentStep executes an approved Agent Definition selected by a Blueprint.
+// The definition and its tool allowlist are validated before this Activity is
+// scheduled; this method does not let model output create capabilities.
+func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string, input map[string]any) (string, error) {
+	if b == nil || b.AgentModel == nil {
+		return "", nil
+	}
+	agentDefinition, err := llmagent.New(llmagent.Config{
+		Name:        "blueprint_agent_step",
+		Description: "Executes one approved Encois Agent Definition inside a generic Blueprint.",
+		Model:       b.AgentModel,
+		Instruction: fmt.Sprintf("Execute the approved Agent Definition %q. Use only the supplied structured input and approved tool results. Return a concise structured result with evidence references where available. Do not make authorization decisions.", definition),
+	})
+	if err != nil {
+		return "", fmt.Errorf("create blueprint agent step: %w", err)
+	}
+	agentRunner, err := runner.NewInMemory("encois-blueprint-agent-"+sessionID, agentDefinition)
+	if err != nil {
+		return "", fmt.Errorf("create blueprint agent runner: %w", err)
+	}
+
+	prompt := fmt.Sprintf("Approved Agent Definition: %s\nStructured input: %v", definition, input)
+	content := genai.NewContentFromText(prompt, genai.RoleUser)
+	var parts []string
+	for event, runErr := range agentRunner.Run(ctx, "system", sessionID, content, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
+		if runErr != nil {
+			return "", runErr
+		}
+		if event == nil || event.Content == nil {
+			continue
+		}
+		for _, part := range event.Content.Parts {
+			if part != nil && part.Text != "" {
+				parts = append(parts, part.Text)
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n")), nil
 }
 
 func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (string, error) {

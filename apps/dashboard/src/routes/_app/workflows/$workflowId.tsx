@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, CheckCircle2, CircleDashed, Clock3, GitBranch, Play, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { CheckCircle2, CircleDashed, Clock3, GitBranch, Play, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { WorkflowCanvas } from '@/components/workflow-canvas'
 import { Button } from '@/components/ui/button'
@@ -25,17 +25,6 @@ function WorkflowDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/workflows">
-            <ArrowLeft data-icon="inline-start" />
-            Workflows
-          </Link>
-        </Button>
-        <span>/</span>
-        <span className="truncate font-mono">{workflowId}</span>
-      </div>
-
       <PageHeader title="Release risk investigation" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
