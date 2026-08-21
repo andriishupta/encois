@@ -370,16 +370,28 @@ Coordinator then performs the private, policy-checked start.
 ## Public and internal API boundaries
 
 The public Gateway API exposes application concepts, not raw MCP or Temporal
-details:
+details. The currently implemented browser-facing routes are mounted under
+`/api/v1`:
 
 ```text
-POST /v1/workflows
-GET  /v1/workflows/{workflowId}
-POST /v1/workflows/{workflowId}/signals
-GET  /v1/workflows/{workflowId}/events
-GET  /v1/tools                 # scoped catalog projection, later
-GET  /v1/integrations
+POST /api/v1/workflows
+GET  /api/v1/workflows
+GET  /api/v1/workflows/{workflowId}
+POST /api/v1/workflows/{workflowId}/signals
+POST /api/v1/workflows/{workflowId}/updates
+GET  /api/v1/integrations
+POST /api/v1/integrations/{integrationId}
+POST /api/v1/workflows/plans/validate
+POST /api/v1/workflows/plans
+POST /api/v1/workflows/plans/{planId}/approve
+POST /api/v1/workflows/plans/{planId}/apply
 ```
+
+The Dashboard currently consumes workflow list/detail/start and integration
+list/update. Overview counters are derived from those projections. Workflow
+events, activity/evidence history, provider freshness, organization hierarchy,
+agent activity, graph paths, and query endpoints remain target contracts and
+must not be represented as static API data in the UI.
 
 For the generic workflow, the start request may carry an inline validated
 Blueprint or reference an approved registry snapshot:

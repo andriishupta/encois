@@ -1,18 +1,21 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { WorkflowExecutionStatus, type WorkflowStatusReason } from '@encois/contracts'
 import { Activity, ArrowUpRight, CircleDashed, Clock3, GitBranch, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listWorkflows } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/workflows/')({
   component: WorkflowsPage,
 })
 
 function WorkflowsPage() {
-  const workflows = useQuery({ queryKey: ['workflows'], queryFn: listWorkflows })
+  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
+  const hasWorkflows = Boolean(workflows.data?.length)
 
   return (
     <div className="flex flex-col gap-8">
@@ -30,12 +33,12 @@ function WorkflowsPage() {
       />
       {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflows…</p> : null}
       {workflows.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load workflows: {workflows.error.message}</CardContent></Card> : null}
-      {!workflows.isLoading && !workflows.isError && workflows.data?.length ? <div className="grid gap-4">{workflows.data.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} description="Typed workflow projection from the Gateway API." icon={workflow.status === 'completed' ? Activity : GitBranch} />)}</div> : null}
-      <Card>
+      {hasWorkflows ? <div className="grid gap-4">{workflows.data?.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} statusReason={workflow.statusReason} description="Typed workflow projection from the Gateway API." icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}</div> : null}
+      {!workflows.isLoading && !workflows.isError && !hasWorkflows ? <Card>
         <CardContent className="pt-6">
           <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a Blueprint execution to create the first durable workflow." />
         </CardContent>
-      </Card>
+      </Card> : null}
     </div>
   )
 }
@@ -44,12 +47,14 @@ function WorkflowPreviewCard({
   id,
   title,
   status,
+  statusReason,
   description,
   icon: Icon,
 }: {
   id: string
   title: string
-  status: string
+  status: WorkflowExecutionStatus
+  statusReason?: WorkflowStatusReason
   description: string
   icon: typeof GitBranch
 }) {
@@ -69,11 +74,15 @@ function WorkflowPreviewCard({
           <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          <span className="rounded-full bg-secondary px-2 py-1 text-secondary-foreground">{status}</span>
+          <span className="rounded-full bg-secondary px-2 py-1 text-secondary-foreground">{formatStatus(status, statusReason)}</span>
           <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />Last run unavailable</span>
           <span className="truncate font-mono">{id}</span>
         </CardContent>
       </Card>
     </Link>
   )
+}
+
+function formatStatus(status: WorkflowExecutionStatus, statusReason?: WorkflowStatusReason): string {
+  return statusReason ? `${status} · ${statusReason.replaceAll('_', ' ')}` : status
 }

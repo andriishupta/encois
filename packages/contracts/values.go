@@ -190,6 +190,15 @@ const (
 	RedactionDeferred MemoryRedactionStatus = "deferred"
 )
 
+type IntegrationStatus string
+
+const (
+	IntegrationPending  IntegrationStatus = "pending"
+	IntegrationActive   IntegrationStatus = "active"
+	IntegrationDisabled IntegrationStatus = "disabled"
+	IntegrationError    IntegrationStatus = "error"
+)
+
 type SourceFreshness struct {
 	Source     string          `json:"source"`
 	ObservedAt string          `json:"observedAt"`

@@ -175,3 +175,11 @@ export const MemoryRedactionStatus = {
   Deferred: "deferred",
 } as const;
 export type MemoryRedactionStatus = (typeof MemoryRedactionStatus)[keyof typeof MemoryRedactionStatus];
+
+export const IntegrationStatus = {
+  Pending: "pending",
+  Active: "active",
+  Disabled: "disabled",
+  Error: "error",
+} as const;
+export type IntegrationStatus = (typeof IntegrationStatus)[keyof typeof IntegrationStatus];

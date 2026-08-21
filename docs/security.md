@@ -121,6 +121,15 @@ Roles are policy inputs, not permissions by themselves. A role must be combined 
 
 For the Google Cloud baseline, Identity Platform/Firebase ID tokens establish the external identity only. The Gateway verifies the token with Application Default Credentials, maps the subject to the local `users` and `organization_memberships` tables, and computes effective scope from local roles and hierarchy grants. Do not treat arbitrary token claims, email domains, or client-selected organization IDs as authorization.
 
+The Dashboard must fail closed when no bearer session exists. Its current local
+development scaffold stores a tab-scoped bearer session in `sessionStorage`
+and accepts a token supplied through a development-only
+fixture environment variable; `VITE_*` values are embedded in the bundle and
+must never hold a hosted or production credential. The production browser
+adapter must use the Identity Platform/Firebase client SDK with token refresh,
+logout, and revocation handling, while the Gateway remains the authorization
+source of truth.
+
 Never let the model select a role, organization, user identity, connector, or scope. Never infer authorization from a natural-language request.
 
 The effective scope calculation is deterministic:

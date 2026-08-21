@@ -1,13 +1,29 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { Activity, ArrowLeft, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAuthSession, getDevelopmentAuthSession, setAuthSession } from '@/lib/auth'
+import { getMockOnboardingState } from '@/lib/onboarding'
 
 export const Route = createFileRoute('/login')({
+  beforeLoad: () => {
+    if (getAuthSession()) {
+      throw redirect({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+    }
+  },
   component: LoginPage,
 })
 
 function LoginPage() {
+  const navigate = useNavigate()
+  const developmentSession = getDevelopmentAuthSession()
+
+  function signInWithDevelopmentSession() {
+    if (!developmentSession) return
+    setAuthSession(developmentSession)
+    void navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+  }
+
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted/30 px-4 py-8">
       <Card className="w-full max-w-md">
@@ -30,10 +46,14 @@ function LoginPage() {
             Password
             <input id="password" name="password" type="password" placeholder="••••••••" className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" />
           </label>
-          <Button type="button" className="w-full" disabled>
-            Sign in
+          <Button type="button" className="w-full" disabled={!developmentSession} onClick={signInWithDevelopmentSession}>
+            {developmentSession ? 'Use local development session' : 'Sign in'}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">Authentication is not connected yet.</p>
+          <p className="text-center text-xs text-muted-foreground">
+            {developmentSession
+              ? 'Identity Platform token loaded from the local development environment.'
+              : 'Identity Platform client sign-in is not configured for this build.'}
+          </p>
           <p className="text-center text-sm text-muted-foreground">
             New to Encois?{' '}
             <Link to="/sign-up" className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4">
@@ -42,9 +62,9 @@ function LoginPage() {
             </Link>
           </p>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/">
+            <Link to="/login">
               <ArrowLeft data-icon="inline-start" />
-              Back to dashboard
+              Stay on sign in
             </Link>
           </Button>
         </CardContent>

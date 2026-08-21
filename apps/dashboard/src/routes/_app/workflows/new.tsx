@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { ContractVersion, TemporalWorkflowType, WorkflowStepKind, type WorkflowStartRequest } from '@encois/contracts'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { startWorkflow } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/workflows/new')({
   component: NewWorkflowPage,
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/_app/workflows/new')({
 
 function NewWorkflowPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [projectKey, setProjectKey] = useState('DEMO')
   const [workflowKey, setWorkflowKey] = useState('project-context-demo')
   const mutation = useMutation({
@@ -38,7 +40,10 @@ function NewWorkflowPage() {
       }
       return startWorkflow(request)
     },
-    onSuccess: (response) => navigate({ to: '/workflows/$workflowId', params: { workflowId: response.workflowId } }),
+    onSuccess: async (response) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() })
+      await navigate({ to: '/workflows/$workflowId', params: { workflowId: response.workflowId } })
+    },
   })
 
   return (

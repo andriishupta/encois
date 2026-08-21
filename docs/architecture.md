@@ -126,6 +126,7 @@ Use a React SPA. Astro is not part of the product architecture.
 - A typed API client and query/cache layer handle Gateway API data.
 - Business rules, credentials, provider SDKs, and authorization decisions stay outside the browser.
 - The UI receives only scoped projections and never queries Temporal, Spanner Graph, Memory Bank, or providers directly.
+- The Dashboard route tree fails closed without an authenticated browser session. The current local scaffold accepts a development-only bearer token through a session boundary; production token acquisition and refresh must be supplied by the Identity Platform/Firebase client adapter before hosted rollout.
 
 Primary screens:
 

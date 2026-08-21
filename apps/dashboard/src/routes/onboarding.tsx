@@ -1,7 +1,11 @@
-import { Outlet, createFileRoute, Link, useRouterState } from '@tanstack/react-router'
+import { Outlet, createFileRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { Activity, Check, Circle } from 'lucide-react'
+import { getAuthSession } from '@/lib/auth'
 
 export const Route = createFileRoute('/onboarding')({
+  beforeLoad: () => {
+    if (!getAuthSession()) throw redirect({ to: '/login' })
+  },
   component: OnboardingLayout,
 })
 
@@ -58,4 +62,3 @@ function OnboardingLayout() {
     </div>
   )
 }
-

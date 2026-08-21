@@ -1,39 +1,32 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, CircleDashed, GitBranch, HeartPulse, PlugZap, Server, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { IntegrationStatus, WorkflowExecutionStatus } from '@encois/contracts'
+import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, HeartPulse, PlugZap, Server, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
+import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
+import { listIntegrations, listWorkflows } from '@/lib/api'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
+import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 
 export const Route = createFileRoute('/_app/')({
   component: DashboardPage,
 })
 
-const dashboardWorkflows = [
-  { id: 'release-risk-aug-30', title: 'Release risk investigation', status: 'Waiting for input', detail: 'Release context is missing', icon: CircleDashed },
-  { id: 'deployment-regression-001', title: 'Deployment regression', status: 'Running', detail: 'Collecting monitoring evidence', icon: Activity },
-  { id: 'weekly-delivery-health', title: 'Weekly delivery health', status: 'Completed', detail: 'Last run 2 hours ago', icon: CheckCircle2 },
-] as const
-
-const recentActivity = [
-  { title: 'GitHub evidence collected', detail: 'Release risk investigation', time: '12 min ago', icon: GitBranch },
-  { title: 'Jira context needs input', detail: 'Release risk investigation', time: '28 min ago', icon: CircleDashed },
-  { title: 'Delivery health completed', detail: 'Weekly delivery health', time: '2 hours ago', icon: CheckCircle2 },
-] as const
-
-const workflowRuns = [
-  { title: 'Deployment regression', status: 'Running', time: 'Today, 10:42', icon: Activity },
-  { title: 'Weekly delivery health', status: 'Completed', time: 'Today, 08:00', icon: CheckCircle2 },
-  { title: 'Release risk investigation', status: 'Waiting', time: 'Yesterday, 16:18', icon: CircleDashed },
-] as const
-
 function DashboardPage() {
   const queryClient = useQueryClient()
   const { workspace } = useWorkspace()
+  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
+  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
   const [startingInitialization, setStartingInitialization] = useState(false)
+  const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
+  const runningWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
+  const waitingWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
+  const connectedIntegrations = integrations.data?.filter((integration) => integration.status === IntegrationStatus.Active).length ?? 0
+  const attentionWorkflows = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
 
   function startInitialization() {
     setStartingInitialization(true)
@@ -58,10 +51,10 @@ function DashboardPage() {
       {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewCard icon={Activity} label="Active workflows" value="2" detail="1 running · 1 waiting" />
-        <OverviewCard icon={PlugZap} label="Integrations" value="1" detail="GitHub connected" />
-        <OverviewCard icon={GitBranch} label="Recent signals" value="24" detail="Across the last 24 hours" />
-        <OverviewCard icon={TriangleAlert} label="Active issues" value="3" detail="2 need attention" />
+        <OverviewCard icon={Activity} label="Active workflows" value={workflows.isLoading ? '…' : String(activeWorkflows.length)} detail={`${runningWorkflows} running · ${waitingWorkflows} waiting`} />
+        <OverviewCard icon={PlugZap} label="Integrations" value={integrations.isLoading ? '…' : String(integrations.data?.length ?? 0)} detail={`${connectedIntegrations} active in scope`} />
+        <OverviewCard icon={GitBranch} label="Recent signals" value="—" detail="Events endpoint is not exposed yet" />
+        <OverviewCard icon={TriangleAlert} label="Needs attention" value={workflows.isLoading ? '…' : String(attentionWorkflows)} detail="Failed or partial workflows" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
@@ -76,7 +69,9 @@ function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {dashboardWorkflows.map((workflow) => <DashboardWorkflowRow key={workflow.id} {...workflow} />)}
+            {workflows.isError ? <p className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
+            {!workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a Blueprint execution to create the first durable workflow." /> : null}
+            {workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} detail={workflow.statusReason ?? 'No status reason reported'} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}
           </CardContent>
         </Card>
 
@@ -86,7 +81,7 @@ function DashboardPage() {
             <CardDescription>Evidence and system events from your workspace.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {recentActivity.map((item) => <ActivityRow key={item.title} {...item} />)}
+            <EmptyPanel icon={CircleDashed} title="Activity projection is not available" description="Workflow events and evidence history are not exposed by the current Gateway API." />
           </CardContent>
         </Card>
       </div>
@@ -98,9 +93,9 @@ function DashboardPage() {
             <CardDescription>Current status of the Encois runtime surface.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <HealthRow icon={Server} label="Gateway API" detail="Waiting for connection" />
-            <HealthRow icon={Activity} label="Agent runtime" detail="Waiting for connection" />
-            <HealthRow icon={HeartPulse} label="External systems" detail="No integrations connected" />
+            <HealthRow icon={Server} label="Gateway API" detail={workflows.isError || integrations.isError ? 'Request failed' : workflows.isLoading || integrations.isLoading ? 'Checking…' : 'Connected'} />
+            <HealthRow icon={Activity} label="Agent runtime" detail="Health endpoint is not exposed to the Dashboard" />
+            <HealthRow icon={HeartPulse} label="External systems" detail={connectedIntegrations ? `${connectedIntegrations} active integration${connectedIntegrations === 1 ? '' : 's'}` : 'No active integrations'} />
           </CardContent>
         </Card>
 
@@ -110,12 +105,22 @@ function DashboardPage() {
             <CardDescription>Runs today and over the last seven days.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {workflowRuns.map((run) => <RunRow key={`${run.title}-${run.time}`} {...run} />)}
+            {workflows.data?.slice(0, 5).map((workflow) => <RunRow key={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} time={formatDate(workflow.updatedAt)} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}
+            {!workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs returned by the Gateway.</p> : null}
           </CardContent>
         </Card>
       </div>
     </div>
   )
+}
+
+function isActiveWorkflow(status: WorkflowExecutionStatus): boolean {
+  return status === WorkflowExecutionStatus.Queued || status === WorkflowExecutionStatus.Running || status === WorkflowExecutionStatus.Waiting || status === WorkflowExecutionStatus.Partial
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.valueOf()) ? 'Time unavailable' : date.toLocaleString()
 }
 
 function InitializationCard({
@@ -156,15 +161,11 @@ function InitializationCard({
   )
 }
 
-function DashboardWorkflowRow({ id, title, status, detail, icon: Icon }: { id: string; title: string; status: string; detail: string; icon: typeof Activity }) {
+function DashboardWorkflowRow({ id, title, status, detail, icon: Icon }: { id: string; title: string; status: WorkflowExecutionStatus; detail: string; icon: typeof Activity }) {
   return <Link to="/workflows/$workflowId" params={{ workflowId: id }} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="hidden rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground sm:block">{status}</span><ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>
 }
 
-function ActivityRow({ title, detail, time, icon: Icon }: { title: string; detail: string; time: string; icon: typeof Activity }) {
-  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="shrink-0 text-xs text-muted-foreground">{time}</span></div>
-}
-
-function RunRow({ title, status, time, icon: Icon }: { title: string; status: string; time: string; icon: typeof Activity }) {
+function RunRow({ title, status, time, icon: Icon }: { title: string; status: WorkflowExecutionStatus; time: string; icon: typeof Activity }) {
   return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{time}</span></span><span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"><Timer className="size-3.5" aria-hidden="true" />{status}</span></div>
 }
 

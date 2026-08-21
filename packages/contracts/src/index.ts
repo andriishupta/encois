@@ -8,6 +8,7 @@ import {
   CoordinatorEventType,
   GraphQueryStatus,
   FreshnessStatus,
+  IntegrationStatus,
   MemoryRedactionStatus,
   OrganizationUnitType,
   ScopeRuleMode,
@@ -34,6 +35,7 @@ export {
   CoordinatorEventType,
   GraphQueryStatus,
   FreshnessStatus,
+  IntegrationStatus,
   MemoryRedactionStatus,
   OrganizationUnitType,
   ScopeRuleMode,
@@ -145,6 +147,18 @@ export type WorkflowExecutionProjection = {
   reused?: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type IntegrationProjection = {
+  id: string;
+  name: string;
+  provider: string;
+  status: IntegrationStatus;
+};
+
+export type IntegrationUpdateRequest = {
+  displayName?: string;
+  status?: IntegrationStatus;
 };
 
 export type BlueprintWorkflowInput = {

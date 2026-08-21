@@ -1,25 +1,13 @@
-import { useState } from 'react'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { Activity, ArrowRight, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { updateMockOnboardingState } from '@/lib/onboarding'
 
 export const Route = createFileRoute('/sign-up')({
   component: SignUpPage,
 })
 
 function SignUpPage() {
-  const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    updateMockOnboardingState({ onboardingComplete: false, email, status: 'pending-initialization' })
-    void navigate({ to: '/onboarding/workspace' })
-  }
-
   return (
     <main className="grid min-h-svh lg:grid-cols-[0.9fr_1.1fr]">
       <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex">
@@ -59,24 +47,24 @@ function SignUpPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+            <form className="flex flex-col gap-4">
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="name">
                 Full name
-                <input id="name" name="name" required value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex Morgan" className={inputClassName} />
+                <input id="name" name="name" disabled placeholder="Alex Morgan" className={inputClassName} />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="email">
                 Work email
-                <input id="email" name="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" className={inputClassName} />
+                <input id="email" name="email" disabled type="email" placeholder="you@company.com" className={inputClassName} />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="password">
                 Password
-                <input id="password" name="password" required type="password" placeholder="••••••••" className={inputClassName} />
+                <input id="password" name="password" disabled type="password" placeholder="••••••••" className={inputClassName} />
               </label>
-              <Button type="submit" className="mt-2 w-full">
+              <Button type="button" disabled className="mt-2 w-full">
                 Create account
                 <ArrowRight data-icon="inline-end" />
               </Button>
-              <p className="text-center text-xs text-muted-foreground">Authentication is mocked for this UI scaffold.</p>
+              <p className="text-center text-xs text-muted-foreground">Account creation is not enabled until the Identity Platform client is configured.</p>
               <p className="text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link to="/login" className="font-medium text-foreground underline underline-offset-4">Sign in</Link>

@@ -36,7 +36,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/onboarding/workflows') return 'Workflow setup'
   if (pathname === '/workflows') return 'Workflows'
   if (pathname === '/workflows/new') return 'New workflow'
-  if (pathname.startsWith('/workflows/')) return 'Release risk investigation'
+  if (pathname.startsWith('/workflows/')) return 'Workflow execution'
   if (pathname === '/integrations') return 'Integrations'
   if (pathname === '/integrations/new') return 'Add integration'
   if (pathname.startsWith('/integrations/')) return getIntegrationTitle(pathname)
@@ -52,5 +52,5 @@ function getIntegrationTitle(pathname: string) {
   const id = pathname.split('/').pop()
   if (id === 'github') return 'GitHub integration'
   if (id === 'jira') return 'Jira integration'
-  return 'Google Workspace integration'
+  return 'Integration'
 }

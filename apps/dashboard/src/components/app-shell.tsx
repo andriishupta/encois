@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Link, useRouterState } from '@tanstack/react-router'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
   ChevronDown,
@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { authSessionEventName, clearAuthSession, getAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/lib/workspace'
 
@@ -28,11 +29,25 @@ const primaryNavigation = [
 const secondaryNavigation = [{ label: 'Settings', to: '/settings', icon: Settings }] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { workspace } = useWorkspace()
   const workspaceName = workspace?.workspaceName ?? 'Acme workspace'
+
+  useEffect(() => {
+    const handleSessionChange = () => {
+      if (!getAuthSession()) void navigate({ to: '/login' })
+    }
+    window.addEventListener(authSessionEventName(), handleSessionChange)
+    return () => window.removeEventListener(authSessionEventName(), handleSessionChange)
+  }, [navigate])
+
+  function handleLogout() {
+    clearAuthSession()
+    void navigate({ to: '/login' })
+  }
 
   return (
     <div className="min-h-svh bg-muted/30 lg:flex lg:pl-64">
@@ -95,11 +110,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="block truncate text-xs text-muted-foreground">Account</span>
             </span>
           </Link>
-          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground" asChild>
-            <Link to="/login" onClick={() => setMobileOpen(false)}>
-              <LogOut data-icon="inline-start" />
-              Log out
-            </Link>
+          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground" onClick={() => { setMobileOpen(false); handleLogout() }}>
+            <LogOut data-icon="inline-start" />
+            Log out
           </Button>
         </div>
       </aside>
@@ -164,7 +177,7 @@ function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbR
   if (pathname === '/') return [{ label: 'Dashboard' }]
   if (pathname === '/workflows') return [{ label: 'Workflows' }]
   if (pathname === '/workflows/new') return [{ label: 'Workflows', to: '/workflows' }, { label: 'New workflow' }]
-  if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Release risk investigation' }]
+  if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Workflow execution' }]
   if (pathname === '/integrations') return [{ label: 'Integrations' }]
   if (pathname === '/integrations/new') return [{ label: 'Integrations', to: '/integrations' }, { label: 'Add integration' }]
   if (pathname.startsWith('/integrations/')) return [{ label: 'Integrations', to: '/integrations' }, { label: getIntegrationLabel(pathname) }]
@@ -180,5 +193,5 @@ function getIntegrationLabel(pathname: string) {
   const id = pathname.split('/').pop()
   if (id === 'github') return 'GitHub integration'
   if (id === 'jira') return 'Jira integration'
-  return 'Google Workspace integration'
+  return 'Integration'
 }

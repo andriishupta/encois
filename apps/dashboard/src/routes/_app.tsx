@@ -1,10 +1,14 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { AppShell } from '@/components/app-shell'
+import { getAuthSession } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
 import { WorkspaceProvider } from '@/lib/workspace'
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: () => {
+    if (!getAuthSession()) {
+      throw redirect({ to: '/login' })
+    }
     if (!getMockOnboardingState()?.onboardingComplete) {
       throw redirect({ to: '/onboarding/workspace' })
     }

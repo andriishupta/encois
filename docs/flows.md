@@ -548,6 +548,13 @@ The first vertical slice needs these API-level projections:
 
 These are intent-level contracts, not all final routes. The public vertical-slice contracts are now versioned in `packages/contracts`; future routes must extend the same OpenAPI/JSON Schema boundary rather than introducing app-local cross-language DTOs.
 
+Current Dashboard coverage is intentionally narrower: it consumes workflow
+list/start/detail projections and integration list/update projections through
+the authenticated Gateway client. Overview, workflow events, evidence
+history, freshness, agent activity, organization hierarchy, graph paths, and
+query routes remain future projections; the Dashboard must show an explicit
+unavailable state until their Gateway contracts exist.
+
 ## 13. Product boundary for the MVP
 
 Included:

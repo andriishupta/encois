@@ -1,28 +1,20 @@
 import { and, eq, inArray, or } from "drizzle-orm";
+import type { IntegrationProjection, IntegrationUpdateRequest } from "@encois/contracts";
 import {
   integrationBindings,
   integrations,
   membershipScopes,
   organizationMemberships,
   rolePermissions,
-  type IntegrationStatus,
   type PersistenceTransaction,
   withOrganizationContext,
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
 
-export type IntegrationSummary = {
-  id: string;
-  name: string;
-  status: IntegrationStatus;
-  provider: string;
-};
+export type IntegrationSummary = IntegrationProjection;
 
-export type IntegrationUpdate = {
-  displayName?: string;
-  status?: IntegrationStatus;
-};
+export type IntegrationUpdate = IntegrationUpdateRequest;
 
 type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
 

@@ -1,3 +1,5 @@
+import { getAuthSession } from '@/lib/auth'
+
 export type MemorySource = 'slack' | 'github' | 'jira' | 'linear' | 'document'
 export type CoordinationMode = 'start-coordinator' | 'connect-only'
 export type WorkspaceInitializationStatus = 'pending-initialization' | 'initializing' | 'ready'
@@ -17,7 +19,8 @@ export type MockOnboardingState = {
   status: WorkspaceInitializationStatus
 }
 
-const STORAGE_KEY = 'encois.mock.onboarding'
+const STORAGE_KEY_PREFIX = 'encois.mock.onboarding'
+const STORAGE_VERSION = 1 as const
 
 const emptyState: MockOnboardingState = {
   onboardingComplete: false,
@@ -26,12 +29,25 @@ const emptyState: MockOnboardingState = {
   status: 'pending-initialization',
 }
 
+function storageKey(): string {
+  const organizationId = getAuthSession()?.organizationId ?? 'unscoped'
+  return `${STORAGE_KEY_PREFIX}.${organizationId}`
+}
+
 export function getMockOnboardingState(): MockOnboardingState | null {
   if (typeof window === 'undefined') return null
 
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    return stored ? { ...emptyState, ...JSON.parse(stored) } : null
+    const stored = window.localStorage.getItem(storageKey())
+    if (!stored) return null
+
+    const parsed: unknown = JSON.parse(stored)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    const value = parsed as Record<string, unknown>
+    if (value.storageVersion !== STORAGE_VERSION || !Array.isArray(value.selectedWorkflows) || !value.selectedWorkflows.every((item) => typeof item === 'string')) return null
+
+    const { storageVersion: _storageVersion, ...state } = value
+    return { ...emptyState, ...state } as MockOnboardingState
   } catch {
     return null
   }
@@ -41,7 +57,7 @@ export function updateMockOnboardingState(patch: Partial<MockOnboardingState>) {
   const next = { ...emptyState, ...getMockOnboardingState(), ...patch }
 
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    window.localStorage.setItem(storageKey(), JSON.stringify({ storageVersion: STORAGE_VERSION, ...next }))
   } catch {
     // The UI remains usable when browser storage is unavailable.
   }

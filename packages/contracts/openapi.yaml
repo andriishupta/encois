@@ -3,6 +3,44 @@ info:
   title: Encois Gateway API
   version: 0.1.0
 paths:
+  /api/v1/integrations:
+    get:
+      operationId: listIntegrations
+      summary: List integrations visible in the caller's effective scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scoped integration projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationListResponse'
+  /api/v1/integrations/{integrationId}:
+    post:
+      operationId: updateIntegration
+      summary: Update integration control-plane metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationUpdateRequest'
+      responses:
+        '200':
+          description: Updated integration projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationResponse'
   /api/v1/workflows:
     post:
       operationId: startWorkflow
@@ -22,6 +60,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowExecutionResponse'
+    get:
+      operationId: listWorkflows
+      summary: List workflow projections visible in the caller's effective scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scoped workflow projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionListResponse'
   /api/v1/internal/coordinator/plans/validate:
     post:
       operationId: validateCoordinatorWorkflowChangePlan
@@ -110,6 +160,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowUpdateResponse'
+  /api/v1/workflows/{workflowId}:
+    get:
+      operationId: getWorkflow
+      summary: Read a tenant-authorized workflow projection
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+  /api/v1/workflows/{workflowId}/signals:
+    post:
+      operationId: signalWorkflow
+      summary: Send an authorized workflow Signal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowSignalRequest'
+      responses:
+        '200':
+          description: Signal accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowSignalResponse'
   /api/v1/workflows/plans/validate:
     post:
       operationId: validateWorkflowChangePlan
@@ -209,6 +303,39 @@ components:
       schema:
         type: string
   schemas:
+    IntegrationStatus:
+      type: string
+      enum: [pending, active, disabled, error]
+    IntegrationProjection:
+      type: object
+      additionalProperties: false
+      required: [id, name, provider, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        provider: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationStatus' }
+    IntegrationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntegrationProjection'
+    IntegrationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/IntegrationProjection'
+    IntegrationUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { type: string, minLength: 1 }
+        status: { $ref: '#/components/schemas/IntegrationStatus' }
     WorkflowStartRequest:
       type: object
       additionalProperties: false
@@ -231,7 +358,7 @@ components:
       properties:
         data:
           type: object
-          required: [workflowId, workflowType, status, organizationId]
+          required: [workflowId, workflowType, namespace, taskQueue, status, organizationId, createdAt, updatedAt]
           properties:
             workflowId: { type: string }
             runId: { type: string }
@@ -239,7 +366,7 @@ components:
             namespace: { type: string }
             taskQueue: { type: string }
             blueprintId: { type: string }
-            status: { type: string }
+            status: { type: string, enum: [queued, running, waiting, partial, failed, completed, cancelled] }
             statusReason:
               type: string
               enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
@@ -247,6 +374,59 @@ components:
             retryAt: { type: string }
             organizationId: { type: string }
             reused: { type: boolean }
+            createdAt: { type: string }
+            updatedAt: { type: string }
+    WorkflowExecutionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowExecutionProjection'
+    WorkflowExecutionProjection:
+      type: object
+      required: [workflowId, workflowType, namespace, taskQueue, status, organizationId, createdAt, updatedAt]
+      properties:
+        workflowId: { type: string }
+        runId: { type: string }
+        workflowType: { type: string }
+        blueprintId: { type: string }
+        namespace: { type: string }
+        taskQueue: { type: string }
+        status: { type: string }
+        statusReason: { type: string }
+        statusMessage: { type: string }
+        retryAt: { type: string }
+        organizationId: { type: string }
+        reused: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    WorkflowSignalRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, signalName, signalId, payload]
+      properties:
+        contractVersion: { const: workflow-signal.v1 }
+        signalName: { const: blueprint-approval }
+        signalId: { type: string, minLength: 1, maxLength: 128 }
+        payload:
+          type: object
+          additionalProperties: false
+          required: [stepId, approved]
+          properties:
+            stepId: { type: string, minLength: 1 }
+            approved: { type: boolean }
+            reason: { type: string, maxLength: 2000 }
+    WorkflowSignalResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accepted]
+          properties:
+            accepted: { type: boolean }
     WorkflowUpdateRequest:
       type: object
       additionalProperties: false

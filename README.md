@@ -75,6 +75,13 @@ pnpm --filter @encois/api-gateway dev
 
 The API listens on `http://127.0.0.1:8787`. Its local health checks are available at `/health/live` and `/health/ready`. The Go Agent Runtime and Agent Gateway are separate processes and are not part of the default `pnpm dev` command.
 
+Dashboard routes are protected and do not use the old mock sign-up flow. For
+the local scaffold, copy `apps/dashboard/.env.example` to a local env file and
+provide a development-only bearer fixture; the login screen can then create a
+tab-scoped session. Never put a hosted or production credential in a `VITE_*`
+variable. The production Identity Platform/Firebase browser adapter is still a
+follow-up before hosted user sign-in.
+
 The generic execution path can be smoke-tested locally when the Temporal CLI is
 installed:
 

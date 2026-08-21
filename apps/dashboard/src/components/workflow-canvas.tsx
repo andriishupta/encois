@@ -19,43 +19,43 @@ type WorkflowNodeData = {
   label: string
   description: string
   status: 'completed' | 'running' | 'pending'
-  icon: 'release' | 'jira' | 'github' | 'synthesis'
+  icon: 'blueprint' | 'evidence' | 'provider' | 'synthesis'
 }
 
 type WorkflowNode = Node<WorkflowNodeData, 'workflow'>
 
 const nodes: WorkflowNode[] = [
   {
-    id: 'release',
+    id: 'blueprint',
     type: 'workflow',
     position: { x: 0, y: 145 },
     data: {
-      label: 'Release',
-      description: 'Risk investigation',
+      label: 'Blueprint',
+      description: 'Generic execution',
       status: 'completed',
-      icon: 'release',
+      icon: 'blueprint',
     },
   },
   {
-    id: 'jira',
+    id: 'evidence',
     type: 'workflow',
     position: { x: 320, y: 40 },
     data: {
-      label: 'Jira assistant',
-      description: 'Collecting evidence',
+      label: 'Evidence collection',
+      description: 'Read-only tool activity',
       status: 'running',
-      icon: 'jira',
+      icon: 'evidence',
     },
   },
   {
-    id: 'github',
+    id: 'provider',
     type: 'workflow',
     position: { x: 320, y: 250 },
     data: {
-      label: 'GitHub assistant',
-      description: 'Collecting activity',
+      label: 'Provider adapter',
+      description: 'Scoped source read',
       status: 'running',
-      icon: 'github',
+      icon: 'provider',
     },
   },
   {
@@ -63,7 +63,7 @@ const nodes: WorkflowNode[] = [
     type: 'workflow',
     position: { x: 650, y: 145 },
     data: {
-      label: 'Risk synthesis',
+      label: 'Outcome synthesis',
       description: 'Waiting for evidence',
       status: 'pending',
       icon: 'synthesis',
@@ -73,37 +73,37 @@ const nodes: WorkflowNode[] = [
 
 const edges: Edge[] = [
   {
-    id: 'release-jira',
-    source: 'release',
-    target: 'jira',
+    id: 'blueprint-evidence',
+    source: 'blueprint',
+    target: 'evidence',
     animated: true,
     markerEnd: { type: MarkerType.ArrowClosed },
   },
   {
-    id: 'release-github',
-    source: 'release',
-    target: 'github',
+    id: 'blueprint-provider',
+    source: 'blueprint',
+    target: 'provider',
     animated: true,
     markerEnd: { type: MarkerType.ArrowClosed },
   },
   {
-    id: 'jira-synthesis',
-    source: 'jira',
+    id: 'evidence-synthesis',
+    source: 'evidence',
     target: 'synthesis',
     markerEnd: { type: MarkerType.ArrowClosed },
   },
   {
-    id: 'github-synthesis',
-    source: 'github',
+    id: 'provider-synthesis',
+    source: 'provider',
     target: 'synthesis',
     markerEnd: { type: MarkerType.ArrowClosed },
   },
 ]
 
 const mobilePositions: Record<string, { x: number; y: number }> = {
-  release: { x: 0, y: 145 },
-  jira: { x: 175, y: 40 },
-  github: { x: 175, y: 250 },
+  blueprint: { x: 0, y: 145 },
+  evidence: { x: 175, y: 40 },
+  provider: { x: 175, y: 250 },
   synthesis: { x: 350, y: 145 },
 }
 
@@ -135,9 +135,9 @@ function WorkflowStepNode({ data }: NodeProps<WorkflowNode>) {
 }
 
 const nodeIcon = {
-  release: GitBranch,
-  jira: CircleDashed,
-  github: GitBranch,
+  blueprint: GitBranch,
+  evidence: CircleDashed,
+  provider: GitBranch,
   synthesis: Sparkles,
 }
 
@@ -193,8 +193,8 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt }: { refreshCount: n
           <div className="flex flex-col gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
             <div className="flex items-center gap-2">
               <span className="workflow-live-dot" aria-hidden="true" />
-              <span className="font-medium">Live execution</span>
-              <span className="text-muted-foreground">{lastPolledAt ? 'Updated just now' : 'Watching for updates'}</span>
+              <span className="font-medium">Execution topology preview</span>
+              <span className="text-muted-foreground">{lastPolledAt ? `Status polled ${lastPolledAt.toLocaleTimeString()}` : 'Waiting for workflow status'}</span>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span>
