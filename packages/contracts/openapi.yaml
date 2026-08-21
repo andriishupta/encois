@@ -79,6 +79,139 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationResponse'
+  /api/v1/organization:
+    get:
+      operationId: getOrganization
+      summary: Get the organization projection visible to the caller
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organization, visible units, members, and manageable permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+  /api/v1/organization/units:
+    get:
+      operationId: listOrganizationUnits
+      summary: List organization units visible to the caller
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Visible organization units
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUnitListResponse'
+    post:
+      operationId: createOrganizationUnit
+      summary: Create a child organization unit inside the caller's management scope
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUnitCreateRequest'
+      responses:
+        '201':
+          description: Created organization unit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUnitResponse'
+  /api/v1/organization/members:
+    get:
+      operationId: listOrganizationMembers
+      summary: List organization members visible to the caller's management scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Visible organization members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMemberListResponse'
+  /api/v1/organization/permissions:
+    get:
+      operationId: listOrganizationPermissions
+      summary: List direct membership permissions manageable by the caller
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Manageable direct membership permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPermissionListResponse'
+    post:
+      operationId: createOrganizationPermission
+      summary: Create or update a direct membership permission
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationPermissionCreateRequest'
+      responses:
+        '201':
+          description: Created or updated direct permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPermissionResponse'
+  /api/v1/organization/permissions/{permissionId}:
+    patch:
+      operationId: updateOrganizationPermission
+      summary: Change a direct membership permission's access level
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: permissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationPermissionUpdateRequest'
+      responses:
+        '200':
+          description: Updated direct permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPermissionResponse'
+    delete:
+      operationId: deleteOrganizationPermission
+      summary: Remove a direct membership permission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: permissionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Permission removed and audit event recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
   /api/v1/sources:
     get:
       operationId: listKnowledgeSources
@@ -110,6 +243,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KnowledgeSourceResponse'
+  /api/v1/sources/uploads:
+    post:
+      operationId: uploadKnowledgeSourcePdf
+      summary: Upload a PDF as a new Knowledge Source and immutable revision
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file, maximum 10 MiB
+                name:
+                  type: string
+                  maxLength: 120
+      responses:
+        '201':
+          description: Source and immutable revision created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSourceUploadResponse'
   /api/v1/sources/{sourceId}:
     get:
       operationId: getKnowledgeSource
@@ -475,6 +636,142 @@ components:
               required: [status]
               properties:
                 status: { const: pending }
+    OrganizationUnitType:
+      type: string
+      enum: [organization, department, team, project, service, custom]
+    AccessLevel:
+      type: string
+      enum: [viewer, contributor, manager, admin]
+    OrganizationMembershipStatus:
+      type: string
+      enum: [invited, active, suspended]
+    OrganizationUnitProjection:
+      type: object
+      additionalProperties: false
+      required: [id, organizationId, parentId, type, slug, name, description, manager, memberCount]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        parentId: { type: [string, 'null'], format: uuid }
+        type: { $ref: '#/components/schemas/OrganizationUnitType' }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        manager: { type: string }
+        memberCount: { type: integer, minimum: 0 }
+    OrganizationMemberProjection:
+      type: object
+      additionalProperties: false
+      required: [id, initials, name, role, roleKey, status]
+      properties:
+        id: { type: string, format: uuid }
+        initials: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string }
+        roleKey: { type: string }
+        homeUnitId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/OrganizationMembershipStatus' }
+    OrganizationPermissionProjection:
+      type: object
+      additionalProperties: false
+      required: [id, memberId, unitId, access, propagateToChildren]
+      properties:
+        id: { type: string, format: uuid }
+        memberId: { type: string, format: uuid }
+        unitId: { type: string, format: uuid }
+        access: { $ref: '#/components/schemas/AccessLevel' }
+        propagateToChildren: { const: true }
+    OrganizationProjection:
+      type: object
+      additionalProperties: false
+      required: [organization, units, members, permissions]
+      properties:
+        organization:
+          type: object
+          additionalProperties: false
+          required: [id, slug, name]
+          properties:
+            id: { type: string, format: uuid }
+            slug: { type: string }
+            name: { type: string }
+        units:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationUnitProjection' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationMemberProjection' }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationPermissionProjection' }
+    OrganizationUnitCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [type, name]
+      properties:
+        parentId: { type: [string, 'null'], format: uuid }
+        type: { $ref: '#/components/schemas/OrganizationUnitType' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, maxLength: 96 }
+    OrganizationPermissionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [memberId, unitId, access]
+      properties:
+        memberId: { type: string, format: uuid }
+        unitId: { type: string, format: uuid }
+        access: { $ref: '#/components/schemas/AccessLevel' }
+    OrganizationPermissionUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [access]
+      properties:
+        access: { $ref: '#/components/schemas/AccessLevel' }
+    OrganizationResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationProjection' }
+    OrganizationUnitResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationUnitProjection' }
+    OrganizationUnitListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationUnitProjection' }
+    OrganizationMemberListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationMemberProjection' }
+    OrganizationPermissionResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationPermissionProjection' }
+    OrganizationPermissionListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationPermissionProjection' }
+    DeletedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [deleted]
+          properties:
+            deleted: { const: true }
     WaitlistRequest:
       type: object
       additionalProperties: false
@@ -575,6 +872,7 @@ components:
         checksum: { type: string }
         observedAt: { type: string }
         ingestedAt: { type: string }
+        metadata: { type: object, additionalProperties: true }
         createdAt: { type: string }
     SourceRevisionCreateRequest:
       type: object
@@ -587,6 +885,7 @@ components:
         contentType: { type: string }
         checksum: { type: string }
         observedAt: { type: string }
+        metadata: { type: object, additionalProperties: true }
     KnowledgeSourceResponse:
       type: object
       required: [data]
@@ -605,12 +904,15 @@ components:
       properties:
         data:
           type: object
-          required: [source, revisions]
+          required: [source, revisions, ingestionRuns]
           properties:
             source: { $ref: '#/components/schemas/KnowledgeSource' }
             revisions:
               type: array
               items: { $ref: '#/components/schemas/SourceRevision' }
+            ingestionRuns:
+              type: array
+              items: { $ref: '#/components/schemas/SourceIngestionRun' }
     SourceRevisionResponse:
       type: object
       required: [data]
@@ -626,8 +928,39 @@ components:
           properties:
             source: { $ref: '#/components/schemas/KnowledgeSource' }
             revision: { $ref: '#/components/schemas/SourceRevision' }
-            workflow: { $ref: '#/components/schemas/WorkflowExecutionResponse' }
+            workflow: { $ref: '#/components/schemas/WorkflowExecutionProjection' }
             resultContract: { const: source-ingestion-result.v1 }
+    KnowledgeSourceUploadResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [source, revision]
+          properties:
+            source: { $ref: '#/components/schemas/KnowledgeSource' }
+            revision: { $ref: '#/components/schemas/SourceRevision' }
+    SourceIngestionRun:
+      type: object
+      additionalProperties: false
+      required: [id, sourceId, sourceRevisionId, temporalWorkflowId, trigger, status, factsCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        sourceId: { type: string, format: uuid }
+        sourceRevisionId: { type: string, format: uuid }
+        temporalWorkflowId: { type: string }
+        temporalRunId: { type: string }
+        trigger: { $ref: '#/components/schemas/SourceIngestionTrigger' }
+        status:
+          type: string
+          enum: [queued, running, completed, deferred, failed]
+        currentStage: { type: string }
+        factsCount: { type: integer, minimum: 0 }
+        error: { type: string }
+        createdAt: { type: string }
+        startedAt: { type: string }
+        completedAt: { type: string }
+        updatedAt: { type: string }
     IntegrationProjection:
       type: object
       additionalProperties: false

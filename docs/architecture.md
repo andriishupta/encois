@@ -241,12 +241,14 @@ Blueprints remain provider-neutral execution graphs that consume source
 evidence; Workflow Templates remain a separate discovery/catalog layer and do
 not reference source IDs or become executable definitions.
 
-The first implementation exposes source registration, revision metadata, and
-an ingestion launch route in the Gateway API. The Runtime validates the
-versioned envelope and returns an explicit deferred result until concrete
-artifact, provider parser, Graph projection, and Memory adapters are wired.
-This is intentional: the boundary and provenance model are real before any
-provider-specific parser is allowed to become product behavior.
+The first implementation exposes source registration, PDF upload, immutable
+revision metadata, source detail/status projection, and an ingestion launch
+route in the Gateway API. PDF bytes are written through the Gateway's scoped
+Cloud Storage adapter (with an explicit development/test memory fallback), and
+only the resulting artifact reference crosses the revision and Temporal
+boundaries. The Runtime validates the versioned envelope and still returns an
+explicit deferred result until concrete PDF parsing, provider parsers, Graph
+projection, and Memory adapters are wired.
 
 #### Initial Google Cloud control-plane implementation
 
@@ -329,10 +331,12 @@ Temporal Workflows
 ```
 
 The current repository implements the Workflow/Activity layer, ADK bundle, and
-private Agent Gateway client. Memory Bank, Spanner Graph, and Cloud Storage are
-target data-plane adapters, not active hosted Runtime clients yet; they should
-be added behind Activities or the Agent Gateway after the hosted synthetic path
-is proven. The Runtime already applies the Memory redaction boundary and emits
+private Agent Gateway client. Memory Bank and Spanner Graph remain target
+data-plane adapters, and Runtime/Agent Gateway provider-artifact Cloud Storage
+access is not active yet; they should be added behind Activities or the Agent
+Gateway after the hosted synthetic path is proven. The Gateway API already
+uses its scoped Cloud Storage adapter for the initial PDF source-upload path.
+The Runtime already applies the Memory redaction boundary and emits
 typed freshness/provenance/retention metadata, but provider persistence remains
 deferred. The Runtime must continue to receive references and stateless context,
 not connect to the Gateway API's control-plane Postgres.
@@ -521,9 +525,9 @@ entries include a version, input/output schemas, behavior annotations,
 availability, approval metadata, and required scope fields; invocation checks
 the registered capability and required scope after policy authorization. The
 policy implementation is explicitly limited to a deterministic read-only
-fixture policy, while Jira and GitHub tool responses are synthetic.
-Organization-unit, connector-grant, persisted-manifest, live provider, and
-real Cloud Storage expansion is still required before production, but arbitrary
+fixture policy, while Jira and GitHub tool responses are synthetic. Connector
+grants, persisted manifests, live providers, and the Agent Gateway's provider-
+artifact Cloud Storage adapter are still required before production; arbitrary
 tool execution and unsafe artifact paths are already denied by the current
 boundary.
 

@@ -1,5 +1,5 @@
 import type { Handler } from "hono";
-import type { SourceRevisionCreateRequest } from "@encois/contracts";
+import type { JsonObject, SourceRevisionCreateRequest } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { createSourceRevision, isSourceServiceError } from "../services/source.service.js";
 
@@ -21,8 +21,10 @@ function parseRequest(value: unknown): SourceRevisionCreateRequest | null {
   const contentType = optionalString(value, "contentType");
   const checksum = optionalString(value, "checksum");
   const observedAt = optionalString(value, "observedAt");
+  const metadata = value.metadata;
   if (!revision || artifactRef === null || sourceObjectId === null || contentType === null || checksum === null || observedAt === null) return null;
   if (observedAt && Number.isNaN(Date.parse(observedAt))) return null;
+  if (metadata !== undefined && (!isRecord(metadata) || Array.isArray(metadata))) return null;
   return {
     revision,
     ...(artifactRef ? { artifactRef } : {}),
@@ -30,6 +32,7 @@ function parseRequest(value: unknown): SourceRevisionCreateRequest | null {
     ...(contentType ? { contentType } : {}),
     ...(checksum ? { checksum } : {}),
     ...(observedAt ? { observedAt } : {}),
+    ...(metadata ? { metadata: metadata as JsonObject } : {}),
   };
 }
 

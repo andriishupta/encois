@@ -37,6 +37,9 @@ function getPageTitle(pathname: string) {
   if (pathname === '/workflows') return 'Workflows'
   if (pathname === '/workflows/new') return 'New workflow'
   if (pathname.startsWith('/workflows/')) return 'Workflow execution'
+  if (pathname === '/sources') return 'Knowledge sources'
+  if (pathname === '/sources/new') return 'Add knowledge source'
+  if (pathname.startsWith('/sources/')) return 'Knowledge source'
   if (pathname === '/integrations') return 'Integrations'
   if (pathname === '/integrations/new') return 'Add integration'
   if (pathname.startsWith('/integrations/')) return getIntegrationTitle(pathname)

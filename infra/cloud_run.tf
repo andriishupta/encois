@@ -124,6 +124,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
+        for_each = var.artifact_bucket_name == "" ? [] : [true]
+
+        content {
+          name  = "SOURCE_ARTIFACT_BUCKET"
+          value = var.artifact_bucket_name
+        }
+      }
+
+      dynamic "env" {
         for_each = var.enable_identity_platform ? [true] : []
 
         content {

@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
@@ -10,6 +10,7 @@ import {
   type JsonObject,
   type KnowledgeSource,
   type KnowledgeSourceCreateRequest,
+  type SourceIngestionRun,
   type SourceIngestionRequest,
   type SourceRevision,
   type SourceRevisionCreateRequest,
@@ -37,6 +38,28 @@ export type SourceServiceError = Error & { code: string };
 export type SourceSummary = {
   source: KnowledgeSource;
   revisions: readonly SourceRevision[];
+  ingestionRuns: readonly SourceIngestionRun[];
+};
+
+export type UploadedPdfSourceInput = {
+  name: string;
+  fileName: string;
+  bytes: Uint8Array;
+};
+
+export type SourceArtifactStore = {
+  reference(input: { organizationId: string; sourceId: string; revision: string }): { artifactRef: string; objectKey: string };
+  write(input: {
+    artifactRef: string;
+    objectKey: string;
+    organizationId: string;
+    sourceId: string;
+    revision: string;
+    fileName: string;
+    contentType: string;
+    bytes: Uint8Array;
+  }): Promise<void>;
+  remove?(input: { artifactRef: string; objectKey: string }): Promise<void>;
 };
 
 export type SourceIngestionLaunch = {
@@ -168,7 +191,27 @@ function toSourceRevision(row: typeof sourceRevisions.$inferSelect): SourceRevis
     ...(row.checksum ? { checksum: row.checksum } : {}),
     ...(row.observedAt ? { observedAt: row.observedAt.toISOString() } : {}),
     ...(row.ingestedAt ? { ingestedAt: row.ingestedAt.toISOString() } : {}),
+    ...(Object.keys(row.metadata).length > 0 ? { metadata: row.metadata } : {}),
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toSourceIngestionRun(row: typeof sourceIngestionRuns.$inferSelect): SourceIngestionRun {
+  return {
+    id: row.id,
+    sourceId: row.sourceId,
+    sourceRevisionId: row.sourceRevisionId,
+    temporalWorkflowId: row.temporalWorkflowId,
+    ...(row.temporalRunId ? { temporalRunId: row.temporalRunId } : {}),
+    trigger: row.trigger,
+    status: row.status,
+    ...(row.currentStage ? { currentStage: row.currentStage } : {}),
+    factsCount: row.factsCount,
+    ...(row.error ? { error: row.error } : {}),
+    createdAt: row.createdAt.toISOString(),
+    ...(row.startedAt ? { startedAt: row.startedAt.toISOString() } : {}),
+    ...(row.completedAt ? { completedAt: row.completedAt.toISOString() } : {}),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -201,7 +244,7 @@ async function assertPermission(
   permission: "knowledge:read" | "knowledge:manage",
 ): Promise<void> {
   if (!(await hasKnowledgePermission(db, principal, permission))) {
-    throw sourceServiceError("FORBIDDEN", "The user is not allowed to manage Knowledge Sources.");
+    throw sourceServiceError("FORBIDDEN", permission === "knowledge:read" ? "The user is not allowed to read Knowledge Sources." : "The user is not allowed to manage Knowledge Sources.");
   }
 }
 
@@ -277,7 +320,9 @@ export async function listKnowledgeSources(principal: AosPrincipal): Promise<rea
       .select()
       .from(knowledgeSources)
       .where(eq(knowledgeSources.organizationId, principal.organizationId));
-    return rows.filter((row) => scopeOverlapsPrincipal(row.readScope, principal.scope)).map(toKnowledgeSource);
+    return rows
+      .filter((row) => scopeOverlapsPrincipal(row.readScope, principal.scope) && scopeOverlapsPrincipal(row.visibilityScope, principal.scope))
+      .map(toKnowledgeSource);
   });
 }
 
@@ -293,12 +338,18 @@ export async function getKnowledgeSource(
       .from(knowledgeSources)
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)))
       .limit(1);
-    if (!row || !scopeOverlapsPrincipal(row.readScope, principal.scope)) return null;
+    if (!row || !scopeOverlapsPrincipal(row.readScope, principal.scope) || !scopeOverlapsPrincipal(row.visibilityScope, principal.scope)) return null;
     const revisions = await db
       .select()
       .from(sourceRevisions)
-      .where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId)));
-    return { source: toKnowledgeSource(row), revisions: revisions.map(toSourceRevision) };
+      .where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId)))
+      .orderBy(asc(sourceRevisions.createdAt));
+    const ingestionRuns = await db
+      .select()
+      .from(sourceIngestionRuns)
+      .where(and(eq(sourceIngestionRuns.sourceId, sourceId), eq(sourceIngestionRuns.organizationId, principal.organizationId)))
+      .orderBy(asc(sourceIngestionRuns.createdAt));
+    return { source: toKnowledgeSource(row), revisions: revisions.map(toSourceRevision), ingestionRuns: ingestionRuns.map(toSourceIngestionRun) };
   });
 }
 
@@ -310,6 +361,7 @@ export async function createSourceRevision(
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   if (!request.revision || request.revision.length > 128) throw sourceServiceError("INVALID_SOURCE_REVISION", "A revision identifier is required and must be at most 128 characters.");
   assertSafeArtifactReference(request.artifactRef);
+  const metadata = safeConfiguration(request.metadata);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     await assertPermission(db, principal, "knowledge:manage");
     const [source] = await db
@@ -317,7 +369,7 @@ export async function createSourceRevision(
       .from(knowledgeSources)
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)))
       .limit(1);
-    if (!source || !scopeIsWithinPrincipal(source.readScope, principal.scope)) return null;
+    if (!source || !scopeIsWithinPrincipal(source.readScope, principal.scope) || !scopeIsWithinPrincipal(source.visibilityScope, principal.scope)) return null;
     const [row] = await db
       .insert(sourceRevisions)
       .values({
@@ -329,6 +381,7 @@ export async function createSourceRevision(
         contentType: request.contentType ?? source.contentType,
         checksum: request.checksum,
         observedAt: request.observedAt ? new Date(request.observedAt) : undefined,
+        metadata,
       })
       .returning();
     if (!row) throw sourceServiceError("SOURCE_REVISION_CREATE_FAILED", "The source revision could not be created.");
@@ -338,6 +391,68 @@ export async function createSourceRevision(
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)));
     return toSourceRevision(row);
   });
+}
+
+function pdfFileName(value: string): string {
+  const normalized = value.replace(/[\\/\u0000-\u001f\u007f]/g, " ").trim().slice(0, 240);
+  return normalized.toLowerCase().endsWith(".pdf") ? normalized : `${normalized || "document"}.pdf`;
+}
+
+export async function uploadPdfKnowledgeSource(
+  principal: AosPrincipal,
+  input: UploadedPdfSourceInput,
+  artifactStore: SourceArtifactStore | undefined,
+): Promise<{ source: KnowledgeSource; revision: SourceRevision }> {
+  if (!artifactStore) throw sourceServiceError("ARTIFACT_STORE_UNAVAILABLE", "PDF uploads are not configured for this environment.");
+  const fileName = pdfFileName(input.fileName);
+  if (!input.name.trim() || input.name.trim().length > 120) {
+    throw sourceServiceError("INVALID_SOURCE_NAME", "A source name is required and must be at most 120 characters.");
+  }
+  if (input.bytes.length === 0 || input.bytes.length > 10 * 1024 * 1024) {
+    throw sourceServiceError("INVALID_UPLOAD_SIZE", "PDF uploads must be between 1 byte and 10 MiB.");
+  }
+  const header = new TextDecoder().decode(input.bytes.subarray(0, 5));
+  if (header !== "%PDF-") throw sourceServiceError("INVALID_PDF", "The uploaded file is not a valid PDF signature.");
+
+  const checksum = createHash("sha256").update(input.bytes).digest("hex");
+  const revision = `sha256-${checksum}`;
+  const source = await createKnowledgeSource(principal, {
+    name: input.name.trim(),
+    kind: KnowledgeSourceKind.UploadedDocument,
+    readScope: { ids: principal.scope },
+    visibilityScope: { ids: principal.scope },
+    contentType: "application/pdf",
+  });
+  const reference = artifactStore.reference({ organizationId: principal.organizationId, sourceId: source.id, revision });
+
+  try {
+    await artifactStore.write({
+      artifactRef: reference.artifactRef,
+      objectKey: reference.objectKey,
+      organizationId: principal.organizationId,
+      sourceId: source.id,
+      revision,
+      fileName,
+      contentType: "application/pdf",
+      bytes: input.bytes,
+    });
+    const revisionProjection = await createSourceRevision(principal, source.id, {
+      revision,
+      artifactRef: reference.artifactRef,
+      sourceObjectId: reference.objectKey,
+      contentType: "application/pdf",
+      checksum,
+      observedAt: new Date().toISOString(),
+      metadata: { fileName, sizeBytes: input.bytes.length },
+    });
+    if (!revisionProjection) throw sourceServiceError("SOURCE_NOT_FOUND", "The uploaded source could not be completed.");
+    return { source: { ...source, currentRevisionId: revisionProjection.id }, revision: revisionProjection };
+  } catch (error) {
+    if (artifactStore.remove) {
+      await artifactStore.remove(reference).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 function sourceIngestionInput(
@@ -403,7 +518,7 @@ export async function startSourceIngestion(
       .from(sourceRevisions)
       .where(and(eq(sourceRevisions.id, revisionId), eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId)))
       .limit(1);
-    if (!sourceRow || !revisionRow || !scopeIsWithinPrincipal(sourceRow.readScope, principal.scope)) {
+    if (!sourceRow || !revisionRow || !scopeIsWithinPrincipal(sourceRow.readScope, principal.scope) || !scopeIsWithinPrincipal(sourceRow.visibilityScope, principal.scope)) {
       throw sourceServiceError("SOURCE_NOT_FOUND", "Source or revision not found.");
     }
 

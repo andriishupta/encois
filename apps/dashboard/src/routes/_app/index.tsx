@@ -7,7 +7,7 @@ import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
-import { listIntegrations, listWorkflows } from '@/lib/api'
+import { listIntegrations, listKnowledgeSources, listWorkflows } from '@/lib/api'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
@@ -21,6 +21,7 @@ function DashboardPage() {
   const { workspace } = useWorkspace()
   const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
   const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
   const [startingInitialization, setStartingInitialization] = useState(false)
   const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
   const runningWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
@@ -52,7 +53,7 @@ function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <OverviewCard icon={Activity} label="Active workflows" value={workflows.isLoading ? '…' : String(activeWorkflows.length)} detail={`${runningWorkflows} running · ${waitingWorkflows} waiting`} />
-        <OverviewCard icon={PlugZap} label="Integrations" value={integrations.isLoading ? '…' : String(integrations.data?.length ?? 0)} detail={`${connectedIntegrations} active in scope`} />
+        <OverviewCard icon={PlugZap} label="Knowledge sources" value={sources.isLoading ? '…' : String(sources.data?.length ?? 0)} detail={`${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope`} />
         <OverviewCard icon={GitBranch} label="Recent signals" value="—" detail="Events endpoint is not exposed yet" />
         <OverviewCard icon={TriangleAlert} label="Needs attention" value={workflows.isLoading ? '…' : String(attentionWorkflows)} detail="Failed or partial workflows" />
       </div>
@@ -93,7 +94,7 @@ function DashboardPage() {
             <CardDescription>Current status of the Encois runtime surface.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <HealthRow icon={Server} label="Gateway API" detail={workflows.isError || integrations.isError ? 'Request failed' : workflows.isLoading || integrations.isLoading ? 'Checking…' : 'Connected'} />
+            <HealthRow icon={Server} label="Gateway API" detail={workflows.isError || integrations.isError || sources.isError ? 'Request failed' : workflows.isLoading || integrations.isLoading || sources.isLoading ? 'Checking…' : 'Connected'} />
             <HealthRow icon={Activity} label="Agent runtime" detail="Health endpoint is not exposed to the Dashboard" />
             <HealthRow icon={HeartPulse} label="External systems" detail={connectedIntegrations ? `${connectedIntegrations} active integration${connectedIntegrations === 1 ? '' : 's'}` : 'No active integrations'} />
           </CardContent>

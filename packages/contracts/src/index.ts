@@ -131,7 +131,25 @@ export type SourceRevision = {
   checksum?: string;
   observedAt?: string;
   ingestedAt?: string;
+  metadata?: JsonObject;
   createdAt: string;
+};
+
+export type SourceIngestionRun = {
+  id: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  temporalWorkflowId: string;
+  temporalRunId?: string;
+  trigger: SourceIngestionTrigger;
+  status: SourceIngestionStatus | "queued" | "running";
+  currentStage?: string;
+  factsCount: number;
+  error?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  updatedAt: string;
 };
 
 export type SourceIngestionRequest = ExecutionEnvelope & {
@@ -179,6 +197,7 @@ export type SourceRevisionCreateRequest = {
   contentType?: string;
   checksum?: string;
   observedAt?: string;
+  metadata?: JsonObject;
 };
 
 export type ExecutionContext = {

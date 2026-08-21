@@ -11,9 +11,9 @@ import {
   LogOut,
   Menu,
   Plus,
-  PlugZap,
   Settings,
   UserRound,
+  Waypoints,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,7 +26,7 @@ import { useOrganization } from '@/lib/organization-context'
 const primaryNavigation = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Workflows', to: '/workflows', icon: GitBranch },
-  { label: 'Integrations', to: '/integrations', icon: PlugZap },
+  { label: 'Knowledge sources', to: '/sources', icon: Waypoints },
 ] as const
 
 const secondaryNavigation = [
@@ -157,7 +157,7 @@ function NavSection({
   onNavigate,
 }: {
   label: string
-  items: readonly { label: string; to: '/' | '/workflows' | '/integrations' | '/organization' | '/settings'; icon: typeof LayoutDashboard }[]
+  items: readonly { label: string; to: '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/settings'; icon: typeof LayoutDashboard }[]
   onNavigate: () => void
 }) {
   return (
@@ -184,13 +184,16 @@ function Breadcrumbs({ pathname, rootLabel }: { pathname: string; rootLabel: str
   return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link to="/" className="max-w-40 truncate text-muted-foreground transition-colors hover:text-foreground">{rootLabel}</Link>{items.map((item) => <span key={item.label} className="flex min-w-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="truncate text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="truncate font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/integrations' | '/organization' | '/organization/permissions' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/organization/permissions' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
 
 function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
   if (pathname === '/workflows') return [{ label: 'Workflows' }]
   if (pathname === '/workflows/new') return [{ label: 'Workflows', to: '/workflows' }, { label: 'New workflow' }]
   if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Workflow execution' }]
+  if (pathname === '/sources') return [{ label: 'Knowledge sources' }]
+  if (pathname === '/sources/new') return [{ label: 'Knowledge sources', to: '/sources' }, { label: 'Add source' }]
+  if (pathname.startsWith('/sources/')) return [{ label: 'Knowledge sources', to: '/sources' }, { label: 'Source details' }]
   if (pathname === '/integrations') return [{ label: 'Integrations' }]
   if (pathname === '/integrations/new') return [{ label: 'Integrations', to: '/integrations' }, { label: 'Add integration' }]
   if (pathname.startsWith('/integrations/')) return [{ label: 'Integrations', to: '/integrations' }, { label: getIntegrationLabel(pathname) }]

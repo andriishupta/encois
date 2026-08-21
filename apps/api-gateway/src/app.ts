@@ -29,6 +29,8 @@ import { createWorkflowsRouter } from "./workflows/router.js";
 import { createInternalCoordinatorRouter } from "./workflows/internal-coordinator.router.js";
 import { createOrganizationRouter } from "./organization/router.js";
 import { createSourcesRouter } from "./sources/router.js";
+import { createSourceArtifactStore } from "./sources/artifact-store.js";
+import type { SourceArtifactStore } from "./sources/services/source.service.js";
 
 const ACTIVE_API_VERSION = "v1" as const;
 
@@ -38,6 +40,7 @@ export type CreateAppOptions = {
   resolveAccess?: IdentityAccessResolver;
   verifyIdentity?: IdentityPlatformVerifier;
   workflowClient?: WorkflowClient;
+  sourceArtifactStore?: SourceArtifactStore;
 };
 
 export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
@@ -117,6 +120,11 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
       taskQueue: config.temporalTaskQueue,
       policyVersion: config.agentGatewayPolicyVersion,
       workflowClient,
+      artifactStore: options.sourceArtifactStore ?? createSourceArtifactStore({
+        bucketName: config.sourceArtifactBucket,
+        nodeEnv: config.nodeEnv,
+        projectId: config.identityPlatformProjectId,
+      }),
     }),
   );
   v1Router.route("/organization", createOrganizationRouter());

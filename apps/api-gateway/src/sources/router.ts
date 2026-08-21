@@ -6,13 +6,15 @@ import {
   getKnowledgeSourceRoute,
   listKnowledgeSourcesRoute,
   startSourceIngestionRoute,
+  uploadPdfKnowledgeSourceRoute,
 } from "./routes/index.js";
-import type { SourceServiceOptions } from "./services/source.service.js";
+import type { SourceArtifactStore, SourceServiceOptions } from "./services/source.service.js";
 
-export function createSourcesRouter(options: SourceServiceOptions): Hono<GatewayEnv> {
+export function createSourcesRouter(options: SourceServiceOptions & { artifactStore?: SourceArtifactStore }): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
   router.get("/", listKnowledgeSourcesRoute);
   router.post("/", createKnowledgeSourceRoute);
+  router.post("/uploads", uploadPdfKnowledgeSourceRoute(options.artifactStore));
   router.get("/:sourceId", getKnowledgeSourceRoute);
   router.post("/:sourceId/revisions", createSourceRevisionRoute);
   router.post("/:sourceId/revisions/:revisionId/ingest", startSourceIngestionRoute(options));

@@ -48,3 +48,10 @@ resource "google_storage_bucket_iam_member" "api_object_viewer" {
   member = "serviceAccount:${google_service_account.api.email}"
 }
 
+resource "google_storage_bucket_iam_member" "api_object_creator" {
+  count = var.artifact_bucket_name == "" ? 0 : 1
+
+  bucket = google_storage_bucket.artifacts[0].name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.api.email}"
+}

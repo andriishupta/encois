@@ -14,6 +14,7 @@ export type MockOnboardingState = {
   companyWebsite?: string
   memorySource?: MemorySource
   memorySourceLabel?: string
+  memorySourceId?: string
   coordinationMode?: CoordinationMode
   selectedWorkflows: string[]
   status: WorkspaceInitializationStatus

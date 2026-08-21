@@ -273,10 +273,12 @@ Manual:      validated note/fact -> shared pipeline
 Media:       transcript/metadata -> shared pipeline
 ```
 
-The current scaffold persists the first three control-plane records and starts
-the registered Runtime Workflow. It returns `deferred` at the acquisition
-stage while Cloud Storage bytes, live Jira/GitHub adapters, PII classification,
-Graph writes, and Memory Bank distillation remain explicit adapter work.
+The current scaffold persists the first three control-plane records, accepts a
+validated PDF upload into the configured Cloud Storage adapter, exposes source
+revisions and ingestion runs to the Dashboard, and starts the registered
+Runtime Workflow. It returns `deferred` at the acquisition/parser stage while
+PDF parsing, live Jira/GitHub adapters, PII classification, Graph writes, and
+Memory Bank distillation remain explicit adapter work.
 
 ## 2. Request-to-worker flow
 

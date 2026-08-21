@@ -48,6 +48,7 @@ Current blueprint routes:
 - `POST /api/v1/integrations/:integrationId` — update an integration after object-level authorization.
 - `GET /api/v1/sources` — list scoped Knowledge Sources.
 - `POST /api/v1/sources` — register an integration, uploaded-document, manual, or media Source.
+- `POST /api/v1/sources/uploads` — upload a validated PDF (up to 10 MiB) as a new source and immutable revision; production requires `SOURCE_ARTIFACT_BUCKET`.
 - `GET /api/v1/sources/:sourceId` — read a Source and its immutable revisions.
 - `POST /api/v1/sources/:sourceId/revisions` — register a revision by artifact/provider reference; raw bytes are not stored in Postgres or Temporal.
 - `POST /api/v1/sources/:sourceId/revisions/:revisionId/ingest` — start the platform-owned `encois.source-ingestion.v1` Workflow.

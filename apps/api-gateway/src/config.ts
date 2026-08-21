@@ -4,6 +4,7 @@ export type AppConfig = {
   corsOrigins: readonly string[];
   host: string;
   identityPlatformProjectId?: string;
+  sourceArtifactBucket?: string;
   identityPlatformAllowedSignInProviders?: readonly string[];
   controlPlaneServiceToken?: string;
   controlPlaneServiceUserId?: string;
@@ -20,7 +21,7 @@ export type AppConfig = {
 };
 
 const DEFAULTS = {
-  bodyLimitBytes: 1_048_576,
+  bodyLimitBytes: 12_582_912,
   host: "127.0.0.1",
   nodeEnv: "development",
   port: 8787,
@@ -50,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigins,
     host: env.HOST?.trim() || DEFAULTS.host,
     identityPlatformProjectId: env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || undefined,
+    sourceArtifactBucket: env.SOURCE_ARTIFACT_BUCKET?.trim() || undefined,
     identityPlatformAllowedSignInProviders,
     controlPlaneServiceToken: env.CONTROL_PLANE_SERVICE_TOKEN?.trim() || undefined,
     controlPlaneServiceUserId: env.CONTROL_PLANE_SERVICE_USER_ID?.trim() || undefined,

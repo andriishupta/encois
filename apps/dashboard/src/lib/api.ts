@@ -8,6 +8,9 @@ import type {
   OrganizationProjection,
   OrganizationUnitCreateRequest,
   OrganizationUnitProjection,
+  KnowledgeSource,
+  SourceIngestionRun,
+  SourceRevision,
   WaitlistRequest,
   WaitlistSubmissionResponse,
   WorkflowExecutionProjection,
@@ -15,7 +18,7 @@ import type {
   WorkflowStartRequest,
   WorkflowUpdateRequest,
 } from '@encois/contracts'
-import { AccessLevel, IntegrationStatus, OrganizationMembershipStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
+import { AccessLevel, IntegrationStatus, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
 import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
@@ -23,6 +26,20 @@ const apiBaseUrl = (environment.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '
 
 type ApiEnvelope<T> = { data: T }
 type ApiErrorPayload = { error?: { code?: string; message?: string } }
+
+export type KnowledgeSourceDetail = {
+  source: KnowledgeSource
+  revisions: readonly SourceRevision[]
+  ingestionRuns: readonly SourceIngestionRun[]
+}
+
+export type KnowledgeSourceUpload = { source: KnowledgeSource; revision: SourceRevision }
+export type SourceIngestionLaunch = {
+  source: KnowledgeSource
+  revision: SourceRevision
+  workflow: { workflowId: string; runId?: string; status: string; reused?: boolean }
+  resultContract: string
+}
 
 export class ApiError extends Error {
   readonly status: number
@@ -66,6 +83,69 @@ function isIntegrationProjection(value: unknown): value is IntegrationProjection
     && typeof value.name === 'string'
     && typeof value.provider === 'string'
     && Object.values(IntegrationStatus).includes(value.status as IntegrationStatus)
+}
+
+function isKnowledgeSource(value: unknown): value is KnowledgeSource {
+  return isRecord(value)
+    && value.contractVersion === 'knowledge-source.v1'
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && typeof value.name === 'string'
+    && Object.values(KnowledgeSourceKind).includes(value.kind as KnowledgeSourceKind)
+    && Object.values(KnowledgeSourceStatus).includes(value.status as KnowledgeSourceStatus)
+    && isRecord(value.readScope)
+    && Array.isArray(value.readScope.ids)
+    && isRecord(value.visibilityScope)
+    && Array.isArray(value.visibilityScope.ids)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+}
+
+function isSourceRevision(value: unknown): value is SourceRevision {
+  return isRecord(value)
+    && value.contractVersion === 'source-revision.v1'
+    && typeof value.id === 'string'
+    && typeof value.sourceId === 'string'
+    && typeof value.organizationId === 'string'
+    && typeof value.revision === 'string'
+    && Object.values(SourceRevisionStatus).includes(value.status as SourceRevisionStatus)
+    && typeof value.createdAt === 'string'
+}
+
+function isSourceIngestionRun(value: unknown): value is SourceIngestionRun {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.sourceId === 'string'
+    && typeof value.sourceRevisionId === 'string'
+    && typeof value.temporalWorkflowId === 'string'
+    && typeof value.trigger === 'string'
+    && ['queued', 'running', 'completed', 'deferred', 'failed'].includes(value.status as string)
+    && typeof value.factsCount === 'number'
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+}
+
+function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourceDetail {
+  return isRecord(value)
+    && isKnowledgeSource(value.source)
+    && Array.isArray(value.revisions)
+    && value.revisions.every(isSourceRevision)
+    && Array.isArray(value.ingestionRuns)
+    && value.ingestionRuns.every(isSourceIngestionRun)
+}
+
+function isKnowledgeSourceUpload(value: unknown): value is KnowledgeSourceUpload {
+  return isRecord(value) && isKnowledgeSource(value.source) && isSourceRevision(value.revision)
+}
+
+function isSourceIngestionLaunch(value: unknown): value is SourceIngestionLaunch {
+  return isRecord(value)
+    && isKnowledgeSource(value.source)
+    && isSourceRevision(value.revision)
+    && isRecord(value.workflow)
+    && typeof value.workflow.workflowId === 'string'
+    && typeof value.workflow.status === 'string'
+    && typeof value.resultContract === 'string'
 }
 
 function isOrganizationUnitProjection(value: unknown): value is OrganizationUnitProjection {
@@ -133,7 +213,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
 
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
-  if (init?.body !== undefined) headers.set('Content-Type', 'application/json')
+  if (typeof init?.body === 'string') headers.set('Content-Type', 'application/json')
   if (session) {
     headers.set('Authorization', `Bearer ${session.accessToken}`)
     if (session.organizationId) headers.set('X-Organization-ID', session.organizationId)
@@ -235,6 +315,34 @@ export async function updateWorkflow(workflowId: string, input: WorkflowUpdateRe
 
 export function listIntegrations(): Promise<readonly IntegrationProjection[]> {
   return request<unknown>('/integrations').then((value) => parseList(value, isIntegrationProjection, 'integration list'))
+}
+
+export function listKnowledgeSources(): Promise<readonly KnowledgeSource[]> {
+  return request<unknown>('/sources').then((value) => parseList(value, isKnowledgeSource, 'Knowledge Source list'))
+}
+
+export async function getKnowledgeSource(sourceId: string): Promise<KnowledgeSourceDetail> {
+  const value = await request<unknown>(`/sources/${encodeURIComponent(sourceId)}`)
+  if (!isKnowledgeSourceDetail(value)) throw new ApiError(200, 'API returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function uploadKnowledgeSourcePdf(file: File, name?: string): Promise<KnowledgeSourceUpload> {
+  const form = new FormData()
+  form.append('file', file)
+  if (name?.trim()) form.append('name', name.trim())
+  const value = await request<unknown>('/sources/uploads', { method: 'POST', body: form })
+  if (!isKnowledgeSourceUpload(value)) throw new ApiError(200, 'API returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function startSourceIngestion(sourceId: string, revisionId: string, trigger: SourceIngestionTrigger = SourceIngestionTrigger.Manual): Promise<SourceIngestionLaunch> {
+  const value = await request<unknown>(`/sources/${encodeURIComponent(sourceId)}/revisions/${encodeURIComponent(revisionId)}/ingest`, {
+    method: 'POST',
+    body: JSON.stringify({ trigger }),
+  })
+  if (!isSourceIngestionLaunch(value)) throw new ApiError(200, 'API returned an invalid source ingestion response.', 'INVALID_RESPONSE')
+  return value
 }
 
 export async function updateIntegration(integrationId: string, input: IntegrationUpdateRequest): Promise<IntegrationProjection> {

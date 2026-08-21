@@ -176,6 +176,49 @@ describe("API Gateway", () => {
     const organization = await app.request("/api/v1/organization");
     expect(organization.status).toBe(503);
     await expect(organization.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
+    for (const path of ["/api/v1/organization/units", "/api/v1/organization/members", "/api/v1/organization/permissions"]) {
+      const response = await app.request(path);
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+    }
+
+    const invalidPermission = await app.request("/api/v1/organization/permissions", {
+      method: "POST",
+      body: JSON.stringify({ memberId: "member-1" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalidPermission.status).toBe(400);
+
+    const invalidUpdate = await app.request("/api/v1/organization/permissions/not-a-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ access: "admin" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalidUpdate.status).toBe(400);
+
+    const invalidDelete = await app.request("/api/v1/organization/permissions/not-a-uuid", { method: "DELETE" });
+    expect(invalidDelete.status).toBe(400);
+  });
+
+  it("mounts tenant-protected Knowledge Source routes and rejects non-PDF uploads at the boundary", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const list = await app.request("/api/v1/sources");
+    expect(list.status).toBe(503);
+    await expect(list.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
+    const form = new FormData();
+    form.set("file", new File(["plain text"], "notes.txt", { type: "text/plain" }));
+    const upload = await app.request("/api/v1/sources/uploads", { method: "POST", body: form });
+    expect(upload.status).toBe(422);
+    await expect(upload.json()).resolves.toMatchObject({ error: { code: "UNSUPPORTED_DOCUMENT_TYPE" } });
   });
 
   it("starts and reads a workflow through the local Temporal blueprint", async () => {
