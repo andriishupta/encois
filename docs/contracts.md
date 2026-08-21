@@ -178,9 +178,7 @@ stable envelope.
   "organizationId": "acme",
   "actorId": "user-123",
   "scope": {
-    "ids": ["team:platform", "project:checkout"],
-    "teamIds": ["platform"],
-    "projectIds": ["checkout"]
+    "ids": ["unit:platform", "unit:checkout"]
   },
   "policyVersion": "policy-17",
   "blueprintId": "release-readiness",
@@ -296,8 +294,9 @@ The runtime adds an Encois execution envelope around the MCP-shaped call:
   "workflowId": "workflow:acme:release-readiness:checkout:aug-30",
   "organizationId": "acme",
   "actorId": "user-123",
-  "scope": { "ids": ["project:checkout"], "projectIds": ["checkout"] },
+  "scope": { "ids": ["unit:checkout"] },
   "policyVersion": "policy-17",
+  "capability": "<API-issued internal execution capability>",
   "tool": "jira.search_issues",
   "arguments": { "query": "release context" }
 }

@@ -88,6 +88,7 @@ export function createPlanCoordinatorEvent(
 						blueprintVersion: change.blueprint.version,
 						key: change.start.key,
 						...(change.start.businessInput ? { businessInput: change.start.businessInput } : {}),
+						scope: { ids: [...principal.scope] },
 					}];
 				})
 			: [];

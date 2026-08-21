@@ -28,6 +28,7 @@ func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) 
 		ActorID:         "user-1",
 		RequestID:       "request-1",
 		PolicyVersion:   "policy-read-only-fixture-v1",
+		Capability:      "test-capability",
 		Scope:           map[string]any{"ids": []any{"team-a"}},
 		BusinessInput:   map[string]any{"projectKey": "checkout"},
 		Blueprint: coordinator.WorkflowBlueprint{
@@ -79,6 +80,7 @@ func TestDynamicBlueprintWorkflowDeduplicatesApprovalSignals(t *testing.T) {
 		ActorID:         "user-1",
 		RequestID:       "request-approval-1",
 		PolicyVersion:   "policy-read-only-fixture-v1",
+		Capability:      "test-capability",
 		Scope:           map[string]any{"ids": []any{"team-a"}},
 		Blueprint: coordinator.WorkflowBlueprint{
 			ContractVersion: "workflow-blueprint.v1",

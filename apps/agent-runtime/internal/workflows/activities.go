@@ -33,6 +33,7 @@ func ValidateBlueprintContract(_ context.Context, input BlueprintWorkflowInput) 
 		"organizationId":  input.OrganizationID,
 		"actorId":         input.ActorID,
 		"policyVersion":   input.PolicyVersion,
+		"capability":      input.Capability,
 		"scope":           input.Scope,
 	}
 	if input.TraceID != "" {
@@ -82,6 +83,7 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 			ActorID:         input.ActorID,
 			PolicyVersion:   input.PolicyVersion,
 			Scope:           input.Scope,
+			Capability:      input.Capability,
 			AgentDefinition: input.Step.AgentDefinition,
 			Tool:            input.Step.Tool,
 			Arguments:       map[string]any{"input": input.Step.Input, "businessInput": input.BusinessInput, "priorResults": input.PriorResults},

@@ -103,6 +103,7 @@ type WorkflowStartSpec struct {
 	BlueprintVersion string         `json:"blueprintVersion"`
 	Key              string         `json:"key"`
 	BusinessInput    map[string]any `json:"businessInput,omitempty"`
+	Scope            map[string]any `json:"scope,omitempty"`
 }
 
 // WorkflowStartIntent is the plan-level request to start the Blueprint that

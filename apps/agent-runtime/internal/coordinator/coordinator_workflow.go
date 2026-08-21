@@ -177,6 +177,9 @@ func startApprovedWorkflows(ctx workflow.Context, input CoordinatorStartInput, s
 	})
 
 	for index, spec := range starts {
+		if len(spec.Scope) == 0 {
+			return fmt.Errorf("approved workflow start %q is missing organization-unit scope", spec.Key)
+		}
 		actorID := input.ActorID
 		if actorID == "" {
 			actorID = input.CoordinatorID
@@ -188,7 +191,7 @@ func startApprovedWorkflows(ctx workflow.Context, input CoordinatorStartInput, s
 			ProjectID:        input.ProjectID,
 			ActorID:          actorID,
 			PolicyVersion:    input.PolicyVersion,
-			Scope:            map[string]any{},
+			Scope:            spec.Scope,
 			BlueprintID:      spec.BlueprintID,
 			BlueprintVersion: spec.BlueprintVersion,
 			Key:              spec.Key,

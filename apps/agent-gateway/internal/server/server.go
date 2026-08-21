@@ -21,6 +21,8 @@ type Server struct {
 	policy                policy.Service
 	logger                *slog.Logger
 	serviceAuthConfigured bool
+	capabilitySecret      string
+	requireCapability     bool
 	workflowMu            sync.RWMutex
 	workflowRecords       map[string]domain.WorkflowDefinitionResponse
 	artifactStore         ArtifactStore
@@ -31,8 +33,10 @@ type Server struct {
 // uses deterministic local implementations; hosted wiring selects Cloud
 // Storage and Spanner without changing routes, authentication, or policy code.
 type RouterOptions struct {
-	ArtifactStore ArtifactStore
-	GraphStore    GraphStore
+	ArtifactStore     ArtifactStore
+	GraphStore        GraphStore
+	CapabilitySecret  string
+	RequireCapability bool
 }
 
 func SetGinMode(mode string) {
@@ -56,6 +60,8 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 		policy:                policyService,
 		logger:                logger,
 		serviceAuthConfigured: serviceToken != "",
+		capabilitySecret:      options.CapabilitySecret,
+		requireCapability:     options.RequireCapability,
 		workflowRecords:       make(map[string]domain.WorkflowDefinitionResponse),
 		artifactStore:         artifactStore,
 		graphStore:            graphStore,
@@ -95,6 +101,10 @@ func (s *Server) ready(c *gin.Context) {
 		status = http.StatusServiceUnavailable
 		state = "service_auth_not_configured"
 	}
+	if s.requireCapability && s.capabilitySecret == "" {
+		status = http.StatusServiceUnavailable
+		state = "execution_capability_not_configured"
+	}
 	c.JSON(status, gin.H{
 		"status":  state,
 		"service": "agent-gateway",
@@ -118,6 +128,21 @@ func (s *Server) authorize(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, s.policy.Authorize(c.Request.Context(), request))
+}
+
+func (s *Server) authorizeExecution(c *gin.Context, execution domain.ExecutionContext) bool {
+	if !s.requireCapability && s.capabilitySecret == "" {
+		return true
+	}
+	if s.capabilitySecret == "" {
+		errorResponse(c, http.StatusServiceUnavailable, "capability_not_configured", "Agent Gateway execution capability is not configured", false)
+		return false
+	}
+	if err := verifyExecutionCapability(execution.Capability, s.capabilitySecret, execution, time.Now()); err != nil {
+		errorResponse(c, http.StatusForbidden, "capability_denied", "The execution capability is not valid for this request", false)
+		return false
+	}
+	return true
 }
 
 func (s *Server) tools(c *gin.Context) {
@@ -145,6 +170,9 @@ func (s *Server) invokeTool(c *gin.Context) {
 	}
 	if request.Arguments == nil {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "arguments are required", false)
+		return
+	}
+	if !s.authorizeExecution(c, request.ExecutionContext) {
 		return
 	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{
@@ -195,6 +223,9 @@ func (s *Server) graphQuery(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "query is required", false)
 		return
 	}
+	if !s.authorizeExecution(c, request.ExecutionContext) {
+		return
+	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{
 		ExecutionContext: request.ExecutionContext,
 		Resource:         "spanner.graph",
@@ -225,6 +256,9 @@ func (s *Server) upsertGraph(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "workflow execution context is required for graph projection", false)
 		return
 	}
+	if !s.authorizeExecution(c, request.ExecutionContext) {
+		return
+	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{ExecutionContext: request.ExecutionContext, Resource: "spanner.graph", Action: "write_facts"})
 	if !decision.Allowed {
 		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
@@ -248,6 +282,9 @@ func (s *Server) writeArtifact(c *gin.Context) {
 	}
 	if request.WorkflowID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.Scope.Empty() {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "workflow execution context is required for artifact storage", false)
+		return
+	}
+	if !s.authorizeExecution(c, request.ExecutionContext) {
 		return
 	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{
@@ -278,6 +315,9 @@ func (s *Server) readArtifact(c *gin.Context) {
 	}
 	if request.ArtifactRef == "" || request.OrganizationID == "" || request.WorkflowID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.Scope.Empty() {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "artifact reference and workflow execution context are required", false)
+		return
+	}
+	if !s.authorizeExecution(c, request.ExecutionContext) {
 		return
 	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{ExecutionContext: request.ExecutionContext, Resource: "cloud-storage", Action: "read_artifact"})

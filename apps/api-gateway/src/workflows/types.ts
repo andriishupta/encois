@@ -24,6 +24,7 @@ export type WorkflowStartCommand = {
     workflowId: string;
     policyVersion: string;
     scope: ExecutionScope;
+    capability: string;
     userId?: string;
     blueprint?: WorkflowBlueprint;
     businessInput?: JsonObject;

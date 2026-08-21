@@ -22,6 +22,7 @@ type SourceIngestionWorkflowInput struct {
 	OrganizationID   string                           `json:"organizationId"`
 	ActorID          string                           `json:"actorId"`
 	PolicyVersion    string                           `json:"policyVersion"`
+	Capability       string                           `json:"capability"`
 	Scope            map[string]any                   `json:"scope"`
 	SourceID         string                           `json:"sourceId"`
 	SourceRevisionID string                           `json:"sourceRevisionId"`
@@ -86,7 +87,7 @@ func validateSourceIngestionWorkflowInput(input SourceIngestionWorkflowInput) er
 	if input.ContractVersion != string(contracts.ContractSourceIngestion) {
 		return fmt.Errorf("unsupported source ingestion contractVersion %q", input.ContractVersion)
 	}
-	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" {
+	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" || input.Capability == "" {
 		return fmt.Errorf("source ingestion execution context is incomplete")
 	}
 	if input.SourceID == "" || input.SourceRevisionID == "" || input.Trigger == "" || input.SourceKind == "" {

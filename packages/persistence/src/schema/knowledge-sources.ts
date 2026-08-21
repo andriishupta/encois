@@ -62,8 +62,6 @@ export type SourceIngestionStatus = (typeof sourceIngestionStatus.enumValues)[nu
 
 export type SourceScope = {
   ids: readonly string[];
-  teamIds?: readonly string[];
-  projectIds?: readonly string[];
 };
 
 /** Logical organization-scoped origin of knowledge. Raw bytes live elsewhere. */

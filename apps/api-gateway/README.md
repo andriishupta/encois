@@ -60,7 +60,7 @@ Current blueprint routes:
 - `POST /api/v1/organization/permissions` — create or update a direct membership scope.
 - `PATCH /api/v1/organization/permissions/:permissionId` — change a direct scope's access level.
 - `DELETE /api/v1/organization/permissions/:permissionId` — remove a direct scope; the Gateway writes an audit event.
-- `POST /api/v1/workflows` — start a workflow through Temporal (or the local in-memory adapter).
+- `POST /api/v1/workflows` — start a workflow through Temporal (or the explicitly selected development/test in-memory adapter).
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
@@ -83,7 +83,13 @@ validated tenant Blueprint; the Go Runtime does not read this catalog.
 Knowledge Sources are a separate control-plane model. Templates do not create
 Sources, revisions, or ingestion runs.
 
-When `TEMPORAL_ADDRESS` is empty, workflow calls use the in-memory adapter so the API can be developed without Temporal credentials. Set `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, and either `TEMPORAL_API_KEY` or mTLS settings to switch to Temporal Cloud. The API starts executions; the Go runtime owns the workers that poll the task queue.
+The in-memory workflow adapter is available only in development/test or when
+`ENCOIS_WORKFLOW_MODE=memory` is explicitly selected. Production and
+production-like Compose require `ENCOIS_WORKFLOW_MODE=temporal`,
+`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, and either
+`TEMPORAL_API_KEY` or mTLS settings; the API fails closed instead of silently
+falling back to memory. The API starts executions; the Go runtime owns the
+workers that poll the task queue.
 
 `AGENT_GATEWAY_POLICY_VERSION` must match the policy version configured in the
 private Agent Gateway; it is propagated through the generic workflow input and

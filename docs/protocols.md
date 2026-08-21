@@ -87,7 +87,7 @@ approval, and execution start separate and makes replay idempotent.
 MCP is the correct standard for the tool layer because tools have a name,
 description, `inputSchema`, optional `outputSchema`, and behavior annotations.
 The Encois execution envelope wraps that tool call with organization, actor,
-scope, workflow, and policy context. Those security fields must not be chosen
+organization-unit scope, workflow, policy, and an API-issued capability. Those security fields must not be chosen
 by the model.
 
 Google ADK can consume MCP tools as agent tools or use equivalent native tool
@@ -237,6 +237,12 @@ tool name/version
 arguments
 request ID, propagated trace ID, and, once known, Temporal run ID
 ```
+
+The Gateway issues the short-lived capability after authenticating the user
+and resolving organization-unit scope. The Runtime forwards it as an opaque
+internal field; the Agent Gateway verifies its signature and exact execution
+context before every data-plane operation. It is never exposed to the browser,
+model prompts, provider payloads, or logs.
 
 The Agent Gateway then:
 

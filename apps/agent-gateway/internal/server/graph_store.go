@@ -130,7 +130,7 @@ func visible(provenance *contracts.DataProvenance, scope domain.Scope) bool {
 }
 
 func scopeContains(scope domain.Scope, target string) bool {
-	return contains(scope.IDs, target) || contains(scope.TeamIDs, target) || contains(scope.ProjectIDs, target)
+	return contains(scope.IDs, target)
 }
 
 func contains(values []string, target string) bool {

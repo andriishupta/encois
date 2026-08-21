@@ -13,11 +13,22 @@ const testConfig: AppConfig = {
   port: 8787,
   requestTimeoutMs: 10_000,
   agentGatewayPolicyVersion: "policy-read-only-fixture-v1",
+  agentGatewayCapabilitySecret: "test-capability-secret",
+  executionCapabilityTtlMs: 86_400_000,
+  workflowMode: "memory",
   temporalNamespace: "default",
   temporalTaskQueue: "test",
 };
 
 describe("API Gateway", () => {
+  it("fails closed when production capability signing is not configured", () => {
+    expect(() =>
+      createApp({
+        config: { ...testConfig, nodeEnv: "production", agentGatewayCapabilitySecret: undefined },
+      }),
+    ).toThrow("AGENT_GATEWAY_CAPABILITY_SECRET is required in production.");
+  });
+
   it("exposes public liveness and readiness endpoints", async () => {
     const app = createApp({ config: testConfig });
 

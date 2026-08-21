@@ -31,6 +31,7 @@ type ToolRequest struct {
 	ActorID         string         `json:"actorId"`
 	PolicyVersion   string         `json:"policyVersion"`
 	Scope           map[string]any `json:"scope"`
+	Capability      string         `json:"capability"`
 	AgentDefinition string         `json:"agentDefinition"`
 	Tool            string         `json:"tool"`
 	Arguments       map[string]any `json:"arguments"`
@@ -56,6 +57,7 @@ type ArtifactReadRequest struct {
 	ActorID         string         `json:"actorId"`
 	PolicyVersion   string         `json:"policyVersion"`
 	Scope           map[string]any `json:"scope"`
+	Capability      string         `json:"capability"`
 	ArtifactRef     string         `json:"artifactRef"`
 }
 
@@ -75,6 +77,7 @@ type GraphMutation struct {
 	ActorID         string         `json:"actorId"`
 	PolicyVersion   string         `json:"policyVersion"`
 	Scope           map[string]any `json:"scope"`
+	Capability      string         `json:"capability"`
 	Nodes           []GraphNode    `json:"nodes"`
 	Edges           []GraphEdge    `json:"edges"`
 }

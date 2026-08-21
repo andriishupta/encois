@@ -21,6 +21,28 @@ resource "google_secret_manager_secret_iam_member" "gateway_accessor" {
   member    = "serviceAccount:${google_service_account.agent_gateway.email}"
 }
 
+resource "google_secret_manager_secret_iam_member" "gateway_execution_capability_accessor" {
+  for_each = {
+    for name, secret in google_secret_manager_secret.application : name => secret
+    if var.enable_agent_gateway && name == var.execution_capability_secret_name
+  }
+
+  secret_id = each.value.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.agent_gateway.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_execution_capability_accessor" {
+  for_each = {
+    for name, secret in google_secret_manager_secret.application : name => secret
+    if var.enable_api && name == var.execution_capability_secret_name
+  }
+
+  secret_id = each.value.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "api_database_accessor" {
   for_each = {
     for name in var.secret_names : name => name

@@ -11,9 +11,7 @@ import (
 )
 
 type Scope struct {
-	IDs        []string `json:"ids"`
-	TeamIDs    []string `json:"teamIds,omitempty"`
-	ProjectIDs []string `json:"projectIds,omitempty"`
+	IDs []string `json:"ids"`
 }
 
 type MemoryScope struct {
@@ -40,6 +38,7 @@ type Request struct {
 	ActorID         string        `json:"actorId"`
 	Scope           Scope         `json:"scope"`
 	PolicyVersion   string        `json:"policyVersion"`
+	Capability      string        `json:"capability"`
 	AgentDefinition string        `json:"agentDefinition"`
 	Operation       string        `json:"operation"`
 	MemoryScope     MemoryScope   `json:"memoryScope"`

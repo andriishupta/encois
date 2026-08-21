@@ -27,8 +27,11 @@ Set `AGENT_GATEWAY_SERVICE_TOKEN` in both the Gateway and Agent Runtime
 environments. Health endpoints remain public; all `/v1/*` routes require the
 Runtime service credential. For Cloud Run, the Runtime may additionally send a
 Google ID token for the Gateway audience; the Encois service token remains a
-separate application-level check. A missing service token makes readiness fail
-closed.
+separate application-level check. Set the same high-entropy
+`AGENT_GATEWAY_CAPABILITY_SECRET` in the Gateway API and Agent Gateway; every
+internal execution request must carry a signed capability bound to its exact
+organization, workflow, actor, policy version, and scope. Missing service or
+capability configuration makes readiness fail closed.
 
 Endpoints:
 
@@ -79,9 +82,10 @@ activate the hosted adapters.
 The Spanner database must contain the tables from `infra/spanner-schema.sql`.
 
 The current policy already validates execution context, policy version, scope,
-and the read-only tool allowlist. A revision without service authentication
-must not receive traffic: readiness fails with `503` when
-`AGENT_GATEWAY_SERVICE_TOKEN` is missing.
+and the read-only tool allowlist. A revision without service authentication or
+execution-capability signing must not receive traffic: readiness fails with
+`503` when `AGENT_GATEWAY_SERVICE_TOKEN` or `AGENT_GATEWAY_CAPABILITY_SECRET`
+is missing.
 
 The gateway is an internal east-west boundary. Its tool catalog and invocation
 payloads follow the MCP shape, wrapped in an Encois execution context. It must

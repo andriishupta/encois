@@ -12,6 +12,9 @@ const config: AppConfig = {
 	port: 8787,
 	requestTimeoutMs: 10_000,
 	agentGatewayPolicyVersion: "policy-read-only-fixture-v1",
+	agentGatewayCapabilitySecret: "test-capability-secret",
+	executionCapabilityTtlMs: 86_400_000,
+	workflowMode: "memory",
 	temporalNamespace: "default",
 	temporalTaskQueue: "test",
 };
@@ -28,6 +31,7 @@ const command: WorkflowStartCommand = {
 		requestId: "request-1",
 		workflowId: "workflow:org-1:encois.user-blueprint.v1:cancel-test",
 		policyVersion: "policy-read-only-fixture-v1",
+		capability: "test-capability",
 		scope: { ids: ["project:checkout"] },
 		businessInput: {},
 		payload: {},
@@ -51,5 +55,11 @@ describe("Temporal workflow client cancellation", () => {
 
 		await expect(client.cancel(command.workflowId, "org-2", "default")).rejects.toThrow("workflow not found");
 		expect((await client.get(command.workflowId, "org-1", "default"))?.status).toBe("queued");
+	});
+
+	it("fails closed instead of creating an in-memory client in production", async () => {
+		expect(() => createWorkflowClient({ ...config, nodeEnv: "production", workflowMode: "temporal" })).toThrow(
+			"TEMPORAL_ADDRESS is required",
+		);
 	});
 });

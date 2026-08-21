@@ -17,6 +17,7 @@ yarn-error.log*
 !.env.test.example
 !.env.local.example
 !.env.production.example
+!.env.local.prod.example
 .secrets/
 secrets/
 credentials/

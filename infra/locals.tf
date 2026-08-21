@@ -1,5 +1,5 @@
 locals {
-  name_prefix = lower(trim(regexreplace("${var.name_prefix}-${var.environment}", "[^a-z0-9-]", "-"), "-"))
+  name_prefix = lower(trim(replace("${var.name_prefix}-${var.environment}", "/[^a-z0-9-]/", "-"), "-"))
   # Service account IDs are limited to 30 characters; the longest suffix is
   # "-dashboard", so keep the shared prefix below that limit.
   service_id = substr(local.name_prefix, 0, 19)

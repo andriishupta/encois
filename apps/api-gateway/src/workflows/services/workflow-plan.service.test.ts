@@ -52,6 +52,7 @@ describe("workflow plan coordinator events", () => {
         blueprintVersion: "1.0.0",
         key: "release:checkout:2026-08-30",
         businessInput: { releaseKey: "2026-08-30" },
+        scope: { ids: ["project:checkout"] },
       },
     ]);
     expect(validateContract("coordinatorEvent", event).valid).toBe(true);

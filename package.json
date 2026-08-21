@@ -9,6 +9,8 @@
     "dev:api-gateway": "pnpm --filter @encois/api-gateway dev",
     "dev:local": "docker compose -f compose.local.yaml up --build",
     "dev:local:down": "docker compose -f compose.local.yaml down",
+    "dev:local:prod": "docker compose --env-file .env.local.prod -f compose.local.prod.yaml up --build",
+    "dev:local:prod:down": "docker compose --env-file .env.local.prod -f compose.local.prod.yaml down",
     "smoke:release": "pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-release-flow.ts",
     "smoke:approval": "pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-approval-flow.ts",
     "smoke:release:local": "bash scripts/smoke-release-local.sh",

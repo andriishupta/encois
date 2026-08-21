@@ -11,6 +11,7 @@
     "actorId",
     "scope",
     "policyVersion",
+    "capability",
     "query"
   ],
   "$defs": {
@@ -19,9 +20,7 @@
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       }
     }
   },
@@ -35,6 +34,7 @@
     "actorId": { "type": "string", "minLength": 1 },
     "scope": { "$ref": "#/$defs/scope" },
     "policyVersion": { "type": "string", "minLength": 1 },
+    "capability": { "type": "string", "minLength": 1 },
     "query": {
       "type": "string",
       "minLength": 1,

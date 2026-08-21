@@ -48,6 +48,7 @@ func TestInvokeSendsScopedAuthenticatedToolRequest(t *testing.T) {
 		OrganizationID:  "org-test",
 		ActorID:         "actor-test",
 		PolicyVersion:   "policy-test",
+		Capability:      "test-capability",
 		Scope:           map[string]any{"ids": []string{"team-test"}},
 		Tool:            "jira.project_tasks",
 		Arguments:       map[string]any{"projectKey": "checkout"},

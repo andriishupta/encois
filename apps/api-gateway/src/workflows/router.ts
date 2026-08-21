@@ -14,7 +14,7 @@ import { listWorkflowTemplatesRoute } from "./routes/list-workflow-templates.rou
 import type { AppConfig } from "../config.js";
 
 export function createWorkflowsRouter(
-  config: Pick<AppConfig, "agentGatewayPolicyVersion" | "temporalNamespace" | "temporalTaskQueue">,
+  config: Pick<AppConfig, "agentGatewayPolicyVersion" | "agentGatewayCapabilitySecret" | "executionCapabilityTtlMs" | "temporalNamespace" | "temporalTaskQueue">,
   workflowClient: WorkflowClient,
 ): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
@@ -22,6 +22,8 @@ export function createWorkflowsRouter(
     namespace: config.temporalNamespace,
     taskQueue: config.temporalTaskQueue,
     policyVersion: config.agentGatewayPolicyVersion,
+    capabilitySecret: config.agentGatewayCapabilitySecret,
+    capabilityTtlMs: config.executionCapabilityTtlMs,
     workflowClient,
   };
 

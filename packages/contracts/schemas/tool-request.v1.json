@@ -2,15 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://encois.dev/schemas/tool-request.v1.json",
   "type": "object",
-  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "tool", "arguments"],
+  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "capability", "tool", "arguments"],
   "$defs": {
     "scope": {
       "type": "object",
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
     }
@@ -25,6 +23,7 @@
     "actorId": { "type": "string" },
     "scope": { "$ref": "#/$defs/scope" },
     "policyVersion": { "type": "string" },
+    "capability": { "type": "string", "minLength": 1 },
     "agentDefinition": { "type": "string" },
     "tool": { "type": "string" },
     "arguments": { "type": "object" }

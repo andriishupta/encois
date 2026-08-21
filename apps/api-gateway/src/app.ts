@@ -45,6 +45,9 @@ export type CreateAppOptions = {
 
 export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   const config = options.config ?? loadConfig();
+  if (config.nodeEnv === "production" && !config.agentGatewayCapabilitySecret) {
+    throw new Error("AGENT_GATEWAY_CAPABILITY_SECRET is required in production.");
+  }
   const workflowClient = options.workflowClient ?? createWorkflowClient(config);
   const identityVerifier =
     options.verifyIdentity ??
@@ -120,6 +123,8 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
       namespace: config.temporalNamespace,
       taskQueue: config.temporalTaskQueue,
       policyVersion: config.agentGatewayPolicyVersion,
+      capabilitySecret: config.agentGatewayCapabilitySecret,
+      capabilityTtlMs: config.executionCapabilityTtlMs,
       workflowClient,
       artifactStore: options.sourceArtifactStore ?? createSourceArtifactStore({
         bucketName: config.sourceArtifactBucket,
@@ -134,6 +139,8 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
     createWorkflowsRouter(
       {
         agentGatewayPolicyVersion: config.agentGatewayPolicyVersion,
+        agentGatewayCapabilitySecret: config.agentGatewayCapabilitySecret,
+        executionCapabilityTtlMs: config.executionCapabilityTtlMs,
         temporalNamespace: config.temporalNamespace,
         temporalTaskQueue: config.temporalTaskQueue,
       },
@@ -145,6 +152,8 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
     createInternalCoordinatorRouter(
       {
         agentGatewayPolicyVersion: config.agentGatewayPolicyVersion,
+        agentGatewayCapabilitySecret: config.agentGatewayCapabilitySecret,
+        executionCapabilityTtlMs: config.executionCapabilityTtlMs,
         temporalNamespace: config.temporalNamespace,
         temporalTaskQueue: config.temporalTaskQueue,
         controlPlaneServiceToken: config.controlPlaneServiceToken,

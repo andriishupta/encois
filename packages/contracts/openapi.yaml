@@ -817,12 +817,6 @@ components:
           type: array
           minItems: 1
           items: { type: string, minLength: 1 }
-        teamIds:
-          type: array
-          items: { type: string, minLength: 1 }
-        projectIds:
-          type: array
-          items: { type: string, minLength: 1 }
     KnowledgeSource:
       type: object
       additionalProperties: false
@@ -1144,12 +1138,6 @@ components:
               type: array
               minItems: 1
               items: { type: string, minLength: 1 }
-            projectIds:
-              type: array
-              items: { type: string, minLength: 1 }
-            teamIds:
-              type: array
-              items: { type: string, minLength: 1 }
         reason: { type: string, maxLength: 2000 }
         evidenceRefs:
           type: array
@@ -1165,6 +1153,15 @@ components:
               blueprintVersion: { type: string, minLength: 1 }
               key: { type: string, minLength: 1, maxLength: 128 }
               businessInput: { type: object }
+              scope:
+                type: object
+                additionalProperties: false
+                required: [ids]
+                properties:
+                  ids:
+                    type: array
+                    minItems: 1
+                    items: { type: string, minLength: 1 }
     WorkflowStartIntent:
       type: object
       additionalProperties: false

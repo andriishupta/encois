@@ -17,6 +17,7 @@ secret_names = [
   "cloud-sql-runtime-url",
   "temporal-client-credentials",
   "agent-gateway-service-token",
+  "execution-capability-secret",
   "control-plane-service-token",
 ]
 

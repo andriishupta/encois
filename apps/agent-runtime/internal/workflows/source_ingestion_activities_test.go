@@ -15,6 +15,7 @@ func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
 		Scope:            map[string]any{"ids": []string{"project-1"}},
 		SourceID:         "source-1",
 		SourceRevisionID: "revision-1",

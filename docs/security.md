@@ -59,7 +59,13 @@ The first implementation may be in-process inside the Go Runtime, but it must us
 
 Temporal Cloud coordinates execution; it does not authorize provider access. The Go Runtime executes Workflow and Activity code. A Worker identity may access only the queues, stores, model endpoints, and private services required by its deployment role.
 
-Workflow payloads and Signals are untrusted application data. Do not place secrets, provider tokens, unrestricted raw company data, or large model responses in Temporal history. Temporal inputs carry identifiers, scope, policy version, and data references.
+Workflow payloads and Signals are untrusted application data. Do not place
+secrets, provider tokens, unrestricted raw company data, or large model
+responses in Temporal history. Temporal inputs carry identifiers, scope, policy
+version, and data references. The internal Gateway-issued execution capability
+is the exception: it is a short-lived signed field in the restricted Runtime
+execution envelope, forwarded opaquely to the private Agent Gateway and never
+returned to the browser, model, provider, logs, or general projections.
 
 The Runtime-to-Gateway Coordinator routes are private application routes, not
 browser or public MCP routes. They require the service credential, an
@@ -249,7 +255,9 @@ Recommended behavior:
 - allow only explicitly listed read operations;
 - make it valid only while the execution is active, or until a bounded maximum TTL; revoke it on cancellation, deletion, security incident, or workflow completion when no longer needed;
 - make it single-use for one-time callbacks where possible;
-- never put it in a URL, browser history, Temporal payload, model context, provider request, or log;
+- never put an external/client-facing capability in a URL, browser history,
+  model context, provider request, or log; the restricted internal execution
+  capability may travel only in the signed Runtime-to-Agent-Gateway envelope;
 - return a generic unauthorized response for wrong workflow, tenant, audience, or operation;
 - rate-limit and monitor use;
 - never allow it to create another Workflow, access graph/memory broadly, delete data, change permissions, or invoke a provider tool.

@@ -18,6 +18,10 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.FromEnv()
+	if cfg.CapabilitySecret == "" {
+		logger.Error("execution capability secret is not configured")
+		os.Exit(1)
+	}
 
 	if cfg.GinMode != "" {
 		gatewayserver.SetGinMode(cfg.GinMode)
@@ -40,6 +44,8 @@ func main() {
 		logger.Error("unsupported agent gateway data mode", "data_mode", cfg.DataMode, "allowed", []string{"gcp", "mock"})
 		os.Exit(1)
 	}
+	routerOptions.CapabilitySecret = cfg.CapabilitySecret
+	routerOptions.RequireCapability = true
 	router := gatewayserver.NewRouterWithOptions(policy.NewReadOnlyToolPolicy(cfg.PolicyVersion), logger, cfg.ServiceToken, routerOptions)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

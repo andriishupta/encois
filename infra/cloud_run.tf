@@ -39,9 +39,8 @@ resource "google_cloud_run_v2_service" "dashboard" {
   }
 
   traffic {
-    type            = "TRAFFIC_TARGET_ALLOCATION"
-    percent         = 100
-    latest_revision = true
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
 
   lifecycle {
@@ -126,6 +125,26 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "AGENT_GATEWAY_POLICY_VERSION"
         value = "policy-read-only-fixture-v1"
+      }
+
+      env {
+        name  = "ENCOIS_WORKFLOW_MODE"
+        value = "temporal"
+      }
+
+      dynamic "env" {
+        for_each = var.enable_api ? [true] : []
+
+        content {
+          name = "AGENT_GATEWAY_CAPABILITY_SECRET"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.execution_capability_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
       }
 
       dynamic "env" {
@@ -233,9 +252,8 @@ resource "google_cloud_run_v2_service" "api" {
   }
 
   traffic {
-    type            = "TRAFFIC_TARGET_ALLOCATION"
-    percent         = 100
-    latest_revision = true
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
 
   lifecycle {
@@ -250,6 +268,10 @@ resource "google_cloud_run_v2_service" "api" {
     precondition {
       condition     = !var.enable_api || var.temporal_address == "" || contains(var.secret_names, var.temporal_secret_name)
       error_message = "temporal_secret_name must name one of the secret_names when API Temporal Cloud is enabled."
+    }
+    precondition {
+      condition     = !var.enable_api || contains(var.secret_names, var.execution_capability_secret_name)
+      error_message = "execution_capability_secret_name must name one of the secret_names when the Gateway API is enabled."
     }
   }
 }
@@ -423,9 +445,8 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
   }
 
   traffic {
-    type            = "TRAFFIC_TARGET_ALLOCATION"
-    percent         = 100
-    latest_revision = true
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
 
   lifecycle {
@@ -526,6 +547,21 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       }
 
       dynamic "env" {
+        for_each = var.enable_agent_gateway ? [true] : []
+
+        content {
+          name = "AGENT_GATEWAY_CAPABILITY_SECRET"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.execution_capability_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
         for_each = var.artifact_bucket_name == "" ? [] : [true]
 
         content {
@@ -561,9 +597,8 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
   }
 
   traffic {
-    type            = "TRAFFIC_TARGET_ALLOCATION"
-    percent         = 100
-    latest_revision = true
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
 
   lifecycle {
@@ -574,6 +609,10 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
     precondition {
       condition     = contains(var.secret_names, var.agent_gateway_secret_name)
       error_message = "agent_gateway_secret_name must name one of the secret_names when the Agent Gateway is enabled."
+    }
+    precondition {
+      condition     = contains(var.secret_names, var.execution_capability_secret_name)
+      error_message = "execution_capability_secret_name must name one of the secret_names when the Agent Gateway is enabled."
     }
     precondition {
       condition     = var.artifact_bucket_name != ""

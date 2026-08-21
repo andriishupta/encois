@@ -3,16 +3,14 @@
   "$id": "https://encois.dev/schemas/artifact-read.v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "artifactRef"],
+  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "capability", "artifactRef"],
   "$defs": {
     "scope": {
       "type": "object",
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
       }
     }
   },
@@ -26,6 +24,7 @@
     "actorId": { "type": "string", "minLength": 1 },
     "scope": { "$ref": "#/$defs/scope" },
     "policyVersion": { "type": "string", "minLength": 1 },
+    "capability": { "type": "string", "minLength": 1 },
     "artifactRef": { "type": "string", "minLength": 1, "maxLength": 2048 }
   }
 }

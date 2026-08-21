@@ -146,6 +146,12 @@ variable "agent_gateway_secret_name" {
   default     = "agent-gateway-service-token"
 }
 
+variable "execution_capability_secret_name" {
+  description = "Secret shared by the Gateway API and Agent Gateway for per-execution capability signing."
+  type        = string
+  default     = "execution-capability-secret"
+}
+
 variable "control_plane_secret_name" {
   description = "Secret shared by the Go Runtime and Gateway API for the private Coordinator control-plane boundary."
   type        = string

@@ -21,6 +21,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { createExecutionCapability } from "../../security/execution-capability.js";
 import type { WorkflowClient } from "../temporal-client.js";
 import {
   buildWorkflowId,
@@ -35,6 +36,8 @@ export type WorkflowServiceOptions = {
   policyVersion: string;
   namespace: string;
   taskQueue: string;
+  capabilitySecret?: string;
+  capabilityTtlMs?: number;
 };
 
 export type WorkflowServiceError = Error & {
@@ -86,15 +89,33 @@ function startCommand(
   taskQueue: string,
   policyVersion: string,
   requestHash: string,
+  capabilitySecret: string,
+  capabilityTtlMs: number | undefined,
 ) {
   const payload = request.input ?? {};
   const blueprint = getBlueprint(request, payload);
   const businessInput = getBusinessInput(request, payload);
-  const scope: ExecutionScope = {
-    ids: principal.scope,
-    ...(request.scope?.projectIds ? { projectIds: request.scope.projectIds } : {}),
-    ...(request.scope?.teamIds ? { teamIds: request.scope.teamIds } : {}),
-  };
+  const requestedScope = request.scope;
+  if (requestedScope && Object.keys(requestedScope).some((key) => key !== "ids")) {
+    throw workflowServiceError("INVALID_SCOPE", "Execution scope may contain only organization-unit ids.");
+  }
+  const requestedIds = requestedScope?.ids;
+  if (requestedIds !== undefined && requestedIds.length === 0) {
+    throw workflowServiceError("INVALID_SCOPE", "Execution scope must contain at least one organization-unit id.");
+  }
+  const scope: ExecutionScope = { ids: [...new Set(requestedIds ?? principal.scope)].sort() };
+  if (!principal.scope.includes("*") && scope.ids.some((id) => !principal.scope.includes(id))) {
+    throw workflowServiceError("SCOPE_DENIED", "The requested workflow scope exceeds the caller's organization-unit scope.");
+  }
+  const capability = createExecutionCapability({
+    secret: capabilitySecret,
+    organizationId: principal.organizationId,
+    workflowId,
+    actorId: principal.actorId,
+    policyVersion,
+    scope,
+    ttlMs: capabilityTtlMs,
+  });
   return {
     workflowType: request.workflowType,
     workflowId,
@@ -108,6 +129,7 @@ function startCommand(
       workflowId,
       policyVersion,
       scope,
+      capability,
       userId: principal.userId,
       blueprint,
       businessInput: businessInput as JsonObject,
@@ -342,6 +364,11 @@ export async function startWorkflow(
     key: request.key ?? request.idempotencyKey ?? requestId,
   });
   const fingerprint = requestHash(request);
+  const capabilitySecret = options.capabilitySecret;
+
+  if (!capabilitySecret) {
+    throw workflowServiceError("CAPABILITY_NOT_CONFIGURED", "Execution capability signing is not configured.");
+  }
 
   if (!database) {
     if (request.blueprintId && !request.blueprint) {
@@ -358,6 +385,8 @@ export async function startWorkflow(
           options.taskQueue,
           options.policyVersion,
           fingerprint,
+          capabilitySecret,
+          options.capabilityTtlMs,
         ),
         options.namespace,
       );
@@ -450,7 +479,7 @@ export async function startWorkflow(
       );
     }
 
-    const command = startCommand(
+  const command = startCommand(
       principal,
       effectiveRequest,
       requestId,
@@ -459,6 +488,8 @@ export async function startWorkflow(
       options.taskQueue,
       options.policyVersion,
       fingerprint,
+      capabilitySecret,
+      options.capabilityTtlMs,
     );
     const projection = await options.workflowClient.start(command, options.namespace);
 

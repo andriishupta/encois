@@ -13,7 +13,7 @@ import { validateWorkflowPlanRoute } from "./routes/validate-workflow-plan.route
  * before authentication and organization-scope checks are evaluated.
  */
 export function createInternalCoordinatorRouter(
-  config: Pick<AppConfig, "agentGatewayPolicyVersion" | "temporalNamespace" | "temporalTaskQueue" | "controlPlaneServiceToken">,
+  config: Pick<AppConfig, "agentGatewayPolicyVersion" | "agentGatewayCapabilitySecret" | "executionCapabilityTtlMs" | "temporalNamespace" | "temporalTaskQueue" | "controlPlaneServiceToken">,
   workflowClient: WorkflowClient,
 ): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
@@ -22,6 +22,8 @@ export function createInternalCoordinatorRouter(
     namespace: config.temporalNamespace,
     taskQueue: config.temporalTaskQueue,
     policyVersion: config.agentGatewayPolicyVersion,
+    capabilitySecret: config.agentGatewayCapabilitySecret,
+    capabilityTtlMs: config.executionCapabilityTtlMs,
     workflowClient,
   };
 

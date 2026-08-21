@@ -62,6 +62,7 @@ func (r gatewaySourceReader) Read(ctx context.Context, input SourceIngestionWork
 		ActorID:         input.ActorID,
 		PolicyVersion:   input.PolicyVersion,
 		Scope:           input.Scope,
+		Capability:      input.Capability,
 		ArtifactRef:     input.ArtifactRef,
 	})
 	if err != nil {
@@ -95,7 +96,8 @@ func ValidateSourceIngestionContract(_ context.Context, input SourceIngestionWor
 	payload := map[string]any{
 		"contractVersion": input.ContractVersion, "requestId": input.RequestID, "workflowId": input.WorkflowID,
 		"organizationId": input.OrganizationID, "actorId": input.ActorID, "policyVersion": input.PolicyVersion,
-		"scope": input.Scope, "sourceId": input.SourceID, "sourceRevisionId": input.SourceRevisionID,
+		"capability": input.Capability,
+		"scope":      input.Scope, "sourceId": input.SourceID, "sourceRevisionId": input.SourceRevisionID,
 		"sourceKind": input.SourceKind, "trigger": input.Trigger, "readScope": input.ReadScope, "visibilityScope": input.VisibilityScope,
 	}
 	for key, value := range map[string]any{"traceId": input.TraceID, "provider": input.Provider, "artifactRef": input.ArtifactRef, "sourceObjectId": input.SourceObjectID, "contentType": input.ContentType} {
@@ -163,7 +165,7 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 			digest := sha256.Sum256([]byte(input.SourceRevisionID + "\x00" + fmt.Sprint(index) + "\x00" + fact))
 			nodes = append(nodes, gatewayclient.GraphNode{ID: "fact:" + hex.EncodeToString(digest[:]), Type: "source_fact", Properties: map[string]any{"text": fact, "sourceId": input.SourceID, "sourceRevisionId": input.SourceRevisionID}, Provenance: provenance})
 		}
-		if err := a.gateway.UpsertGraph(ctx, gatewayclient.GraphMutation{ContractVersion: string(contractschemas.ContractGraphUpsert), RequestID: input.RequestID + ":graph", TraceID: input.TraceID, WorkflowID: input.WorkflowID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, PolicyVersion: input.PolicyVersion, Scope: input.Scope, Nodes: nodes}); err != nil {
+		if err := a.gateway.UpsertGraph(ctx, gatewayclient.GraphMutation{ContractVersion: string(contractschemas.ContractGraphUpsert), RequestID: input.RequestID + ":graph", TraceID: input.TraceID, WorkflowID: input.WorkflowID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, PolicyVersion: input.PolicyVersion, Scope: input.Scope, Capability: input.Capability, Nodes: nodes}); err != nil {
 			return SourceIngestionWorkflowResult{}, fmt.Errorf("project source facts into graph: %w", err)
 		}
 	}
@@ -175,8 +177,8 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 	summary := strings.Join(facts, " ")
 	memoryRequest := memory.Request{
 		ContractVersion: string(contractschemas.ContractAgentMemory), RequestID: input.RequestID + ":memory", WorkflowID: input.WorkflowID,
-		TraceID: input.TraceID, RunID: "", OrganizationID: input.OrganizationID, ActorID: input.ActorID, Scope: memory.Scope{IDs: scopeIDs(input.VisibilityScope), TeamIDs: scopeValues(input.VisibilityScope, "teamIds"), ProjectIDs: scopeValues(input.VisibilityScope, "projectIds")},
-		PolicyVersion: input.PolicyVersion, AgentDefinition: "source-ingestion", Operation: "distill", MemoryScope: memory.MemoryScope{AgentDefinition: "source-ingestion", ProjectID: firstScopeValue(input.VisibilityScope, "projectIds")},
+		TraceID: input.TraceID, RunID: "", OrganizationID: input.OrganizationID, ActorID: input.ActorID, Scope: memory.Scope{IDs: scopeIDs(input.VisibilityScope)}, Capability: input.Capability,
+		PolicyVersion: input.PolicyVersion, AgentDefinition: "source-ingestion", Operation: "distill", MemoryScope: memory.MemoryScope{AgentDefinition: "source-ingestion"},
 		Distillation: &memory.Distillation{Summary: summary, EvidenceRefs: evidenceRefs, ObservedAt: raw.ObservedAt, RedactionStatus: contractschemas.RedactionApplied, RedactionVersion: "source-redaction-1"},
 	}
 	_, err = a.memory.Execute(ctx, memory.SanitizeRequest(memoryRequest))
@@ -220,32 +222,19 @@ func extractFacts(text string) []string {
 }
 
 func scopeIDs(scope map[string]any) []string {
-	if values := scopeValues(scope, "ids"); len(values) > 0 {
-		return values
+	if values, ok := scope["ids"].([]string); ok && len(values) > 0 {
+		return append([]string(nil), values...)
 	}
-	return []string{"*"}
-}
-
-func scopeValues(scope map[string]any, key string) []string {
-	if values, ok := scope[key].([]any); ok {
-		result := make([]string, 0, len(values))
+	if values, ok := scope["ids"].([]any); ok {
+		ids := make([]string, 0, len(values))
 		for _, value := range values {
 			if id, ok := value.(string); ok && id != "" {
-				result = append(result, id)
+				ids = append(ids, id)
 			}
 		}
-		return result
+		if len(ids) > 0 {
+			return ids
+		}
 	}
-	if values, ok := scope[key].([]string); ok {
-		return values
-	}
-	return nil
-}
-
-func firstScopeValue(scope map[string]any, key string) string {
-	values := scopeValues(scope, key)
-	if len(values) > 0 {
-		return values[0]
-	}
-	return ""
+	return []string{"*"}
 }

@@ -11,7 +11,10 @@ uses `TEMPORAL_ADDRESS`, the worker uses `TEMPORAL_HOST_PORT`, both receive the
 Temporal API key from Secret Manager, and the worker exposes internal
 `/health/live` and `/health/ready` endpoints. When both private services are
 enabled, Terraform also wires the Agent Gateway URL and its separate service
-token to the worker and grants each service only the secret it needs. When the
+token to the worker and grants each service only the secret it needs. Terraform
+also wires the separate execution-capability signing secret to both the Gateway
+API and Agent Gateway; neither service can start the production execution path
+without that shared Secret Manager value. When the
 API and Runtime are enabled together, it also wires the private control-plane
 URL, Cloud Run audience, shared application token, and Runtime service-account
 invoker grant. Vertex AI mode is enabled with Application Default Credentials;

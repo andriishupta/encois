@@ -125,6 +125,7 @@ func TestCoordinatorWorkflowDeduplicatesCoordinatorEvents(t *testing.T) {
 			BlueprintVersion: "1.0.0",
 			Key:              "release-aug-30",
 			BusinessInput:    map[string]any{"releaseKey": "aug-30"},
+			Scope:            map[string]any{"ids": []any{"unit-1"}},
 		}},
 	}
 	wrongOrganization := event
@@ -179,6 +180,7 @@ func TestCoordinatorWorkflowRetainsFailedStartsForRetry(t *testing.T) {
 			BlueprintID:      "release-readiness",
 			BlueprintVersion: "1.0.0",
 			Key:              "release-retry",
+			Scope:            map[string]any{"ids": []any{"unit-1"}},
 		}},
 	}
 	env.RegisterDelayedCallback(func() {

@@ -11,7 +11,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 		{
 			name:   "execution context",
 			schema: SchemaExecutionContext,
-			value:  map[string]any{"contractVersion": "execution-context.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}}},
+			value:  map[string]any{"contractVersion": "execution-context.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "capability": "test-capability", "scope": map[string]any{"ids": []string{"team-a"}}},
 		},
 		{
 			name:   "blueprint",
@@ -25,7 +25,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 		{
 			name:   "tool request",
 			schema: SchemaToolRequest,
-			value:  map[string]any{"contractVersion": "tool-request.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}}, "tool": "jira.project_tasks", "arguments": map[string]any{}},
+			value:  map[string]any{"contractVersion": "tool-request.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "capability": "test-capability", "scope": map[string]any{"ids": []string{"team-a"}}, "tool": "jira.project_tasks", "arguments": map[string]any{}},
 		},
 		{
 			name:   "tool result",
@@ -38,6 +38,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			value: map[string]any{
 				"contractVersion": "artifact-write.v1", "requestId": "artifact-1", "workflowId": "wf-1",
 				"organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1",
+				"capability": "test-capability",
 				"scope": map[string]any{"ids": []string{"team-a"}}, "objectKey": "evidence/release.json",
 				"contentType": "application/json", "dataRef": "provider:jira:release-1",
 			},
@@ -53,6 +54,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			value: map[string]any{
 				"contractVersion": "graph-query.v1", "requestId": "graph-1", "workflowId": "wf-1", "organizationId": "org-1",
 				"actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}},
+				"capability": "test-capability",
 				"query": "release.related_entities", "params": map[string]any{"releaseKey": "aug-30"},
 			},
 		},
@@ -71,6 +73,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			value: map[string]any{
 				"contractVersion": "agent-memory.v1", "requestId": "memory-1", "workflowId": "wf-1", "organizationId": "org-1",
 				"actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}},
+				"capability": "test-capability",
 				"agentDefinition": "release-investigation.synthesizer@1", "operation": "retrieve",
 				"memoryScope": map[string]any{"agentDefinition": "release-investigation.synthesizer@1", "projectId": "project-1"},
 				"query":       "release risk patterns", "maxResults": 5,

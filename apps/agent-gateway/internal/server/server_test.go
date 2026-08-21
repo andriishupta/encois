@@ -59,6 +59,7 @@ func TestMockToolInvocation(t *testing.T) {
 			OrganizationID:  "org-test",
 			ActorID:         "actor-test",
 			PolicyVersion:   "policy-test",
+			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
 		Tool:      "jira.project_tasks",
@@ -162,6 +163,7 @@ func TestReadOnlyPolicyDeniesUnknownTool(t *testing.T) {
 			OrganizationID:  "org-test",
 			ActorID:         "actor-test",
 			PolicyVersion:   "policy-test",
+			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
 		Tool:      "unknown.tool",
@@ -191,6 +193,7 @@ func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
 			OrganizationID:  "org-test",
 			ActorID:         "actor-test",
 			PolicyVersion:   "policy-old",
+			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
 		Tool:      "jira.project_tasks",
@@ -212,7 +215,7 @@ func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
 
 func TestArtifactWriteReturnsTenantScopedReference(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"evidence/project.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"objectKey":"evidence/project.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -236,7 +239,7 @@ func TestRouterAcceptsAnInjectedArtifactStore(t *testing.T) {
 	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
 		ArtifactStore: store,
 	})
-	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-adapter-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"evidence/project.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-adapter-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"objectKey":"evidence/project.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -260,7 +263,7 @@ func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
 	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
 		GraphStore: store,
 	})
-	body := `{"contractVersion":"graph-query.v1","requestId":"graph-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"query":"project.related_entities","params":{"projectKey":"checkout"}}`
+	body := `{"contractVersion":"graph-query.v1","requestId":"graph-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"query":"project.related_entities","params":{"projectKey":"checkout"}}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/graph/query", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -281,7 +284,7 @@ func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
 
 func TestGraphQueryUsesDefaultMockAdapter(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"graph-query.v1","requestId":"graph-deferred","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"query":"project.related_entities"}`
+	body := `{"contractVersion":"graph-query.v1","requestId":"graph-deferred","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"query":"project.related_entities"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/graph/query", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -294,7 +297,7 @@ func TestGraphQueryUsesDefaultMockAdapter(t *testing.T) {
 
 func TestArtifactWriteRejectsPathTraversal(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"../../secret.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"objectKey":"../../secret.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -308,7 +311,7 @@ func TestArtifactWriteRejectsPathTraversal(t *testing.T) {
 
 func TestToolBoundaryRequiresCanonicalScopeIDs(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"tool-request.v1","requestId":"req-test","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"projectIds":["project-a"]},"tool":"jira.project_tasks","arguments":{}}`
+	body := `{"contractVersion":"tool-request.v1","requestId":"req-test","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"projectIds":["project-a"]},"tool":"jira.project_tasks","arguments":{}}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")

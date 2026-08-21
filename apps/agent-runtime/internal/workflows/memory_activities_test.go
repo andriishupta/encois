@@ -17,6 +17,7 @@ func TestMemoryActivityReturnsTypedMockResult(t *testing.T) {
 		ActorID:         "actor-1",
 		Scope:           memory.Scope{IDs: []string{"team-1"}},
 		PolicyVersion:   "policy-1",
+		Capability:      "test-capability",
 		AgentDefinition: "release-investigation.synthesizer@1",
 		Operation:       "retrieve",
 		MemoryScope:     memory.MemoryScope{AgentDefinition: "release-investigation.synthesizer@1", ProjectID: "project-1"},

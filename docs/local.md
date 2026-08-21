@@ -82,6 +82,37 @@ Cloud Storage, and the synthetic Agent Gateway tools all have local
 implementations. External Jira/GitHub calls remain deterministic fixtures;
 live provider credentials and adapters are hosted follow-up work.
 
+## Production-like local mode
+
+Use this mode to run the Dashboard, API Gateway, Agent Runtime, and Agent
+Gateway locally while connecting to the managed services used by the hosted
+deployment:
+
+```bash
+cp .env.local.prod.example .env.local.prod
+# fill in the real project, endpoints, ADC path, and non-committed secrets
+pnpm dev:local:prod
+```
+
+It uses `compose.local.prod.yaml` with `AGENT_AI_MODE=gemini`, Vertex/Memory
+Bank, Temporal Cloud, Identity Platform, Cloud SQL/Postgres, Cloud Storage,
+and Spanner. It has no local Postgres, Temporal server, Firebase emulator, or
+mock data-plane fallback. Set `LOCAL_UID` and `LOCAL_GID` to the values from
+`id -u` and `id -g`; the GCP containers then run as that numeric user and can
+read a normal host ADC file without running as root. `GOOGLE_APPLICATION_CREDENTIALS`
+must point to an ADC JSON file; `gcloud auth application-default
+login` is suitable for local testing. The Dashboard's `VITE_FIREBASE_*`
+values are public browser configuration, while service tokens and ADC files
+must never be committed.
+
+This runs the service images locally; it does not deploy Cloud Run. Existing
+Identity Platform membership/invite data and reachable managed endpoints are
+required for a useful end-to-end test. Stop it with:
+
+```bash
+pnpm dev:local:prod:down
+```
+
 ## Reset
 
 To stop the stack:
@@ -114,3 +145,8 @@ not hidden inside the Compose startup command.
 - Terraform is not required for local startup.
 - OpenTelemetry export is not required; logs and correlation IDs are available
   through Compose logs. Cloud Trace is configured only for the hosted path.
+
+The remaining test-oriented follow-up is tracked in
+[`docs/next-steps.md`](next-steps.md). It covers persistence unit tests,
+hosted dependency smoke checks, and pre-production validation without making
+those items prerequisites for the local mock path.

@@ -301,14 +301,6 @@ func scopeSatisfies(scope domain.Scope, required []string) bool {
 			if len(scope.IDs) == 0 {
 				return false
 			}
-		case "teamIds":
-			if len(scope.TeamIDs) == 0 {
-				return false
-			}
-		case "projectIds":
-			if len(scope.ProjectIDs) == 0 {
-				return false
-			}
 		default:
 			return false
 		}

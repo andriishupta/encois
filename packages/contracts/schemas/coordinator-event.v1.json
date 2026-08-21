@@ -33,9 +33,7 @@
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
-        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
       }
     },
     "reason": { "type": "string", "maxLength": 2000 },
@@ -50,7 +48,13 @@
           "blueprintId": { "type": "string", "minLength": 1 },
           "blueprintVersion": { "type": "string", "minLength": 1 },
           "key": { "type": "string", "minLength": 1, "maxLength": 128 },
-          "businessInput": { "type": "object" }
+          "businessInput": { "type": "object" },
+          "scope": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ids"],
+            "properties": { "ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 } }
+          }
         }
       }
     }

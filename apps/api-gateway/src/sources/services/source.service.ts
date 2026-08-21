@@ -30,6 +30,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { createExecutionCapability } from "../../security/execution-capability.js";
 import type { WorkflowClient, WorkflowResultReader } from "../../workflows/temporal-client.js";
 import { buildWorkflowId } from "../../workflows/types.js";
 
@@ -81,6 +82,8 @@ export type SourceServiceOptions = {
   namespace: string;
   taskQueue: string;
   policyVersion: string;
+  capabilitySecret?: string;
+  capabilityTtlMs?: number;
 };
 
 function isSourceIngestionResult(value: unknown): value is SourceIngestionResult {
@@ -145,23 +148,11 @@ function localUserId(principal: AosPrincipal): string | null {
 
 function toScope(value: unknown): SourceScope | null {
   if (!isJsonObject(value) || !Array.isArray(value.ids) || value.ids.length === 0) return null;
-  const ids = value.ids.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  const ids = [...new Set(value.ids.filter((entry): entry is string => typeof entry === "string" && entry.length > 0))];
   if (ids.length !== value.ids.length) return null;
 
-  const readOptionalIds = (key: "teamIds" | "projectIds"): readonly string[] | undefined => {
-    const candidate = value[key];
-    if (candidate === undefined) return undefined;
-    if (!Array.isArray(candidate)) return undefined;
-    const entries = candidate.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-    return entries.length === candidate.length ? entries : undefined;
-  };
-
-  const teamIds = readOptionalIds("teamIds");
-  const projectIds = readOptionalIds("projectIds");
-  if ((value.teamIds !== undefined && teamIds === undefined) || (value.projectIds !== undefined && projectIds === undefined)) {
-    return null;
-  }
-  return { ids, ...(teamIds ? { teamIds } : {}), ...(projectIds ? { projectIds } : {}) };
+  if (Object.keys(value).some((key) => key !== "ids")) return null;
+  return { ids };
 }
 
 function scopeIsWithinPrincipal(sourceScope: SourceScope, principalScope: readonly string[]): boolean {
@@ -211,8 +202,8 @@ function toKnowledgeSource(row: typeof knowledgeSources.$inferSelect): Knowledge
     ...(row.provider ? { provider: row.provider } : {}),
     ...(row.integrationId ? { integrationId: row.integrationId } : {}),
     status: row.status,
-    readScope: row.readScope,
-    visibilityScope: row.visibilityScope,
+    readScope: { ids: row.readScope.ids },
+    visibilityScope: { ids: row.visibilityScope.ids },
     ...(row.contentType ? { contentType: row.contentType } : {}),
     ...(row.currentRevisionId ? { currentRevisionId: row.currentRevisionId } : {}),
     createdAt: row.createdAt.toISOString(),
@@ -524,7 +515,10 @@ function sourceIngestionInput(
   traceId: string,
   workflowId: string,
   policyVersion: string,
+  capabilitySecret: string,
+  capabilityTtlMs: number | undefined,
 ): SourceIngestionRequest {
+  const scope = { ids: [...new Set(source.readScope.ids)].sort() };
   return {
     contractVersion: ContractVersion.SourceIngestion,
     actorId: principal.actorId,
@@ -533,7 +527,16 @@ function sourceIngestionInput(
     traceId,
     workflowId,
     policyVersion,
-    scope: source.readScope,
+    scope,
+    capability: createExecutionCapability({
+      secret: capabilitySecret,
+      organizationId: principal.organizationId,
+      workflowId,
+      actorId: principal.actorId,
+      policyVersion,
+      scope,
+      ttlMs: capabilityTtlMs,
+    }),
     sourceId: source.id,
     sourceRevisionId: revision.id,
     sourceKind: source.kind,
@@ -584,7 +587,8 @@ export async function startSourceIngestion(
 
     const source = toKnowledgeSource(sourceRow);
     const revision = toSourceRevision(revisionRow);
-    const input = sourceIngestionInput(principal, source, revision, trigger, requestId, traceId, workflowId, options.policyVersion);
+    if (!options.capabilitySecret) throw sourceServiceError("CAPABILITY_NOT_CONFIGURED", "Execution capability signing is not configured.");
+    const input = sourceIngestionInput(principal, source, revision, trigger, requestId, traceId, workflowId, options.policyVersion, options.capabilitySecret, options.capabilityTtlMs);
     const [existing] = await db
       .select()
       .from(sourceIngestionRuns)

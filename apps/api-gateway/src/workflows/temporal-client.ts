@@ -317,7 +317,15 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
 }
 
 export function createWorkflowClient(config: AppConfig): WorkflowClient {
-  if (!config.temporalAddress) return createInMemoryWorkflowClient();
+  if (config.workflowMode === "memory") {
+    if (config.nodeEnv !== "development" && config.nodeEnv !== "test") {
+      throw new Error("In-memory workflow execution is allowed only in development or test mode.");
+    }
+    return createInMemoryWorkflowClient();
+  }
+  if (!config.temporalAddress) {
+    throw new Error("TEMPORAL_ADDRESS is required when ENCOIS_WORKFLOW_MODE=temporal.");
+  }
 
   return createTemporalWorkflowClient({
     address: config.temporalAddress,

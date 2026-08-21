@@ -73,9 +73,8 @@ export {
 export { CONTRACT_SCHEMA_FILES, validateContract, type ContractSchemaName, type ContractValidationResult } from "./validation.js";
 
 export type ExecutionScope = {
+  /** Organization-unit IDs. No separate team/project scope namespaces exist. */
   ids: readonly string[];
-  projectIds?: readonly string[];
-  teamIds?: readonly string[];
 };
 
 export type SourceFreshness = {
@@ -210,6 +209,8 @@ export type ExecutionContext = {
   actorId: string;
   scope: ExecutionScope;
   policyVersion: string;
+  /** Internal per-execution capability issued by the authenticated Gateway. */
+  capability: string;
 };
 
 /** A versioned boundary that carries execution context under its own contract. */
@@ -408,6 +409,7 @@ export type CoordinatorEvent = {
     blueprintVersion: string;
     key: string;
     businessInput?: JsonObject;
+    scope?: Partial<ExecutionScope>;
   }[];
 };
 

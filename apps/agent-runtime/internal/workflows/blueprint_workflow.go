@@ -23,6 +23,7 @@ type BlueprintWorkflowInput struct {
 	ActorID         string                        `json:"actorId"`
 	PolicyVersion   string                        `json:"policyVersion"`
 	Scope           map[string]any                `json:"scope"`
+	Capability      string                        `json:"capability"`
 	BusinessInput   map[string]any                `json:"businessInput"`
 	IdempotencyKey  string                        `json:"idempotencyKey,omitempty"`
 }
@@ -52,6 +53,7 @@ type BlueprintStepInput struct {
 	ActorID        string                         `json:"actorId"`
 	PolicyVersion  string                         `json:"policyVersion"`
 	Scope          map[string]any                 `json:"scope"`
+	Capability     string                         `json:"capability"`
 	BusinessInput  map[string]any                 `json:"businessInput"`
 	Step           coordinator.WorkflowStep       `json:"step"`
 	PriorResults   map[string]BlueprintStepResult `json:"priorResults,omitempty"`
@@ -162,6 +164,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 					ActorID:        input.ActorID,
 					PolicyVersion:  input.PolicyVersion,
 					Scope:          input.Scope,
+					Capability:     input.Capability,
 					BusinessInput:  businessInput,
 					Step:           step,
 					PriorResults:   dependencyResults(step, stepResults),
@@ -256,7 +259,7 @@ func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
 	if input.ContractVersion != string(contracts.ContractWorkflowBlueprint) {
 		return fmt.Errorf("unsupported workflow contractVersion %q", input.ContractVersion)
 	}
-	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" {
+	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" || input.Capability == "" {
 		return fmt.Errorf("workflow execution context is incomplete")
 	}
 	if err := validateScope(input.Scope); err != nil {
@@ -315,7 +318,7 @@ func validateScope(scope map[string]any) error {
 	if len(scope) == 0 {
 		return fmt.Errorf("workflow execution scope is empty")
 	}
-	validKeys := map[string]struct{}{"ids": {}, "teamIds": {}, "projectIds": {}}
+	validKeys := map[string]struct{}{"ids": {}}
 	for key, raw := range scope {
 		if _, ok := validKeys[key]; !ok {
 			return fmt.Errorf("unsupported scope field %q", key)

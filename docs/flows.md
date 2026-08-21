@@ -579,7 +579,7 @@ flowchart LR
 
 Example: a Team A manager may see Team A and explicitly shared dependencies. A company-level lead may see Departments A, B, and C. A specialist receives only the intersection of user scope, workflow scope, agent policy, and connector grant.
 
-The server computes this scope for every request, graph query, memory retrieval, and tool call. A client-supplied `organizationId`, `teamId`, or “admin” flag is never trusted.
+The server computes this scope for every request, graph query, memory retrieval, and tool call. A client-supplied `organizationId`, organization-unit ID, or “admin” flag is never trusted. Authorization uses one canonical organization-unit ID set; team and project are organization-unit types, not separate scope namespaces.
 
 The effective scope is deterministic and tree-aware:
 

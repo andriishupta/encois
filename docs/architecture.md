@@ -169,7 +169,8 @@ The first Node.js blueprint exposes `POST /api/v1/workflows`,
 `GET /api/v1/workflows/:workflowId`. The API derives a tenant-prefixed workflow
 ID from the authenticated organization, workflow type, and request key, then
 uses the Temporal TypeScript Client to start or describe the execution. A local
-in-memory adapter is used only when Temporal is not configured; it is not a
+in-memory adapter is used only in development/test or when explicitly selected
+with `ENCOIS_WORKFLOW_MODE=memory`; it is not a
 durable execution substitute. The Go runtime remains the worker and owns the
 actual workflow implementation.
 

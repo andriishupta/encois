@@ -22,13 +22,13 @@ const (
 )
 
 type Scope struct {
-	IDs        []string `json:"ids,omitempty"`
-	TeamIDs    []string `json:"teamIds,omitempty"`
-	ProjectIDs []string `json:"projectIds,omitempty"`
+	// IDs are organization-unit IDs. Team/project are organization-unit types,
+	// not separate authorization namespaces.
+	IDs []string `json:"ids,omitempty"`
 }
 
 func (s Scope) Empty() bool {
-	return len(s.IDs) == 0 && len(s.TeamIDs) == 0 && len(s.ProjectIDs) == 0
+	return len(s.IDs) == 0
 }
 
 type ExecutionContext struct {
@@ -41,6 +41,7 @@ type ExecutionContext struct {
 	ActorID         string `json:"actorId"`
 	Scope           Scope  `json:"scope"`
 	PolicyVersion   string `json:"policyVersion"`
+	Capability      string `json:"capability,omitempty"`
 }
 
 func (c ExecutionContext) Validate(expectedContract string) error {
@@ -50,7 +51,7 @@ func (c ExecutionContext) Validate(expectedContract string) error {
 	if c.RequestID == "" || c.OrganizationID == "" {
 		return fmt.Errorf("requestId and organizationId are required")
 	}
-	if expectedContract == ToolRequestContractVersion || expectedContract == ArtifactWriteContractVersion {
+	if expectedContract == ToolRequestContractVersion || expectedContract == GraphQueryContractVersion || expectedContract == GraphUpsertContractVersion || expectedContract == ArtifactWriteContractVersion || expectedContract == ArtifactReadContractVersion {
 		if c.WorkflowID == "" || c.ActorID == "" || c.PolicyVersion == "" {
 			return fmt.Errorf("workflowId, actorId, and policyVersion are required for tool requests")
 		}

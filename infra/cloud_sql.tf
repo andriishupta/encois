@@ -1,11 +1,15 @@
 resource "google_sql_database_instance" "control_plane" {
   count = var.enable_cloud_sql ? 1 : 0
 
-  name                  = "${local.name_prefix}-postgres"
-  database_version      = var.cloud_sql_database_version
-  region                = var.region
-  deletion_protection   = true
-  connector_enforcement = "REQUIRED"
+  name                = "${local.name_prefix}-postgres"
+  database_version    = var.cloud_sql_database_version
+  region              = var.region
+  deletion_protection = true
+
+  # The pinned Google provider no longer exposes connector_enforcement on this
+  # resource. Cloud Run uses its managed Cloud SQL connector attachment below;
+  # keep encrypted-only connections and review this provider capability before
+  # exposing any direct database network path.
 
   settings {
     tier              = var.cloud_sql_tier

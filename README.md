@@ -153,6 +153,20 @@ Stop the stack with `pnpm dev:local:down`. To reset local Postgres and Temporal
 state, remove the named volumes explicitly with
 `docker compose -f compose.local.yaml down -v`.
 
+To run the same four service images against managed production-like
+dependencies, copy `.env.local.prod.example` to `.env.local.prod`, fill in
+real non-committed values, then run:
+
+```bash
+pnpm dev:local:prod
+```
+
+This mode requires real Application Default Credentials, Cloud SQL/Postgres,
+Temporal Cloud, Identity Platform, Cloud Storage, Spanner, Vertex AI/Memory
+Bank, and Gemini access. It has no Firebase emulator, local Temporal server,
+local database, or mock data-plane fallback. Stop it with
+`pnpm dev:local:prod:down`.
+
 Terraform does not run the application locally. It provisions cloud resources
 and references container images; Docker Compose is the local orchestration
 layer. The four deployable services have Dockerfiles, while Postgres and
