@@ -1,6 +1,7 @@
 import type { Handler } from "hono";
 import {
   KnowledgeSourceKind,
+  isJsonObject,
   type KnowledgeSourceCreateRequest,
   type JsonObject,
 } from "@encois/contracts";
@@ -11,10 +12,6 @@ import {
   parseSourceScope,
 } from "../services/source.service.js";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function optionalString(value: Record<string, unknown>, key: string): string | undefined | null {
   const candidate = value[key];
   if (candidate === undefined) return undefined;
@@ -22,7 +19,7 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
 }
 
 function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
-  if (!isRecord(value)) return null;
+  if (!isJsonObject(value)) return null;
   const name = optionalString(value, "name");
   const kind = value.kind;
   const provider = optionalString(value, "provider");
@@ -40,7 +37,7 @@ function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
     !readScope ||
     !visibilityScope
   ) return null;
-  if (value.configuration !== undefined && (!isRecord(value.configuration) || Array.isArray(value.configuration))) return null;
+  if (value.configuration !== undefined && (!isJsonObject(value.configuration) || Array.isArray(value.configuration))) return null;
   return {
     name,
     kind: kind as KnowledgeSourceKind,

@@ -15,7 +15,6 @@ export const ContractVersion = {
   ToolManifest: "tool-manifest.v1",
   WorkflowUpdate: "workflow-update.v1",
   WorkflowChangePlan: "workflow-change-plan.v1",
-  WorkflowChangePlanV2: "workflow-change-plan.v2",
   CoordinatorEvent: "coordinator-event.v1",
   KnowledgeSource: "knowledge-source.v1",
   SourceRevision: "source-revision.v1",

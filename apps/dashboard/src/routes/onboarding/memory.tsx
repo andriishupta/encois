@@ -3,7 +3,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Check, FileText, Github, LoaderCircle, MessageSquare, PlugZap, Upload, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
+import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
 import { getMockOnboardingState, updateMockOnboardingState, type MemorySource } from '@/lib/onboarding'
 import { cn } from '@/lib/utils'
 
@@ -58,7 +58,7 @@ function MemorySetupPage() {
       if (!sourceId) throw new Error('The source was not created.')
       void navigate({ to: '/onboarding/coordination' })
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'The source could not be uploaded.')
+      setError(isApiError(cause) ? cause.message : 'The source could not be uploaded.')
     } finally {
       setUploading(false)
     }

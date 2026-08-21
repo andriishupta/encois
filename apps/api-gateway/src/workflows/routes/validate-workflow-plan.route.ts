@@ -1,5 +1,4 @@
 import type { Handler } from "hono";
-import { validateContract, type WorkflowChangePlan, type WorkflowChangePlanV2 } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   isWorkflowServiceError,
@@ -7,19 +6,14 @@ import {
   type WorkflowServiceOptions,
 } from "../services/workflow.service.js";
 import { workflowValidationErrorStatus } from "../utils.js";
-
-function parsePlan(value: unknown): WorkflowChangePlan | WorkflowChangePlanV2 | null {
-  if (validateContract("workflowChangePlanV2", value).valid) return value as WorkflowChangePlanV2;
-  if (validateContract("workflowChangePlan", value).valid) return value as WorkflowChangePlan;
-  return null;
-}
+import { parseWorkflowPlan } from "./parse-workflow-plan.js";
 
 export function validateWorkflowPlanRoute(_options: WorkflowServiceOptions): Handler<GatewayEnv> {
   return async (context) => {
-    const plan = parsePlan(await context.req.json().catch(() => null));
+    const plan = parseWorkflowPlan(await context.req.json().catch(() => null));
     if (!plan) {
       return context.json(
-        { error: { code: "INVALID_REQUEST", message: "A valid workflow-change-plan.v1 or workflow-change-plan.v2 is required." } },
+        { error: { code: "INVALID_REQUEST", message: "A valid workflow-change-plan.v1 is required." } },
         400,
       );
     }

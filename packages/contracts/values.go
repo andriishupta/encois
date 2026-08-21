@@ -5,30 +5,29 @@ package contracts
 type ContractVersion string
 
 const (
-	ContractExecutionContext     ContractVersion = "execution-context.v1"
-	ContractWorkflowBlueprint    ContractVersion = "workflow-blueprint.v1"
-	ContractWorkflowResult       ContractVersion = "blueprint-workflow-result.v1"
-	ContractWorkflowSignal       ContractVersion = "workflow-signal.v1"
-	ContractToolRequest          ContractVersion = "tool-request.v1"
-	ContractToolResult           ContractVersion = "tool-result.v1"
-	ContractArtifactWrite        ContractVersion = "artifact-write.v1"
-	ContractArtifactWriteResult  ContractVersion = "artifact-write-result.v1"
-	ContractGraphQuery           ContractVersion = "graph-query.v1"
-	ContractGraphQueryResult     ContractVersion = "graph-query-result.v1"
-	ContractAgentMemory          ContractVersion = "agent-memory.v1"
-	ContractAgentMemoryResult    ContractVersion = "agent-memory-result.v1"
-	ContractToolManifest         ContractVersion = "tool-manifest.v1"
-	ContractWorkflowUpdate       ContractVersion = "workflow-update.v1"
-	ContractWorkflowChangePlan   ContractVersion = "workflow-change-plan.v1"
-	ContractWorkflowChangePlanV2 ContractVersion = "workflow-change-plan.v2"
-	ContractCoordinatorEvent     ContractVersion = "coordinator-event.v1"
-	ContractCoordinator          ContractVersion = "coordinator.v1"
-	ContractBootstrapProject     ContractVersion = "bootstrap-project.v1"
-	ContractAuthorizationCheck   ContractVersion = "authorization-check.v1"
-	ContractWorkflowDefinition   ContractVersion = "workflow-definition.v1"
-	ContractKnowledgeSource      ContractVersion = "knowledge-source.v1"
-	ContractSourceRevision       ContractVersion = "source-revision.v1"
-	ContractSourceIngestion      ContractVersion = "source-ingestion.v1"
+	ContractExecutionContext      ContractVersion = "execution-context.v1"
+	ContractWorkflowBlueprint     ContractVersion = "workflow-blueprint.v1"
+	ContractWorkflowResult        ContractVersion = "blueprint-workflow-result.v1"
+	ContractWorkflowSignal        ContractVersion = "workflow-signal.v1"
+	ContractToolRequest           ContractVersion = "tool-request.v1"
+	ContractToolResult            ContractVersion = "tool-result.v1"
+	ContractArtifactWrite         ContractVersion = "artifact-write.v1"
+	ContractArtifactWriteResult   ContractVersion = "artifact-write-result.v1"
+	ContractGraphQuery            ContractVersion = "graph-query.v1"
+	ContractGraphQueryResult      ContractVersion = "graph-query-result.v1"
+	ContractAgentMemory           ContractVersion = "agent-memory.v1"
+	ContractAgentMemoryResult     ContractVersion = "agent-memory-result.v1"
+	ContractToolManifest          ContractVersion = "tool-manifest.v1"
+	ContractWorkflowUpdate        ContractVersion = "workflow-update.v1"
+	ContractWorkflowChangePlan    ContractVersion = "workflow-change-plan.v1"
+	ContractCoordinatorEvent      ContractVersion = "coordinator-event.v1"
+	ContractCoordinator           ContractVersion = "coordinator.v1"
+	ContractBootstrapProject      ContractVersion = "bootstrap-project.v1"
+	ContractAuthorizationCheck    ContractVersion = "authorization-check.v1"
+	ContractWorkflowDefinition    ContractVersion = "workflow-definition.v1"
+	ContractKnowledgeSource       ContractVersion = "knowledge-source.v1"
+	ContractSourceRevision        ContractVersion = "source-revision.v1"
+	ContractSourceIngestion       ContractVersion = "source-ingestion.v1"
 	ContractSourceIngestionResult ContractVersion = "source-ingestion-result.v1"
 )
 
@@ -38,7 +37,7 @@ const (
 	WorkflowTypeUserBlueprint    TemporalWorkflowType = "encois.user-blueprint.v1"
 	WorkflowTypeCoordinator      TemporalWorkflowType = "CoordinatorWorkflow"
 	WorkflowTypeBootstrapProject TemporalWorkflowType = "BootstrapProjectWorkflow"
-	WorkflowTypeSourceIngestion TemporalWorkflowType = "encois.source-ingestion.v1"
+	WorkflowTypeSourceIngestion  TemporalWorkflowType = "encois.source-ingestion.v1"
 )
 
 type WorkflowStepKind string
@@ -207,10 +206,10 @@ const (
 type KnowledgeSourceKind string
 
 const (
-	SourceKindIntegration       KnowledgeSourceKind = "integration"
-	SourceKindUploadedDocument  KnowledgeSourceKind = "uploaded_document"
-	SourceKindManual            KnowledgeSourceKind = "manual"
-	SourceKindMedia             KnowledgeSourceKind = "media"
+	SourceKindIntegration      KnowledgeSourceKind = "integration"
+	SourceKindUploadedDocument KnowledgeSourceKind = "uploaded_document"
+	SourceKindManual           KnowledgeSourceKind = "manual"
+	SourceKindMedia            KnowledgeSourceKind = "media"
 )
 
 type KnowledgeSourceStatus string
@@ -240,11 +239,11 @@ const (
 type SourceIngestionTrigger string
 
 const (
-	IngestionTriggerBootstrap  SourceIngestionTrigger = "bootstrap"
-	IngestionTriggerManual     SourceIngestionTrigger = "manual"
-	IngestionTriggerWebhook    SourceIngestionTrigger = "webhook"
-	IngestionTriggerSchedule   SourceIngestionTrigger = "schedule"
-	IngestionTriggerReconcile  SourceIngestionTrigger = "reconcile"
+	IngestionTriggerBootstrap SourceIngestionTrigger = "bootstrap"
+	IngestionTriggerManual    SourceIngestionTrigger = "manual"
+	IngestionTriggerWebhook   SourceIngestionTrigger = "webhook"
+	IngestionTriggerSchedule  SourceIngestionTrigger = "schedule"
+	IngestionTriggerReconcile SourceIngestionTrigger = "reconcile"
 )
 
 type SourceIngestionStatus string
@@ -264,14 +263,14 @@ type SourceFreshness struct {
 }
 
 type DataProvenance struct {
-	Source                string   `json:"source"`
-	SourceID              string   `json:"sourceId,omitempty"`
-	SourceRevisionID      string   `json:"sourceRevisionId,omitempty"`
-	SourceRecordID        string   `json:"sourceRecordId,omitempty"`
-	ArtifactRef           string   `json:"artifactRef,omitempty"`
+	Source                string         `json:"source"`
+	SourceID              string         `json:"sourceId,omitempty"`
+	SourceRevisionID      string         `json:"sourceRevisionId,omitempty"`
+	SourceRecordID        string         `json:"sourceRecordId,omitempty"`
+	ArtifactRef           string         `json:"artifactRef,omitempty"`
 	Locator               map[string]any `json:"locator,omitempty"`
-	ObservedAt            string   `json:"observedAt"`
-	IngestedAt            string   `json:"ingestedAt,omitempty"`
-	TransformationVersion string   `json:"transformationVersion,omitempty"`
-	VisibilityScope       []string `json:"visibilityScope,omitempty"`
+	ObservedAt            string         `json:"observedAt"`
+	IngestedAt            string         `json:"ingestedAt,omitempty"`
+	TransformationVersion string         `json:"transformationVersion,omitempty"`
+	VisibilityScope       []string       `json:"visibilityScope,omitempty"`
 }

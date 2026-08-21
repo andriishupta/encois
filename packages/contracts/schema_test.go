@@ -137,10 +137,10 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			},
 		},
 		{
-			name:   "workflow change plan v2 lifecycle targets",
-			schema: SchemaWorkflowChangePlanV2,
+			name:   "workflow change plan lifecycle targets",
+			schema: SchemaWorkflowChangePlan,
 			value: map[string]any{
-				"contractVersion": "workflow-change-plan.v2", "planId": "plan-2", "coordinatorId": "coord-1",
+				"contractVersion": "workflow-change-plan.v1", "planId": "plan-2", "coordinatorId": "coord-1",
 				"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
 				"changes": []any{
 					map[string]any{
@@ -193,14 +193,14 @@ func TestCanonicalSchemaRejectsInvalidToolStepAndScope(t *testing.T) {
 	}
 
 	invalidLifecyclePlan := map[string]any{
-		"contractVersion": "workflow-change-plan.v2", "planId": "plan-invalid", "coordinatorId": "coord-1",
+		"contractVersion": "workflow-change-plan.v1", "planId": "plan-invalid", "coordinatorId": "coord-1",
 		"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
 		"changes": []any{map[string]any{
 			"kind": "deprecate", "targetWorkflowId": "workflow:org-1:encois.user-blueprint.v1:release-1",
 			"reason": "Wrong target kind.", "requiresApproval": true,
 		}},
 	}
-	if err := Validate(SchemaWorkflowChangePlanV2, invalidLifecyclePlan); err == nil {
-		t.Fatal("expected v2 deprecate change without Blueprint target to be rejected")
+	if err := Validate(SchemaWorkflowChangePlan, invalidLifecyclePlan); err == nil {
+		t.Fatal("expected deprecate change without Blueprint target to be rejected")
 	}
 }

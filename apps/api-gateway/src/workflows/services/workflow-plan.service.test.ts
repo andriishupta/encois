@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateContract, type WorkflowChangePlan, type WorkflowChangePlanV2 } from "@encois/contracts";
+import { validateContract, type WorkflowChangePlan } from "@encois/contracts";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { createPlanCoordinatorEvent } from "./workflow-plan.service.js";
 
@@ -76,8 +76,8 @@ describe("workflow plan coordinator events", () => {
   });
 
   it("does not infer a start for a cancel-only execution plan", () => {
-    const cancellationPlan: WorkflowChangePlanV2 = {
-      contractVersion: "workflow-change-plan.v2",
+    const cancellationPlan: WorkflowChangePlan = {
+      contractVersion: "workflow-change-plan.v1",
       planId: "plan-cancel-1",
       coordinatorId: "coord-1",
       organizationId: "org-1",
@@ -98,7 +98,7 @@ describe("workflow plan coordinator events", () => {
   });
 });
 
-function planRecord(value: WorkflowChangePlan | WorkflowChangePlanV2) {
+function planRecord(value: WorkflowChangePlan) {
   return {
     planId: value.planId,
     coordinatorId: value.coordinatorId,

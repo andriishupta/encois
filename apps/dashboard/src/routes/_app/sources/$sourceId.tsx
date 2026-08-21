@@ -7,7 +7,7 @@ import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ApiError, getKnowledgeSource, startSourceIngestion } from '@/lib/api'
+import { getKnowledgeSource, isApiError, startSourceIngestion } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/sources/$sourceId')({
@@ -22,7 +22,7 @@ function SourceDetailPage() {
   const ingest = useMutation({
     mutationFn: (revisionId: string) => startSourceIngestion(sourceId, revisionId),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.source(sourceId) }); setError(null) },
-    onError: (cause) => setError(cause instanceof ApiError ? cause.message : 'Ingestion could not be started.'),
+    onError: (cause) => setError(isApiError(cause) ? cause.message : 'Ingestion could not be started.'),
   })
 
   if (source.isLoading) return <p className="text-sm text-muted-foreground">Loading source…</p>

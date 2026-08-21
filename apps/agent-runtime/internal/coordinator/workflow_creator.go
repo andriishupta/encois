@@ -30,46 +30,6 @@ func (c WorkflowCreator) ValidatePlan(plan WorkflowChangePlan) error {
 		return fmt.Errorf("workflow change plan must contain at least one change")
 	}
 	for index, change := range plan.Changes {
-		switch change.Kind {
-		case ChangeCreate, ChangeUpdate, ChangeDeprecate, ChangeCancel:
-		default:
-			return fmt.Errorf("change %d has unsupported kind %q", index, change.Kind)
-		}
-		if change.Kind == ChangeCreate || change.Kind == ChangeUpdate {
-			if change.Blueprint == nil || change.Blueprint.BlueprintID == "" || change.Blueprint.Version == "" {
-				return fmt.Errorf("change %d has an incomplete blueprint", index)
-			}
-			if change.Blueprint.WorkflowType != UserBlueprintWorkflowType {
-				return fmt.Errorf("change %d must use generic workflow type %q", index, UserBlueprintWorkflowType)
-			}
-			if _, ok := c.allowedWorkflowTypes[change.Blueprint.WorkflowType]; !ok {
-				return fmt.Errorf("workflow type %q is not registered", change.Blueprint.WorkflowType)
-			}
-		}
-		if (change.Kind == ChangeUpdate || change.Kind == ChangeDeprecate || change.Kind == ChangeCancel) && change.TargetWorkflowID == "" {
-			return fmt.Errorf("change %d requires target workflow id", index)
-		}
-		if err := validateStartIntent(index, change.Start, change.Blueprint, change.Kind); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ValidatePlanV2 validates lifecycle target semantics without applying a
-// registry or Temporal mutation. The Gateway API remains the authority for
-// persistence, approval, and execution control.
-func (c WorkflowCreator) ValidatePlanV2(plan WorkflowChangePlanV2) error {
-	if plan.ContractVersion != WorkflowChangePlanV2Version {
-		return fmt.Errorf("unsupported workflow change plan version %q", plan.ContractVersion)
-	}
-	if plan.PlanID == "" || plan.CoordinatorID == "" || plan.OrganizationID == "" {
-		return fmt.Errorf("plan id, coordinator id, and organization id are required")
-	}
-	if len(plan.Changes) == 0 {
-		return fmt.Errorf("workflow change plan must contain at least one change")
-	}
-	for index, change := range plan.Changes {
 		if change.Reason == "" {
 			return fmt.Errorf("change %d requires a reason", index)
 		}

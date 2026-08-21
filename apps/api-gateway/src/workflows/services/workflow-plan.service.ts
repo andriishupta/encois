@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { ContractVersion, CoordinatorEventType, type CoordinatorEvent, type WorkflowChangePlanV2 } from "@encois/contracts";
+import { ContractVersion, CoordinatorEventType, type CoordinatorEvent } from "@encois/contracts";
 import {
 	auditEvents,
 	coordinatorEventOutbox,
@@ -265,8 +265,9 @@ export async function approveWorkflowPlan(principal: AosPrincipal, planId: strin
 /**
  * Apply an approved plan to the control-plane Blueprint registry.
  *
- * v1 applies create changes. v2 additionally applies Blueprint revisions,
- * deprecations, and cancel-only Temporal execution plans.
+ * v1 contains create, Blueprint lifecycle, and cancel changes. Cancellation
+ * remains a cancel-only application so a Temporal side effect is never mixed
+ * with registry mutation in one request.
  */
 export async function applyWorkflowPlan(
 	principal: AosPrincipal,
@@ -293,19 +294,14 @@ export async function applyWorkflowPlan(
     throw workflowServiceError("WORKFLOW_PLAN_NOT_APPLICABLE", `Workflow change plan is ${row.status}.`);
   }
 
-  const v2Plan = plan.contractVersion === ContractVersion.WorkflowChangePlanV2 ? plan : undefined;
-  const isV2 = Boolean(v2Plan);
-  const cancelChanges = v2Plan ? v2Plan.changes.filter((change) => change.kind === "cancel") : [];
+  const cancelChanges = plan.changes.filter((change) => change.kind === "cancel");
   const unsupportedChange = plan.changes.find((change) => {
-    if (!isV2) return change.kind !== "create";
     return cancelChanges.length > 0 ? change.kind !== "cancel" : false;
   });
   if (unsupportedChange) {
     throw workflowServiceError(
       "WORKFLOW_PLAN_APPLICATION_UNSUPPORTED",
-      isV2
-        ? "A workflow-change-plan.v2 cancel plan may contain only Temporal cancellation changes."
-        : `The v1 application slice supports create changes only; ${unsupportedChange.kind} requires workflow-change-plan.v2.`,
+      "A workflow-change-plan.v1 cancel plan may contain only Temporal cancellation changes.",
     );
   }
 
@@ -326,11 +322,8 @@ export async function applyWorkflowPlan(
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     const now = new Date();
     const actions: string[] = [];
-    // v1 changes are safe to treat as the v2 shape here because all v1
-    // non-create changes are rejected above and create has no target fields.
-    const changes = (v2Plan ? v2Plan.changes : plan.changes) as WorkflowChangePlanV2["changes"];
-    for (const change of cancelChanges.length > 0 ? [] : changes) {
-      if (isV2 && change.kind === "deprecate") {
+    for (const change of cancelChanges.length > 0 ? [] : plan.changes) {
+      if (change.kind === "deprecate") {
         if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
           throw workflowServiceError("WORKFLOW_PLAN_INVALID", "Deprecate change is missing its Blueprint target.");
         }
@@ -364,7 +357,7 @@ export async function applyWorkflowPlan(
         throw workflowServiceError("WORKFLOW_PLAN_INVALID", `${change.kind} change is missing a Blueprint.`);
       }
 
-      if (isV2 && change.kind === "update") {
+      if (change.kind === "update") {
         if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
           throw workflowServiceError("WORKFLOW_PLAN_INVALID", "Update change is missing its Blueprint target.");
         }

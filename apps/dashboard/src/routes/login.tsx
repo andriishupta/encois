@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { Activity, ArrowRight, Chrome } from 'lucide-react'
-import { ApiError, getAuthStatus } from '@/lib/api'
+import { getAuthStatus, isApiError } from '@/lib/api'
 import { getAuthSession, getDevelopmentAuthSession, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
 import { Button } from '@/components/ui/button'
@@ -39,9 +39,9 @@ function LoginPage() {
       }
       await navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
     } catch (cause) {
-      if (cause instanceof ApiError && cause.code === 'PERSISTENCE_UNAVAILABLE') {
+      if (isApiError(cause) && cause.code === 'PERSISTENCE_UNAVAILABLE') {
         setError('Access provisioning is not available yet. Please try again later.')
-      } else if (cause instanceof ApiError && cause.status === 401) {
+      } else if (isApiError(cause) && cause.status === 401) {
         setError('This Google account is not enabled for Encois yet.')
       } else if (cause instanceof Error && cause.message.includes('popup')) {
         setError('Google sign-in was cancelled.')
@@ -66,7 +66,7 @@ function LoginPage() {
       }
       await navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) {
+      if (isApiError(cause) && cause.status === 401) {
         setError('This local account is not enabled for Encois yet.')
       } else {
         setError('We could not complete local sign-in. Check the emulator credentials.')

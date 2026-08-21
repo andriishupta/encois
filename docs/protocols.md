@@ -46,11 +46,11 @@ it is not yet a repository dependency. Canonical schema
 validation is now shared by the TypeScript API, Go Runtime, and Agent Gateway;
 the `tool-manifest.v1` catalog schema and `workflow-change-plan.v1` proposal
 schema are also shared and checked at their respective Go boundaries.
-The lifecycle-aware `workflow-change-plan.v2` schema is now also embedded and
-fixture-validated. The Gateway accepts v1/v2 for validation and submission and
-currently applies v1 create plus v2 Blueprint update/deprecate changes, and
-cancel-only Temporal plans through its Temporal client. Persistence-backed
-application and hosted verification remain pending. The bootstrap
+The lifecycle-aware `workflow-change-plan.v1` schema is embedded and
+fixture-validated. The Gateway validates and submits this single contract,
+applies create/update/deprecate changes, and supports cancel-only Temporal
+plans through its Temporal client. Persistence-backed application and hosted
+verification remain pending. The bootstrap
 Workflow can return a validated plan proposal. The Runtime also contains a
 narrow `corecoordinator.Client`, a service-token HTTP adapter, and registered
 Activities for the private Coordinator routes; those Activities do not access
@@ -133,7 +133,7 @@ transaction and copied into Temporal input; the Go Runtime never reads the
 registry database.
 
 The plan-validation endpoint is a non-mutating preview for
-`workflow-change-plan.v1` and `.v2`. It checks tenant identity and required
+`workflow-change-plan.v1`. It checks tenant identity and required
 scopes and returns `validated_not_applied`; persistence, approval, and
 application remain separate control-plane operations. When Postgres is
 configured, the submit route stores a proposal idempotently as `proposed`, and
@@ -143,13 +143,13 @@ approval step or start a Blueprint that is not resolved as an approved
 registry snapshot.
 
 When Postgres is configured, `POST /v1/workflows/plans` persists the validated
-v1/v2 proposal with an idempotent `planId` and status `proposed`. The approval
+v1 proposal with an idempotent `planId` and status `proposed`. The approval
 route transitions it to `approved` and writes an audit event, but does not start
 or mutate a Temporal Workflow. Applying an approved create/update/deprecate
 plan persists or retires tenant-scoped Blueprint snapshots; the private
 Coordinator start route accepts only a registry reference and the Gateway
 passes the resolved immutable snapshot to the generic Temporal Workflow. The
-The v2 cancel operation is supported only for cancel-only plans. The Gateway
+The v1 cancel operation is supported only for cancel-only plans. The Gateway
 checks organization ownership, cancels each targeted Temporal Workflow, and
 then marks the approved plan applied. A repeated cancellation is idempotent;
 mixed Blueprint-registry and Temporal-execution changes remain rejected.

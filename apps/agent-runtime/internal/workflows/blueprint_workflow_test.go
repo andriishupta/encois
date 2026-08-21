@@ -109,7 +109,7 @@ func TestDynamicBlueprintWorkflowRejectsInvalidContract(t *testing.T) {
 	env.RegisterDynamicWorkflow(DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
 	registerContractActivities(env)
 	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
-		ContractVersion: "workflow-blueprint.v0",
+		ContractVersion: "workflow-blueprint.invalid",
 		WorkflowID:      "workflow:org-1:invalid",
 		OrganizationID:  "org-1",
 		ActorID:         "user-1",

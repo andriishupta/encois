@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { OrganizationProjection, OrganizationUnitCreateRequest } from '@encois/contracts'
-import { ApiError, createOrganizationPermission, createOrganizationUnit, deleteOrganizationPermission, getOrganization, updateOrganizationPermission } from '@/lib/api'
+import { createOrganizationPermission, createOrganizationUnit, deleteOrganizationPermission, getOrganization, isApiError, updateOrganizationPermission } from '@/lib/api'
 import {
   initialOrganizationUnits,
   initialUnitPermissions,
@@ -67,7 +67,7 @@ function toPermission(permission: OrganizationProjection['permissions'][number])
 }
 
 function isSoftApiError(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 0 || error.status === 503)
+  return isApiError(error) && (error.status === 0 || error.status === 503)
 }
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {

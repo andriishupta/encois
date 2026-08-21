@@ -1,4 +1,5 @@
 import type { Handler } from "hono";
+import { isJsonObject } from "@encois/contracts";
 import { integrationStatus, type IntegrationStatus } from "@encois/persistence";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
@@ -6,16 +7,12 @@ import {
   type IntegrationUpdate,
 } from "../services/integrations.service.js";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isIntegrationStatus(value: unknown): value is IntegrationStatus {
   return typeof value === "string" && integrationStatus.enumValues.includes(value as IntegrationStatus);
 }
 
 function parseUpdate(value: unknown): IntegrationUpdate | null {
-  if (!isRecord(value)) return null;
+  if (!isJsonObject(value)) return null;
 
   const update: IntegrationUpdate = {};
   if (value.displayName !== undefined) {

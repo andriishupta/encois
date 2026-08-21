@@ -100,7 +100,6 @@ packages/contracts/
     tool-manifest.v1.json
     workflow-update.v1.json
     workflow-change-plan.v1.json
-    workflow-change-plan.v2.json
     coordinator-event.v1.json
     knowledge-source.v1.json
     source-revision.v1.json
@@ -124,6 +123,12 @@ freshness states, workflow status reasons, artifact retention classes, and
 memory redaction states. `resolveEffectiveScope` is a pure helper used by the
 Gateway to expand direct membership roots; it does not read the database or
 make authorization decisions from model output.
+
+This pre-production baseline uses `v1` for all shared application contracts and
+`1.0.0` for TypeScript package and OpenAPI metadata. Database migrations remain
+independently numbered and are not reset or collapsed. An incompatible
+application contract will receive a new version only after a stable release
+requires compatibility.
 
 Tool, graph, memory, and artifact results carry optional freshness, provenance,
 retention, or redaction metadata. This keeps the data-quality and privacy
@@ -359,15 +364,15 @@ Blueprint versions:
 Gemini/ADK may propose the plan. Deterministic registry, permission, policy,
 and compatibility checks decide whether it can be persisted or started.
 
-`workflow-change-plan.v1` remains the create-plan contract used by the current
-bootstrap. `workflow-change-plan.v2` is the lifecycle-aware contract: `update`
-and `deprecate` require `targetBlueprintId` plus `targetBlueprintVersion`, while
-`cancel` requires `targetWorkflowId`; these target families cannot be mixed.
-The Gateway validates and persists both versions, applies v1 create and v2
-Blueprint update/deprecate changes, and supports v2 Temporal cancellation only
-for cancel-only plans through its Temporal client. Repeated cancellation is
-idempotent; mixed Blueprint-registry and Temporal-execution plans are rejected.
-Persistence-backed and hosted cancellation verification remain deployment work.
+`workflow-change-plan.v1` is the single lifecycle contract. `create` carries a
+Blueprint, `update` and `deprecate` carry `targetBlueprintId` plus
+`targetBlueprintVersion`, and `cancel` carries `targetWorkflowId`; these target
+families cannot be mixed. The Gateway validates and persists the plan, applies
+Blueprint lifecycle changes, and supports Temporal cancellation only for
+cancel-only plans through its Temporal client. Repeated cancellation is
+idempotent; persistence-backed and hosted cancellation verification remain
+deployment work. A future incompatible shape will receive a new contract
+version; there is no pre-production v2 compatibility layer.
 
 An executable `create` or `update` change may include an explicit start intent:
 

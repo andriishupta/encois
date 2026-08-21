@@ -175,8 +175,8 @@ assert.equal(
   true,
 );
 assert.equal(
-  validateContract("workflowChangePlanV2", {
-    contractVersion: "workflow-change-plan.v2",
+  validateContract("workflowChangePlan", {
+    contractVersion: "workflow-change-plan.v1",
     planId: "plan-2",
     coordinatorId: "coord-1",
     organizationId: "org-1",
@@ -208,8 +208,8 @@ assert.equal(
   true,
 );
 assert.equal(
-  validateContract("workflowChangePlanV2", {
-    contractVersion: "workflow-change-plan.v2",
+  validateContract("workflowChangePlan", {
+    contractVersion: "workflow-change-plan.v1",
     planId: "plan-invalid",
     coordinatorId: "coord-1",
     organizationId: "org-1",

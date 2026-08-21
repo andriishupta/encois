@@ -280,7 +280,7 @@ Temporal provides:
 - workflow visibility and execution IDs;
 - recovery after worker restarts or deployment changes.
 
-The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, describe, and cancel workflows; cancellation is currently reached through an approved cancel-only `workflow-change-plan.v2`, while a direct public cancel route remains future work. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls the configured Temporal endpoint, local or hosted; Temporal never reaches into the runtime to execute code.
+The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, describe, and cancel workflows; cancellation is currently reached through an approved cancel-only `workflow-change-plan.v1`, while a direct public cancel route remains future work. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls the configured Temporal endpoint, local or hosted; Temporal never reaches into the runtime to execute code.
 
 The business workflow is defined in code, but Workflow code must remain deterministic. Gemini calls, database calls, graph writes, Memory Bank calls, and MCP/API calls run as Temporal Activities. Activities are functions registered in a Worker, not independently deployed microservices.
 
@@ -595,7 +595,7 @@ Use different contract formats for different boundaries instead of trying to sha
 | Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
 | Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
 | Workflow Blueprints | JSON Schema with MCP-shaped tool references | Coordinator, Creator, Gateway API, Go Runtime, UI builder | Company-specific executable configuration for the generic Workflow |
-| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create or `workflow-change-plan.v2` Blueprint update/deprecate; never queried directly by Go Runtime |
+| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create/update/deprecate; never queried directly by Go Runtime |
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
 | API Temporal command receipts | Gateway-owned Postgres schema | TypeScript Gateway API | Tenant-scoped Signal/Update idempotency and replay state; never sent to Go or Temporal |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |

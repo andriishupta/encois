@@ -7,7 +7,6 @@ const (
 	BootstrapProjectWorkflowName  = string(contracts.WorkflowTypeBootstrapProject)
 	CoordinatorContractVersion    = string(contracts.ContractCoordinator)
 	WorkflowChangePlanVersion     = string(contracts.ContractWorkflowChangePlan)
-	WorkflowChangePlanV2Version   = string(contracts.ContractWorkflowChangePlanV2)
 	UserBlueprintWorkflowType     = string(contracts.WorkflowTypeUserBlueprint)
 	SignalIntegrationConnected    = string(contracts.SignalIntegrationConnected)
 	SignalSourceReady             = string(contracts.SignalSourceReady)
@@ -218,30 +217,6 @@ const (
 )
 
 type WorkflowChange struct {
-	Kind             WorkflowChangeKind   `json:"kind"`
-	TargetWorkflowID string               `json:"targetWorkflowId,omitempty"`
-	Blueprint        *WorkflowBlueprint   `json:"blueprint,omitempty"`
-	Start            *WorkflowStartIntent `json:"start,omitempty"`
-	Reason           string               `json:"reason"`
-	EvidenceRefs     []string             `json:"evidenceRefs,omitempty"`
-	RequiresApproval bool                 `json:"requiresApproval"`
-}
-
-type WorkflowChangePlan struct {
-	ContractVersion string           `json:"contractVersion"`
-	PlanID          string           `json:"planId"`
-	CoordinatorID   string           `json:"coordinatorId"`
-	OrganizationID  string           `json:"organizationId"`
-	ProjectID       string           `json:"projectId,omitempty"`
-	ObservedAt      string           `json:"observedAt"`
-	EvidenceRefs    []string         `json:"evidenceRefs,omitempty"`
-	Changes         []WorkflowChange `json:"changes"`
-}
-
-// WorkflowChangeV2 separates Blueprint registry identity from Temporal
-// execution identity. It is prepared for lifecycle application; v1 remains
-// the active bootstrap/create-plan contract.
-type WorkflowChangeV2 struct {
 	Kind                   WorkflowChangeKind   `json:"kind"`
 	TargetBlueprintID      string               `json:"targetBlueprintId,omitempty"`
 	TargetBlueprintVersion string               `json:"targetBlueprintVersion,omitempty"`
@@ -253,13 +228,13 @@ type WorkflowChangeV2 struct {
 	RequiresApproval       bool                 `json:"requiresApproval"`
 }
 
-type WorkflowChangePlanV2 struct {
-	ContractVersion string             `json:"contractVersion"`
-	PlanID          string             `json:"planId"`
-	CoordinatorID   string             `json:"coordinatorId"`
-	OrganizationID  string             `json:"organizationId"`
-	ProjectID       string             `json:"projectId,omitempty"`
-	ObservedAt      string             `json:"observedAt"`
-	EvidenceRefs    []string           `json:"evidenceRefs,omitempty"`
-	Changes         []WorkflowChangeV2 `json:"changes"`
+type WorkflowChangePlan struct {
+	ContractVersion string           `json:"contractVersion"`
+	PlanID          string           `json:"planId"`
+	CoordinatorID   string           `json:"coordinatorId"`
+	OrganizationID  string           `json:"organizationId"`
+	ProjectID       string           `json:"projectId,omitempty"`
+	ObservedAt      string           `json:"observedAt"`
+	EvidenceRefs    []string         `json:"evidenceRefs,omitempty"`
+	Changes         []WorkflowChange `json:"changes"`
 }

@@ -1,4 +1,5 @@
 import { validateContract } from "./validation.js";
+import { isJsonObject, type JsonObject } from "./json.js";
 import {
   AgentMemoryOperation,
   AgentMemoryStatus,
@@ -33,6 +34,7 @@ import {
 } from "./values.js";
 
 export { resolveEffectiveScope, type EffectiveScope, type OrganizationUnitNode, type ScopeRule } from "./scope.js";
+export { isJsonObject, type JsonObject } from "./json.js";
 export { validateWaitlistRequest, WaitlistLimits, type WaitlistRequest, type WaitlistValidationField, type WaitlistValidationResult } from "./waitlist.js";
 
 export {
@@ -69,8 +71,6 @@ export {
 } from "./values.js";
 
 export { CONTRACT_SCHEMA_FILES, validateContract, type ContractSchemaName, type ContractValidationResult } from "./validation.js";
-
-export type JsonObject = Record<string, unknown>;
 
 export type ExecutionScope = {
   ids: readonly string[];
@@ -436,29 +436,6 @@ export type WorkflowChangePlan = {
   evidenceRefs?: readonly string[];
   changes: readonly {
     kind: WorkflowChangeKind;
-    targetWorkflowId?: string;
-    blueprint?: WorkflowBlueprint;
-    start?: WorkflowStartIntent;
-    reason: string;
-    evidenceRefs?: readonly string[];
-    requiresApproval: boolean;
-  }[];
-};
-
-/**
- * Lifecycle-aware plan contract. v1 remains the active create-plan contract;
- * v2 separates Blueprint registry targets from Temporal execution targets.
- */
-export type WorkflowChangePlanV2 = {
-  contractVersion: typeof ContractVersion.WorkflowChangePlanV2;
-  planId: string;
-  coordinatorId: string;
-  organizationId: string;
-  projectId?: string;
-  observedAt: string;
-  evidenceRefs?: readonly string[];
-  changes: readonly {
-    kind: WorkflowChangeKind;
     targetBlueprintId?: string;
     targetBlueprintVersion?: string;
     targetWorkflowId?: string;
@@ -597,12 +574,8 @@ export type ToolManifest = {
   approvalRequired: boolean;
 };
 
-export function isRecord(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null {
-  if (!isRecord(value)) return null;
+  if (!isJsonObject(value)) return null;
   if (!validateContract("workflowBlueprint", value).valid) return null;
   if (value.contractVersion !== ContractVersion.WorkflowBlueprint) return null;
   if (value.workflowType !== TemporalWorkflowType.UserBlueprint) return null;
@@ -614,23 +587,23 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
   if (!Array.isArray(value.steps) || value.steps.length === 0) return null;
   if (value.allowedTools !== undefined && (!Array.isArray(value.allowedTools) || value.allowedTools.some((tool) => typeof tool !== "string"))) return null;
   if (value.requiredScopes !== undefined && (!Array.isArray(value.requiredScopes) || value.requiredScopes.some((scope) => typeof scope !== "string"))) return null;
-  if (value.parameters !== undefined && (!isRecord(value.parameters) || Object.values(value.parameters).some((parameter) => typeof parameter !== "string"))) return null;
+  if (value.parameters !== undefined && (!isJsonObject(value.parameters) || Object.values(value.parameters).some((parameter) => typeof parameter !== "string"))) return null;
 
   const steps: WorkflowStep[] = [];
   for (const candidate of value.steps) {
-    if (!isRecord(candidate) || typeof candidate.id !== "string" || typeof candidate.kind !== "string") return null;
+    if (!isJsonObject(candidate) || typeof candidate.id !== "string" || typeof candidate.kind !== "string") return null;
     if (!Object.values(WorkflowStepKind).includes(candidate.kind as WorkflowStepKind)) return null;
     if (candidate.tool !== undefined && typeof candidate.tool !== "string") return null;
     if (candidate.agentDefinition !== undefined && typeof candidate.agentDefinition !== "string") return null;
     if (candidate.dependsOn !== undefined && (!Array.isArray(candidate.dependsOn) || candidate.dependsOn.some((dependency) => typeof dependency !== "string"))) return null;
-    if (candidate.input !== undefined && !isRecord(candidate.input)) return null;
+    if (candidate.input !== undefined && !isJsonObject(candidate.input)) return null;
     steps.push({
       id: candidate.id,
       kind: candidate.kind as WorkflowStepKind,
       ...(typeof candidate.tool === "string" ? { tool: candidate.tool } : {}),
       ...(typeof candidate.agentDefinition === "string" ? { agentDefinition: candidate.agentDefinition } : {}),
       ...(Array.isArray(candidate.dependsOn) ? { dependsOn: candidate.dependsOn as string[] } : {}),
-      ...(isRecord(candidate.input) ? { input: candidate.input } : {}),
+      ...(isJsonObject(candidate.input) ? { input: candidate.input } : {}),
       ...(typeof candidate.requiresApproval === "boolean" ? { requiresApproval: candidate.requiresApproval } : {}),
     });
   }
@@ -646,7 +619,7 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
     steps,
     ...(Array.isArray(value.allowedTools) ? { allowedTools: value.allowedTools as string[] } : {}),
     ...(Array.isArray(value.requiredScopes) ? { requiredScopes: value.requiredScopes as string[] } : {}),
-    ...(isRecord(value.parameters) ? { parameters: value.parameters as Record<string, string> } : {}),
+    ...(isJsonObject(value.parameters) ? { parameters: value.parameters as Record<string, string> } : {}),
     ...(typeof value.inputSchemaRef === "string" ? { inputSchemaRef: value.inputSchemaRef } : {}),
     ...(typeof value.outputSchemaRef === "string" ? { outputSchemaRef: value.outputSchemaRef } : {}),
     ...(typeof value.requiresApproval === "boolean" ? { requiresApproval: value.requiresApproval } : {}),

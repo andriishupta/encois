@@ -14,7 +14,6 @@ import workflowBlueprintSchema from "../schemas/workflow-blueprint.v1.json" with
 import workflowSignalSchema from "../schemas/workflow-signal.v1.json" with { type: "json" };
 import workflowUpdateSchema from "../schemas/workflow-update.v1.json" with { type: "json" };
 import workflowChangePlanSchema from "../schemas/workflow-change-plan.v1.json" with { type: "json" };
-import workflowChangePlanV2Schema from "../schemas/workflow-change-plan.v2.json" with { type: "json" };
 import coordinatorEventSchema from "../schemas/coordinator-event.v1.json" with { type: "json" };
 import knowledgeSourceSchema from "../schemas/knowledge-source.v1.json" with { type: "json" };
 import sourceRevisionSchema from "../schemas/source-revision.v1.json" with { type: "json" };
@@ -37,7 +36,6 @@ export const CONTRACT_SCHEMA_FILES = {
   toolManifest: "tool-manifest.v1.json",
   workflowUpdate: "workflow-update.v1.json",
   workflowChangePlan: "workflow-change-plan.v1.json",
-  workflowChangePlanV2: "workflow-change-plan.v2.json",
   coordinatorEvent: "coordinator-event.v1.json",
   knowledgeSource: "knowledge-source.v1.json",
   sourceRevision: "source-revision.v1.json",
@@ -69,7 +67,6 @@ const schemas: Record<ContractSchemaName, object> = {
   toolManifest: toolManifestSchema,
   workflowUpdate: workflowUpdateSchema,
   workflowChangePlan: workflowChangePlanSchema,
-  workflowChangePlanV2: workflowChangePlanV2Schema,
   coordinatorEvent: coordinatorEventSchema,
   knowledgeSource: knowledgeSourceSchema,
   sourceRevision: sourceRevisionSchema,

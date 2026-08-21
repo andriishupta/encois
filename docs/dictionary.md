@@ -46,7 +46,7 @@ A client connection used by an application to communicate with Temporal Cloud.
 
 - The Gateway API uses a client to start, signal, query, describe, and cancel
   Workflows. Cancellation is currently reached through an approved cancel-only
-  `workflow-change-plan.v2`; a direct public cancel route remains future work.
+  `workflow-change-plan.v1`; a direct public cancel route remains future work.
 - The Go Agent Runtime uses a client to create a Worker and may use it for child Workflows or Signals.
 
 ### Temporal Namespace

@@ -1,4 +1,4 @@
-import { isRecord, TemporalWorkflowType, type JsonObject } from "@encois/contracts";
+import { isJsonObject, TemporalWorkflowType, type JsonObject } from "@encois/contracts";
 
 export type WorkflowHttpStatus = 401 | 403 | 409 | 422 | 503;
 export type WorkflowPlanHttpStatus = 403 | 404 | 409 | 422 | 503;
@@ -30,7 +30,7 @@ export function readOptionalString(
 export function readOptionalRecord(value: JsonObject, key: string): JsonObject | null | undefined {
   const candidate = value[key];
   if (candidate === undefined) return undefined;
-  return isRecord(candidate) ? candidate : null;
+  return isJsonObject(candidate) ? candidate : null;
 }
 
 export function workflowErrorStatus(code: string): WorkflowHttpStatus {

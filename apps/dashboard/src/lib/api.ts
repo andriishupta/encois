@@ -18,7 +18,7 @@ import type {
   WorkflowStartRequest,
   WorkflowUpdateRequest,
 } from '@encois/contracts'
-import { AccessLevel, IntegrationStatus, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
+import { AccessLevel, IntegrationStatus, isJsonObject, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
 import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
@@ -41,16 +41,22 @@ export type SourceIngestionLaunch = {
   resultContract: string
 }
 
-export class ApiError extends Error {
-  readonly status: number
-  readonly code?: string
+export type ApiError = Error & {
+  name: 'ApiError'
+  status: number
+  code?: string
+}
 
-  constructor(status: number, message: string, code?: string) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-    this.code = code
-  }
+export function createApiError(status: number, message: string, code?: string): ApiError {
+  const error = new Error(message) as ApiError
+  error.name = 'ApiError'
+  error.status = status
+  if (code) error.code = code
+  return error
+}
+
+export function isApiError(value: unknown): value is ApiError {
+  return value instanceof Error && value.name === 'ApiError' && typeof (value as Partial<ApiError>).status === 'number'
 }
 
 function errorPayload(value: unknown): ApiErrorPayload | null {
@@ -66,19 +72,15 @@ function errorPayload(value: unknown): ApiErrorPayload | null {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isWorkflowProjection(value: unknown): value is WorkflowExecutionProjection {
-  if (!isRecord(value)) return false
+  if (!isJsonObject(value)) return false
   if (typeof value.workflowId !== 'string' || typeof value.workflowType !== 'string' || typeof value.namespace !== 'string' || typeof value.taskQueue !== 'string' || typeof value.organizationId !== 'string' || typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string') return false
   if (!Object.values(WorkflowExecutionStatus).includes(value.status as WorkflowExecutionStatus)) return false
   return value.statusReason === undefined || Object.values(WorkflowStatusReason).includes(value.statusReason as WorkflowStatusReason)
 }
 
 function isIntegrationProjection(value: unknown): value is IntegrationProjection {
-  return isRecord(value)
+  return isJsonObject(value)
     && typeof value.id === 'string'
     && typeof value.name === 'string'
     && typeof value.provider === 'string'
@@ -86,23 +88,23 @@ function isIntegrationProjection(value: unknown): value is IntegrationProjection
 }
 
 function isKnowledgeSource(value: unknown): value is KnowledgeSource {
-  return isRecord(value)
+  return isJsonObject(value)
     && value.contractVersion === 'knowledge-source.v1'
     && typeof value.id === 'string'
     && typeof value.organizationId === 'string'
     && typeof value.name === 'string'
     && Object.values(KnowledgeSourceKind).includes(value.kind as KnowledgeSourceKind)
     && Object.values(KnowledgeSourceStatus).includes(value.status as KnowledgeSourceStatus)
-    && isRecord(value.readScope)
+    && isJsonObject(value.readScope)
     && Array.isArray(value.readScope.ids)
-    && isRecord(value.visibilityScope)
+    && isJsonObject(value.visibilityScope)
     && Array.isArray(value.visibilityScope.ids)
     && typeof value.createdAt === 'string'
     && typeof value.updatedAt === 'string'
 }
 
 function isSourceRevision(value: unknown): value is SourceRevision {
-  return isRecord(value)
+  return isJsonObject(value)
     && value.contractVersion === 'source-revision.v1'
     && typeof value.id === 'string'
     && typeof value.sourceId === 'string'
@@ -113,7 +115,7 @@ function isSourceRevision(value: unknown): value is SourceRevision {
 }
 
 function isSourceIngestionRun(value: unknown): value is SourceIngestionRun {
-  return isRecord(value)
+  return isJsonObject(value)
     && typeof value.id === 'string'
     && typeof value.sourceId === 'string'
     && typeof value.sourceRevisionId === 'string'
@@ -126,7 +128,7 @@ function isSourceIngestionRun(value: unknown): value is SourceIngestionRun {
 }
 
 function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourceDetail {
-  return isRecord(value)
+  return isJsonObject(value)
     && isKnowledgeSource(value.source)
     && Array.isArray(value.revisions)
     && value.revisions.every(isSourceRevision)
@@ -135,21 +137,21 @@ function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourceDetail
 }
 
 function isKnowledgeSourceUpload(value: unknown): value is KnowledgeSourceUpload {
-  return isRecord(value) && isKnowledgeSource(value.source) && isSourceRevision(value.revision)
+  return isJsonObject(value) && isKnowledgeSource(value.source) && isSourceRevision(value.revision)
 }
 
 function isSourceIngestionLaunch(value: unknown): value is SourceIngestionLaunch {
-  return isRecord(value)
+  return isJsonObject(value)
     && isKnowledgeSource(value.source)
     && isSourceRevision(value.revision)
-    && isRecord(value.workflow)
+    && isJsonObject(value.workflow)
     && typeof value.workflow.workflowId === 'string'
     && typeof value.workflow.status === 'string'
     && typeof value.resultContract === 'string'
 }
 
 function isOrganizationUnitProjection(value: unknown): value is OrganizationUnitProjection {
-  return isRecord(value)
+  return isJsonObject(value)
     && typeof value.id === 'string'
     && typeof value.organizationId === 'string'
     && (value.parentId === null || typeof value.parentId === 'string')
@@ -162,7 +164,7 @@ function isOrganizationUnitProjection(value: unknown): value is OrganizationUnit
 }
 
 function isOrganizationMemberProjection(value: unknown): boolean {
-  return isRecord(value)
+  return isJsonObject(value)
     && typeof value.id === 'string'
     && typeof value.initials === 'string'
     && typeof value.name === 'string'
@@ -173,7 +175,7 @@ function isOrganizationMemberProjection(value: unknown): boolean {
 }
 
 function isOrganizationPermissionProjection(value: unknown): value is OrganizationPermissionProjection {
-  return isRecord(value)
+  return isJsonObject(value)
     && typeof value.id === 'string'
     && typeof value.memberId === 'string'
     && typeof value.unitId === 'string'
@@ -182,7 +184,7 @@ function isOrganizationPermissionProjection(value: unknown): value is Organizati
 }
 
 function isOrganizationProjection(value: unknown): value is OrganizationProjection {
-  if (!isRecord(value) || !isRecord(value.organization)) return false
+  if (!isJsonObject(value) || !isJsonObject(value.organization)) return false
   return typeof value.organization.id === 'string'
     && typeof value.organization.slug === 'string'
     && typeof value.organization.name === 'string'
@@ -195,21 +197,21 @@ function isOrganizationProjection(value: unknown): value is OrganizationProjecti
 }
 
 function parseList<T>(value: unknown, guard: (item: unknown) => item is T, name: string): readonly T[] {
-  if (!Array.isArray(value) || !value.every(guard)) throw new ApiError(200, `API returned an invalid ${name} response.`, 'INVALID_RESPONSE')
+  if (!Array.isArray(value) || !value.every(guard)) throw createApiError(200, `API returned an invalid ${name} response.`, 'INVALID_RESPONSE')
   return value
 }
 
 function isAcceptedResponse(value: unknown): value is { accepted: true } {
-  return isRecord(value) && value.accepted === true
+  return isJsonObject(value) && value.accepted === true
 }
 
 function isUpdateResponse(value: unknown): value is { accepted: true; updateId: string } {
-  return isRecord(value) && value.accepted === true && typeof value.updateId === 'string'
+  return isJsonObject(value) && value.accepted === true && typeof value.updateId === 'string'
 }
 
 async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
   const session = requiresAuth ? await getAuthSessionToken() : null
-  if (requiresAuth && !session) throw new ApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
+  if (requiresAuth && !session) throw createApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
 
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
@@ -223,14 +225,14 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   try {
     response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
   } catch {
-    throw new ApiError(0, 'The Gateway API could not be reached.', 'API_UNAVAILABLE')
+    throw createApiError(0, 'The Gateway API could not be reached.', 'API_UNAVAILABLE')
   }
 
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const payload = errorPayload(body)
     if (response.status === 401) clearAuthSession()
-    throw new ApiError(
+    throw createApiError(
       response.status,
       payload?.error?.message ?? `API request failed (${response.status})`,
       payload?.error?.code,
@@ -238,7 +240,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   }
 
   if (typeof body !== 'object' || body === null || Array.isArray(body) || !('data' in body)) {
-    throw new ApiError(response.status, 'API returned an invalid response.', 'INVALID_RESPONSE')
+    throw createApiError(response.status, 'API returned an invalid response.', 'INVALID_RESPONSE')
   }
   return (body as ApiEnvelope<T>).data
 }
@@ -249,12 +251,12 @@ export function listWorkflows(): Promise<readonly WorkflowExecutionProjection[]>
 
 export async function getAuthStatus(): Promise<AuthStatusResponse> {
   const value = await request<unknown>('/auth/me')
-  if (!isRecord(value) || (value.status !== 'active' && value.status !== 'pending')) {
-    throw new ApiError(200, 'API returned an invalid authentication status.', 'INVALID_RESPONSE')
+  if (!isJsonObject(value) || (value.status !== 'active' && value.status !== 'pending')) {
+    throw createApiError(200, 'API returned an invalid authentication status.', 'INVALID_RESPONSE')
   }
   if (value.status === 'pending') return { status: 'pending' }
   if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string') {
-    throw new ApiError(200, 'API returned an invalid active authentication status.', 'INVALID_RESPONSE')
+    throw createApiError(200, 'API returned an invalid active authentication status.', 'INVALID_RESPONSE')
   }
   setAuthOrganizationId(value.organizationId)
   return {
@@ -268,21 +270,21 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
 export function submitWaitlist(input: WaitlistRequest): Promise<WaitlistSubmissionResponse> {
   const validation = validateWaitlistRequest(input)
   if (!validation.ok) {
-    return Promise.reject(new ApiError(400, validation.issue.message, 'INVALID_REQUEST'))
+    return Promise.reject(createApiError(400, validation.issue.message, 'INVALID_REQUEST'))
   }
 
   return request<unknown>('/public/waitlist', {
     method: 'POST',
     body: JSON.stringify(validation.value),
   }, false).then((value) => {
-    if (!isRecord(value) || value.accepted !== true) throw new ApiError(200, 'API returned an invalid waitlist response.', 'INVALID_RESPONSE')
+    if (!isJsonObject(value) || value.accepted !== true) throw createApiError(200, 'API returned an invalid waitlist response.', 'INVALID_RESPONSE')
     return { accepted: true }
   })
 }
 
 export async function getWorkflow(workflowId: string): Promise<WorkflowExecutionProjection> {
   const value = await request<unknown>(`/workflows/${encodeURIComponent(workflowId)}`)
-  if (!isWorkflowProjection(value)) throw new ApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
+  if (!isWorkflowProjection(value)) throw createApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -291,7 +293,7 @@ export async function startWorkflow(input: WorkflowStartRequest): Promise<Workfl
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isWorkflowProjection(value)) throw new ApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
+  if (!isWorkflowProjection(value)) throw createApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -300,7 +302,7 @@ export async function signalWorkflow(workflowId: string, input: WorkflowSignalRe
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isAcceptedResponse(value)) throw new ApiError(200, 'API returned an invalid Signal response.', 'INVALID_RESPONSE')
+  if (!isAcceptedResponse(value)) throw createApiError(200, 'API returned an invalid Signal response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -309,7 +311,7 @@ export async function updateWorkflow(workflowId: string, input: WorkflowUpdateRe
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isUpdateResponse(value)) throw new ApiError(200, 'API returned an invalid Update response.', 'INVALID_RESPONSE')
+  if (!isUpdateResponse(value)) throw createApiError(200, 'API returned an invalid Update response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -323,7 +325,7 @@ export function listKnowledgeSources(): Promise<readonly KnowledgeSource[]> {
 
 export async function getKnowledgeSource(sourceId: string): Promise<KnowledgeSourceDetail> {
   const value = await request<unknown>(`/sources/${encodeURIComponent(sourceId)}`)
-  if (!isKnowledgeSourceDetail(value)) throw new ApiError(200, 'API returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceDetail(value)) throw createApiError(200, 'API returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -332,7 +334,7 @@ export async function uploadKnowledgeSourcePdf(file: File, name?: string): Promi
   form.append('file', file)
   if (name?.trim()) form.append('name', name.trim())
   const value = await request<unknown>('/sources/uploads', { method: 'POST', body: form })
-  if (!isKnowledgeSourceUpload(value)) throw new ApiError(200, 'API returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceUpload(value)) throw createApiError(200, 'API returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -341,7 +343,7 @@ export async function startSourceIngestion(sourceId: string, revisionId: string,
     method: 'POST',
     body: JSON.stringify({ trigger }),
   })
-  if (!isSourceIngestionLaunch(value)) throw new ApiError(200, 'API returned an invalid source ingestion response.', 'INVALID_RESPONSE')
+  if (!isSourceIngestionLaunch(value)) throw createApiError(200, 'API returned an invalid source ingestion response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -350,13 +352,13 @@ export async function updateIntegration(integrationId: string, input: Integratio
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isIntegrationProjection(value)) throw new ApiError(200, 'API returned an invalid integration response.', 'INVALID_RESPONSE')
+  if (!isIntegrationProjection(value)) throw createApiError(200, 'API returned an invalid integration response.', 'INVALID_RESPONSE')
   return value
 }
 
 export async function getOrganization(): Promise<OrganizationProjection> {
   const value = await request<unknown>('/organization')
-  if (!isOrganizationProjection(value)) throw new ApiError(200, 'API returned an invalid organization response.', 'INVALID_RESPONSE')
+  if (!isOrganizationProjection(value)) throw createApiError(200, 'API returned an invalid organization response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -365,7 +367,7 @@ export async function createOrganizationUnit(input: OrganizationUnitCreateReques
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationUnitProjection(value)) throw new ApiError(200, 'API returned an invalid organization unit response.', 'INVALID_RESPONSE')
+  if (!isOrganizationUnitProjection(value)) throw createApiError(200, 'API returned an invalid organization unit response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -374,7 +376,7 @@ export async function createOrganizationPermission(input: OrganizationPermission
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationPermissionProjection(value)) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -383,11 +385,11 @@ export async function updateOrganizationPermission(permissionId: string, input: 
     method: 'PATCH',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationPermissionProjection(value)) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
   return value
 }
 
 export async function deleteOrganizationPermission(permissionId: string): Promise<void> {
   const value = await request<unknown>(`/organization/permissions/${encodeURIComponent(permissionId)}`, { method: 'DELETE' })
-  if (!isRecord(value) || value.deleted !== true) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isJsonObject(value) || value.deleted !== true) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
 }

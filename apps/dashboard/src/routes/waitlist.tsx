@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Activity, ArrowLeft, Check } from 'lucide-react'
 import { validateWaitlistRequest } from '@encois/contracts'
-import { ApiError, submitWaitlist } from '@/lib/api'
+import { isApiError, submitWaitlist } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -54,7 +54,7 @@ function WaitlistPage() {
       await submitWaitlist(validation.value)
       setSubmitted(true)
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'We could not save your request. Please try again.')
+      setError(isApiError(cause) ? cause.message : 'We could not save your request. Please try again.')
     } finally {
       setIsSubmitting(false)
     }

@@ -10,7 +10,8 @@ func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
 		Changes: []WorkflowChange{{
-			Kind:  ChangeCreate,
+			Kind:   ChangeCreate,
+			Reason: "Test the workflow type boundary.",
 			Start: &WorkflowStartIntent{Key: "release-aug-30"},
 			Blueprint: &WorkflowBlueprint{
 				BlueprintID:  "unknown",
@@ -32,7 +33,8 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
 		Changes: []WorkflowChange{{
-			Kind:  ChangeCreate,
+			Kind:   ChangeCreate,
+			Reason: "Create a registered workflow.",
 			Start: &WorkflowStartIntent{Key: "release-aug-30"},
 			Blueprint: &WorkflowBlueprint{
 				BlueprintID:  "release-risk",
@@ -46,14 +48,14 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 	}
 }
 
-func TestWorkflowCreatorV2SeparatesBlueprintAndWorkflowTargets(t *testing.T) {
+func TestWorkflowCreatorSeparatesBlueprintAndWorkflowTargets(t *testing.T) {
 	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
-	err := creator.ValidatePlanV2(WorkflowChangePlanV2{
-		ContractVersion: WorkflowChangePlanV2Version,
-		PlanID:          "plan-v2",
+	err := creator.ValidatePlan(WorkflowChangePlan{
+		ContractVersion: WorkflowChangePlanVersion,
+		PlanID:          "plan-lifecycle",
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
-		Changes: []WorkflowChangeV2{
+		Changes: []WorkflowChange{
 			{
 				Kind:                   ChangeUpdate,
 				TargetBlueprintID:      "release-readiness",
@@ -66,18 +68,18 @@ func TestWorkflowCreatorV2SeparatesBlueprintAndWorkflowTargets(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("expected valid v2 lifecycle plan: %v", err)
+		t.Fatalf("expected valid lifecycle plan: %v", err)
 	}
 }
 
-func TestWorkflowCreatorV2RejectsMixedTargetIdentity(t *testing.T) {
+func TestWorkflowCreatorRejectsMixedTargetIdentity(t *testing.T) {
 	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
-	err := creator.ValidatePlanV2(WorkflowChangePlanV2{
-		ContractVersion: WorkflowChangePlanV2Version,
-		PlanID:          "plan-invalid-v2",
+	err := creator.ValidatePlan(WorkflowChangePlan{
+		ContractVersion: WorkflowChangePlanVersion,
+		PlanID:          "plan-invalid-lifecycle",
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
-		Changes: []WorkflowChangeV2{{
+		Changes: []WorkflowChange{{
 			Kind:                   ChangeDeprecate,
 			TargetWorkflowID:       "workflow:org-1:encois.user-blueprint.v1:release-1",
 			TargetBlueprintVersion: "1.0.0",
@@ -85,6 +87,6 @@ func TestWorkflowCreatorV2RejectsMixedTargetIdentity(t *testing.T) {
 		}},
 	})
 	if err == nil {
-		t.Fatal("expected v2 lifecycle plan with a missing Blueprint target id to be rejected")
+		t.Fatal("expected lifecycle plan with a missing Blueprint target id to be rejected")
 	}
 }

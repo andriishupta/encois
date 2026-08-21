@@ -1,5 +1,5 @@
 import type { Handler } from "hono";
-import { isRecord, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
+import { isJsonObject, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   isWorkflowServiceError,
@@ -16,7 +16,7 @@ import {
 } from "../utils.js";
 
 function parseRequest(value: unknown): WorkflowStartRequest | null {
-  if (!isRecord(value) || typeof value.workflowType !== "string") return null;
+  if (!isJsonObject(value) || typeof value.workflowType !== "string") return null;
   if (!isTemporalWorkflowType(value.workflowType)) return null;
   // Source ingestion is a platform-owned workflow. It is launched only after
   // a persisted Source + Revision pass the source-specific authorization and

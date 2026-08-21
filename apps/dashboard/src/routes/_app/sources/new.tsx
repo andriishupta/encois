@@ -4,7 +4,7 @@ import { ArrowLeft, FileText, LoaderCircle, Save, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
+import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
 
 export const Route = createFileRoute('/_app/sources/new')({
   component: NewSourcePage,
@@ -30,7 +30,7 @@ function NewSourcePage() {
       await startSourceIngestion(uploaded.source.id, uploaded.revision.id)
       await navigate({ to: '/sources/$sourceId', params: { sourceId: uploaded.source.id } })
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'The source could not be uploaded.')
+      setError(isApiError(cause) ? cause.message : 'The source could not be uploaded.')
     } finally {
       setSaving(false)
     }

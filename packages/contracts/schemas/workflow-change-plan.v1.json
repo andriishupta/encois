@@ -50,6 +50,8 @@
       "required": ["kind", "reason", "requiresApproval"],
       "properties": {
         "kind": { "enum": ["create", "update", "deprecate", "cancel"] },
+        "targetBlueprintId": { "type": "string", "minLength": 1 },
+        "targetBlueprintVersion": { "type": "string", "minLength": 1 },
         "targetWorkflowId": { "type": "string", "minLength": 1 },
         "blueprint": { "$ref": "#/$defs/blueprint" },
         "start": { "$ref": "#/$defs/start" },
@@ -58,8 +60,10 @@
         "requiresApproval": { "type": "boolean" }
       },
       "allOf": [
-        { "if": { "properties": { "kind": { "enum": ["create", "update"] } } }, "then": { "required": ["blueprint"], "properties": { "blueprint": { "type": "object" } } } },
-        { "if": { "properties": { "kind": { "enum": ["update", "deprecate", "cancel"] } } }, "then": { "required": ["targetWorkflowId"], "properties": { "targetWorkflowId": { "type": "string" } } } }
+        { "if": { "properties": { "kind": { "const": "create" } } }, "then": { "required": ["blueprint"], "properties": { "blueprint": { "type": "object" } }, "not": { "anyOf": [{ "required": ["targetBlueprintId"], "properties": { "targetBlueprintId": {} } }, { "required": ["targetBlueprintVersion"], "properties": { "targetBlueprintVersion": {} } }, { "required": ["targetWorkflowId"], "properties": { "targetWorkflowId": {} } }] } } },
+        { "if": { "properties": { "kind": { "const": "update" } } }, "then": { "required": ["targetBlueprintId", "targetBlueprintVersion", "blueprint"], "properties": { "targetBlueprintId": { "type": "string" }, "targetBlueprintVersion": { "type": "string" }, "blueprint": { "type": "object" } }, "not": { "required": ["targetWorkflowId"], "properties": { "targetWorkflowId": {} } } } },
+        { "if": { "properties": { "kind": { "const": "deprecate" } } }, "then": { "required": ["targetBlueprintId", "targetBlueprintVersion"], "properties": { "targetBlueprintId": { "type": "string" }, "targetBlueprintVersion": { "type": "string" } }, "not": { "required": ["targetWorkflowId"], "properties": { "targetWorkflowId": {} } } } },
+        { "if": { "properties": { "kind": { "const": "cancel" } } }, "then": { "required": ["targetWorkflowId"], "properties": { "targetWorkflowId": { "type": "string" } }, "not": { "anyOf": [{ "required": ["targetBlueprintId"], "properties": { "targetBlueprintId": {} } }, { "required": ["targetBlueprintVersion"], "properties": { "targetBlueprintVersion": {} } }, { "required": ["blueprint"], "properties": { "blueprint": {} } }] } } }
       ]
     },
     "start": {

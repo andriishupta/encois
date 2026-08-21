@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app'
+import { isJsonObject } from '@encois/contracts'
 import {
   browserSessionPersistence,
   connectAuthEmulator,
@@ -36,10 +37,6 @@ type DashboardEnv = {
 
 function environment(): DashboardEnv {
   return (import.meta as ImportMeta & { env?: DashboardEnv }).env ?? {}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function configuredFirebase(): boolean {
@@ -99,7 +96,7 @@ export function getAuthSession(): AuthSession | null {
 
   try {
     const value: unknown = JSON.parse(window.sessionStorage.getItem(AUTH_SESSION_KEY) ?? 'null')
-    if (isRecord(value) && typeof value.accessToken === 'string' && value.accessToken.trim().length > 0) {
+    if (isJsonObject(value) && typeof value.accessToken === 'string' && value.accessToken.trim().length > 0) {
       return {
         accessToken: value.accessToken,
         ...(typeof value.organizationId === 'string' && value.organizationId.trim().length > 0

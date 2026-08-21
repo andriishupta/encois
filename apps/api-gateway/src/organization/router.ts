@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import {
   AccessLevel,
+  isJsonObject,
   OrganizationUnitType,
   type OrganizationPermissionCreateRequest,
   type OrganizationPermissionUpdateRequest,
@@ -20,17 +21,13 @@ import {
   updateOrganizationPermissionForPrincipal,
 } from "./services/organization.service.js";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function optionalString(value: unknown): string | undefined | null {
   if (value === undefined) return undefined;
   return typeof value === "string" ? value.trim() : null;
 }
 
 function parseUnitCreate(value: unknown): OrganizationUnitCreateRequest | null {
-  if (!isRecord(value) || typeof value.name !== "string" || typeof value.type !== "string") return null;
+  if (!isJsonObject(value) || typeof value.name !== "string" || typeof value.type !== "string") return null;
   if (!Object.values(OrganizationUnitType).includes(value.type as OrganizationUnitType)) return null;
   const parentId = optionalString(value.parentId);
   const slug = optionalString(value.slug);
@@ -44,13 +41,13 @@ function parseUnitCreate(value: unknown): OrganizationUnitCreateRequest | null {
 }
 
 function parsePermissionCreate(value: unknown): OrganizationPermissionCreateRequest | null {
-  if (!isRecord(value) || typeof value.memberId !== "string" || typeof value.unitId !== "string" || typeof value.access !== "string") return null;
+  if (!isJsonObject(value) || typeof value.memberId !== "string" || typeof value.unitId !== "string" || typeof value.access !== "string") return null;
   if (!Object.values(AccessLevel).includes(value.access as AccessLevel)) return null;
   return { memberId: value.memberId.trim(), unitId: value.unitId.trim(), access: value.access as AccessLevel };
 }
 
 function parsePermissionUpdate(value: unknown): OrganizationPermissionUpdateRequest | null {
-  if (!isRecord(value) || typeof value.access !== "string" || !Object.values(AccessLevel).includes(value.access as AccessLevel)) return null;
+  if (!isJsonObject(value) || typeof value.access !== "string" || !Object.values(AccessLevel).includes(value.access as AccessLevel)) return null;
   return { access: value.access as AccessLevel };
 }
 

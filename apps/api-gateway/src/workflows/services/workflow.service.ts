@@ -1,12 +1,11 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { ContractVersion, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
+import { ContractVersion, isJsonObject, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
 import type {
   ExecutionScope,
   JsonObject,
   WorkflowBlueprint,
   WorkflowChangePlan,
-  WorkflowChangePlanV2,
 } from "@encois/contracts";
 import {
   organizationMemberships,
@@ -42,7 +41,7 @@ export type WorkflowServiceError = Error & {
   code: string;
 };
 
-export type WorkflowChangePlanInput = WorkflowChangePlan | WorkflowChangePlanV2;
+export type WorkflowChangePlanInput = WorkflowChangePlan;
 
 export function workflowServiceError(code: string, message: string): WorkflowServiceError {
   const error = new Error(message) as WorkflowServiceError;
@@ -60,7 +59,7 @@ export function localUserId(principal: AosPrincipal): string | null {
 }
 
 function blueprintFromPayload(payload: JsonObject): WorkflowBlueprint | undefined {
-  if (isRecord(payload.blueprint)) return parseWorkflowBlueprint(payload.blueprint) ?? undefined;
+  if (isJsonObject(payload.blueprint)) return parseWorkflowBlueprint(payload.blueprint) ?? undefined;
   if (payload.workflowType === TemporalWorkflowType.UserBlueprint && Array.isArray(payload.steps)) {
     return parseWorkflowBlueprint(payload) ?? undefined;
   }
@@ -73,7 +72,7 @@ function getBlueprint(request: WorkflowStartRequest, payload: JsonObject): Workf
 }
 
 function getBusinessInput(request: WorkflowStartRequest, payload: JsonObject): JsonObject {
-  if (isRecord(payload.businessInput)) return payload.businessInput;
+  if (isJsonObject(payload.businessInput)) return payload.businessInput;
   if (!request.blueprint) return payload;
   return Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "blueprint"));
 }
@@ -119,13 +118,9 @@ function startCommand(
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
-  if (isRecord(value)) {
+  if (isJsonObject(value)) {
     return `{${Object.keys(value)
       .sort()
       .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
@@ -857,39 +852,37 @@ export async function validateWorkflowChangePlan(
     }
   }
 
-  if (plan.contractVersion === ContractVersion.WorkflowChangePlanV2) {
-    for (const [index, change] of plan.changes.entries()) {
-      if (change.kind === "update") {
-        if (!change.targetBlueprintId || !change.targetBlueprintVersion || !change.blueprint) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Blueprint target and replacement.`);
-        }
-        if (change.targetWorkflowId) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Temporal execution.`);
-        }
-        if (change.blueprint.blueprintId !== change.targetBlueprintId) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} targets a different Blueprint id.`);
-        }
-        if (change.blueprint.version === change.targetBlueprintVersion) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} must publish a new Blueprint version.`);
-        }
-      } else if (change.kind === "deprecate") {
-        if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Blueprint target.`);
-        }
-        if (change.targetWorkflowId) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Temporal execution.`);
-        }
-      } else if (change.kind === "cancel") {
-        if (!change.targetWorkflowId) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Temporal workflow target.`);
-        }
-        if (change.targetBlueprintId || change.targetBlueprintVersion || change.blueprint) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Blueprint registry object.`);
-        }
-      } else if (change.kind === "create") {
-        if (change.targetBlueprintId || change.targetBlueprintVersion || change.targetWorkflowId) {
-          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot include a lifecycle target.`);
-        }
+  for (const [index, change] of plan.changes.entries()) {
+    if (change.kind === "update") {
+      if (!change.targetBlueprintId || !change.targetBlueprintVersion || !change.blueprint) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Blueprint target and replacement.`);
+      }
+      if (change.targetWorkflowId) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Temporal execution.`);
+      }
+      if (change.blueprint.blueprintId !== change.targetBlueprintId) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} targets a different Blueprint id.`);
+      }
+      if (change.blueprint.version === change.targetBlueprintVersion) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} must publish a new Blueprint version.`);
+      }
+    } else if (change.kind === "deprecate") {
+      if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Blueprint target.`);
+      }
+      if (change.targetWorkflowId) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Temporal execution.`);
+      }
+    } else if (change.kind === "cancel") {
+      if (!change.targetWorkflowId) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Temporal workflow target.`);
+      }
+      if (change.targetBlueprintId || change.targetBlueprintVersion || change.blueprint) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Blueprint registry object.`);
+      }
+    } else if (change.kind === "create") {
+      if (change.targetBlueprintId || change.targetBlueprintVersion || change.targetWorkflowId) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot include a lifecycle target.`);
       }
     }
   }

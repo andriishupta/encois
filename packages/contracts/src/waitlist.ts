@@ -1,3 +1,5 @@
+import { isJsonObject } from "./json.js";
+
 export const WaitlistLimits = {
   email: 320,
   companyName: 160,
@@ -49,10 +51,6 @@ export type WaitlistValidationField = keyof WaitlistRequest;
 export type WaitlistValidationResult =
   | { ok: true; value: WaitlistRequest }
   | { ok: false; issue: { field?: WaitlistValidationField; message: string } };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function optionalText(
   input: Record<string, unknown>,
@@ -111,7 +109,7 @@ function isWorkEmail(value: string): boolean {
  * mailbox ownership still requires an email verification step later.
  */
 export function validateWaitlistRequest(input: unknown): WaitlistValidationResult {
-  if (!isRecord(input)) return { ok: false, issue: { message: "A waitlist request is required." } };
+  if (!isJsonObject(input)) return { ok: false, issue: { message: "A waitlist request is required." } };
 
   const rawEmail = input.email;
   const email = typeof rawEmail === "string" ? rawEmail.normalize("NFKC").trim().toLowerCase() : "";

@@ -64,10 +64,10 @@ Current blueprint routes:
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
-- `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` create proposal or `workflow-change-plan.v2` lifecycle proposal without applying it.
-- `POST /api/v1/workflows/plans` — persist an idempotent v1/v2 proposal as `proposed` when Postgres is configured.
+- `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` lifecycle proposal without applying it.
+- `POST /api/v1/workflows/plans` — persist an idempotent v1 proposal as `proposed` when Postgres is configured.
 - `POST /api/v1/workflows/plans/:planId/approve` — approve a persisted proposal; application is still a separate step.
-- `POST /api/v1/workflows/plans/:planId/apply` — apply an approved v1 `create`, v2 Blueprint `update`, or v2 Blueprint `deprecate` proposal and enqueue its Coordinator event; only an explicit `start` intent launches the approved Blueprint snapshot. v2 Temporal `cancel` remains explicitly unsupported until a Temporal cancellation client is wired.
+- `POST /api/v1/workflows/plans/:planId/apply` — apply an approved v1 `create`, Blueprint `update`/`deprecate`, or cancel-only proposal and enqueue its Coordinator event; only an explicit `start` intent launches the approved Blueprint snapshot.
 - `POST /api/v1/internal/coordinator/plans/validate` — private Runtime/Coordinator plan preview; requires `X-Encois-Service-Token` and `X-Organization-ID`.
 - `POST /api/v1/internal/coordinator/plans` — private Runtime/Coordinator plan submission; the human approval boundary remains in the Gateway.
 - `POST /api/v1/internal/coordinator/workflows` — private start path for an approved tenant Blueprint reference; it reuses the generic workflow service and does not expose the database.

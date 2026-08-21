@@ -1,11 +1,7 @@
 import type { Handler } from "hono";
-import type { JsonObject, SourceRevisionCreateRequest } from "@encois/contracts";
+import { isJsonObject, type JsonObject, type SourceRevisionCreateRequest } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { createSourceRevision, isSourceServiceError } from "../services/source.service.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function optionalString(value: Record<string, unknown>, key: string): string | undefined | null {
   const candidate = value[key];
@@ -14,7 +10,7 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
 }
 
 function parseRequest(value: unknown): SourceRevisionCreateRequest | null {
-  if (!isRecord(value)) return null;
+  if (!isJsonObject(value)) return null;
   const revision = optionalString(value, "revision");
   const artifactRef = optionalString(value, "artifactRef");
   const sourceObjectId = optionalString(value, "sourceObjectId");
@@ -24,7 +20,7 @@ function parseRequest(value: unknown): SourceRevisionCreateRequest | null {
   const metadata = value.metadata;
   if (!revision || artifactRef === null || sourceObjectId === null || contentType === null || checksum === null || observedAt === null) return null;
   if (observedAt && Number.isNaN(Date.parse(observedAt))) return null;
-  if (metadata !== undefined && (!isRecord(metadata) || Array.isArray(metadata))) return null;
+  if (metadata !== undefined && (!isJsonObject(metadata) || Array.isArray(metadata))) return null;
   return {
     revision,
     ...(artifactRef ? { artifactRef } : {}),

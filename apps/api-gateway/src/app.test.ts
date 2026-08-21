@@ -381,7 +381,7 @@ describe("API Gateway", () => {
     });
   });
 
-  it("validates lifecycle workflow-change-plan.v2 targets without applying them", async () => {
+  it("validates lifecycle workflow-change-plan.v1 targets without applying them", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"] },
@@ -391,7 +391,7 @@ describe("API Gateway", () => {
     });
     const response = await app.request("/api/v1/workflows/plans/validate", {
       body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v2",
+        contractVersion: "workflow-change-plan.v1",
         planId: "plan-release-lifecycle-1",
         coordinatorId: "coordinator-org-1",
         organizationId: "org-1",
@@ -449,7 +449,7 @@ describe("API Gateway", () => {
     });
     const response = await app.request("/api/v1/workflows/plans/validate", {
       body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v2",
+        contractVersion: "workflow-change-plan.v1",
         planId: "plan-invalid-lifecycle-1",
         coordinatorId: "coordinator-org-1",
         organizationId: "org-1",

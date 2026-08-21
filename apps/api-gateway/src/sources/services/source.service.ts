@@ -6,6 +6,7 @@ import {
   KnowledgeSourceStatus,
   SourceIngestionTrigger,
   SourceRevisionStatus,
+  isJsonObject,
   type ExecutionScope,
   type JsonObject,
   type KnowledgeSource,
@@ -96,12 +97,8 @@ function localUserId(principal: AosPrincipal): string | null {
   return /^[0-9a-f-]{36}$/i.test(candidate) ? candidate : null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function toScope(value: unknown): SourceScope | null {
-  if (!isRecord(value) || !Array.isArray(value.ids) || value.ids.length === 0) return null;
+  if (!isJsonObject(value) || !Array.isArray(value.ids) || value.ids.length === 0) return null;
   const ids = value.ids.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
   if (ids.length !== value.ids.length) return null;
 
@@ -133,13 +130,13 @@ function scopeOverlapsPrincipal(sourceScope: SourceScope, principalScope: readon
 
 function safeConfiguration(value: unknown): JsonObject {
   if (value === undefined) return {};
-  if (!isRecord(value)) throw sourceServiceError("INVALID_SOURCE_CONFIGURATION", "configuration must be an object.");
+  if (!isJsonObject(value)) throw sourceServiceError("INVALID_SOURCE_CONFIGURATION", "configuration must be an object.");
   const inspect = (entry: unknown): void => {
     if (Array.isArray(entry)) {
       for (const item of entry) inspect(item);
       return;
     }
-    if (!isRecord(entry)) return;
+    if (!isJsonObject(entry)) return;
     for (const [key, child] of Object.entries(entry)) {
       if (/token|secret|password|credential|private[_-]?key/i.test(key)) {
         throw sourceServiceError("SECRET_IN_SOURCE_CONFIGURATION", "Credentials must be stored in Secret Manager, not source configuration.");
