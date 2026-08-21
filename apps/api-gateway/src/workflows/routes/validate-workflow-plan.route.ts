@@ -6,6 +6,7 @@ import {
   validateWorkflowChangePlan,
   type WorkflowServiceOptions,
 } from "../services/workflow.service.js";
+import { workflowValidationErrorStatus } from "../utils.js";
 
 function parsePlan(value: unknown): WorkflowChangePlan | WorkflowChangePlanV2 | null {
   if (validateContract("workflowChangePlanV2", value).valid) return value as WorkflowChangePlanV2;
@@ -28,8 +29,7 @@ export function validateWorkflowPlanRoute(_options: WorkflowServiceOptions): Han
       return context.json({ data });
     } catch (error) {
       if (isWorkflowServiceError(error)) {
-        const status = error.code === "FORBIDDEN" || error.code === "SCOPE_DENIED" ? 403 : error.code === "WORKFLOW_PLAN_INVALID" ? 422 : 401;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowValidationErrorStatus(error.code));
       }
       throw error;
     }

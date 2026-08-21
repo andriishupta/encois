@@ -1,5 +1,5 @@
 import type { Handler } from "hono";
-import { isRecord, parseWorkflowBlueprint } from "@encois/contracts";
+import { isRecord, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   isWorkflowServiceError,
@@ -7,33 +7,43 @@ import {
   type WorkflowServiceOptions,
 } from "../services/workflow.service.js";
 import type { WorkflowStartRequest } from "../types.js";
-import { PLATFORM_WORKFLOW_TYPES, USER_BLUEPRINT_WORKFLOW_TYPE } from "../types.js";
+import {
+  isTemporalWorkflowType,
+  readOptionalRecord,
+  readOptionalString,
+  workflowErrorStatus,
+  workflowStartResponseStatus,
+} from "../utils.js";
 
 function parseRequest(value: unknown): WorkflowStartRequest | null {
   if (!isRecord(value) || typeof value.workflowType !== "string") return null;
-  if (!PLATFORM_WORKFLOW_TYPES.includes(value.workflowType as (typeof PLATFORM_WORKFLOW_TYPES)[number])) return null;
+  if (!isTemporalWorkflowType(value.workflowType)) return null;
 
   const request: WorkflowStartRequest = { workflowType: value.workflowType };
   for (const field of ["version", "key", "blueprintId", "blueprintVersion"] as const) {
-    if (value[field] !== undefined && (typeof value[field] !== "string" || value[field].length > 128)) return null;
-    if (typeof value[field] === "string") request[field] = value[field];
+    const candidate = readOptionalString(value, field);
+    if (candidate === null) return null;
+    if (candidate !== undefined) request[field] = candidate;
   }
-  if (value.input !== undefined && !isRecord(value.input)) return null;
-  if (value.scope !== undefined && !isRecord(value.scope)) return null;
-  if (value.idempotencyKey !== undefined && (typeof value.idempotencyKey !== "string" || value.idempotencyKey.length > 128)) return null;
-  const input = value.input as Record<string, unknown> | undefined;
+  const input = readOptionalRecord(value, "input");
+  const scope = readOptionalRecord(value, "scope");
+  const idempotencyKey = readOptionalString(value, "idempotencyKey");
+  if (input === null || scope === null || idempotencyKey === null) return null;
   const blueprintCandidate = value.blueprint ?? input?.blueprint;
   const blueprint = blueprintCandidate === undefined ? undefined : parseWorkflowBlueprint(blueprintCandidate);
   if (blueprintCandidate !== undefined && !blueprint) return null;
   if (blueprint && typeof value.blueprintId === "string" && value.blueprintId !== blueprint.blueprintId) return null;
   if (blueprint && typeof value.blueprintVersion === "string" && value.blueprintVersion !== blueprint.version) return null;
-  if ((value.blueprintId !== undefined || value.blueprintVersion !== undefined) && value.workflowType !== USER_BLUEPRINT_WORKFLOW_TYPE) return null;
-  request.input = value.input as Record<string, unknown> | undefined;
-  request.scope = value.scope as Record<string, unknown> | undefined;
+  if (
+    (value.blueprintId !== undefined || value.blueprintVersion !== undefined) &&
+    value.workflowType !== TemporalWorkflowType.UserBlueprint
+  ) return null;
+  request.input = input ?? undefined;
+  request.scope = scope as WorkflowStartRequest["scope"];
   request.blueprint = blueprint ?? undefined;
-  request.blueprintId = typeof value.blueprintId === "string" ? value.blueprintId : undefined;
-  request.blueprintVersion = typeof value.blueprintVersion === "string" ? value.blueprintVersion : undefined;
-  request.idempotencyKey = typeof value.idempotencyKey === "string" ? value.idempotencyKey : undefined;
+  request.blueprintId = readOptionalString(value, "blueprintId") ?? undefined;
+  request.blueprintVersion = readOptionalString(value, "blueprintVersion") ?? undefined;
+  request.idempotencyKey = idempotencyKey ?? undefined;
   return request;
 }
 
@@ -66,25 +76,10 @@ export function createWorkflowRoute(
 
     try {
       const data = await startWorkflow(context.get("principal"), request, context.get("requestId"), context.get("traceId"), options);
-      return context.json({ data }, 202);
+      return context.json({ data }, workflowStartResponseStatus(data.reused));
     } catch (error) {
       if (isWorkflowServiceError(error)) {
-        const status =
-          error.code === "FORBIDDEN"
-            ? 403
-            : [
-                  "WORKFLOW_DEFINITION_NOT_FOUND",
-                  "BLUEPRINT_VERSION_REQUIRED",
-                  "BLUEPRINT_NOT_FOUND",
-                  "BLUEPRINT_INVALID",
-                ].includes(error.code)
-              ? 422
-              : ["PERSISTENCE_UNAVAILABLE", "BLUEPRINT_REGISTRY_UNAVAILABLE"].includes(error.code)
-                ? 503
-              : error.code === "IDEMPOTENCY_CONFLICT"
-                ? 409
-                : 401;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowErrorStatus(error.code));
       }
       throw error;
     }

@@ -1,15 +1,16 @@
 import type { Handler } from "hono";
-import { validateContract, type WorkflowUpdateRequest } from "@encois/contracts";
+import { ContractVersion, validateContract, WorkflowUpdateName, type WorkflowUpdateRequest } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { isWorkflowServiceError, updateWorkflow, type WorkflowServiceOptions } from "../services/workflow.service.js";
+import { workflowCommandErrorStatus } from "../utils.js";
 
 function parseUpdate(value: unknown): WorkflowUpdateRequest | null {
   if (!validateContract("workflowUpdate", value).valid) return null;
   const record = value as Record<string, unknown>;
   const payload = record.payload as Record<string, unknown>;
   return {
-    contractVersion: "workflow-update.v1",
-    updateName: "blueprint-context",
+    contractVersion: ContractVersion.WorkflowUpdate,
+    updateName: WorkflowUpdateName.BlueprintContext,
     updateId: (record.updateId as string).trim(),
     payload: {
       businessInput: payload.businessInput as Record<string, unknown>,
@@ -29,17 +30,7 @@ export function updateWorkflowRoute(options: WorkflowServiceOptions): Handler<Ga
       return context.json({ data: { accepted: true, updateId: request.updateId } });
     } catch (error) {
       if (isWorkflowServiceError(error)) {
-        const status =
-          error.code === "WORKFLOW_NOT_FOUND"
-            ? 404
-            : error.code === "FORBIDDEN"
-              ? 403
-              : error.code === "WORKFLOW_NOT_UPDATABLE"
-                ? 409
-                : error.code === "WORKFLOW_UPDATE_CONFLICT"
-                  ? 409
-                : 503;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowCommandErrorStatus(error.code));
       }
       throw error;
     }

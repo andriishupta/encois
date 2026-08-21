@@ -10,7 +10,7 @@ type.
 
 `packages/contracts` contains the TypeScript contract types, canonical JSON
 Schema sources, and a small Go validator package. The TypeScript API validates
-the public Blueprint, release, and Signal payloads with Ajv-2020, then applies
+the public Blueprint, Signal, and update payloads with Ajv-2020, then applies
 semantic authorization and workflow checks. Go services embed and validate the
 same schema files at the Blueprint, workflow change-plan, tool request, tool
 result, artifact reference, and workflow result boundaries. Generated DTOs remain optional
@@ -18,7 +18,7 @@ follow-up work; validation does not require sharing TypeScript source with Go.
 
 The tool names in examples are protocol examples, not a promise that those
 providers are already connected. The current Agent Gateway fixture catalog is
-`jira.release_tasks` and `github.release_activity`. Its entries now validate
+`jira.project_tasks` and `github.project_activity`. Its entries now validate
 against the canonical `tool-manifest.v1` schema; persisted connector grants,
 live manifests, and real provider adapters remain deferred.
 
@@ -78,11 +78,12 @@ packages/contracts/
   schema.go
   schema_test.go
   src/index.ts
+  src/scope.ts
+  src/values.ts
   src/validation.ts
   test-contracts.mjs
   openapi.yaml
   schemas/
-    release-investigation.v1.json
     workflow-blueprint.v1.json
     blueprint-workflow-result.v1.json
     workflow-signal.v1.json
@@ -113,6 +114,17 @@ becomes the schema owner. `workflow-change-plan.v1` is validated before a
 bootstrap proposal can leave the Go Runtime; raw model text never crosses that
 boundary.
 
+The shared values also define organization-unit types, scope-rule modes,
+freshness states, workflow status reasons, artifact retention classes, and
+memory redaction states. `resolveEffectiveScope` is a pure helper used by the
+Gateway to expand direct membership roots; it does not read the database or
+make authorization decisions from model output.
+
+Tool, graph, memory, and artifact results carry optional freshness, provenance,
+retention, or redaction metadata. This keeps the data-quality and privacy
+boundaries explicit even while Graph, Memory Bank, and Cloud Storage remain
+deferred adapters.
+
 ## Generic workflow model
 
 The platform has one generic execution contract. A company-specific scenario
@@ -128,7 +140,7 @@ Workflow Start Request
 
 The only platform-owned long-lived workflow types are the Coordinator and the
 bootstrap/reconciliation workflows. A user-created or company-created
-workflow uses the registered generic Temporal Workflow. `Release Investigation`
+workflow uses the registered generic Temporal Workflow. Release readiness
 is only an example Blueprint, not a required Encois workflow type.
 
 ### Workflow start request
@@ -314,7 +326,7 @@ Blueprint versions:
           {
             "id": "jira",
             "kind": "tool",
-            "tool": "jira.release_tasks"
+            "tool": "jira.project_tasks"
           }
         ]
       },

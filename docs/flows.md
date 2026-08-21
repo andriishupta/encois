@@ -24,6 +24,19 @@ Cross-language payloads and generation rules are defined in [`contracts.md`](con
 - Every visible conclusion has evidence IDs, source timestamps, freshness, confidence, and limitations.
 - External writes are disabled in the MVP.
 
+Background intelligence uses three triggers:
+
+```text
+provider webhook/event -> fast incremental update
+Temporal Schedule/timer -> periodic reconciliation
+manual query            -> on-demand investigation
+```
+
+The exact cadence is source-specific (for example minutes for production
+health, hourly for release health, and daily for full reconciliation). The
+Coordinator remains one durable Workflow; it is not a process or server per
+agent.
+
 The execution vocabulary is defined in [`dictionary.md`](dictionary.md). In particular, a Worker is a deployable Go process, an Activity is a registered function executed by that Worker, and a specialist Agent is a logical role rather than a separate server.
 
 ## 2.1 Mandatory onboarding and Coordinator bootstrap
@@ -109,6 +122,7 @@ policy checks, and secrets remain inside the Agent Gateway.
 CoordinatorWorkflow
   -> wait for onboarding signal, Temporal Schedule, source event, or workflow result
   -> inspect freshness and enabled Integration Packs
+  -> decide incremental versus scheduled reconciliation from source freshness budgets
   -> retrieve relevant scoped Graph/Memory Bank references
   -> ask ADK/Gemini for a typed change proposal
   -> validate Blueprint version, step graph, tools, scope, budget, and approval requirements deterministically
@@ -418,6 +432,11 @@ Temporal Workflow starts a wait
 
 If a provider has no webhook, a Temporal timer can schedule bounded polling. A new agent is not created for every check.
 
+All source reads carry `observedAt`, `ingestedAt`, source identity, and a freshness
+status (`fresh`, `stale`, or `unknown`). Source-specific budgets decide whether
+the Coordinator can use the data, should mark the result degraded, or should
+schedule reconciliation. A stale result must remain visibly stale in the UI.
+
 The local harness verifies this same control shape with a generic approval
 Blueprint: the Workflow reaches a running wait, the API sends the authorized
 Signal, and the existing Go Worker resumes the same execution. The hosted
@@ -459,6 +478,18 @@ Example: a Team A manager may see Team A and explicitly shared dependencies. A c
 
 The server computes this scope for every request, graph query, memory retrieval, and tool call. A client-supplied `organizationId`, `teamId`, or “admin” flag is never trusted.
 
+The effective scope is deterministic and tree-aware:
+
+```text
+direct membership roots -> inherited descendants
+explicit grants         -> additional descendants
+explicit restrictions   -> subtract restricted descendants
+```
+
+The current API computes inheritance from the organization-unit tree. Persisted
+grant/restriction rules are the next control-plane permission migration; until
+then direct membership scopes are the only durable input.
+
 ## 10. Canvas and observability flow
 
 The canvas is a projection of Temporal execution, Spanner Graph relationships, and safe telemetry. It is not a second execution engine.
@@ -473,7 +504,8 @@ React renders:
   - Company / Department / Team / Project structure
   - graph paths between risks and owners
   - active workflows and specialist branches
-  - queued, running, waiting, partial, failed, and completed states
+  - queued, running, waiting, partial, degraded, failed, and completed states
+  - status reason, retry/freshness context, and missing capability/approval state
   - evidence, timestamps, retries, Signals, Activities, and trace links
 ```
 
@@ -489,8 +521,11 @@ Activity fails
   -> failure is classified: auth | rate-limit | timeout | provider | validation | policy
   -> completed Activities are not re-run
   -> retryable Activity is retried with bounded backoff
-  -> non-retryable failure becomes visible in the workflow
-  -> usable evidence may produce a PARTIAL result
+  -> missing credentials/capability becomes WAITING_FOR_CAPABILITY
+  -> approval requirement becomes WAITING_FOR_APPROVAL
+  -> provider failure with usable evidence becomes DEGRADED/PARTIAL
+  -> permanent invalid input becomes FAILED
+  -> reason code, retry context, and stale evidence are visible in the workflow
   -> user/operator may cancel or signal a recovery path
 ```
 

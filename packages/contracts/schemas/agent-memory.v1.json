@@ -43,7 +43,9 @@
       "properties": {
         "summary": { "type": "string", "minLength": 1, "maxLength": 10000 },
         "evidenceRefs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-        "observedAt": { "type": "string", "minLength": 1 }
+        "observedAt": { "type": "string", "minLength": 1 },
+        "redactionStatus": { "enum": ["applied", "no_match", "deferred"] },
+        "redactionVersion": { "type": "string", "minLength": 1 }
       }
     }
   },

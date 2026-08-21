@@ -3,7 +3,6 @@ import type { GatewayEnv } from "../middleware/aos.js";
 import type { WorkflowClient } from "./temporal-client.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
 import { getWorkflowRoute } from "./routes/get-workflow.route.js";
-import { createReleaseInvestigationRoute } from "./routes/release-investigation.route.js";
 import { listWorkflowsRoute } from "./routes/list-workflows.route.js";
 import { signalWorkflowRoute } from "./routes/signal-workflow.route.js";
 import { updateWorkflowRoute } from "./routes/update-workflow.route.js";
@@ -26,7 +25,6 @@ export function createWorkflowsRouter(
   };
 
   router.post("/", createWorkflowRoute(options));
-  router.post("/release-investigations", createReleaseInvestigationRoute(options));
   router.post("/plans", submitWorkflowPlanRoute());
   router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());

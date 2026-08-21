@@ -6,6 +6,7 @@ import (
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
 func TestBlueprintToolActivityWithoutGatewayIsDeferred(t *testing.T) {
@@ -16,7 +17,7 @@ func TestBlueprintToolActivityWithoutGatewayIsDeferred(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "deferred-no-agent-gateway" {
+	if result.Status != "waiting" || result.StatusReason != contracts.ReasonCapabilityMissing {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }
@@ -29,7 +30,7 @@ func TestBlueprintAgentActivityWithoutModelIsDeferred(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "deferred-no-agent-model" {
+	if result.Status != "waiting" || result.StatusReason != contracts.ReasonCapabilityMissing {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }

@@ -43,9 +43,9 @@ The migration enables PostgreSQL RLS on tenant-scoped tables. The API must execu
 
 - `users` — Identity Platform subject and minimal profile projection; no provider tokens.
 - `organizations` — tenant root.
-- `organization_units` — organization, department, team, and project hierarchy.
+- `organization_units` — organization, department, team, project, service, and future custom hierarchy nodes.
 - `roles`, `role_permissions` — system/custom role definitions and permissions.
-- `organization_memberships`, `membership_scopes` — user membership and effective hierarchy scope.
+- `organization_memberships`, `membership_scopes` — user membership and direct hierarchy roots. The Gateway expands descendants; explicit grant/restriction persistence is a planned follow-up table, not a client-side rule.
 - `integrations`, `integration_bindings` — one organization integration bound to many organization units/projects.
 - `webhook_endpoints`, `webhook_deliveries` — verified endpoint configuration and idempotent receipt projection.
 - `workflow_definitions`, `workflow_runs`, `workflow_events` — approved workflow definitions plus safe Temporal execution projections.
@@ -66,6 +66,11 @@ Use Cloud Storage for raw provider snapshots, uploaded files, and large investig
 
 The Gateway authorizes access and issues short-lived signed URLs. Buckets remain private, credentials stay in Secret Manager/ADC, and lifecycle retention is configured per environment. Redis is not used as a source of truth for files, workflows, authorization, or tenant data.
 
+Every artifact request declares or receives a retention class. The local
+adapter records `ephemeral`, `investigation`, `source_snapshot`, or
+`legal_hold`; hosted Cloud Storage lifecycle rules and deletion jobs must enforce
+the corresponding TTL before real customer data is enabled.
+
 ## Temporal client boundary
 
 The API Gateway owns the north-south Temporal client boundary, not the worker
@@ -79,11 +84,19 @@ For local development, an in-memory adapter is selected when
 `TEMPORAL_ADDRESS` is unset. This is a test/development projection only and
 must not be used for production or cross-instance coordination.
 
+Temporal Namespace policy: the MVP uses one shared Namespace with
+organization-prefixed Workflow IDs and Gateway/Agent Gateway authorization.
+Namespace selection is a deployment isolation setting, not a substitute for
+tenant checks. Dedicated customer profiles may use a dedicated Namespace or a
+dedicated GCP project plus Temporal environment.
+
 ## Deferred decisions
 
 - Cloud SQL regional/HA tier and private IP topology.
 - Cloud SQL IAM database authentication versus Secret Manager password for the runtime login role.
 - Cloud Storage bucket retention, deletion, and customer data residency policy.
+- Explicit organization-unit grant/restriction tables and permission-admin UI.
+- Per-provider freshness budgets and Cloud Scheduler/Temporal Schedule wiring.
 - Redis product and topology for rate limits, cache, and short-lived locks.
 - Identity Platform tenant model and enterprise SAML/OIDC provider configuration.
 - Cloud Run deployment manifests, service accounts, and CI/CD promotion flow.

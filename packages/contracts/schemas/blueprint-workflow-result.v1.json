@@ -10,8 +10,24 @@
       "properties": {
         "stepId": { "type": "string", "minLength": 1 },
         "status": { "type": "string", "minLength": 1 },
+        "statusReason": { "enum": ["temporary_error", "missing_credentials", "human_approval", "capability_unavailable", "provider_unavailable", "invalid_input", "degraded_evidence"] },
         "data": { "type": "object" },
-        "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "freshness": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "observedAt", "status"],
+            "properties": {
+              "source": { "type": "string", "minLength": 1 },
+              "observedAt": { "type": "string", "minLength": 1 },
+              "ingestedAt": { "type": "string", "minLength": 1 },
+              "expiresAt": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["fresh", "stale", "unknown"] }
+            }
+          }
+        }
       },
       "additionalProperties": false
     }
@@ -19,6 +35,7 @@
   "properties": {
     "contractVersion": { "const": "blueprint-workflow-result.v1" },
     "status": { "enum": ["completed", "waiting", "failed"] },
+    "statusReason": { "enum": ["temporary_error", "missing_credentials", "human_approval", "capability_unavailable", "provider_unavailable", "invalid_input", "degraded_evidence"] },
     "steps": { "type": "array", "items": { "$ref": "#/$defs/stepResult" } }
   },
   "additionalProperties": false

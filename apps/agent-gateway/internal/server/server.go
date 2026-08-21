@@ -169,7 +169,7 @@ func (s *Server) invokeTool(c *gin.Context) {
 		return
 	}
 
-	data, evidenceRefs, ok := mockTool(request.Tool)
+	data, evidenceRefs, freshness, ok := mockTool(request.Tool)
 	if !ok {
 		errorResponse(c, http.StatusNotImplemented, "tool_not_implemented", "provider adapter is not configured", false)
 		return
@@ -181,6 +181,7 @@ func (s *Server) invokeTool(c *gin.Context) {
 		Status:          "mocked",
 		Data:            data,
 		EvidenceRefs:    evidenceRefs,
+		Freshness:       freshness,
 	})
 }
 
@@ -252,29 +253,30 @@ func (s *Server) writeArtifact(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func mockTool(toolName string) (map[string]any, []string, bool) {
+func mockTool(toolName string) (map[string]any, []string, []contractschemas.SourceFreshness, bool) {
+	now := time.Now().UTC().Format(time.RFC3339)
 	switch toolName {
-	case "jira.release_tasks":
+	case "jira.project_tasks":
 		return map[string]any{
 			"source":         "jira",
-			"releaseId":      "mock-release-aug-30",
+			"projectId":      "mock-project-checkout",
 			"totalTasks":     10,
 			"completedTasks": 8,
 			"remainingTasks": 2,
 			"blockedTasks":   1,
 			"observedAt":     time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock:jira:release-aug-30"}, true
-	case "github.release_activity":
+		}, []string{"mock:jira:project-checkout"}, []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
+	case "github.project_activity":
 		return map[string]any{
 			"source":             "github",
-			"releaseId":          "mock-release-aug-30",
+			"projectId":          "mock-project-checkout",
 			"openPullRequests":   2,
 			"failingChecks":      1,
 			"commitsSinceCutoff": 12,
 			"observedAt":         time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock:github:release-aug-30"}, true
+		}, []string{"mock:github:project-checkout"}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
 	default:
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 }
 

@@ -28,14 +28,14 @@ func TestInvokeSendsScopedAuthenticatedToolRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 		payload := string(body)
-		for _, expected := range []string{`"workflowId":"workflow:org-test:release:one"`, `"organizationId":"org-test"`, `"releaseKey":"aug-30"`, `"arguments"`, `"scope"`} {
+		for _, expected := range []string{`"workflowId":"workflow:org-test:project:one"`, `"organizationId":"org-test"`, `"projectKey":"checkout"`, `"arguments"`, `"scope"`} {
 			if !strings.Contains(payload, expected) {
 				t.Fatalf("request body does not contain %q: %s", expected, payload)
 			}
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"contractVersion":"tool-result.v1","requestId":"request-test","tool":"jira.release_tasks","status":"mocked","data":{"ok":true}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"contractVersion":"tool-result.v1","requestId":"request-test","tool":"jira.project_tasks","status":"mocked","data":{"ok":true}}`)),
 			Header:     make(http.Header),
 		}, nil
 	})
@@ -44,13 +44,13 @@ func TestInvokeSendsScopedAuthenticatedToolRequest(t *testing.T) {
 		ContractVersion: "tool-request.v1",
 		RequestID:       "request-test",
 		TraceID:         "trace-test",
-		WorkflowID:      "workflow:org-test:release:one",
+		WorkflowID:      "workflow:org-test:project:one",
 		OrganizationID:  "org-test",
 		ActorID:         "actor-test",
 		PolicyVersion:   "policy-test",
 		Scope:           map[string]any{"ids": []string{"team-test"}},
-		Tool:            "jira.release_tasks",
-		Arguments:       map[string]any{"releaseKey": "aug-30"},
+		Tool:            "jira.project_tasks",
+		Arguments:       map[string]any{"projectKey": "checkout"},
 	})
 	if err != nil {
 		t.Fatal(err)

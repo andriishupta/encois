@@ -3,8 +3,24 @@ package memory
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
+
+func TestSanitizeRequestRedactsObviousPIIAndSecrets(t *testing.T) {
+	request := Request{Distillation: &Distillation{
+		Summary:      "Observed 2026-08-20. Contact jane@example.com or +1 555 123 4567; use bearer abcdefghijklmnop.",
+		EvidenceRefs: []string{"artifact://evidence/1"},
+		ObservedAt:   "2026-08-20T16:00:00Z",
+	}}
+	sanitized := SanitizeRequest(request)
+	if sanitized.Distillation == nil || strings.Contains(sanitized.Distillation.Summary, "jane@example.com") || strings.Contains(sanitized.Distillation.Summary, "abcdefghijklmnop") || !strings.Contains(sanitized.Distillation.Summary, "2026-08-20") {
+		t.Fatalf("PII or secret was not redacted: %+v", sanitized.Distillation)
+	}
+	if sanitized.Distillation.RedactionStatus == "" || sanitized.Distillation.RedactionVersion != RedactionVersion {
+		t.Fatalf("redaction metadata missing: %+v", sanitized.Distillation)
+	}
+}
 
 func TestDeferredStoreDoesNotPretendMemoryIsAvailable(t *testing.T) {
 	_, err := (DeferredStore{}).Execute(context.Background(), Request{})

@@ -12,7 +12,8 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "type": { "type": "string", "minLength": 1 },
-        "properties": { "type": "object" }
+        "properties": { "type": "object" },
+        "provenance": { "$ref": "#/$defs/provenance" }
       }
     },
     "edge": {
@@ -24,7 +25,33 @@
         "sourceId": { "type": "string", "minLength": 1 },
         "targetId": { "type": "string", "minLength": 1 },
         "relationship": { "type": "string", "minLength": 1 },
-        "properties": { "type": "object" }
+        "properties": { "type": "object" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "observedAt"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "sourceRecordId": { "type": "string", "minLength": 1 },
+        "observedAt": { "type": "string", "minLength": 1 },
+        "ingestedAt": { "type": "string", "minLength": 1 },
+        "transformationVersion": { "type": "string", "minLength": 1 },
+        "visibilityScope": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "observedAt", "status"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "observedAt": { "type": "string", "minLength": 1 },
+        "ingestedAt": { "type": "string", "minLength": 1 },
+        "expiresAt": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["fresh", "stale", "unknown"] }
       }
     }
   },
@@ -34,6 +61,7 @@
     "status": { "enum": ["completed", "deferred", "failed"] },
     "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
     "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
-    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "freshness": { "type": "array", "items": { "$ref": "#/$defs/freshness" } }
   }
 }

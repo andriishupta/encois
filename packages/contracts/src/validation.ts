@@ -1,7 +1,6 @@
 import { Ajv2020, type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
 import blueprintWorkflowResultSchema from "../schemas/blueprint-workflow-result.v1.json" with { type: "json" };
 import executionContextSchema from "../schemas/execution-context.v1.json" with { type: "json" };
-import releaseInvestigationSchema from "../schemas/release-investigation.v1.json" with { type: "json" };
 import toolRequestSchema from "../schemas/tool-request.v1.json" with { type: "json" };
 import toolResultSchema from "../schemas/tool-result.v1.json" with { type: "json" };
 import artifactWriteSchema from "../schemas/artifact-write.v1.json" with { type: "json" };
@@ -19,7 +18,6 @@ import workflowChangePlanV2Schema from "../schemas/workflow-change-plan.v2.json"
 import coordinatorEventSchema from "../schemas/coordinator-event.v1.json" with { type: "json" };
 
 export const CONTRACT_SCHEMA_FILES = {
-  releaseInvestigation: "release-investigation.v1.json",
   workflowBlueprint: "workflow-blueprint.v1.json",
   workflowResult: "blueprint-workflow-result.v1.json",
   workflowSignal: "workflow-signal.v1.json",
@@ -48,7 +46,6 @@ export type ContractValidationResult = {
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const schemas: Record<ContractSchemaName, object> = {
-  releaseInvestigation: releaseInvestigationSchema,
   workflowBlueprint: workflowBlueprintSchema,
   workflowResult: blueprintWorkflowResultSchema,
   workflowSignal: workflowSignalSchema,

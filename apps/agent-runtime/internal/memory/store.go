@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	contractschemas "github.com/andriishupta/encois/packages/contracts"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
 // ErrNotConfigured is returned until a hosted Memory Bank adapter is selected
@@ -25,9 +25,11 @@ type MemoryScope struct {
 }
 
 type Distillation struct {
-	Summary      string   `json:"summary"`
-	EvidenceRefs []string `json:"evidenceRefs"`
-	ObservedAt   string   `json:"observedAt"`
+	Summary          string                          `json:"summary"`
+	EvidenceRefs     []string                        `json:"evidenceRefs"`
+	ObservedAt       string                          `json:"observedAt"`
+	RedactionStatus  contracts.MemoryRedactionStatus `json:"redactionStatus,omitempty"`
+	RedactionVersion string                          `json:"redactionVersion,omitempty"`
 }
 
 type Request struct {
@@ -49,11 +51,12 @@ type Request struct {
 }
 
 type Record struct {
-	ID              string   `json:"id"`
-	AgentDefinition string   `json:"agentDefinition"`
-	Summary         string   `json:"summary"`
-	EvidenceRefs    []string `json:"evidenceRefs"`
-	ObservedAt      string   `json:"observedAt"`
+	ID              string                     `json:"id"`
+	AgentDefinition string                     `json:"agentDefinition"`
+	Summary         string                     `json:"summary"`
+	EvidenceRefs    []string                   `json:"evidenceRefs"`
+	ObservedAt      string                     `json:"observedAt"`
+	Freshness       *contracts.SourceFreshness `json:"freshness,omitempty"`
 }
 
 type Result struct {
@@ -77,13 +80,13 @@ func (DeferredStore) Execute(context.Context, Request) (Result, error) {
 }
 
 func ValidateRequest(request Request) error {
-	return contractschemaValidate(contractschemas.SchemaAgentMemory, request)
+	return contractschemaValidate(contracts.SchemaAgentMemory, request)
 }
 
 func ValidateResult(result Result) error {
-	return contractschemaValidate(contractschemas.SchemaAgentMemoryResult, result)
+	return contractschemaValidate(contracts.SchemaAgentMemoryResult, result)
 }
 
-func contractschemaValidate(schema contractschemas.SchemaName, value any) error {
-	return contractschemas.Validate(schema, value)
+func contractschemaValidate(schema contracts.SchemaName, value any) error {
+	return contracts.Validate(schema, value)
 }

@@ -49,6 +49,13 @@ A client connection used by an application to communicate with Temporal Cloud.
   `workflow-change-plan.v2`; a direct public cancel route remains future work.
 - The Go Agent Runtime uses a client to create a Worker and may use it for child Workflows or Signals.
 
+### Temporal Namespace
+
+An operational/deployment partition for Temporal Workflows and task queues. It
+can provide dedicated customer isolation, but it is not the primary tenant
+authorization boundary; Gateway checks, organization-scoped IDs, and Agent
+Gateway policy remain mandatory.
+
 ### Worker
 
 A long-running application process that connects to Temporal Cloud, polls one or more task queues, and executes registered Workflow and Activity code.
@@ -431,6 +438,18 @@ Memory Bank is scoped by organization and, where needed, agent, team, or user. I
 
 ## Data and intelligence terms
 
+### Organizational Unit
+
+A node in the organization-owned visibility tree. Units may represent a
+department, team, project, service, or custom logical group and have an
+optional parent.
+
+### Effective Scope
+
+The deterministic visibility set for an actor or agent: inherited descendants
+of direct membership roots plus explicit grants, minus explicit restrictions.
+Roles alone never define effective scope.
+
 ### Raw Snapshot
 
 An immutable or retention-controlled copy of provider data as observed at a point in time. Raw snapshots are stored in Cloud Storage and referenced by ID or URI.
@@ -459,6 +478,18 @@ Commit IMPLEMENTS Ticket
 Deployment AFFECTS Service
 Person RESPONSIBLE_FOR Ticket
 ~~~
+
+### Freshness
+
+Metadata that says when source data was observed and ingested, and whether it
+is within the source-specific freshness budget. A stale or unknown source must
+remain visible as stale or unknown in an insight.
+
+### Memory Distillation
+
+The controlled conversion of validated evidence into a small reusable agent
+memory. It includes PII/secret filtering and evidence references; it does not
+make Memory Bank a graph, workflow, or authorization store.
 
 ### Graph Projection
 

@@ -27,7 +27,7 @@ func ValidateBlueprintContract(_ context.Context, input BlueprintWorkflowInput) 
 		return fmt.Errorf("validate blueprint contract: %w", err)
 	}
 	executionContext := map[string]any{
-		"contractVersion": "execution-context.v1",
+		"contractVersion": string(contractschemas.ContractExecutionContext),
 		"requestId":       input.RequestID,
 		"workflowId":      input.WorkflowID,
 		"organizationId":  input.OrganizationID,
@@ -66,10 +66,14 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 	switch input.Step.Kind {
 	case "tool":
 		if a.agentGateway == nil {
-			return BlueprintStepResult{StepID: input.Step.ID, Status: "deferred-no-agent-gateway"}, nil
+			return BlueprintStepResult{
+				StepID:       input.Step.ID,
+				Status:       string(contractschemas.WorkflowResultWaiting),
+				StatusReason: contractschemas.ReasonCapabilityMissing,
+			}, nil
 		}
 		result, err := a.agentGateway.Invoke(ctx, gatewayclient.ToolRequest{
-			ContractVersion: "tool-request.v1",
+			ContractVersion: string(contractschemas.ContractToolRequest),
 			RequestID:       input.RequestID,
 			TraceID:         input.TraceID,
 			WorkflowID:      input.WorkflowID,
@@ -85,10 +89,14 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 		if err != nil {
 			return BlueprintStepResult{}, err
 		}
-		return BlueprintStepResult{StepID: input.Step.ID, Status: result.Status, Data: result.Data, EvidenceRefs: result.EvidenceRefs}, nil
+		return BlueprintStepResult{StepID: input.Step.ID, Status: result.Status, Data: result.Data, EvidenceRefs: result.EvidenceRefs, Freshness: result.Freshness}, nil
 	case "agent":
 		if a.agentBundle == nil || !a.agentBundle.Enabled || a.agentBundle.AgentModel == nil {
-			return BlueprintStepResult{StepID: input.Step.ID, Status: "deferred-no-agent-model"}, nil
+			return BlueprintStepResult{
+				StepID:       input.Step.ID,
+				Status:       string(contractschemas.WorkflowResultWaiting),
+				StatusReason: contractschemas.ReasonCapabilityMissing,
+			}, nil
 		}
 		summary, err := a.agentBundle.RunAgentStep(ctx, input.WorkflowID+":"+input.Step.ID, input.Step.AgentDefinition, map[string]any{
 			"input":        input.Step.Input,

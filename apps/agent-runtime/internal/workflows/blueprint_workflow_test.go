@@ -12,6 +12,8 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
 )
 
+const UserBlueprintWorkflowType = coordinator.UserBlueprintWorkflowType
+
 func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
@@ -27,18 +29,18 @@ func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) 
 		RequestID:       "request-1",
 		PolicyVersion:   "policy-read-only-fixture-v1",
 		Scope:           map[string]any{"ids": []any{"team-a"}},
-		BusinessInput:   map[string]any{"releaseKey": "aug-30"},
+		BusinessInput:   map[string]any{"projectKey": "checkout"},
 		Blueprint: coordinator.WorkflowBlueprint{
 			ContractVersion: "workflow-blueprint.v1",
-			BlueprintID:     "release-investigation:aug-30",
+			BlueprintID:     "project-context:checkout",
 			Version:         "1.0.0",
-			Name:            "Release investigation",
+			Name:            "Project context",
 			WorkflowType:    UserBlueprintWorkflowType,
-			Purpose:         "Check release readiness",
+			Purpose:         "Collect project context",
 			Steps: []coordinator.WorkflowStep{
-				{ID: "jira", Kind: "tool", Tool: "jira.release_tasks"},
-				{ID: "github", Kind: "tool", Tool: "github.release_activity"},
-				{ID: "synthesis", Kind: "agent", AgentDefinition: "release-investigation.synthesizer@1", DependsOn: []string{"jira", "github"}},
+				{ID: "jira", Kind: "tool", Tool: "jira.project_tasks"},
+				{ID: "github", Kind: "tool", Tool: "github.project_activity"},
+				{ID: "synthesis", Kind: "agent", AgentDefinition: "context.synthesizer@1", DependsOn: []string{"jira", "github"}},
 			},
 		},
 	})

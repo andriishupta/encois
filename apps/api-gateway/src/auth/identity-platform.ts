@@ -1,7 +1,8 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
 import { and, eq } from "drizzle-orm";
-import { membershipScopes, organizationMemberships, organizationUnits, users, withOrganizationContext } from "@encois/persistence";
+import { resolveEffectiveScope, type OrganizationUnitNode } from "@encois/contracts";
+import { membershipScopes, organizationMemberships, organizationUnits, users, withOrganizationContext, type PersistenceTransaction } from "@encois/persistence";
 import type { Context } from "hono";
 import type { AosAuthenticationResult, AosAuthenticator, AosPrincipal, GatewayEnv } from "../middleware/aos.js";
 import { database } from "../database.js";
@@ -76,6 +77,37 @@ export type InternalServiceAuthenticatorOptions = {
   serviceUserId?: string;
 };
 
+async function resolveOrganizationScope(
+  db: PersistenceTransaction,
+  organizationId: string,
+  membershipId: string,
+): Promise<readonly string[]> {
+  const [units, directScopes] = await Promise.all([
+    db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type, slug: organizationUnits.slug })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, organizationId)),
+    db
+      .select({ unitId: membershipScopes.organizationUnitId })
+      .from(membershipScopes)
+      .where(and(eq(membershipScopes.membershipId, membershipId), eq(membershipScopes.organizationId, organizationId))),
+  ]);
+
+  // Direct membership scopes currently act as roots. Explicit grants and
+  // restrictions have a typed domain boundary, but their persistence table is
+  // intentionally deferred until the control-plane permission UI is needed.
+  const effective = resolveEffectiveScope({
+    units: units.map((unit) => ({
+      id: unit.id,
+      ...(unit.parentId ? { parentId: unit.parentId } : {}),
+      type: unit.type as OrganizationUnitNode["type"],
+    })),
+    directUnitIds: directScopes.map((scope) => scope.unitId),
+  });
+  const resolved = new Set(effective.resolvedUnitIds);
+  return units.filter((unit) => resolved.has(unit.id)).flatMap((unit) => [unit.id, unit.slug]);
+}
+
 /**
  * Authenticates the private Runtime -> Gateway control-plane boundary. In a
  * database-backed environment the configured service user must have an active
@@ -113,28 +145,11 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
           .limit(1);
         if (!membership) return null;
 
-        const scopes = await db
-          .select({ unitId: organizationUnits.id, slug: organizationUnits.slug })
-          .from(membershipScopes)
-          .innerJoin(
-            organizationUnits,
-            and(
-              eq(organizationUnits.id, membershipScopes.organizationUnitId),
-              eq(organizationUnits.organizationId, organizationId),
-            ),
-          )
-          .where(
-            and(
-              eq(membershipScopes.membershipId, membership.membershipId),
-              eq(membershipScopes.organizationId, organizationId),
-            ),
-          );
-
         return {
           actorId,
           userId: membership.userId,
           organizationId,
-          scope: scopes.flatMap((scope) => [scope.unitId, scope.slug]),
+          scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
         } satisfies AosPrincipal;
       });
 
@@ -191,28 +206,11 @@ export function createDatabasePrincipalResolver() {
         .limit(1);
       if (!membership) return null;
 
-      const scopes = await db
-        .select({ unitId: organizationUnits.id, slug: organizationUnits.slug })
-        .from(membershipScopes)
-        .innerJoin(
-          organizationUnits,
-          and(
-            eq(organizationUnits.id, membershipScopes.organizationUnitId),
-            eq(organizationUnits.organizationId, organizationId),
-          ),
-        )
-        .where(
-          and(
-            eq(membershipScopes.membershipId, membership.membershipId),
-            eq(membershipScopes.organizationId, organizationId),
-          ),
-        );
-
       return {
         actorId: identity.subject,
         userId: membership.userId,
         organizationId,
-        scope: scopes.flatMap((scope) => [scope.unitId, scope.slug]),
+        scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
       };
     });
   };

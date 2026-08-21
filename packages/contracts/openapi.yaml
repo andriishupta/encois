@@ -22,31 +22,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowExecutionResponse'
-  /api/v1/workflows/release-investigations:
-    post:
-      operationId: startReleaseInvestigation
-      summary: Start or reuse a release investigation
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReleaseInvestigationRequest'
-      responses:
-        '202':
-          description: New workflow accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReleaseInvestigationResponse'
-        '200':
-          description: Existing active workflow reused
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReleaseInvestigationResponse'
   /api/v1/internal/coordinator/plans/validate:
     post:
       operationId: validateCoordinatorWorkflowChangePlan
@@ -265,43 +240,13 @@ components:
             taskQueue: { type: string }
             blueprintId: { type: string }
             status: { type: string }
+            statusReason:
+              type: string
+              enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
+            statusMessage: { type: string }
+            retryAt: { type: string }
             organizationId: { type: string }
             reused: { type: boolean }
-    ReleaseInvestigationRequest:
-      type: object
-      additionalProperties: false
-      required: [contractVersion, projectKey, releaseKey]
-      properties:
-        contractVersion:
-          const: release-investigation.v1
-        projectKey:
-          type: string
-        releaseKey:
-          type: string
-        targetDate:
-          type: string
-        idempotencyKey:
-          type: string
-        scope:
-          type: object
-    ReleaseInvestigationResponse:
-      type: object
-      required: [contractVersion, workflow, reused]
-      properties:
-        contractVersion:
-          const: release-investigation.v1
-        reused:
-          type: boolean
-        workflow:
-          type: object
-          required: [workflowId, workflowType, status, organizationId]
-          properties:
-            workflowId: { type: string }
-            runId: { type: string }
-            workflowType: { type: string }
-            blueprintId: { type: string }
-            status: { type: string }
-            organizationId: { type: string }
     WorkflowUpdateRequest:
       type: object
       additionalProperties: false

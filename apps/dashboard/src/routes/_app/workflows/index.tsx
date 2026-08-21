@@ -18,7 +18,7 @@ function WorkflowsPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Workflows"
-        description="Track investigations, delegated agents, and workflow progress."
+        description="Track Blueprint executions, delegated agents, and workflow progress."
         actions={
           <Button asChild>
             <Link to="/workflows/new">
@@ -33,7 +33,7 @@ function WorkflowsPage() {
       {!workflows.isLoading && !workflows.isError && workflows.data?.length ? <div className="grid gap-4">{workflows.data.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} description="Typed workflow projection from the Gateway API." icon={workflow.status === 'completed' ? Activity : GitBranch} />)}</div> : null}
       <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a release investigation to create the first durable workflow." />
+          <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a Blueprint execution to create the first durable workflow." />
         </CardContent>
       </Card>
     </div>

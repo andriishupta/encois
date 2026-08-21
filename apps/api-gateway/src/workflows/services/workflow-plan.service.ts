@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import type { CoordinatorEvent, WorkflowChangePlanV2 } from "@encois/contracts";
+import { ContractVersion, CoordinatorEventType, type CoordinatorEvent, type WorkflowChangePlanV2 } from "@encois/contracts";
 import {
 	auditEvents,
 	coordinatorEventOutbox,
@@ -77,10 +77,10 @@ function persistenceUnavailable(): never {
 export function createPlanCoordinatorEvent(
 	principal: AosPrincipal,
 	plan: Pick<WorkflowPlanRecord, "planId" | "coordinatorId" | "organizationId" | "plan">,
-	eventType: "workflow-plan-approved" | "workflow-plan-applied",
+	eventType: typeof CoordinatorEventType.WorkflowPlanApproved | typeof CoordinatorEventType.WorkflowPlanApplied,
 ): CoordinatorEvent {
 	const workflowStarts =
-		eventType === "workflow-plan-applied"
+		eventType === CoordinatorEventType.WorkflowPlanApplied
 			? plan.plan.changes.flatMap((change) => {
 					if (!change.start || !change.blueprint) return [];
 					return [{
@@ -92,14 +92,14 @@ export function createPlanCoordinatorEvent(
 				})
 			: [];
 	return {
-		contractVersion: "coordinator-event.v1",
+		contractVersion: ContractVersion.CoordinatorEvent,
 		eventId: `${eventType}:${plan.planId}`,
 		eventType,
 		coordinatorId: plan.coordinatorId,
 		organizationId: plan.organizationId,
 		actorId: principal.actorId,
 		planId: plan.planId,
-		...(eventType === "workflow-plan-approved" ? { approved: true } : {}),
+		...(eventType === CoordinatorEventType.WorkflowPlanApproved ? { approved: true } : {}),
 		...(principal.scope.length > 0 ? { scope: { ids: [...principal.scope] } } : {}),
 		...(workflowStarts.length > 0 ? { workflowStarts } : {}),
 	};
@@ -293,7 +293,7 @@ export async function applyWorkflowPlan(
     throw workflowServiceError("WORKFLOW_PLAN_NOT_APPLICABLE", `Workflow change plan is ${row.status}.`);
   }
 
-  const v2Plan = plan.contractVersion === "workflow-change-plan.v2" ? plan : undefined;
+  const v2Plan = plan.contractVersion === ContractVersion.WorkflowChangePlanV2 ? plan : undefined;
   const isV2 = Boolean(v2Plan);
   const cancelChanges = v2Plan ? v2Plan.changes.filter((change) => change.kind === "cancel") : [];
   const unsupportedChange = plan.changes.find((change) => {

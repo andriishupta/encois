@@ -98,9 +98,8 @@ control-plane API or give it Postgres access.
 
 ## Implemented in the current slice
 
-- `packages/contracts` exists with TypeScript types and JSON Schema sources for the release request, Blueprint, workflow result, execution context, tool request/result, artifact write/reference, Signals, tool manifests, and Workflow Updates.
-- The canonical JSON Schemas now run at the TypeScript boundary through Ajv-2020 for release requests, Blueprints, Signals, and Updates; manual parsers still apply domain-specific checks after schema validation.
-- `release-investigation.v1` is a typed API scenario built on the generic Temporal type `encois.user-blueprint.v1`.
+- `packages/contracts` exists with TypeScript types and JSON Schema sources for the generic Blueprint, workflow result, execution context, tool request/result, artifact write/reference, Signals, tool manifests, and Workflow Updates.
+- The canonical JSON Schemas now run at the TypeScript boundary through Ajv-2020 for Blueprints, Signals, and Updates; manual parsers still apply domain-specific checks after schema validation.
 - The Blueprint contains parallel synthetic Jira/GitHub tool steps and a dependent ADK synthesis step.
 - The API passes separate `businessInput`, effective scope, actor, workflow ID, policy version, and request ID to the Go workflow input.
 - Stable tenant-prefixed workflow IDs prevent duplicate active investigations for the same project/release. Local Temporal fallback and the Postgres path compare a stable request fingerprint: identical requests reuse the existing projection, while a different payload under the same workflow/idempotency key returns `409 IDEMPOTENCY_CONFLICT`. Real Temporal also uses conflict/reuse policies. Postgres persistence records workflow identity and explicit idempotency keys when configured.
@@ -122,9 +121,9 @@ control-plane API or give it Postgres access.
 - The Agent Gateway now exposes a fixture-level MCP-shaped capability catalog with tool versions, descriptions, input/output schemas, behavior annotations, availability, approval requirements, and required scope fields. Invocation enforces the registered capability and its required scope after the deterministic policy check. Connector grants, persisted manifests, and live MCP/API discovery remain deferred.
 - The Agent Gateway now has a narrow injectable `ArtifactStore` boundary and a tenant/workflow-prefixed in-memory implementation for `POST /v1/artifacts`. The artifact request/result are canonical cross-language schemas embedded and validated by Go; the endpoint returns an immutable-looking reference and rejects path traversal. Router tests prove a future Cloud Storage adapter can be supplied without changing the HTTP, authentication, or policy layers. The real Cloud Storage adapter, object bytes, retention, and hosted IAM remain deferred.
 - The Graph boundary now has canonical `graph-query.v1` and `graph-query-result.v1` schemas, Go/TypeScript validators, an injectable `GraphStore`, and a default deferred adapter. The route still fails closed until a scope-aware Spanner implementation and explicit graph policy grant exist; no graph provider or arbitrary raw query execution is enabled.
-- Agent-specific memory now has canonical `agent-memory.v1` and `agent-memory-result.v1` schemas plus a Go Runtime `memory.Store` boundary with a deferred adapter. The request supports only scoped `retrieve`/`distill` operations and evidence-linked summaries; it does not persist raw provider data or Workflow history. `ExecuteAgentMemory` is registered as an Activity with the deferred store and returns a typed deferred result until a hosted Memory Bank provider is configured; retention/deletion policy remains deferred.
+- Agent-specific memory now has canonical `agent-memory.v1` and `agent-memory-result.v1` schemas plus a Go Runtime `memory.Store` boundary with a deferred adapter. The request supports only scoped `retrieve`/`distill` operations and evidence-linked summaries; it does not persist raw provider data or Workflow history. `ExecuteAgentMemory` is registered as an Activity, applies deterministic `regex-v1` redaction before distillation and on returned records, and returns a typed deferred result until a hosted Memory Bank provider is configured; retention/deletion policy remains deferred.
 - The `tool-manifest.v1` schema is now canonical in `packages/contracts` and is embedded/validated by the Go Agent Gateway before catalog responses. This covers the manifest wire shape; persisted registry records and provider discovery remain deferred.
-- The dashboard has a typed API client, workflow list/detail queries, polling through React Query, and a form that starts `release-investigation.v1`. Workflow execution state is no longer kept in localStorage.
+- The dashboard has a typed API client, workflow list/detail queries, polling through React Query, and a form that starts a generic Blueprint. Workflow execution state is no longer kept in localStorage.
 - The Go Temporal test suite executes a generic Blueprint with parallel-ready tool steps and a dependent agent step without a Temporal server.
 - Coordinator tests cover scoped event deduplication, explicit approved-snapshot starts, and retention/retry of a failed start until a later reconciliation signal.
 - Opt-in `pnpm smoke:release` and `pnpm smoke:approval` harnesses exercise the real TypeScript Temporal client, API projection, context Update, and approval Signal path. `pnpm smoke:release:local` now starts the local Temporal dev server, Agent Gateway, and Go Runtime, waits for readiness, runs both smokes, and cleans up.
@@ -135,11 +134,30 @@ control-plane API or give it Postgres access.
 - Basic observability is present: API request IDs and structured request logs, trace-context correlation from `traceparent`/`X-Trace-ID`, Temporal workflow/run IDs in projections, workflow audit events, and structured Go Runtime/Agent Gateway logs. OpenTelemetry export and a push-based visibility consumer remain pending.
 - Full TypeScript workspace tests, lint, typechecks, and builds pass locally; shared-contract, Agent Gateway, and Agent Runtime Go tests/builds plus `go vet` also pass. Repository CI now covers these checks, runs the local Temporal/Go smoke with a pinned CLI, applies and verifies migrations against ephemeral PostgreSQL, builds all four container images without pushing, and initializes/validates Terraform without a backend; the hosted CI result remains to be observed.
 
+## Architecture addendum audit
+
+| Addendum | Current state | Next boundary |
+| --- | --- | --- |
+| Organization-unit tree | Direct organization/dept/team/project roots existed; hierarchy expansion is now computed by the Gateway and contract helper; service/custom unit types are in the schema contract | Persist explicit grants/restrictions and add administration UI |
+| Effective scope | Deterministic inherited descendant calculation is implemented; direct membership roots remain the only durable input | Add persisted grant/restrict rules and object-level scope tests |
+| Temporal Namespace | Shared Namespace is documented as operational isolation only; organization-prefixed IDs and scoped commands remain the security boundary | Add dedicated Namespace/project deployment profiles when needed |
+| Events + schedules | Coordinator handles events and a durable timer; outbox/dispatcher exists | Add source-specific Temporal Schedules/Cloud Scheduler wiring |
+| Freshness | Typed freshness metadata is available on tool/graph/memory result boundaries; synthetic tools emit `fresh` | Add provider freshness budgets and stale-result policy in adapters/UI |
+| Graph vs Memory | Separate deferred GraphStore and MemoryStore boundaries already exist | Implement scoped Spanner facts/provenance and hosted Memory Bank retrieval |
+| Memory PII boundary | `regex-v1` redaction runs before distillation and again on returned memory records | Add provider-aware classification, retention, deletion, and export |
+| Cloud Storage | Scoped in-memory artifact adapter records retention class | Add real GCS bytes, TTL/lifecycle, content/size limits, and IAM |
+| Workflow failure reasons | Typed reason codes and waiting/degraded result fields are defined; missing local capabilities now return a durable waiting reason | Map Temporal/provider errors into persisted projections and UI |
+| Runtime workers | Correct single Go Worker deployment model is already implemented | Scale worker replicas/queues only for load or isolation |
+
+The addendum does not require a database-backed implementation before the next
+synthetic vertical slice. It defines the boundaries now and leaves hosted
+providers, migrations, and policy administration as explicit follow-up work.
+
 ## Requirement audit
 
 | Original requirement | Current evidence | Status |
 | --- | --- | --- |
-| `release-investigation.v1` scenario | Typed route and Blueprint builder | Done |
+| Generic Blueprint scenario | Typed route and Blueprint builder | Done |
 | Minimal cross-language contracts | `packages/contracts`, JSON Schemas, shared Go validator, matching DTOs, artifact reference contract | Done for current boundary; generated DTOs and drift CI intentionally deferred |
 | Typed endpoint aligned with Go | API command and `BlueprintWorkflowInput` | Done |
 | Idempotency and active-workflow rules | Stable tenant Workflow ID, request fingerprint conflict, Temporal conflict policy, Postgres uniqueness, durable Signal/Update command receipts, concurrent API HTTP-route harness | Done for current slice; CI execution result and hosted concurrency verification pending |
@@ -205,7 +223,7 @@ company data ingestion should be attempted.
 13. Connect one real read-only integration, preferably Jira, with Secret
     Manager credentials, provider timeouts, recorded fixtures, and evidence
     references; add GitHub afterwards. The adapter must normalize provider data
-    behind the existing `jira.release_tasks` capability, enforce the execution
+    behind the existing `jira.project_tasks` capability, enforce the execution
     scope before the request, and never expose provider tokens or raw responses
     to Temporal history.
 14. Replace the in-memory `ArtifactStore` with Cloud Storage raw evidence and
@@ -231,11 +249,11 @@ company data ingestion should be attempted.
 Do not build a custom Firestore workflow engine, one microservice per specialist or
 repository, Graph-first retrieval, Memory Bank-first product logic, or arbitrary
 MCP discovery during a running execution. The next proof point is the generic
-release flow with synthetic tools.
+Blueprint flow with synthetic tools.
 
 ## Vertical-slice done condition
 
-An authenticated user can start or reuse one release investigation, see a
+An authenticated user can start or reuse one generic Blueprint execution, see a
 durable workflow status, execute two synthetic read-only tools in parallel,
 receive a structured evidence-linked result, resume an approved wait through a
 Signal, and observe a denied request when service auth, scope, or tool

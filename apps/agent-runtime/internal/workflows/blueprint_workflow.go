@@ -9,9 +9,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
-
-const UserBlueprintWorkflowType = coordinator.UserBlueprintWorkflowType
 
 type BlueprintWorkflowInput struct {
 	ContractVersion string                        `json:"contractVersion"`
@@ -29,16 +28,19 @@ type BlueprintWorkflowInput struct {
 }
 
 type BlueprintWorkflowResult struct {
-	ContractVersion string                `json:"contractVersion"`
-	Status          string                `json:"status"`
-	Steps           []BlueprintStepResult `json:"steps"`
+	ContractVersion string                         `json:"contractVersion"`
+	Status          contracts.WorkflowResultStatus `json:"status"`
+	StatusReason    contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
+	Steps           []BlueprintStepResult          `json:"steps"`
 }
 
 type BlueprintStepResult struct {
-	StepID       string         `json:"stepId"`
-	Status       string         `json:"status"`
-	Data         map[string]any `json:"data,omitempty"`
-	EvidenceRefs []string       `json:"evidenceRefs,omitempty"`
+	StepID       string                         `json:"stepId"`
+	Status       string                         `json:"status"`
+	StatusReason contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
+	Data         map[string]any                 `json:"data,omitempty"`
+	EvidenceRefs []string                       `json:"evidenceRefs,omitempty"`
+	Freshness    []contracts.SourceFreshness    `json:"freshness,omitempty"`
 }
 
 type BlueprintStepInput struct {
@@ -88,7 +90,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	if blueprint.WorkflowType == "" {
 		blueprint = input.Payload
 	}
-	if blueprint.WorkflowType != UserBlueprintWorkflowType {
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
 		return BlueprintWorkflowResult{}, fmt.Errorf("unsupported blueprint workflow type %q", blueprint.WorkflowType)
 	}
 	if len(blueprint.Steps) == 0 {
@@ -111,7 +113,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	results := make([]BlueprintStepResult, 0, len(blueprint.Steps))
 	businessInput := cloneMap(input.BusinessInput)
 	processedUpdateIDs := make(map[string]bool)
-	if err := workflow.SetUpdateHandler(ctx, "blueprint-context", func(_ workflow.Context, update BlueprintContextUpdate) (BlueprintContextUpdateResult, error) {
+	if err := workflow.SetUpdateHandler(ctx, string(contracts.UpdateBlueprintContext), func(_ workflow.Context, update BlueprintContextUpdate) (BlueprintContextUpdateResult, error) {
 		if update.UpdateID == "" {
 			return BlueprintContextUpdateResult{}, fmt.Errorf("updateId is required")
 		}
@@ -129,7 +131,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	}); err != nil {
 		return BlueprintWorkflowResult{}, fmt.Errorf("register blueprint context update: %w", err)
 	}
-	approvalChannel := workflow.GetSignalChannel(ctx, "blueprint-approval")
+	approvalChannel := workflow.GetSignalChannel(ctx, string(contracts.SignalBlueprintApproval))
 	pendingApprovals := make(map[string]BlueprintApprovalSignal)
 	processedSignalIDs := make(map[string]bool)
 	runID := workflow.GetInfo(ctx).WorkflowExecution.RunID
@@ -228,9 +230,20 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 		}
 	}
 
+	resultStatus := contracts.WorkflowResultCompleted
+	var resultReason contracts.WorkflowStatusReason
+	for _, stepResult := range results {
+		if stepResult.Status == string(contracts.WorkflowResultWaiting) {
+			resultStatus = contracts.WorkflowResultWaiting
+			if stepResult.StatusReason != "" {
+				resultReason = stepResult.StatusReason
+			}
+		}
+	}
 	result := BlueprintWorkflowResult{
-		ContractVersion: "blueprint-workflow-result.v1",
-		Status:          "completed",
+		ContractVersion: string(contracts.ContractWorkflowResult),
+		Status:          resultStatus,
+		StatusReason:    resultReason,
 		Steps:           results,
 	}
 	if err := workflow.ExecuteActivity(activityCtx, "ValidateBlueprintResult", result).Get(ctx, nil); err != nil {
@@ -240,7 +253,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 }
 
 func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
-	if input.ContractVersion != "workflow-blueprint.v1" {
+	if input.ContractVersion != string(contracts.ContractWorkflowBlueprint) {
 		return fmt.Errorf("unsupported workflow contractVersion %q", input.ContractVersion)
 	}
 	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" {
@@ -253,10 +266,10 @@ func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
 	if blueprint.WorkflowType == "" {
 		blueprint = input.Payload
 	}
-	if blueprint.ContractVersion != "workflow-blueprint.v1" {
+	if blueprint.ContractVersion != string(contracts.ContractWorkflowBlueprint) {
 		return fmt.Errorf("unsupported blueprint contractVersion %q", blueprint.ContractVersion)
 	}
-	if blueprint.WorkflowType != UserBlueprintWorkflowType {
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
 		return fmt.Errorf("unsupported blueprint workflow type %q", blueprint.WorkflowType)
 	}
 	if blueprint.BlueprintID == "" || blueprint.Version == "" || blueprint.Name == "" || blueprint.Purpose == "" {

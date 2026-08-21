@@ -39,15 +39,15 @@ flowchart TB
 
     subgraph Private[Private agent plane]
         AgentGateway[Agent Gateway\napps/agent-gateway\nGin policy and tool broker\nCurrent: service token, Cloud Run audience support, mock tools]
-        Policy[Deterministic policy\nscope, capability, approval\nCurrent: read-only fixture policy]
+        Policy[Deterministic policy\nscope, capability, approval\nCurrent: inherited scope helper + read-only fixture policy]
         Integrations[Integration adapters\nJira, GitHub, Workspace, monitoring\nCurrent: synthetic fixtures]
     end
 
     subgraph Knowledge[Knowledge and evidence plane]
         Gemini[Vertex AI / Gemini\nADK model calls and synthesis]
-        Memory[Agent-specific Memory Bank\nTyped Runtime Activity boundary\nCurrent: deferred store; target: hosted memory]
+        Memory[Agent-specific Memory Bank\nTyped Runtime Activity + redaction boundary\nCurrent: deferred store; target: hosted memory]
         Graph[(Spanner Graph\nTyped query boundary\nCurrent: deferred store; target: normalized facts)]
-        Storage[(Cloud Storage\nTyped artifact boundary\nCurrent: in-memory refs; target: raw artifacts)]
+        Storage[(Cloud Storage\nTyped artifact + retention boundary\nCurrent: in-memory refs; target: raw artifacts)]
     end
 
     Sources[GitHub / Jira / Google Workspace / monitoring\nExternal systems]
@@ -92,6 +92,11 @@ flowchart TB
 
 The diagram intentionally shows the architecture and the implementation status together. The current local proof path uses the real TypeScript Temporal client, a local Temporal server, the Go Worker, the Agent Gateway, and synthetic provider fixtures; the API-only development path can still use the in-memory adapter. The target path keeps the same boundaries but replaces local services and fixtures with hosted authenticated services and managed Google Cloud resources.
 
+All data-plane arrows are expected to carry organization scope, provenance, and
+freshness. Memory writes additionally pass the deterministic `regex-v1`
+redaction boundary. Temporal Namespace is shown as an execution platform
+setting, not as a substitute for Gateway authorization.
+
 ## Deployable service boundaries
 
 ```mermaid
@@ -135,7 +140,7 @@ flowchart LR
     Provider[External provider APIs / MCP]
     Evidence[(Cloud Storage\nCurrent: in-memory ArtifactStore)]
     CompanyGraph[(Spanner Graph\nCurrent: deferred GraphStore)]
-    AgentMemory[(Memory Bank\nCurrent: deferred Runtime Store)]
+        AgentMemory[(Memory Bank\nCurrent: deferred store + active redaction boundary)]
 
     Dashboard --> Routes
     RuntimeClient -. private control plane .-> RuntimeControl

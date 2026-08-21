@@ -1,7 +1,6 @@
 import type {
-  ReleaseInvestigationRequest,
-  ReleaseInvestigationResponse,
   WorkflowExecutionProjection,
+  WorkflowStartRequest,
 } from '@encois/contracts'
 
 const apiBaseUrl = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
@@ -44,11 +43,9 @@ export function getWorkflow(workflowId: string): Promise<WorkflowExecutionProjec
   return request<WorkflowExecutionProjection>(`/workflows/${encodeURIComponent(workflowId)}`)
 }
 
-export function startReleaseInvestigation(
-  input: Omit<ReleaseInvestigationRequest, 'contractVersion'>,
-): Promise<ReleaseInvestigationResponse> {
-  return request<ReleaseInvestigationResponse>('/workflows/release-investigations', {
+export function startWorkflow(input: WorkflowStartRequest): Promise<WorkflowExecutionProjection> {
+  return request<WorkflowExecutionProjection>('/workflows', {
     method: 'POST',
-    body: JSON.stringify({ contractVersion: 'release-investigation.v1', ...input }),
+    body: JSON.stringify(input),
   })
 }

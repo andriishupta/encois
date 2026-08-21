@@ -6,34 +6,33 @@ import (
 	"strings"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 	"github.com/gin-gonic/gin"
 )
-
-const genericBlueprintWorkflowType = "encois.user-blueprint.v1"
 
 var workflowCapabilities = []domain.WorkflowCapability{
 	{
 		ContractVersion: domain.ToolManifestContractVersion,
-		Name:            "jira.release_tasks",
+		Name:            "jira.project_tasks",
 		Version:         "1.0.0",
 		Kind:            "tool",
-		Description:     "Read release task status from Jira.",
+		Description:     "Read project task status from Jira.",
 		SideEffects:     "read-only",
-		InputSchema:     releaseToolInputSchema(),
-		OutputSchema:    jiraReleaseOutputSchema(),
+		InputSchema:     projectToolInputSchema(),
+		OutputSchema:    jiraProjectOutputSchema(),
 		Annotations:     domain.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 		RequiredScope:   []string{"ids"},
 		Available:       true,
 	},
 	{
 		ContractVersion: domain.ToolManifestContractVersion,
-		Name:            "github.release_activity",
+		Name:            "github.project_activity",
 		Version:         "1.0.0",
 		Kind:            "tool",
-		Description:     "Read pull requests, checks, and commits related to a release.",
+		Description:     "Read pull requests, checks, and commits related to a project.",
 		SideEffects:     "read-only",
-		InputSchema:     releaseToolInputSchema(),
-		OutputSchema:    githubReleaseOutputSchema(),
+		InputSchema:     projectToolInputSchema(),
+		OutputSchema:    githubProjectOutputSchema(),
 		Annotations:     domain.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 		RequiredScope:   []string{"ids"},
 		Available:       true,
@@ -57,13 +56,13 @@ var workflowCapabilities = []domain.WorkflowCapability{
 func (s *Server) workflowCapabilities(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"contractVersion":      domain.WorkflowBlueprintContractVersion,
-		"temporalWorkflowType": genericBlueprintWorkflowType,
+		"temporalWorkflowType": string(contracts.WorkflowTypeUserBlueprint),
 		"capabilities":         workflowCapabilities,
 		"execution":            "Agent Gateway validates capabilities; API Gateway starts Temporal",
 	})
 }
 
-func releaseToolInputSchema() map[string]any {
+func projectToolInputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -75,35 +74,35 @@ func releaseToolInputSchema() map[string]any {
 	}
 }
 
-func jiraReleaseOutputSchema() map[string]any {
+func jiraProjectOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"source":         map[string]any{"const": "jira"},
-			"releaseId":      map[string]any{"type": "string"},
+			"projectId":      map[string]any{"type": "string"},
 			"totalTasks":     map[string]any{"type": "integer"},
 			"completedTasks": map[string]any{"type": "integer"},
 			"remainingTasks": map[string]any{"type": "integer"},
 			"blockedTasks":   map[string]any{"type": "integer"},
 			"observedAt":     map[string]any{"type": "string"},
 		},
-		"required":             []string{"source", "releaseId", "observedAt"},
+		"required":             []string{"source", "projectId", "observedAt"},
 		"additionalProperties": true,
 	}
 }
 
-func githubReleaseOutputSchema() map[string]any {
+func githubProjectOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"source":             map[string]any{"const": "github"},
-			"releaseId":          map[string]any{"type": "string"},
+			"projectId":          map[string]any{"type": "string"},
 			"openPullRequests":   map[string]any{"type": "integer"},
 			"failingChecks":      map[string]any{"type": "integer"},
 			"commitsSinceCutoff": map[string]any{"type": "integer"},
 			"observedAt":         map[string]any{"type": "string"},
 		},
-		"required":             []string{"source", "releaseId", "observedAt"},
+		"required":             []string{"source", "projectId", "observedAt"},
 		"additionalProperties": true,
 	}
 }
@@ -182,7 +181,7 @@ func workflowResponse(request domain.WorkflowDefinitionRequest, status string, p
 		ContractVersion:       domain.WorkflowDefinitionContractVersion,
 		RequestID:             request.RequestID,
 		Status:                status,
-		TemporalWorkflowType:  genericBlueprintWorkflowType,
+		TemporalWorkflowType:  string(contracts.WorkflowTypeUserBlueprint),
 		TemporalStartRequired: false,
 		PolicyStatus:          "deterministic-read-only-fixture",
 		Permissions:           permissions,
@@ -192,14 +191,17 @@ func workflowResponse(request domain.WorkflowDefinitionRequest, status string, p
 }
 
 func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPermissionRequirement, []string, error) {
+	if err := contracts.Validate(contracts.SchemaWorkflowBlueprint, blueprint); err != nil {
+		return nil, nil, fmt.Errorf("blueprint does not match canonical schema: %w", err)
+	}
 	if blueprint.ContractVersion != domain.WorkflowBlueprintContractVersion {
 		return nil, nil, fmt.Errorf("unsupported blueprint contractVersion %q", blueprint.ContractVersion)
 	}
 	if blueprint.BlueprintID == "" || blueprint.Version == "" || strings.TrimSpace(blueprint.Name) == "" {
 		return nil, nil, fmt.Errorf("blueprintId, version, and name are required")
 	}
-	if blueprint.WorkflowType != genericBlueprintWorkflowType {
-		return nil, nil, fmt.Errorf("user blueprints must use workflowType %q", genericBlueprintWorkflowType)
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
+		return nil, nil, fmt.Errorf("user blueprints must use workflowType %q", contracts.WorkflowTypeUserBlueprint)
 	}
 	if len(blueprint.Steps) == 0 {
 		return nil, nil, fmt.Errorf("blueprint must contain at least one step")

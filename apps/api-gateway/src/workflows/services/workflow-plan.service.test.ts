@@ -26,7 +26,7 @@ const plan: WorkflowChangePlan = {
         workflowType: "encois.user-blueprint.v1",
         purpose: "Assess release readiness.",
         enabled: true,
-        steps: [{ id: "jira", kind: "tool", tool: "jira.release_tasks" }],
+        steps: [{ id: "jira", kind: "tool", tool: "jira.project_tasks" }],
       },
       start: { key: "release:checkout:2026-08-30", businessInput: { releaseKey: "2026-08-30" } },
       reason: "Create the approved release workflow.",

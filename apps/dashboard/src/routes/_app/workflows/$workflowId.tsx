@@ -12,10 +12,9 @@ export const Route = createFileRoute('/_app/workflows/$workflowId')({
 })
 
 const workflowSteps = [
-  { name: 'Resolve release context', type: 'Activity', status: 'Waiting for input', icon: CircleDashed },
-  { name: 'Collect Jira evidence', type: 'Jira specialist', status: 'Pending', icon: Clock3 },
-  { name: 'Collect GitHub activity', type: 'GitHub specialist', status: 'Pending', icon: GitBranch },
-  { name: 'Synthesize release risk', type: 'Gemini synthesis', status: 'Pending', icon: Play },
+  { name: 'Resolve Blueprint context', type: 'Activity', status: 'Waiting for input', icon: CircleDashed },
+  { name: 'Collect source evidence', type: 'Tool activity', status: 'Pending', icon: Clock3 },
+  { name: 'Synthesize context', type: 'Agent activity', status: 'Pending', icon: Play },
 ] as const
 
 function WorkflowDetailPage() {
@@ -25,7 +24,7 @@ function WorkflowDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Release investigation" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
+      <PageHeader title="Blueprint execution" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Status" value={status} icon={CircleDashed} />
@@ -38,7 +37,7 @@ function WorkflowDetailPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1.5">
             <CardTitle>Workflow canvas</CardTitle>
-            <CardDescription>Execution graph for the typed release-investigation.v1 Blueprint.</CardDescription>
+            <CardDescription>Execution graph for the generic Blueprint.</CardDescription>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className="size-3.5" aria-hidden="true" />

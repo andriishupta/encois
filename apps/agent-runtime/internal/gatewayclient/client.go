@@ -36,12 +36,13 @@ type ToolRequest struct {
 }
 
 type ToolResponse struct {
-	ContractVersion string         `json:"contractVersion"`
-	RequestID       string         `json:"requestId"`
-	Tool            string         `json:"tool"`
-	Status          string         `json:"status"`
-	Data            map[string]any `json:"data,omitempty"`
-	EvidenceRefs    []string       `json:"evidenceRefs,omitempty"`
+	ContractVersion string                            `json:"contractVersion"`
+	RequestID       string                            `json:"requestId"`
+	Tool            string                            `json:"tool"`
+	Status          string                            `json:"status"`
+	Data            map[string]any                    `json:"data,omitempty"`
+	EvidenceRefs    []string                          `json:"evidenceRefs,omitempty"`
+	Freshness       []contractschemas.SourceFreshness `json:"freshness,omitempty"`
 }
 
 func New(baseURL string, serviceToken ...string) *Client {

@@ -1,19 +1,21 @@
 package coordinator
 
+import contracts "github.com/andriishupta/encois/packages/contracts"
+
 const (
-	CoordinatorWorkflowName       = "CoordinatorWorkflow"
-	BootstrapProjectWorkflowName  = "BootstrapProjectWorkflow"
-	CoordinatorContractVersion    = "coordinator.v1"
-	WorkflowChangePlanVersion     = "workflow-change-plan.v1"
-	WorkflowChangePlanV2Version   = "workflow-change-plan.v2"
-	UserBlueprintWorkflowType     = "encois.user-blueprint.v1"
-	SignalIntegrationConnected    = "integration-connected"
-	SignalSourceReady             = "source-ready"
-	SignalReconcile               = "reconcile-requested"
-	SignalWorkflowCompleted       = "workflow-completed"
-	SignalProviderChanged         = "provider-changed"
-	SignalApprovalResolved        = "approval-resolved"
-	SignalCoordinatorEvent        = "coordinator-event"
+	CoordinatorWorkflowName       = string(contracts.WorkflowTypeCoordinator)
+	BootstrapProjectWorkflowName  = string(contracts.WorkflowTypeBootstrapProject)
+	CoordinatorContractVersion    = string(contracts.ContractCoordinator)
+	WorkflowChangePlanVersion     = string(contracts.ContractWorkflowChangePlan)
+	WorkflowChangePlanV2Version   = string(contracts.ContractWorkflowChangePlanV2)
+	UserBlueprintWorkflowType     = string(contracts.WorkflowTypeUserBlueprint)
+	SignalIntegrationConnected    = string(contracts.SignalIntegrationConnected)
+	SignalSourceReady             = string(contracts.SignalSourceReady)
+	SignalReconcile               = string(contracts.SignalReconcile)
+	SignalWorkflowCompleted       = string(contracts.SignalWorkflowCompleted)
+	SignalProviderChanged         = string(contracts.SignalProviderChanged)
+	SignalApprovalResolved        = string(contracts.SignalApprovalResolved)
+	SignalCoordinatorEvent        = string(contracts.SignalCoordinatorEvent)
 	CoordinatorPlanActivityName   = "CreateCoordinatorPlan"
 	CoordinatorSubmitActivityName = "SubmitWorkflowChangePlan"
 	CoordinatorStartActivityName  = "StartApprovedWorkflow"
@@ -179,45 +181,40 @@ type ApprovedWorkflowStartResult struct {
 	Status     string `json:"status"`
 }
 
-type ScheduleBlueprint struct {
-	Cron          string `json:"cron,omitempty"`
-	Timezone      string `json:"timezone,omitempty"`
-	OverlapPolicy string `json:"overlapPolicy,omitempty"`
-}
-
 type WorkflowBlueprint struct {
-	ContractVersion  string             `json:"contractVersion"`
-	BlueprintID      string             `json:"blueprintId"`
-	Version          string             `json:"version"`
-	Name             string             `json:"name"`
-	WorkflowType     string             `json:"workflowType"`
-	Purpose          string             `json:"purpose"`
-	Enabled          bool               `json:"enabled"`
-	Steps            []WorkflowStep     `json:"steps,omitempty"`
-	AllowedTools     []string           `json:"allowedTools,omitempty"`
-	RequiredScopes   []string           `json:"requiredScopes,omitempty"`
-	Parameters       map[string]string  `json:"parameters,omitempty"`
-	Schedule         *ScheduleBlueprint `json:"schedule,omitempty"`
-	RequiresApproval bool               `json:"requiresApproval"`
+	ContractVersion  string            `json:"contractVersion"`
+	BlueprintID      string            `json:"blueprintId"`
+	Version          string            `json:"version"`
+	Name             string            `json:"name"`
+	WorkflowType     string            `json:"workflowType"`
+	Purpose          string            `json:"purpose"`
+	Enabled          bool              `json:"enabled"`
+	Steps            []WorkflowStep    `json:"steps,omitempty"`
+	AllowedTools     []string          `json:"allowedTools,omitempty"`
+	RequiredScopes   []string          `json:"requiredScopes,omitempty"`
+	Parameters       map[string]string `json:"parameters,omitempty"`
+	InputSchemaRef   string            `json:"inputSchemaRef,omitempty"`
+	OutputSchemaRef  string            `json:"outputSchemaRef,omitempty"`
+	RequiresApproval bool              `json:"requiresApproval"`
 }
 
 type WorkflowStep struct {
-	ID               string         `json:"id"`
-	Kind             string         `json:"kind"`
-	Tool             string         `json:"tool,omitempty"`
-	AgentDefinition  string         `json:"agentDefinition,omitempty"`
-	DependsOn        []string       `json:"dependsOn,omitempty"`
-	Input            map[string]any `json:"input,omitempty"`
-	RequiresApproval bool           `json:"requiresApproval,omitempty"`
+	ID               string                     `json:"id"`
+	Kind             contracts.WorkflowStepKind `json:"kind"`
+	Tool             string                     `json:"tool,omitempty"`
+	AgentDefinition  string                     `json:"agentDefinition,omitempty"`
+	DependsOn        []string                   `json:"dependsOn,omitempty"`
+	Input            map[string]any             `json:"input,omitempty"`
+	RequiresApproval bool                       `json:"requiresApproval,omitempty"`
 }
 
-type WorkflowChangeKind string
+type WorkflowChangeKind = contracts.WorkflowChangeKind
 
 const (
-	ChangeCreate    WorkflowChangeKind = "create"
-	ChangeUpdate    WorkflowChangeKind = "update"
-	ChangeDeprecate WorkflowChangeKind = "deprecate"
-	ChangeCancel    WorkflowChangeKind = "cancel"
+	ChangeCreate    = contracts.ChangeCreate
+	ChangeUpdate    = contracts.ChangeUpdate
+	ChangeDeprecate = contracts.ChangeDeprecate
+	ChangeCancel    = contracts.ChangeCancel
 )
 
 type WorkflowChange struct {

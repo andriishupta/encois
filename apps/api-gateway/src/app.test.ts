@@ -418,7 +418,7 @@ describe("API Gateway", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "BLUEPRINT_REGISTRY_UNAVAILABLE" } });
   });
 
-  it("starts and reuses one typed release investigation for the same release", async () => {
+  it("starts and reuses one generic Blueprint execution for the same key", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: {
@@ -431,18 +431,30 @@ describe("API Gateway", () => {
       config: testConfig,
     });
     const request = {
-      contractVersion: "release-investigation.v1",
-      projectKey: "DEMO",
-      releaseKey: "aug-30",
-      targetDate: "2026-08-30",
+      workflowType: "encois.user-blueprint.v1",
+      key: "project-context-demo",
+      input: { projectKey: "DEMO" },
+      blueprint: {
+        contractVersion: "workflow-blueprint.v1",
+        blueprintId: "project-context",
+        version: "1.0.0",
+        name: "Project context",
+        workflowType: "encois.user-blueprint.v1",
+        purpose: "Collect project context.",
+        enabled: true,
+        steps: [
+          { id: "source", kind: "tool", tool: "jira.project_tasks" },
+          { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
+        ],
+      },
     };
 
-    const first = await app.request("/api/v1/workflows/release-investigations", {
+    const first = await app.request("/api/v1/workflows", {
       body: JSON.stringify(request),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
-    const second = await app.request("/api/v1/workflows/release-investigations", {
+    const second = await app.request("/api/v1/workflows", {
       body: JSON.stringify(request),
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -450,14 +462,14 @@ describe("API Gateway", () => {
 
     expect(first.status).toBe(202);
     expect(second.status).toBe(200);
-    const firstBody = (await first.json()) as { data: { workflow: { workflowId: string }; reused: boolean } };
-    const secondBody = (await second.json()) as { data: { workflow: { workflowId: string }; reused: boolean } };
+    const firstBody = (await first.json()) as { data: { workflowId: string; reused: boolean } };
+    const secondBody = (await second.json()) as { data: { workflowId: string; reused: boolean } };
     expect(firstBody.data.reused).toBe(false);
-    expect(secondBody.data).toMatchObject({ reused: true, workflow: { workflowId: firstBody.data.workflow.workflowId } });
-    expect(secondBody.data.workflow.workflowId).toContain("release-investigation-demo-aug-30");
+    expect(secondBody.data).toMatchObject({ reused: true, workflowId: firstBody.data.workflowId });
+    expect(secondBody.data.workflowId).toContain("project-context-demo");
 
-    const conflicting = await app.request("/api/v1/workflows/release-investigations", {
-      body: JSON.stringify({ ...request, targetDate: "2026-09-01" }),
+    const conflicting = await app.request("/api/v1/workflows", {
+      body: JSON.stringify({ ...request, input: { projectKey: "OTHER" } }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
@@ -468,24 +480,24 @@ describe("API Gateway", () => {
     expect(list.status).toBe(200);
     await expect(list.json()).resolves.toMatchObject({ data: [{ workflowType: "encois.user-blueprint.v1" }] });
 
-    const signal = await app.request(`/api/v1/workflows/${firstBody.data.workflow.workflowId}/signals`, {
+    const signal = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
       body: JSON.stringify({
         contractVersion: "workflow-signal.v1",
         signalName: "blueprint-approval",
         signalId: "approval-test-1",
-        payload: { stepId: "release-summary", approved: true },
+        payload: { stepId: "summary", approved: true },
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
     expect(signal.status).toBe(200);
 
-    const invalidSignal = await app.request(`/api/v1/workflows/${firstBody.data.workflow.workflowId}/signals`, {
+    const invalidSignal = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
       body: JSON.stringify({
         contractVersion: "workflow-signal.v1",
         signalName: "blueprint-approval",
         signalId: "approval-test-2",
-        payload: { stepId: "release-summary" },
+        payload: { stepId: "summary" },
       }),
       headers: { "content-type": "application/json" },
       method: "POST",

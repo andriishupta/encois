@@ -97,6 +97,12 @@ Tenant isolation must not depend on developers remembering one filter in every q
 
 Shared infrastructure is acceptable only when every access path enforces tenant scope. A shared Temporal namespace, Worker deployment, graph instance, or database must not imply shared authorization.
 
+Temporal Namespace is operational isolation, not the tenant authorization
+boundary. The MVP may use one shared Namespace, but every Workflow ID, input,
+Signal, Update, visibility query, and projection remains organization-scoped.
+Dedicated Namespaces are an enterprise deployment profile; a dedicated GCP
+project plus Temporal environment/Namespace is the strongest isolation profile.
+
 ## 4. Human identity and authorization
 
 Authentication establishes who the caller is. Authorization determines what that caller may do. They are separate checks.
@@ -116,6 +122,19 @@ Roles are policy inputs, not permissions by themselves. A role must be combined 
 For the Google Cloud baseline, Identity Platform/Firebase ID tokens establish the external identity only. The Gateway verifies the token with Application Default Credentials, maps the subject to the local `users` and `organization_memberships` tables, and computes effective scope from local roles and hierarchy grants. Do not treat arbitrary token claims, email domains, or client-selected organization IDs as authorization.
 
 Never let the model select a role, organization, user identity, connector, or scope. Never infer authorization from a natural-language request.
+
+The effective scope calculation is deterministic:
+
+```text
+direct membership descendants
++ explicit grant descendants
+- explicit restriction descendants
+```
+
+The current API computes inherited descendants from the organization-unit tree.
+Explicit grant/restriction persistence is intentionally deferred, but the
+contract boundary already models it so a future permission UI cannot replace
+the authorization algorithm with client or model logic.
 
 ## 5. Database and persistence security
 
@@ -272,6 +291,26 @@ Use data minimization:
 - preserve source, observed time, freshness, transformation version, and visibility scope;
 - define deletion and export behavior across raw data, graph, memory, Temporal projections, caches, and audit records.
 
+Memory distillation must pass this boundary before a provider write:
+
+```text
+raw evidence -> schema/provenance validation -> PII/secret filtering
+  -> fact extraction -> concise distillation -> scoped Memory Bank
+```
+
+The current `regex-v1` adapter redacts obvious emails, phone numbers, bearer
+tokens, and common API-key shapes using the Go standard library. It is a
+defense-in-depth baseline, not proof that all PII is removed. Provider-aware
+classification, configurable sensitive-field policies, and optional
+model-assisted review remain TODOs. A Memory provider must re-check the
+boundary on write and retrieval; Memory is never an authorization source.
+
+Graph facts may contain a necessary person/business identity, but should retain
+only minimal fields and provenance. Do not store raw messages, private email,
+credentials, or unrestricted provider payloads in graph properties. Every fact
+and evidence projection carries source, observed time, ingestion time,
+transformation version, visibility scope, and freshness where available.
+
 Model output is untrusted. Validate structured output, cap sizes, reject unsupported claims, distinguish observed facts from inference, and show evidence and freshness to users. Do not log chain-of-thought. Store concise decisions, tool calls, evidence references, outcomes, and error classifications.
 
 ## 11. Network and deployment security
@@ -347,6 +386,8 @@ Before shipping a component or vertical slice, verify:
 - [ ] external writes are approval-gated, idempotent, auditable, and recoverable;
 - [ ] model and provider content is treated as untrusted data;
 - [ ] raw data, graph facts, memory, projections, and audit records have retention and deletion behavior;
+- [ ] Memory writes pass deterministic redaction before provider persistence, with a documented limitation for semantic PII;
+- [ ] stale source data is marked stale/unknown and cannot be presented as fresh;
 - [ ] logs and traces are redacted and still provide useful correlation;
 - [ ] tests cover auth failure, tenant isolation, policy denial, token replay, prompt injection, tool poisoning, provider failure, and oversized input.
 

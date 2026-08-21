@@ -27,7 +27,7 @@ Current blueprint routes:
 - `POST /api/v1/integrations/:integrationId` — update an integration after object-level authorization.
 - `POST /api/v1/workflows` — start a workflow through Temporal (or the local in-memory adapter).
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
-- `POST /api/v1/workflows/release-investigations` — typed `release-investigation.v1` start/reuse endpoint.
+- `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` create proposal or `workflow-change-plan.v2` lifecycle proposal without applying it.
 - `POST /api/v1/workflows/plans` — persist an idempotent v1/v2 proposal as `proposed` when Postgres is configured.
 - `POST /api/v1/workflows/plans/:planId/approve` — approve a persisted proposal; application is still a separate step.

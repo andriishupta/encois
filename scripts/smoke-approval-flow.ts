@@ -86,7 +86,7 @@ const updateResponse = await app.request(`/api/v1/workflows/${encodeURIComponent
     contractVersion: "workflow-update.v1",
     updateName: "blueprint-context",
     updateId: "approval-smoke-context-1",
-    payload: { businessInput: { releaseKey: "context-added-after-start" }, reason: "Release context was added after the Workflow started." },
+    payload: { businessInput: { projectKey: "context-added-after-start" }, reason: "Project context was added after the Workflow started." },
   }),
 });
 if (updateResponse.status !== 200) {
@@ -99,7 +99,7 @@ const updateReplayResponse = await app.request(`/api/v1/workflows/${encodeURICom
     contractVersion: "workflow-update.v1",
     updateName: "blueprint-context",
     updateId: "approval-smoke-context-1",
-    payload: { businessInput: { releaseKey: "context-added-after-start" }, reason: "Release context was added after the Workflow started." },
+    payload: { businessInput: { projectKey: "context-added-after-start" }, reason: "Project context was added after the Workflow started." },
   }),
 });
 if (updateReplayResponse.status !== 200) {

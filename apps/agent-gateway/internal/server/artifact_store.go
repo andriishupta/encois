@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
 // ArtifactStore is the narrow boundary that the real Cloud Storage adapter
@@ -26,9 +27,11 @@ type memoryArtifactStore struct {
 }
 
 type memoryArtifact struct {
-	ObjectKey   string
-	ContentType string
-	DataRef     string
+	ObjectKey      string
+	ContentType    string
+	DataRef        string
+	RetentionClass contracts.ArtifactRetentionClass
+	RetentionUntil string
 }
 
 func newMemoryArtifactStore() ArtifactStore {
@@ -45,9 +48,11 @@ func (s *memoryArtifactStore) Write(_ context.Context, request domain.ArtifactWr
 	artifactRef := "artifact://memory/" + hex.EncodeToString(digest[:])
 	s.mu.Lock()
 	s.objects[artifactRef] = memoryArtifact{
-		ObjectKey:   objectKey,
-		ContentType: request.ContentType,
-		DataRef:     request.DataRef,
+		ObjectKey:      objectKey,
+		ContentType:    request.ContentType,
+		DataRef:        request.DataRef,
+		RetentionClass: defaultRetentionClass(request.RetentionClass),
+		RetentionUntil: request.RetentionUntil,
 	}
 	s.mu.Unlock()
 
@@ -57,7 +62,16 @@ func (s *memoryArtifactStore) Write(_ context.Context, request domain.ArtifactWr
 		ArtifactRef:     artifactRef,
 		ObjectKey:       objectKey,
 		Status:          "mocked",
+		RetentionClass:  defaultRetentionClass(request.RetentionClass),
+		RetentionUntil:  request.RetentionUntil,
 	}, nil
+}
+
+func defaultRetentionClass(value contracts.ArtifactRetentionClass) contracts.ArtifactRetentionClass {
+	if value == "" {
+		return contracts.RetentionInvestigation
+	}
+	return value
 }
 
 func scopedArtifactKey(request domain.ArtifactWriteRequest) (string, error) {

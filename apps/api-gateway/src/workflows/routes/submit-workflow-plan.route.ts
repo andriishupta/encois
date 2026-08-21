@@ -5,6 +5,7 @@ import {
   isWorkflowPlanServiceError,
   submitWorkflowPlan,
 } from "../services/workflow-plan.service.js";
+import { workflowPlanErrorStatus, workflowResponseStatus } from "../utils.js";
 
 function parsePlan(value: unknown): WorkflowChangePlan | WorkflowChangePlanV2 | null {
   if (validateContract("workflowChangePlanV2", value).valid) return value as WorkflowChangePlanV2;
@@ -24,18 +25,10 @@ export function submitWorkflowPlanRoute(): Handler<GatewayEnv> {
 
     try {
       const data = await submitWorkflowPlan(context.get("principal"), plan);
-      return context.json({ data }, data.status === "proposed" ? 202 : 200);
+      return context.json({ data }, workflowResponseStatus(data.status));
     } catch (error) {
       if (isWorkflowPlanServiceError(error)) {
-        const status =
-          error.code === "FORBIDDEN" || error.code === "SCOPE_DENIED"
-            ? 403
-            : error.code === "IDEMPOTENCY_CONFLICT"
-              ? 409
-              : error.code === "PERSISTENCE_UNAVAILABLE"
-                ? 503
-                : 422;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowPlanErrorStatus(error.code, 422));
       }
       throw error;
     }

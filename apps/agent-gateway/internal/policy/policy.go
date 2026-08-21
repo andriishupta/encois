@@ -28,8 +28,8 @@ func NewReadOnlyToolPolicy(version string) *ReadOnlyToolPolicy {
 	return &ReadOnlyToolPolicy{
 		version: version,
 		tools: map[string]struct{}{
-			"jira.release_tasks":      {},
-			"github.release_activity": {},
+			"jira.project_tasks":      {},
+			"github.project_activity": {},
 		},
 	}
 }

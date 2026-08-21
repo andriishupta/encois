@@ -1,36 +1,21 @@
 import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
-import type { CoordinatorEvent, ExecutionScope, JsonObject, WorkflowBlueprint, WorkflowUpdateRequest } from "@encois/contracts";
+import {
+  ContractVersion,
+  TemporalWorkflowType,
+  type CoordinatorEvent,
+  type ExecutionScope,
+  type JsonObject,
+  type WorkflowBlueprint,
+} from "@encois/contracts";
 
 export type WorkflowRunStatus = PersistenceWorkflowRunStatus;
 
-export const USER_BLUEPRINT_WORKFLOW_TYPE = "encois.user-blueprint.v1";
-export const COORDINATOR_WORKFLOW_TYPE = "CoordinatorWorkflow";
-export const BOOTSTRAP_WORKFLOW_TYPE = "BootstrapProjectWorkflow";
-
-export const PLATFORM_WORKFLOW_TYPES = [
-  USER_BLUEPRINT_WORKFLOW_TYPE,
-  COORDINATOR_WORKFLOW_TYPE,
-  BOOTSTRAP_WORKFLOW_TYPE,
-] as const;
-
-export type WorkflowStartRequest = {
-  workflowType: string;
-  version?: string;
-  key?: string;
-  blueprintId?: string;
-  blueprintVersion?: string;
-  input?: JsonObject;
-  scope?: Partial<ExecutionScope>;
-  blueprint?: WorkflowBlueprint;
-  idempotencyKey?: string;
-};
-
 export type WorkflowStartCommand = {
-  workflowType: string;
+  workflowType: TemporalWorkflowType;
   workflowId: string;
   taskQueue: string;
   input: {
-    contractVersion: "workflow-blueprint.v1";
+    contractVersion: typeof ContractVersion.WorkflowBlueprint;
     actorId: string;
     organizationId: string;
     requestId: string;
@@ -47,28 +32,12 @@ export type WorkflowStartCommand = {
   requestHash: string;
 };
 
-export type WorkflowSignalRequest = {
-  contractVersion: "workflow-signal.v1";
-  signalName: "blueprint-approval";
-  signalId: string;
-  payload: JsonObject;
-};
-
-export type { WorkflowUpdateRequest };
-
-export type WorkflowExecutionProjection = {
-  workflowId: string;
-  runId?: string;
-  workflowType: string;
-  blueprintId?: string;
-  namespace: string;
-  taskQueue: string;
-  status: WorkflowRunStatus;
-  organizationId: string;
-  reused?: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
+export type {
+  WorkflowExecutionProjection,
+  WorkflowSignalRequest,
+  WorkflowStartRequest,
+  WorkflowUpdateRequest,
+} from "@encois/contracts";
 
 export type WorkflowIdentity = {
   organizationId: string;
@@ -98,7 +67,7 @@ export function buildWorkflowId(identity: WorkflowIdentity): string {
 export function buildCoordinatorWorkflowId(organizationId: string, coordinatorId: string): string {
   return buildWorkflowId({
     organizationId,
-    workflowType: COORDINATOR_WORKFLOW_TYPE,
+    workflowType: TemporalWorkflowType.Coordinator,
     key: coordinatorId,
   });
 }

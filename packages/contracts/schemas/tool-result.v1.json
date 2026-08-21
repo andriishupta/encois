@@ -9,7 +9,22 @@
     "tool": { "type": "string" },
     "status": { "enum": ["mocked", "completed", "waiting", "failed"] },
     "data": { "type": "object" },
-    "evidenceRefs": { "type": "array", "items": { "type": "string" } }
+    "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "freshness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "observedAt", "status"],
+        "properties": {
+          "source": { "type": "string", "minLength": 1 },
+          "observedAt": { "type": "string", "minLength": 1 },
+          "ingestedAt": { "type": "string", "minLength": 1 },
+          "expiresAt": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["fresh", "stale", "unknown"] }
+        }
+      }
+    }
   },
   "additionalProperties": false
 }

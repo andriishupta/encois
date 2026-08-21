@@ -2631,7 +2631,9 @@
         "organization",
         "department",
         "team",
-        "project"
+        "project",
+        "service",
+        "custom"
       ]
     },
     "public.workflow_definition_status": {

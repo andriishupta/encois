@@ -9,11 +9,6 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 		value  any
 	}{
 		{
-			name:   "release request",
-			schema: SchemaReleaseInvestigation,
-			value:  map[string]any{"contractVersion": "release-investigation.v1", "projectKey": "checkout", "releaseKey": "aug-30"},
-		},
-		{
 			name:   "execution context",
 			schema: SchemaExecutionContext,
 			value:  map[string]any{"contractVersion": "execution-context.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}}},
@@ -24,18 +19,18 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			value: map[string]any{
 				"contractVersion": "workflow-blueprint.v1", "blueprintId": "bp-1", "version": "1.0.0",
 				"name": "Example", "workflowType": "encois.user-blueprint.v1", "purpose": "Test", "enabled": true,
-				"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.release_tasks"}},
+				"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 			},
 		},
 		{
 			name:   "tool request",
 			schema: SchemaToolRequest,
-			value:  map[string]any{"contractVersion": "tool-request.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}}, "tool": "jira.release_tasks", "arguments": map[string]any{}},
+			value:  map[string]any{"contractVersion": "tool-request.v1", "requestId": "req-1", "workflowId": "wf-1", "organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}}, "tool": "jira.project_tasks", "arguments": map[string]any{}},
 		},
 		{
 			name:   "tool result",
 			schema: SchemaToolResult,
-			value:  map[string]any{"contractVersion": "tool-result.v1", "requestId": "req-1", "tool": "jira.release_tasks", "status": "completed"},
+			value:  map[string]any{"contractVersion": "tool-result.v1", "requestId": "req-1", "tool": "jira.project_tasks", "status": "completed"},
 		},
 		{
 			name:   "artifact write",
@@ -78,7 +73,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 				"actorId": "actor-1", "policyVersion": "policy-1", "scope": map[string]any{"ids": []string{"team-a"}},
 				"agentDefinition": "release-investigation.synthesizer@1", "operation": "retrieve",
 				"memoryScope": map[string]any{"agentDefinition": "release-investigation.synthesizer@1", "projectId": "project-1"},
-				"query": "release risk patterns", "maxResults": 5,
+				"query":       "release risk patterns", "maxResults": 5,
 			},
 		},
 		{
@@ -96,8 +91,8 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			name:   "tool manifest",
 			schema: SchemaToolManifest,
 			value: map[string]any{
-				"contractVersion": "tool-manifest.v1", "name": "jira.release_tasks", "version": "1.0.0", "kind": "tool",
-				"description": "Read release task status from Jira.", "sideEffects": "read-only",
+				"contractVersion": "tool-manifest.v1", "name": "jira.project_tasks", "version": "1.0.0", "kind": "tool",
+				"description": "Read project task status from Jira.", "sideEffects": "read-only",
 				"inputSchema": map[string]any{"type": "object"}, "outputSchema": map[string]any{"type": "object"},
 				"annotations":   map[string]any{"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
 				"requiredScope": []string{"ids"}, "available": true, "approvalRequired": false,
@@ -136,7 +131,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 					"kind": "create", "blueprint": map[string]any{
 						"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "1.0.0",
 						"name": "Release readiness", "workflowType": "encois.user-blueprint.v1", "purpose": "Check release readiness", "enabled": true,
-						"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.release_tasks"}},
+						"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 					}, "start": map[string]any{"key": "release-aug-30", "businessInput": map[string]any{"releaseKey": "aug-30"}}, "reason": "Create the approved release readiness workflow.", "requiresApproval": true,
 				}},
 			},
@@ -153,7 +148,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 						"blueprint": map[string]any{
 							"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "2.0.0",
 							"name": "Release readiness", "workflowType": "encois.user-blueprint.v1", "purpose": "Check release readiness", "enabled": true,
-							"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.release_tasks"}},
+							"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 						}, "reason": "Publish a new revision.", "requiresApproval": true,
 					},
 					map[string]any{
@@ -191,7 +186,7 @@ func TestCanonicalSchemaRejectsInvalidToolStepAndScope(t *testing.T) {
 	invalidRequest := map[string]any{
 		"contractVersion": "tool-request.v1", "requestId": "req-1", "workflowId": "wf-1",
 		"organizationId": "org-1", "actorId": "actor-1", "policyVersion": "policy-1",
-		"scope": map[string]any{"projectIds": []string{"project-a"}}, "tool": "jira.release_tasks", "arguments": map[string]any{},
+		"scope": map[string]any{"projectIds": []string{"project-a"}}, "tool": "jira.project_tasks", "arguments": map[string]any{},
 	}
 	if err := Validate(SchemaToolRequest, invalidRequest); err == nil {
 		t.Fatal("expected a tool request without scope.ids to be rejected")

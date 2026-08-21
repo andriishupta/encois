@@ -1,22 +1,23 @@
 import type { Handler } from "hono";
-import { validateContract } from "@encois/contracts";
+import { ContractVersion, validateContract, WorkflowSignalName } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { isWorkflowServiceError, signalWorkflow, type WorkflowServiceOptions } from "../services/workflow.service.js";
 import type { WorkflowSignalRequest } from "../types.js";
+import { workflowCommandErrorStatus } from "../utils.js";
 
 function parseSignal(value: unknown): WorkflowSignalRequest | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (!validateContract("workflowSignal", value).valid) return null;
   const record = value as Record<string, unknown>;
-  if (record.contractVersion !== "workflow-signal.v1" || record.signalName !== "blueprint-approval") return null;
+  if (record.contractVersion !== ContractVersion.WorkflowSignal || record.signalName !== WorkflowSignalName.BlueprintApproval) return null;
   if (typeof record.signalId !== "string" || record.signalId.trim().length === 0 || record.signalId.length > 128) return null;
   if (!record.payload || typeof record.payload !== "object" || Array.isArray(record.payload)) return null;
   const payload = record.payload as Record<string, unknown>;
   if (typeof payload.stepId !== "string" || payload.stepId.trim().length === 0 || typeof payload.approved !== "boolean") return null;
   if (payload.reason !== undefined && typeof payload.reason !== "string") return null;
   return {
-    contractVersion: "workflow-signal.v1",
-    signalName: "blueprint-approval",
+    contractVersion: ContractVersion.WorkflowSignal,
+    signalName: WorkflowSignalName.BlueprintApproval,
     signalId: record.signalId.trim(),
     payload,
   };
@@ -33,17 +34,7 @@ export function signalWorkflowRoute(options: WorkflowServiceOptions): Handler<Ga
       return context.json({ data: { accepted: true } });
     } catch (error) {
       if (isWorkflowServiceError(error)) {
-        const status =
-          error.code === "WORKFLOW_NOT_FOUND"
-            ? 404
-            : error.code === "FORBIDDEN"
-              ? 403
-              : error.code === "WORKFLOW_NOT_SIGNALABLE"
-                ? 409
-                : error.code === "WORKFLOW_SIGNAL_CONFLICT"
-                  ? 409
-                : 503;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowCommandErrorStatus(error.code));
       }
       throw error;
     }

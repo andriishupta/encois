@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Client, Connection, WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from "@temporalio/client";
-import type { CoordinatorEvent } from "@encois/contracts";
+import { CoordinatorSignalName, WorkflowExecutionStatus, type CoordinatorEvent } from "@encois/contracts";
 import type { AppConfig } from "../config.js";
 import { buildCoordinatorWorkflowId, type WorkflowExecutionProjection, type WorkflowRunStatus, type WorkflowSignalRequest, type WorkflowStartCommand, type WorkflowUpdateRequest } from "./types.js";
 
@@ -31,11 +31,11 @@ function stableSerialize(value: unknown): string {
 
 function temporalStatus(value: string): WorkflowRunStatus {
   const normalized = value.toLowerCase();
-  if (normalized.includes("completed")) return "completed";
-  if (normalized.includes("failed") || normalized.includes("timed_out")) return "failed";
-  if (normalized.includes("cancel")) return "cancelled";
-  if (normalized.includes("waiting")) return "waiting";
-  return "running";
+  if (normalized.includes("completed")) return WorkflowExecutionStatus.Completed;
+  if (normalized.includes("failed") || normalized.includes("timed_out")) return WorkflowExecutionStatus.Failed;
+  if (normalized.includes("cancel")) return WorkflowExecutionStatus.Cancelled;
+  if (normalized.includes("waiting")) return WorkflowExecutionStatus.Waiting;
+  return WorkflowExecutionStatus.Running;
 }
 
 function createInMemoryWorkflowClient(): WorkflowClient {
@@ -57,7 +57,7 @@ function createInMemoryWorkflowClient(): WorkflowClient {
         workflowType: command.workflowType,
         namespace,
         taskQueue: command.taskQueue,
-        status: "queued",
+        status: WorkflowExecutionStatus.Queued,
         organizationId: command.input.organizationId,
         blueprintId: command.input.blueprint?.blueprintId,
         reused: false,
@@ -85,7 +85,9 @@ function createInMemoryWorkflowClient(): WorkflowClient {
       if (!["queued", "running", "waiting"].includes(execution.status)) {
         throw new Error(`workflow is ${execution.status} and cannot accept a Signal`);
       }
-      executions.set(workflowId, { ...execution, status: request.payload.approved === false ? "failed" : "running", updatedAt: now() });
+      let status: WorkflowRunStatus = WorkflowExecutionStatus.Running;
+      if (request.payload.approved === false) status = WorkflowExecutionStatus.Failed;
+      executions.set(workflowId, { ...execution, status, updatedAt: now() });
     },
 
     async signalCoordinator(coordinatorId, organizationId, _namespace, _event) {
@@ -95,7 +97,7 @@ function createInMemoryWorkflowClient(): WorkflowClient {
       if (!["queued", "running", "waiting"].includes(execution.status)) {
         throw new Error(`Coordinator workflow is ${execution.status} and cannot accept an event`);
       }
-      executions.set(workflowId, { ...execution, status: "running", updatedAt: now() });
+      executions.set(workflowId, { ...execution, status: WorkflowExecutionStatus.Running, updatedAt: now() });
     },
 
     async update(workflowId, organizationId, _namespace, request) {
@@ -115,11 +117,11 @@ function createInMemoryWorkflowClient(): WorkflowClient {
     async cancel(workflowId, organizationId) {
       const execution = executions.get(workflowId);
       if (!execution || execution.organizationId !== organizationId) throw new Error("workflow not found");
-      if (execution.status === "cancelled") return;
+      if (execution.status === WorkflowExecutionStatus.Cancelled) return;
       if (!["queued", "running", "waiting"].includes(execution.status)) {
         throw new Error(`workflow is ${execution.status} and cannot be cancelled`);
       }
-      executions.set(workflowId, { ...execution, status: "cancelled", updatedAt: now() });
+      executions.set(workflowId, { ...execution, status: WorkflowExecutionStatus.Cancelled, updatedAt: now() });
     },
   };
 }
@@ -211,7 +213,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         workflowType: command.workflowType,
         namespace,
         taskQueue: command.taskQueue,
-        status: "queued",
+        status: WorkflowExecutionStatus.Queued,
         organizationId: command.input.organizationId,
         blueprintId: command.input.blueprint?.blueprintId,
         reused: false,
@@ -274,7 +276,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
       }
       const temporalClient = await getClient();
       const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
-      await temporalClient.workflow.getHandle(workflowId).signal("coordinator-event", event);
+      await temporalClient.workflow.getHandle(workflowId).signal(CoordinatorSignalName.Event, event);
     },
 
     async update(workflowId, organizationId, _namespace, request) {
@@ -291,7 +293,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
       const handle = (await getClient()).workflow.getHandle(workflowId);
       const description = await handle.describe();
       const status = temporalStatus(description.status.name);
-      if (status === "cancelled") return;
+      if (status === WorkflowExecutionStatus.Cancelled) return;
       if (!["queued", "running", "waiting"].includes(status)) {
         throw new Error(`workflow is ${status} and cannot be cancelled`);
       }

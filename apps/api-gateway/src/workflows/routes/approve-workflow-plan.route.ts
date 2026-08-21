@@ -4,6 +4,7 @@ import {
   approveWorkflowPlan,
   isWorkflowPlanServiceError,
 } from "../services/workflow-plan.service.js";
+import { workflowPlanErrorStatus } from "../utils.js";
 
 export function approveWorkflowPlanRoute(): Handler<GatewayEnv> {
   return async (context) => {
@@ -15,15 +16,7 @@ export function approveWorkflowPlanRoute(): Handler<GatewayEnv> {
       return context.json({ data });
     } catch (error) {
       if (isWorkflowPlanServiceError(error)) {
-        const status =
-          error.code === "WORKFLOW_PLAN_NOT_FOUND"
-            ? 404
-            : error.code === "FORBIDDEN" || error.code === "SCOPE_DENIED"
-              ? 403
-              : error.code === "PERSISTENCE_UNAVAILABLE"
-                ? 503
-                : 409;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowPlanErrorStatus(error.code));
       }
       throw error;
     }

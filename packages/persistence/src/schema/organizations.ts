@@ -16,6 +16,8 @@ export const organizationUnitType = pgEnum("organization_unit_type", [
   "department",
   "team",
   "project",
+  "service",
+  "custom",
 ]);
 
 export const membershipStatus = pgEnum("membership_status", ["invited", "active", "suspended"]);

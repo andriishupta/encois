@@ -5,6 +5,7 @@ import {
   isWorkflowPlanServiceError,
   type WorkflowPlanApplicationOptions,
 } from "../services/workflow-plan.service.js";
+import { workflowPlanErrorStatus } from "../utils.js";
 
 export function applyWorkflowPlanRoute(options: WorkflowPlanApplicationOptions): Handler<GatewayEnv> {
   return async (context) => {
@@ -16,15 +17,7 @@ export function applyWorkflowPlanRoute(options: WorkflowPlanApplicationOptions):
       return context.json({ data }, 200);
     } catch (error) {
       if (isWorkflowPlanServiceError(error)) {
-        const status =
-          error.code === "PERSISTENCE_UNAVAILABLE"
-            ? 503
-            : error.code === "WORKFLOW_PLAN_NOT_FOUND"
-              ? 404
-              : error.code === "FORBIDDEN" || error.code === "SCOPE_DENIED" || error.code === "IDENTITY_NOT_RESOLVED"
-                ? 403
-                : 409;
-        return context.json({ error: { code: error.code, message: error.message } }, status);
+        return context.json({ error: { code: error.code, message: error.message } }, workflowPlanErrorStatus(error.code));
       }
       throw error;
     }

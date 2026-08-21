@@ -6,6 +6,8 @@ import (
 
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
+
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
 )
 
 const coordinatorReconcileInterval = 24 * time.Hour
@@ -262,13 +264,13 @@ func BootstrapProjectWorkflow(ctx workflow.Context, input BootstrapProjectInput)
 		return BootstrapProjectResult{}, err
 	}
 	if proposal.Status != "proposed" || proposal.Plan == nil {
-		return BootstrapProjectResult{ContractVersion: "bootstrap-project.v1", Ready: false}, nil
+		return BootstrapProjectResult{ContractVersion: string(contractschemas.ContractBootstrapProject), Ready: false}, nil
 	}
 	if err := NewWorkflowCreator(nil).ValidatePlan(*proposal.Plan); err != nil {
 		return BootstrapProjectResult{}, err
 	}
 	return BootstrapProjectResult{
-		ContractVersion: "bootstrap-project.v1",
+		ContractVersion: string(contractschemas.ContractBootstrapProject),
 		Ready:           true,
 		EvidenceRefs:    proposal.Plan.EvidenceRefs,
 		PlanID:          proposal.Plan.PlanID,

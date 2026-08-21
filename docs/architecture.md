@@ -49,6 +49,13 @@ The selected platform shape is:
 
 Temporal Cloud is the execution platform, not the company data store. Spanner Graph is the company context store, not the workflow engine. Memory Bank is agent context, not the canonical source of company relationships.
 
+Temporal Namespace is an operational/deployment boundary, not the primary
+tenant-security boundary. The MVP may use one shared Namespace with
+organization-prefixed Workflow IDs, Gateway authorization, scoped Signals and
+Updates, Agent Gateway policy, and tenant-scoped stores. A customer-isolated
+profile may use a dedicated Namespace; strongest isolation uses a dedicated
+Google Cloud project and Temporal environment/Namespace.
+
 The first concrete GCP deployment baseline is documented in [`docs/infra.md`](infra.md). It uses Cloud Run for the Gateway API and the planned Go worker deployment, a global HTTPS Application Load Balancer with serverless NEGs for `/dashboard/*` and `/api/*`, Cloud Identity Platform for user authentication, Secret Manager for connector credentials, and optional Cloud Storage/Spanner resources. The Terraform stack is an explicit provider adapter; it does not create projects, manage Temporal Cloud, or run automatically from the repository.
 
 ## 3. System context
@@ -87,8 +94,25 @@ application. A bounded one-shot dispatcher (`coordinator-dispatcher`) claims
 events with a lease and retries delivery to the Coordinator Workflow through
 Temporal. It is a process/job entrypoint, not a public route; production
 deployment should invoke it per organization through a Cloud Run Job and
-Scheduler. The Go Runtime never reads this outbox or the control-plane
-database.
+Scheduler. Webhooks are an incremental trigger only; the Coordinator also
+uses Temporal timers or deployment-managed Schedules for reconciliation. The Go
+Runtime never reads this outbox or the control-plane database.
+
+Organization is the hard multi-tenant boundary. Inside it, `organization_units`
+form a parent/child tree and may represent departments, teams, projects,
+services, or future custom units. The Gateway computes effective scope
+deterministically:
+
+```text
+effective scope = direct membership descendants
+                + explicit grant descendants
+                - explicit restriction descendants
+```
+
+The current persistence slice stores direct membership roots and the shared
+contract/domain helper already computes inheritance and future grant/restrict
+rules. Persisted explicit scope rules and an administration UI are deferred
+until the control-plane permission surface is needed.
 
 ## 4. Core components
 
@@ -236,9 +260,11 @@ Temporal Workflows
 
 The current repository implements the Workflow/Activity layer, ADK bundle, and
 private Agent Gateway client. Memory Bank, Spanner Graph, and Cloud Storage are
-target data-plane adapters, not active Runtime clients yet; they should be
-added behind Activities or the Agent Gateway after the hosted synthetic path is
-proven. The Runtime must continue to receive references and stateless context,
+target data-plane adapters, not active hosted Runtime clients yet; they should
+be added behind Activities or the Agent Gateway after the hosted synthetic path
+is proven. The Runtime already applies the Memory redaction boundary and emits
+typed freshness/provenance/retention metadata, but provider persistence remains
+deferred. The Runtime must continue to receive references and stateless context,
 not connect to the Gateway API's control-plane Postgres.
 
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
@@ -584,13 +610,34 @@ provider API / MCP
   -> Gateway API returns a scoped projection to React
 ```
 
+Memory writes have an explicit boundary and never receive an unrestricted raw
+provider payload:
+
+```text
+raw evidence -> validation -> deterministic PII/secret filtering
+  -> fact extraction -> concise distillation -> scoped Memory Bank
+```
+
+The MVP filter is a small standard-library regex adapter for obvious email,
+phone, token, and API-key patterns (`regex-v1`). It is useful defense in depth,
+not a complete PII detector. Provider-specific classifiers, configurable data
+classification, and an optional model-assisted review remain TODOs. Graph
+facts retain business provenance and freshness; Memory retains reusable
+patterns and conclusions, not canonical relationships or authorization data.
+
+Cloud Storage keeps only referenced raw/large artifacts for a stated retention
+class (`ephemeral`, `investigation`, `source_snapshot`, or `legal_hold`). SQL,
+Temporal, Graph, and Memory carry references or distilled fields rather than
+unbounded payload copies. Retention/TTL enforcement is a hosted adapter and
+policy TODO; the local artifact adapter records the class now.
+
 The raw snapshot is evidence and replay material; the graph is the shared structured context; Memory Bank is selective agent context; Temporal is operational execution history. A model may summarize or propose facts, but deterministic adapters and policy checks decide what is persisted as canonical data.
 
 Initial logical entities:
 
 ```text
 Organization
-OrgUnit(company | department | team | project)
+OrgUnit(organization | department | team | project | service | custom)
 Membership
 ScopeGrant
 Integration
@@ -627,9 +674,15 @@ The hierarchy is:
 Company
   └─ Department
       └─ Team
-          └─ Project
-              └─ Person / System
+      └─ Project
+          └─ Service / Custom unit
 ```
+
+A membership may start at a unit, inherit descendants, receive explicit
+grants to another branch, and have explicit restrictions subtract a branch.
+Small organizations can grant the root unit and therefore see the whole
+tenant. The Gateway resolves this set; Gemini, ADK, the browser, Temporal
+Namespace, and Agent Runtime never decide it.
 
 A specialist receives the intersection of the user scope, investigation scope, agent policy, and connector grant. The model never gets to enlarge that intersection.
 
@@ -654,6 +707,9 @@ stateDiagram-v2
     Created --> Running: Temporal Workflow started
     Running --> Waiting: timer, signal, permission, or child workflow
     Waiting --> Running: Temporal resumes workflow
+    Running --> Degraded: provider unavailable with usable evidence
+    Degraded --> Running: retry or reconciliation
+    Waiting --> Waiting: missing capability or approval
     Running --> Succeeded
     Running --> Partial: bounded failure with usable evidence
     Running --> Failed: terminal failure
@@ -675,6 +731,14 @@ RUNNING
   -> RUNNING                 correlated Signal arrives
 ```
 
+Operational reason codes are carried separately from the coarse projection
+status: `temporary_error`, `missing_credentials`, `human_approval`,
+`capability_unavailable`, `provider_unavailable`, `invalid_input`, and
+`degraded_evidence`. Temporal retries temporary/provider failures; missing
+capabilities and approval remain durable waits; invalid input is terminal.
+The UI should expose the reason and retry/freshness context, not only
+`Running` or `Failed`.
+
 Use a stable business Workflow ID, for example `workflow:acme:release-readiness:checkout:aug-30`, to prevent duplicate active executions for the same Blueprint and business key. Temporal's Run ID identifies one execution of that Workflow ID. A refresh can resume the existing Workflow, use `continue-as-new`, or create a child run while preserving the same workflow projection.
 
 Each external call is an Activity with a timeout, retry policy, idempotency key, and optional heartbeat. An Activity failure does not require restarting completed Activities. A workflow waiting for permission or an external status does not consume an active agent process.
@@ -688,6 +752,8 @@ Each external call is an Activity with a timeout, retry policy, idempotency key,
 - A private Agent Gateway runs as an internal Cloud Run service, or remains an in-process Go module until the first slice needs independent scaling.
 - Go Agent Runtime runs Temporal workers on Cloud Run or another supported worker environment.
 - Temporal Cloud manages durable execution.
+- The MVP uses a shared Temporal Namespace; dedicated Namespace/project
+  profiles are deployment isolation options, not authorization shortcuts.
 - If a relational control-plane store is needed, Postgres is owned by the Gateway API and migrated with Drizzle; the Go Runtime does not access it.
 - Spanner Graph stores organization data and company relationships.
 - Agent Engine Memory Bank stores scoped agent memories.
@@ -812,6 +878,10 @@ User: “Are we on track for the August 30 release, and what changed after yeste
 - Exact Go Memory Bank client/API integration from the Temporal ADK runtime.
 - Graph schema evolution and entity-resolution strategy.
 - Data retention, deletion, export, and residency controls.
+- Persisted explicit scope grants/restrictions and hierarchy administration.
+- Source-specific freshness budgets and Temporal Schedule provisioning.
+- Provider-aware PII classification beyond the deterministic `regex-v1` filter
+  and Memory Bank deletion/export behavior.
 - Model Armor or equivalent policy service integration.
 - Approval workflow and write-capable tools.
 - Formal plugin packaging and marketplace/distribution model.

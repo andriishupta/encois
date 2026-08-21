@@ -30,8 +30,8 @@ Endpoints:
 - `POST /v1/authorize` or `/v1/permissions/check` — deterministic fixture policy decision;
 - `GET /v1/tools` — MCP-shaped registered tool catalog with versions, schemas,
   annotations, availability, approval metadata, and required scope;
-- `POST /v1/tools/invoke` — mock `jira.release_tasks` and
-  `github.release_activity` tools;
+- `POST /v1/tools/invoke` — mock `jira.project_tasks` and
+  `github.project_activity` tools;
 - `POST /v1/graph/query` — typed, scope-constrained Spanner Graph boundary;
   the current fixture policy denies it, and an allowed request returns `501`
   until a GraphStore adapter is configured;
@@ -50,7 +50,7 @@ remains the authoritative owner of user-facing workflow persistence,
 authorization grants, idempotency, and Temporal start/signal/schedule calls.
 The Agent Gateway derives required permissions from the step/tool catalog and
 checks them through the current policy service. The current policy allows only
-the two synthetic read-only release tools and denies unknown tools or
+the two synthetic read-only project tools and denies unknown tools or
 incomplete execution context. Tool invocation also checks that the execution
 scope satisfies the capability's required scope. The catalog is fixture-level;
 persisted connector grants, live MCP/API manifests, and real provider adapters

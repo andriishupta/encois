@@ -17,7 +17,6 @@ import (
 type SchemaName string
 
 const (
-	SchemaReleaseInvestigation SchemaName = "releaseInvestigation"
 	SchemaWorkflowBlueprint    SchemaName = "workflowBlueprint"
 	SchemaWorkflowResult       SchemaName = "workflowResult"
 	SchemaWorkflowSignal       SchemaName = "workflowSignal"
@@ -41,7 +40,6 @@ const (
 var schemaFiles embed.FS
 
 var schemaPaths = map[SchemaName]string{
-	SchemaReleaseInvestigation: "schemas/release-investigation.v1.json",
 	SchemaWorkflowBlueprint:    "schemas/workflow-blueprint.v1.json",
 	SchemaWorkflowResult:       "schemas/blueprint-workflow-result.v1.json",
 	SchemaWorkflowSignal:       "schemas/workflow-signal.v1.json",

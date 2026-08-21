@@ -4,7 +4,7 @@ import { loadConfig } from "../apps/api-gateway/src/config.js";
 const temporalAddress = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "default";
 const timeoutMs = Number(process.env.ENCOIS_SMOKE_TIMEOUT_MS ?? 30_000);
-const releaseKey = process.env.ENCOIS_SMOKE_RELEASE_KEY ?? "smoke-release";
+const workflowKey = process.env.ENCOIS_SMOKE_WORKFLOW_KEY ?? "smoke-project-context";
 const traceId = process.env.ENCOIS_SMOKE_TRACE_ID ?? "0123456789abcdef0123456789abcdef";
 
 const config = loadConfig({
@@ -26,14 +26,26 @@ const app = createApp({
   }),
 });
 
-const startResponse = await app.request("/api/v1/workflows/release-investigations", {
+const startResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    contractVersion: "release-investigation.v1",
-    projectKey: "checkout",
-    releaseKey,
-    targetDate: "2099-08-30",
+    workflowType: "encois.user-blueprint.v1",
+    key: workflowKey,
+    input: { projectKey: "checkout" },
+    blueprint: {
+      contractVersion: "workflow-blueprint.v1",
+      blueprintId: "project-context",
+      version: "1.0.0",
+      name: "Project context",
+      workflowType: "encois.user-blueprint.v1",
+      purpose: "Collect project context.",
+      enabled: true,
+      steps: [
+        { id: "source", kind: "tool", tool: "jira.project_tasks" },
+        { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
+      ],
+    },
   }),
 });
 
@@ -45,34 +57,56 @@ if (startResponse.status !== 202 && startResponse.status !== 200) {
   throw new Error(`workflow start failed with HTTP ${startResponse.status}: ${await startResponse.text()}`);
 }
 
-const started = (await startResponse.json()) as {
-  data?: { workflow?: { workflowId?: string; reused?: boolean } };
-};
-const workflowId = started.data?.workflow?.workflowId;
+const started = (await startResponse.json()) as { data?: { workflowId?: string; reused?: boolean } };
+const workflowId = started.data?.workflowId;
 if (!workflowId) throw new Error("workflow start response did not include workflowId");
 
-const replayResponse = await app.request("/api/v1/workflows/release-investigations", {
+const replayResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    contractVersion: "release-investigation.v1",
-    projectKey: "checkout",
-    releaseKey,
-    targetDate: "2099-08-30",
+    workflowType: "encois.user-blueprint.v1",
+    key: workflowKey,
+    input: { projectKey: "checkout" },
+    blueprint: {
+      contractVersion: "workflow-blueprint.v1",
+      blueprintId: "project-context",
+      version: "1.0.0",
+      name: "Project context",
+      workflowType: "encois.user-blueprint.v1",
+      purpose: "Collect project context.",
+      enabled: true,
+      steps: [
+        { id: "source", kind: "tool", tool: "jira.project_tasks" },
+        { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
+      ],
+    },
   }),
 });
 if (replayResponse.status !== 200) {
   throw new Error(`identical workflow replay failed with HTTP ${replayResponse.status}: ${await replayResponse.text()}`);
 }
 
-const conflictResponse = await app.request("/api/v1/workflows/release-investigations", {
+const conflictResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    contractVersion: "release-investigation.v1",
-    projectKey: "checkout",
-    releaseKey,
-    targetDate: "2099-09-01",
+    workflowType: "encois.user-blueprint.v1",
+    key: workflowKey,
+    input: { projectKey: "other" },
+    blueprint: {
+      contractVersion: "workflow-blueprint.v1",
+      blueprintId: "project-context",
+      version: "1.0.0",
+      name: "Project context",
+      workflowType: "encois.user-blueprint.v1",
+      purpose: "Collect project context.",
+      enabled: true,
+      steps: [
+        { id: "source", kind: "tool", tool: "jira.project_tasks" },
+        { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
+      ],
+    },
   }),
 });
 if (conflictResponse.status !== 409) {
@@ -89,7 +123,7 @@ while (Date.now() < deadline) {
   const body = (await response.json()) as { data?: { status?: string; runId?: string } };
   latestStatus = body.data?.status ?? "unknown";
   if (latestStatus === "completed" || latestStatus === "failed" || latestStatus === "cancelled") {
-    console.log(JSON.stringify({ event: "release_smoke.completed", traceId, workflowId, ...body.data }));
+    console.log(JSON.stringify({ event: "blueprint_smoke.completed", traceId, workflowId, ...body.data }));
     if (latestStatus !== "completed") process.exitCode = 1;
     break;
   }

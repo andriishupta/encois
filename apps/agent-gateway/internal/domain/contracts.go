@@ -1,18 +1,22 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+
+	contracts "github.com/andriishupta/encois/packages/contracts"
+)
 
 const (
-	ToolRequestContractVersion         = "tool-request.v1"
-	GraphQueryContractVersion          = "graph-query.v1"
-	GraphQueryResultContractVersion    = "graph-query-result.v1"
-	ArtifactWriteContractVersion       = "artifact-write.v1"
-	ArtifactWriteResultContractVersion = "artifact-write-result.v1"
-	AuthorizationContractVersion       = "authorization-check.v1"
-	ToolResultContractVersion          = "tool-result.v1"
-	ToolManifestContractVersion        = "tool-manifest.v1"
-	WorkflowBlueprintContractVersion   = "workflow-blueprint.v1"
-	WorkflowDefinitionContractVersion  = "workflow-definition.v1"
+	ToolRequestContractVersion         = string(contracts.ContractToolRequest)
+	GraphQueryContractVersion          = string(contracts.ContractGraphQuery)
+	GraphQueryResultContractVersion    = string(contracts.ContractGraphQueryResult)
+	ArtifactWriteContractVersion       = string(contracts.ContractArtifactWrite)
+	ArtifactWriteResultContractVersion = string(contracts.ContractArtifactWriteResult)
+	AuthorizationContractVersion       = string(contracts.ContractAuthorizationCheck)
+	ToolResultContractVersion          = string(contracts.ContractToolResult)
+	ToolManifestContractVersion        = string(contracts.ContractToolManifest)
+	WorkflowBlueprintContractVersion   = string(contracts.ContractWorkflowBlueprint)
+	WorkflowDefinitionContractVersion  = string(contracts.ContractWorkflowDefinition)
 )
 
 type Scope struct {
@@ -78,12 +82,13 @@ type ToolInvocationRequest struct {
 }
 
 type ToolInvocationResponse struct {
-	ContractVersion string         `json:"contractVersion"`
-	RequestID       string         `json:"requestId"`
-	Tool            string         `json:"tool"`
-	Status          string         `json:"status"`
-	Data            map[string]any `json:"data,omitempty"`
-	EvidenceRefs    []string       `json:"evidenceRefs,omitempty"`
+	ContractVersion string                      `json:"contractVersion"`
+	RequestID       string                      `json:"requestId"`
+	Tool            string                      `json:"tool"`
+	Status          string                      `json:"status"`
+	Data            map[string]any              `json:"data,omitempty"`
+	EvidenceRefs    []string                    `json:"evidenceRefs,omitempty"`
+	Freshness       []contracts.SourceFreshness `json:"freshness,omitempty"`
 }
 
 type GraphQueryRequest struct {
@@ -93,58 +98,60 @@ type GraphQueryRequest struct {
 }
 
 type GraphNode struct {
-	ID         string         `json:"id"`
-	Type       string         `json:"type"`
-	Properties map[string]any `json:"properties"`
+	ID         string                    `json:"id"`
+	Type       string                    `json:"type"`
+	Properties map[string]any            `json:"properties"`
+	Provenance *contracts.DataProvenance `json:"provenance,omitempty"`
 }
 
 type GraphEdge struct {
-	ID           string         `json:"id"`
-	SourceID     string         `json:"sourceId"`
-	TargetID     string         `json:"targetId"`
-	Relationship string         `json:"relationship"`
-	Properties   map[string]any `json:"properties"`
+	ID           string                    `json:"id"`
+	SourceID     string                    `json:"sourceId"`
+	TargetID     string                    `json:"targetId"`
+	Relationship string                    `json:"relationship"`
+	Properties   map[string]any            `json:"properties"`
+	Provenance   *contracts.DataProvenance `json:"provenance,omitempty"`
 }
 
 type GraphQueryResponse struct {
-	ContractVersion string      `json:"contractVersion"`
-	RequestID       string      `json:"requestId"`
-	Status          string      `json:"status"`
-	Nodes           []GraphNode `json:"nodes"`
-	Edges           []GraphEdge `json:"edges"`
-	EvidenceRefs    []string    `json:"evidenceRefs,omitempty"`
+	ContractVersion string                      `json:"contractVersion"`
+	RequestID       string                      `json:"requestId"`
+	Status          string                      `json:"status"`
+	Nodes           []GraphNode                 `json:"nodes"`
+	Edges           []GraphEdge                 `json:"edges"`
+	EvidenceRefs    []string                    `json:"evidenceRefs,omitempty"`
+	Freshness       []contracts.SourceFreshness `json:"freshness,omitempty"`
 }
 
 type ArtifactWriteRequest struct {
 	ExecutionContext
-	ObjectKey   string `json:"objectKey"`
-	ContentType string `json:"contentType"`
-	DataRef     string `json:"dataRef"`
+	ObjectKey      string                           `json:"objectKey"`
+	ContentType    string                           `json:"contentType"`
+	DataRef        string                           `json:"dataRef"`
+	RetentionClass contracts.ArtifactRetentionClass `json:"retentionClass,omitempty"`
+	RetentionUntil string                           `json:"retentionUntil,omitempty"`
 }
 
 type ArtifactWriteResponse struct {
-	ContractVersion string `json:"contractVersion"`
-	RequestID       string `json:"requestId"`
-	ArtifactRef     string `json:"artifactRef"`
-	ObjectKey       string `json:"objectKey"`
-	Status          string `json:"status"`
+	ContractVersion string                           `json:"contractVersion"`
+	RequestID       string                           `json:"requestId"`
+	ArtifactRef     string                           `json:"artifactRef"`
+	ObjectKey       string                           `json:"objectKey"`
+	Status          string                           `json:"status"`
+	RetentionClass  contracts.ArtifactRetentionClass `json:"retentionClass,omitempty"`
+	RetentionUntil  string                           `json:"retentionUntil,omitempty"`
 }
 
 // WorkflowStep is a builder node. Steps with the same satisfied dependencies
 // can run in parallel; DependsOn expresses the directed workflow graph.
 type WorkflowStep struct {
-	ID               string         `json:"id"`
-	Kind             string         `json:"kind"`
-	Tool             string         `json:"tool,omitempty"`
-	AgentDefinition  string         `json:"agentDefinition,omitempty"`
-	DependsOn        []string       `json:"dependsOn,omitempty"`
-	Input            map[string]any `json:"input,omitempty"`
-	RequiresApproval bool           `json:"requiresApproval,omitempty"`
-}
-
-type WorkflowSchedule struct {
-	Cron     string `json:"cron,omitempty"`
-	Timezone string `json:"timezone,omitempty"`
+	ID               string                     `json:"id"`
+	Kind             contracts.WorkflowStepKind `json:"kind"`
+	Tool             string                     `json:"tool,omitempty"`
+	AgentDefinition  string                     `json:"agentDefinition,omitempty"`
+	DependsOn        []string                   `json:"dependsOn,omitempty"`
+	Input            map[string]any             `json:"input,omitempty"`
+	RequiresApproval bool                       `json:"requiresApproval,omitempty"`
 }
 
 type WorkflowBlueprint struct {
@@ -156,7 +163,11 @@ type WorkflowBlueprint struct {
 	Purpose          string            `json:"purpose"`
 	Enabled          bool              `json:"enabled"`
 	Steps            []WorkflowStep    `json:"steps"`
-	Schedule         *WorkflowSchedule `json:"schedule,omitempty"`
+	AllowedTools     []string          `json:"allowedTools,omitempty"`
+	RequiredScopes   []string          `json:"requiredScopes,omitempty"`
+	Parameters       map[string]string `json:"parameters,omitempty"`
+	InputSchemaRef   string            `json:"inputSchemaRef,omitempty"`
+	OutputSchemaRef  string            `json:"outputSchemaRef,omitempty"`
 	RequiresApproval bool              `json:"requiresApproval"`
 }
 

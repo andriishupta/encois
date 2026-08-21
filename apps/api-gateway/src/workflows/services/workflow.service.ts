@@ -1,6 +1,6 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { parseWorkflowBlueprint } from "@encois/contracts";
+import { ContractVersion, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
 import type {
   ExecutionScope,
   JsonObject,
@@ -25,7 +25,6 @@ import { database } from "../../database.js";
 import type { WorkflowClient } from "../temporal-client.js";
 import {
   buildWorkflowId,
-  USER_BLUEPRINT_WORKFLOW_TYPE,
   type WorkflowExecutionProjection,
   type WorkflowSignalRequest,
   type WorkflowStartRequest,
@@ -60,6 +59,25 @@ export function localUserId(principal: AosPrincipal): string | null {
   return /^[0-9a-f-]{36}$/i.test(candidate) ? candidate : null;
 }
 
+function blueprintFromPayload(payload: JsonObject): WorkflowBlueprint | undefined {
+  if (isRecord(payload.blueprint)) return parseWorkflowBlueprint(payload.blueprint) ?? undefined;
+  if (payload.workflowType === TemporalWorkflowType.UserBlueprint && Array.isArray(payload.steps)) {
+    return parseWorkflowBlueprint(payload) ?? undefined;
+  }
+  return undefined;
+}
+
+function getBlueprint(request: WorkflowStartRequest, payload: JsonObject): WorkflowBlueprint | undefined {
+  if (request.workflowType !== TemporalWorkflowType.UserBlueprint) return undefined;
+  return request.blueprint ?? blueprintFromPayload(payload);
+}
+
+function getBusinessInput(request: WorkflowStartRequest, payload: JsonObject): JsonObject {
+  if (isRecord(payload.businessInput)) return payload.businessInput;
+  if (!request.blueprint) return payload;
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "blueprint"));
+}
+
 function startCommand(
   principal: AosPrincipal,
   request: WorkflowStartRequest,
@@ -71,22 +89,8 @@ function startCommand(
   requestHash: string,
 ) {
   const payload = request.input ?? {};
-  const blueprint =
-    request.workflowType === USER_BLUEPRINT_WORKFLOW_TYPE
-      ? request.blueprint ??
-        (isRecord(payload.blueprint)
-          ? (payload.blueprint as WorkflowBlueprint)
-          : typeof payload.workflowType === "string" && Array.isArray(payload.steps)
-            ? (payload as unknown as WorkflowBlueprint)
-            : undefined)
-      : undefined;
-  const businessInput = request.blueprint
-    ? isRecord(payload.businessInput)
-      ? payload.businessInput
-      : Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "blueprint"))
-    : isRecord(payload.businessInput)
-      ? payload.businessInput
-      : payload;
+  const blueprint = getBlueprint(request, payload);
+  const businessInput = getBusinessInput(request, payload);
   const scope: ExecutionScope = {
     ids: principal.scope,
     ...(request.scope?.projectIds ? { projectIds: request.scope.projectIds } : {}),
@@ -97,7 +101,7 @@ function startCommand(
     workflowId,
     taskQueue,
     input: {
-      contractVersion: "workflow-blueprint.v1" as const,
+      contractVersion: ContractVersion.WorkflowBlueprint,
       actorId: principal.actorId,
       organizationId: principal.organizationId,
       requestId,
@@ -853,7 +857,7 @@ export async function validateWorkflowChangePlan(
     }
   }
 
-  if (plan.contractVersion === "workflow-change-plan.v2") {
+  if (plan.contractVersion === ContractVersion.WorkflowChangePlanV2) {
     for (const [index, change] of plan.changes.entries()) {
       if (change.kind === "update") {
         if (!change.targetBlueprintId || !change.targetBlueprintVersion || !change.blueprint) {
