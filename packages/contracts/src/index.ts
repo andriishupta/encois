@@ -483,11 +483,22 @@ export type ArtifactWriteResult = {
   retentionUntil?: string;
 };
 
+export type ArtifactReadRequest = ExecutionEnvelope & {
+  contractVersion: typeof ContractVersion.ArtifactRead;
+  artifactRef: string;
+};
+
 /** A logical, scope-constrained graph lookup. The query is not raw provider SQL. */
 export type GraphQueryRequest = ExecutionEnvelope & {
   contractVersion: typeof ContractVersion.GraphQuery;
   query: string;
   params?: JsonObject;
+};
+
+export type GraphUpsertRequest = ExecutionEnvelope & {
+  contractVersion: typeof ContractVersion.GraphUpsert;
+  nodes: readonly GraphNode[];
+  edges: readonly GraphEdge[];
 };
 
 export type GraphNode = {

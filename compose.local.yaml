@@ -84,6 +84,7 @@ services:
       AGENT_GATEWAY_HTTP_ADDR: ":8080"
       AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
+      AGENT_GATEWAY_DATA_MODE: mock
       GIN_MODE: debug
     ports:
       - "8080:8080"
@@ -124,6 +125,7 @@ services:
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
       AGENT_AI_MODE: mock
+      AGENT_MEMORY_MODE: mock
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
     ports:
@@ -148,6 +150,7 @@ services:
         VITE_FIREBASE_PROJECT_ID: demo-encois
         VITE_FIREBASE_APP_ID: local
         VITE_FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
+        VITE_ENCOIS_UI_MODE: mock
     ports:
       - "5173:8080"
     depends_on:

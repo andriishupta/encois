@@ -23,7 +23,24 @@ func main() {
 		gatewayserver.SetGinMode(cfg.GinMode)
 	}
 
-	router := gatewayserver.NewRouter(policy.NewReadOnlyToolPolicy(cfg.PolicyVersion), logger, cfg.ServiceToken)
+	var routerOptions gatewayserver.RouterOptions
+	var closeAdapters func() error
+	var err error
+	switch cfg.DataMode {
+	case "gcp":
+		routerOptions, closeAdapters, err = gatewayserver.NewGCPAdapters(context.Background(), cfg.StorageBucket, cfg.SpannerDatabase)
+		if err != nil {
+			logger.Error("failed to initialize GCP data adapters", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = closeAdapters() }()
+	case "mock":
+		// Explicit local/test fixture mode.
+	default:
+		logger.Error("unsupported agent gateway data mode", "data_mode", cfg.DataMode, "allowed", []string{"gcp", "mock"})
+		os.Exit(1)
+	}
+	router := gatewayserver.NewRouterWithOptions(policy.NewReadOnlyToolPolicy(cfg.PolicyVersion), logger, cfg.ServiceToken, routerOptions)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
@@ -34,7 +51,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("agent gateway listening", "address", cfg.HTTPAddr, "policy_mode", "read_only_fixture", "service_auth_configured", cfg.ServiceToken != "")
+		logger.Info("agent gateway listening", "address", cfg.HTTPAddr, "policy_mode", "read_only_fixture", "data_mode", cfg.DataMode, "service_auth_configured", cfg.ServiceToken != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("agent gateway stopped unexpectedly", "error", err)
 			os.Exit(1)

@@ -13,5 +13,5 @@ resource "google_spanner_database" "context" {
 
   instance = google_spanner_instance.context[0].name
   name     = var.spanner_database_name
+  ddl      = [file("${path.module}/spanner-schema.sql")]
 }
-

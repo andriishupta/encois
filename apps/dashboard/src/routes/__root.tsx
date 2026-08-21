@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
+import { isDashboardMockMode } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
 
 export const Route = createRootRoute({
@@ -17,7 +18,7 @@ function RootLayout() {
 
 function DocumentTitle() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const workspaceName = getMockOnboardingState()?.workspaceName ?? 'Encois'
+  const workspaceName = isDashboardMockMode() ? getMockOnboardingState()?.workspaceName ?? 'Encois' : 'Encois'
 
   useEffect(() => {
     document.title = `${getPageTitle(pathname)} | ${workspaceName}`

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type Dispatch,
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { OrganizationProjection, OrganizationUnitCreateRequest } from '@encois/contracts'
 import { createOrganizationPermission, createOrganizationUnit, deleteOrganizationPermission, getOrganization, isApiError, updateOrganizationPermission } from '@/lib/api'
+import { isDashboardMockMode } from '@/lib/auth'
 import {
   initialOrganizationUnits,
   initialUnitPermissions,
@@ -72,22 +73,23 @@ function isSoftApiError(error: unknown): boolean {
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
+  const mockMode = isDashboardMockMode()
   const query = useQuery<OrganizationProjection | null>({
     queryKey: queryKeys.organization(),
     queryFn: async () => {
       try {
         return await getOrganization()
       } catch (error) {
-        if (isSoftApiError(error)) return null
+        if (mockMode && isSoftApiError(error)) return null
         throw error
       }
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
-  const [units, setUnits] = useState<OrganizationUnit[]>(() => [...initialOrganizationUnits])
-  const [members, setMembers] = useState<OrganizationMember[]>(() => [...organizationMembers])
-  const [permissions, setPermissions] = useState<UnitPermission[]>(() => [...initialUnitPermissions])
+  const [units, setUnits] = useState<OrganizationUnit[]>(() => mockMode ? [...initialOrganizationUnits] : [])
+  const [members, setMembers] = useState<OrganizationMember[]>(() => mockMode ? [...organizationMembers] : [])
+  const [permissions, setPermissions] = useState<UnitPermission[]>(() => mockMode ? [...initialUnitPermissions] : [])
   const [currentUnitId, setCurrentUnitId] = useState('organization')
 
   useEffect(() => {
@@ -119,6 +121,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       error: query.error instanceof Error ? query.error.message : null,
       async createUnit(input) {
         if (!usingApi) {
+          if (!mockMode) throw new Error('Organization API is unavailable.')
           const id = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unit'}-${units.length}`
           const unit: OrganizationUnit = { id, parentId: input.parentId ?? null, type: input.type, name: input.name, description: 'A new organizational scope.', manager: 'Not assigned', memberCount: 0 }
           setUnits((current) => [...current, unit])
@@ -131,6 +134,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       },
       async createPermission(input) {
         if (!usingApi) {
+          if (!mockMode) throw new Error('Organization API is unavailable.')
           const existing = permissions.find((permission) => permission.memberId === input.memberId && permission.unitId === input.unitId)
           if (existing) {
             const next = { ...existing, access: input.access, propagateToChildren: true }
@@ -151,6 +155,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       },
       async updatePermission(permissionId, access) {
         if (!usingApi) {
+          if (!mockMode) throw new Error('Organization API is unavailable.')
           let updated: UnitPermission | undefined
           setPermissions((current) => current.map((permission) => {
             if (permission.id !== permissionId) return permission
@@ -167,6 +172,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       },
       async removePermission(permissionId) {
         if (!usingApi) {
+          if (!mockMode) throw new Error('Organization API is unavailable.')
           setPermissions((current) => current.filter((permission) => permission.id !== permissionId))
           return
         }
@@ -175,7 +181,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         await refresh()
       },
     }
-  }, [currentUnitId, members, permissions, query.data, query.error, query.isLoading, queryClient, units])
+  }, [currentUnitId, members, mockMode, permissions, query.data, query.error, query.isLoading, queryClient, units])
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>
 }

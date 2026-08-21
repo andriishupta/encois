@@ -329,8 +329,10 @@ dynamically.
 
 The common pipeline after source-specific acquisition. Jira, GitHub, PDF,
 Markdown, manual notes, and future media sources converge on the same typed
-evidence/provenance model. The first slice may return `deferred` until a
-concrete parser or storage adapter is configured.
+evidence/provenance model. The current slice has deterministic local
+acquisition/parsing plus selectable Cloud Storage, Spanner, and Memory Bank
+adapters; OCR, transcription, and live provider acquisition remain separate
+extensions.
 
 ### Integration Pack
 

@@ -72,6 +72,7 @@ wait_for_port 127.0.0.1 7233
   cd apps/agent-gateway
   AGENT_GATEWAY_HTTP_ADDR=:8080 \
   AGENT_GATEWAY_POLICY_VERSION=policy-read-only-fixture-v1 \
+  AGENT_GATEWAY_DATA_MODE=mock \
   AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
   go run ./cmd/agent-gateway
 ) >"$smoke_tmp_dir/agent-gateway.log" 2>&1 &
@@ -95,6 +96,8 @@ assert_http_status 403 \
   TEMPORAL_HOST_PORT=127.0.0.1:7233 \
   TEMPORAL_NAMESPACE=default \
   TEMPORAL_TASK_QUEUE=encois-agent-runtime \
+  AGENT_AI_MODE=mock \
+  AGENT_MEMORY_MODE=mock \
   AGENT_GATEWAY_URL=http://127.0.0.1:8080 \
   AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
   go run ./cmd/agent-runtime

@@ -2,11 +2,9 @@ package workflows
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
-	contractschemas "github.com/andriishupta/encois/packages/contracts"
 )
 
 const MemoryActivityName = "ExecuteAgentMemory"
@@ -17,28 +15,19 @@ type MemoryActivities struct {
 
 func NewMemoryActivities(store memory.Store) *MemoryActivities {
 	if store == nil {
-		store = memory.DeferredStore{}
+		store = memory.NewMockStore()
 	}
 	return &MemoryActivities{store: store}
 }
 
-// ExecuteAgentMemory is an Activity boundary, not Workflow state. The
-// deferred result keeps the optional capability non-fatal until a hosted
-// Memory Bank adapter is configured.
+// ExecuteAgentMemory is an Activity boundary, not Workflow state. The same
+// contract is used by the local mock and Vertex AI Memory Bank adapters.
 func (a *MemoryActivities) ExecuteAgentMemory(ctx context.Context, request memory.Request) (memory.Result, error) {
 	request = memory.SanitizeRequest(request)
 	if err := memory.ValidateRequest(request); err != nil {
 		return memory.Result{}, fmt.Errorf("validate agent memory request: %w", err)
 	}
 	result, err := a.store.Execute(ctx, request)
-	if errors.Is(err, memory.ErrNotConfigured) {
-		return memory.Result{
-			ContractVersion: string(contractschemas.ContractAgentMemoryResult),
-			RequestID:       request.RequestID,
-			Status:          "deferred",
-			Memories:        []memory.Record{},
-		}, nil
-	}
 	if err != nil {
 		return memory.Result{}, err
 	}

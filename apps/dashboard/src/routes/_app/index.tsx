@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { listIntegrations, listKnowledgeSources, listWorkflows } from '@/lib/api'
+import { isDashboardMockMode } from '@/lib/auth'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
@@ -30,6 +31,7 @@ function DashboardPage() {
   const attentionWorkflows = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
 
   function startInitialization() {
+    if (!isDashboardMockMode()) return
     setStartingInitialization(true)
     queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ status: 'initializing' }))
     window.setTimeout(() => {
@@ -39,6 +41,7 @@ function DashboardPage() {
   }
 
   function dismissReadyBanner() {
+    if (!isDashboardMockMode()) return
     queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ initializationBannerDismissed: true }))
   }
 

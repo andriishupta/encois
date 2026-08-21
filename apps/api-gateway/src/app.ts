@@ -64,6 +64,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
     : undefined;
   const internalServiceAuthenticator = config.controlPlaneServiceToken
     ? createInternalServiceAuthenticator({
+        allowDatabaseScopeFallback: config.nodeEnv === "development" || config.nodeEnv === "test",
         serviceToken: config.controlPlaneServiceToken,
         serviceUserId: config.controlPlaneServiceUserId,
       })

@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,8 +28,8 @@ type Server struct {
 }
 
 // RouterOptions contains replaceable data-plane adapters. The default router
-// deliberately uses local fixtures; hosted wiring can provide a Cloud Storage
-// implementation without changing routes, authentication, or policy code.
+// uses deterministic local implementations; hosted wiring selects Cloud
+// Storage and Spanner without changing routes, authentication, or policy code.
 type RouterOptions struct {
 	ArtifactStore ArtifactStore
 	GraphStore    GraphStore
@@ -51,7 +50,7 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 	}
 	graphStore := options.GraphStore
 	if graphStore == nil {
-		graphStore = newDeferredGraphStore()
+		graphStore = newMemoryGraphStore()
 	}
 	server := &Server{
 		policy:                policyService,
@@ -74,7 +73,9 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 	v1.GET("/tools", server.tools)
 	v1.POST("/tools/invoke", server.invokeTool)
 	v1.POST("/graph/query", server.graphQuery)
+	v1.POST("/graph/upsert", server.upsertGraph)
 	v1.POST("/artifacts", server.writeArtifact)
+	v1.POST("/artifacts/read", server.readArtifact)
 	v1.GET("/workflow-capabilities", server.workflowCapabilities)
 	v1.POST("/workflows/validate", server.validateWorkflow)
 	v1.POST("/workflows", server.createWorkflow)
@@ -101,8 +102,8 @@ func (s *Server) ready(c *gin.Context) {
 			"policy":       "read-only-fixture-policy",
 			"serviceAuth":  s.serviceAuthConfigured,
 			"providers":    "mock-in-memory",
-			"cloudStorage": "mock-in-memory",
-			"spanner":      "not-configured",
+			"cloudStorage": s.artifactStoreStatus(),
+			"spanner":      s.graphStoreStatus(),
 		},
 	})
 }
@@ -204,10 +205,6 @@ func (s *Server) graphQuery(c *gin.Context) {
 		return
 	}
 	result, err := s.graphStore.Query(c.Request.Context(), request)
-	if errors.Is(err, ErrGraphNotConfigured) {
-		errorResponse(c, http.StatusNotImplemented, "spanner_not_configured", "Spanner Graph adapter is intentionally deferred", false)
-		return
-	}
 	if err != nil {
 		errorResponse(c, http.StatusBadGateway, "graph_query_failed", err.Error(), true)
 		return
@@ -217,6 +214,27 @@ func (s *Server) graphQuery(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func (s *Server) upsertGraph(c *gin.Context) {
+	var request domain.GraphMutation
+	if !bindJSON(c, &request, domain.GraphUpsertContractVersion) {
+		return
+	}
+	if request.OrganizationID == "" || request.WorkflowID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.Scope.Empty() {
+		errorResponse(c, http.StatusBadRequest, "invalid_request", "workflow execution context is required for graph projection", false)
+		return
+	}
+	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{ExecutionContext: request.ExecutionContext, Resource: "spanner.graph", Action: "write_facts"})
+	if !decision.Allowed {
+		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
+		return
+	}
+	if err := s.graphStore.Upsert(c.Request.Context(), request); err != nil {
+		errorResponse(c, http.StatusBadGateway, "graph_upsert_failed", err.Error(), true)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "completed", "requestId": request.RequestID})
 }
 
 func (s *Server) writeArtifact(c *gin.Context) {
@@ -251,6 +269,43 @@ func (s *Server) writeArtifact(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func (s *Server) readArtifact(c *gin.Context) {
+	var request domain.ArtifactReadRequest
+	if !bindJSON(c, &request, domain.ArtifactReadContractVersion) {
+		return
+	}
+	if request.ArtifactRef == "" || request.OrganizationID == "" || request.WorkflowID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.Scope.Empty() {
+		errorResponse(c, http.StatusBadRequest, "invalid_request", "artifact reference and workflow execution context are required", false)
+		return
+	}
+	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{ExecutionContext: request.ExecutionContext, Resource: "cloud-storage", Action: "read_artifact"})
+	if !decision.Allowed {
+		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
+		return
+	}
+	result, err := s.artifactStore.Read(c.Request.Context(), request)
+	if err != nil {
+		errorResponse(c, http.StatusBadGateway, "artifact_read_failed", err.Error(), true)
+		return
+	}
+	c.Header("X-Artifact-Ref", result.ArtifactRef)
+	c.Data(http.StatusOK, result.ContentType, result.Bytes)
+}
+
+func (s *Server) artifactStoreStatus() string {
+	if _, ok := s.artifactStore.(*gcsArtifactStore); ok {
+		return "gcp-cloud-storage"
+	}
+	return "mock-in-memory"
+}
+
+func (s *Server) graphStoreStatus() string {
+	if _, ok := s.graphStore.(*spannerGraphStore); ok {
+		return "gcp-spanner"
+	}
+	return "mock-in-memory"
 }
 
 func mockTool(toolName string) (map[string]any, []string, []contractschemas.SourceFreshness, bool) {
@@ -309,10 +364,20 @@ func bindJSON(c *gin.Context, target any, expectedContract string) bool {
 		if validationError == nil {
 			validationError = contractschemas.Validate(contractschemas.SchemaGraphQuery, request)
 		}
+	case *domain.GraphMutation:
+		validationError = request.ExecutionContext.Validate(expectedContract)
+		if validationError == nil {
+			validationError = contractschemas.Validate(contractschemas.SchemaGraphUpsert, request)
+		}
 	case *domain.ArtifactWriteRequest:
 		validationError = request.ExecutionContext.Validate(expectedContract)
 		if validationError == nil {
 			validationError = contractschemas.Validate(contractschemas.SchemaArtifactWrite, request)
+		}
+	case *domain.ArtifactReadRequest:
+		validationError = request.ExecutionContext.Validate(expectedContract)
+		if validationError == nil {
+			validationError = contractschemas.Validate(contractschemas.SchemaArtifactRead, request)
 		}
 	}
 	if validationError != nil {

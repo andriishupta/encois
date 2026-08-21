@@ -19,12 +19,12 @@ resource "google_service_account" "agent_gateway" {
 }
 
 locals {
-  application_service_accounts = {
-    dashboard     = google_service_account.dashboard.email
-    api           = google_service_account.api.email
-    agent_runtime = google_service_account.agent_runtime.email
-    agent_gateway = google_service_account.agent_gateway.email
-  }
+  application_service_accounts = merge(
+    var.enable_dashboard ? { dashboard = google_service_account.dashboard.email } : {},
+    var.enable_api ? { api = google_service_account.api.email } : {},
+    var.enable_agent_runtime ? { agent_runtime = google_service_account.agent_runtime.email } : {},
+    var.enable_agent_gateway ? { agent_gateway = google_service_account.agent_gateway.email } : {}
+  )
 }
 
 resource "google_project_iam_member" "log_writer" {
@@ -44,15 +44,11 @@ resource "google_project_iam_member" "trace_agent" {
 }
 
 resource "google_project_iam_member" "runtime_vertex_user" {
+  count = var.enable_agent_runtime ? 1 : 0
+
   project = var.project_id
   role    = "roles/aiplatform.user"
   member  = "serviceAccount:${google_service_account.agent_runtime.email}"
-}
-
-resource "google_project_iam_member" "gateway_vertex_user" {
-  project = var.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.agent_gateway.email}"
 }
 
 resource "google_project_iam_member" "api_cloud_sql_client" {
@@ -63,16 +59,8 @@ resource "google_project_iam_member" "api_cloud_sql_client" {
   member  = "serviceAccount:${google_service_account.api.email}"
 }
 
-resource "google_project_iam_member" "runtime_spanner_user" {
-  count = var.enable_spanner ? 1 : 0
-
-  project = var.project_id
-  role    = "roles/spanner.databaseUser"
-  member  = "serviceAccount:${google_service_account.agent_runtime.email}"
-}
-
 resource "google_project_iam_member" "gateway_spanner_user" {
-  count = var.enable_spanner ? 1 : 0
+  count = var.enable_spanner && var.enable_agent_gateway ? 1 : 0
 
   project = var.project_id
   role    = "roles/spanner.databaseUser"

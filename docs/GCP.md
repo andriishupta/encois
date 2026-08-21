@@ -71,7 +71,7 @@ The migration enables PostgreSQL RLS on tenant-scoped tables. The API must execu
 - `organizations` — tenant root.
 - `organization_units` — organization, department, team, project, service, and future custom hierarchy nodes.
 - `roles`, `role_permissions` — system/custom role definitions and permissions.
-- `organization_memberships`, `membership_scopes` — user membership and direct hierarchy roots. The Gateway expands descendants; explicit grant/restriction persistence is a planned follow-up table, not a client-side rule.
+- `organization_memberships`, `membership_scopes` — user membership and direct hierarchy roots. The Gateway expands descendants; explicit grant/restriction persistence remains a planned follow-up table, not a client-side rule.
 - `integrations`, `integration_bindings` — one organization integration bound to many organization units/projects.
 - `webhook_endpoints`, `webhook_deliveries` — verified endpoint configuration and idempotent receipt projection.
 - `workflow_definitions`, `workflow_runs`, `workflow_events` — approved workflow definitions plus safe Temporal execution projections.
@@ -84,18 +84,29 @@ Large input/output data is represented by references such as `input_ref`, `resul
 
 ## Cloud Storage
 
-Use Cloud Storage for raw provider snapshots, uploaded files, and large investigation artifacts. Object keys must include environment and organization scope, for example:
+Use Cloud Storage for raw provider snapshots, uploaded files, and large investigation artifacts. Object keys must include organization scope; environment isolation is provided by the configured bucket/project, for example:
 
 ```text
-{environment}/org/{organizationId}/workflows/{workflowId}/artifacts/{artifactId}
+organizations/{organizationId}/sources/{sourceId}/revisions/{revision}.pdf
+{organizationId}/{workflowId}/{artifactId}
 ```
 
-The Gateway authorizes access and issues short-lived signed URLs. Buckets remain private, credentials stay in Secret Manager/ADC, and lifecycle retention is configured per environment. Redis is not used as a source of truth for files, workflows, authorization, or tenant data.
+The Gateway API records scoped artifact references, while the private Agent
+Gateway authorizes Runtime reads and performs the Cloud Storage access. The
+bucket remains private; no signed URL is exposed in the current slice.
+Credentials stay in Secret Manager/ADC, and lifecycle retention is configured
+per environment. Redis is not used as a source of truth for files, workflows,
+authorization, or tenant data.
 
 Every artifact request declares or receives a retention class. The local
 adapter records `ephemeral`, `investigation`, `source_snapshot`, or
 `legal_hold`; hosted Cloud Storage lifecycle rules and deletion jobs must enforce
 the corresponding TTL before real customer data is enabled.
+
+The current Spanner implementation is a tenant-keyed node/edge projection in
+`encois_graph_nodes` and `encois_graph_edges`, queried through the Agent
+Gateway. It is the MVP Graph persistence boundary; native property-graph query
+syntax can be introduced later without changing the Runtime contract.
 
 ## Temporal client boundary
 
@@ -106,9 +117,12 @@ metadata by workflow ID. The Go application polls the same task queue and owns
 workflow code and Activities. Temporal credentials belong in Secret Manager or
 the deployment secret integration; they are not browser configuration.
 
-For local development, an in-memory adapter is selected when
-`TEMPORAL_ADDRESS` is unset. This is a test/development projection only and
-must not be used for production or cross-instance coordination.
+For local development, the Agent Gateway and Runtime select in-process mock
+data adapters with `AGENT_GATEWAY_DATA_MODE=mock` and
+`AGENT_MEMORY_MODE=mock`. Hosted deployments select `gcp`, use ADC, and must
+provide the bucket, Spanner database, and Vertex AI Reasoning Engine resource.
+The Temporal API fallback remains an in-memory test/development projection
+only and must not be used for production or cross-instance coordination.
 
 Temporal Namespace policy: the MVP uses one shared Namespace with
 organization-prefixed Workflow IDs and Gateway/Agent Gateway authorization.

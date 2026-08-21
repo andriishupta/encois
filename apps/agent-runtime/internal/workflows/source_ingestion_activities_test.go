@@ -7,7 +7,7 @@ import (
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
-func TestSourceIngestionContractAndDeferredAdapterResult(t *testing.T) {
+func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-1",
@@ -33,8 +33,8 @@ func TestSourceIngestionContractAndDeferredAdapterResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("process source revision: %v", err)
 	}
-	if result.Status != contracts.IngestionStatusDeferred || result.Stage != "acquired" {
-		t.Fatalf("expected deferred acquisition result, got %+v", result)
+	if result.Status != contracts.IngestionStatusCompleted || result.Stage != "memory_distilled" || result.FactsCount == 0 {
+		t.Fatalf("expected completed ingestion result, got %+v", result)
 	}
 	if err := ValidateSourceIngestionResult(context.Background(), result); err != nil {
 		t.Fatalf("expected valid source ingestion result: %v", err)

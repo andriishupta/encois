@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { isDashboardMockMode } from '@/lib/auth'
 import { getMockOnboardingState, type MockOnboardingState } from '@/lib/onboarding'
 
 export const workspaceQueryKey = ['workspace'] as const
@@ -12,9 +13,11 @@ type WorkspaceContextValue = {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const mockMode = isDashboardMockMode()
   const query = useQuery({
     queryKey: workspaceQueryKey,
     queryFn: getMockOnboardingState,
+    enabled: mockMode,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
@@ -31,4 +34,3 @@ export function useWorkspace() {
   if (!context) throw new Error('useWorkspace must be used inside WorkspaceProvider')
   return context
 }
-

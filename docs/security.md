@@ -33,7 +33,8 @@ Human / public client
   -> provider API / MCP / isolated browser worker
 
 Gateway API -> control-plane database and projections
-Agent Gateway / Runtime -> Cloud Storage, Spanner Graph, Memory Bank
+Agent Gateway -> Cloud Storage, Spanner Graph
+Agent Runtime -> Memory Bank through its Activity boundary
 ```
 
 ### Public Gateway API
@@ -78,7 +79,7 @@ Every tenant-scoped entity must have an immutable `organization_id` or equivalen
 - database rows and unique constraints;
 - API requests, responses, cache keys, and idempotency keys;
 - Temporal Workflow IDs, inputs, Signals, search attributes, and projections;
-- Cloud Storage object prefixes and signed URLs;
+- Cloud Storage object prefixes and authenticated artifact references;
 - Spanner Graph nodes, edges, facts, and queries;
 - Memory Bank sessions and memories;
 - connector credentials and integration grants;
@@ -91,7 +92,7 @@ Tenant isolation must not depend on developers remembering one filter in every q
 - application-level authorization and repository methods that require scope;
 - database role separation and row-level security where supported;
 - tenant-aware foreign keys, indexes, and unique constraints;
-- tenant-specific object paths and signed URL conditions;
+- tenant-specific object paths and Agent Gateway authorization;
 - tenant-aware graph and memory query wrappers;
 - tests for cross-tenant reads, writes, caches, jobs, and error paths.
 
@@ -217,7 +218,7 @@ Requirements:
 - use workload identity or short-lived service credentials instead of long-lived service-account keys;
 - rotate and revoke credentials; document the owner and recovery path;
 - do not send credentials to the browser, model, MCP server unless that connector explicitly requires it, Temporal history, logs, traces, graph, Memory Bank, or generic error responses;
-- redact authorization headers, cookies, query-string secrets, provider tokens, and signed URLs before logging;
+- redact authorization headers, cookies, query-string secrets, provider tokens, and artifact references before logging;
 - treat secret values returned by providers or tools as sensitive even when the schema does not mark them.
 
 Connector credentials are resolved at the Agent Gateway. Agents request a capability; they do not receive a provider token. A provider token must be bound to the organization, integration, allowed scopes, and intended service identity.

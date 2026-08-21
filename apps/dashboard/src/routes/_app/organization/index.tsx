@@ -83,7 +83,7 @@ function OrganizationPage() {
         </Card>
 
         <div className="flex flex-col gap-4">
-          <Card>
+          {selectedUnit ? <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Building2 className="size-4 text-muted-foreground" aria-hidden="true" />{selectedUnit.name}</CardTitle>
               <CardDescription>{formatUnitPath(units, selectedUnit.id)}</CardDescription>
@@ -100,9 +100,9 @@ function OrganizationPage() {
                 <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button>
               </div>
             </CardContent>
-          </Card>
+          </Card> : <Card><CardHeader><CardTitle>Organization scope</CardTitle><CardDescription>The Gateway has not returned an organization projection.</CardDescription></CardHeader></Card>}
 
-          <Card>
+          {selectedUnit ? <Card>
             <CardHeader>
               <CardTitle>Scope inheritance</CardTitle>
               <CardDescription>Membership roots can include descendants; explicit restrictions will narrow the effective scope.</CardDescription>
@@ -112,7 +112,7 @@ function OrganizationPage() {
               <ScopeRow label="Child units" value={String(units.filter((unit) => unit.parentId === selectedUnit.id).length)} />
               <ScopeRow label="Permission board" value="Available to administrators" />
             </CardContent>
-          </Card>
+          </Card> : null}
         </div>
       </div>
 

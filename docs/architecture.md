@@ -25,10 +25,10 @@ The security properties for these boundaries, including tenant isolation, secret
 
 The maintained visual map of the current system, including service boundaries, implementation status, and the release investigation path, is [`docs/system-diagram.md`](system-diagram.md). Keep it synchronized with the repository when a boundary or deployment path changes.
 
-The current implementation review and ordered engineering backlog are in
-[`docs/next-steps.md`](next-steps.md). This architecture document describes
-the intended baseline; the review document explicitly distinguishes working
-scaffolds from production boundaries.
+The architecture, system diagram, flows, protocols, security baseline, and
+application READMEs are the maintained implementation references. Deferred
+production work is recorded next to the affected boundary rather than in a
+separate backlog document.
 
 ## 2. Architectural position
 
@@ -75,9 +75,8 @@ flowchart LR
     MCP --> Sources[GitHub / Jira / Google Workspace / Monitoring]
     ToolGateway --> Browser[Isolated browser worker\nlast-resort read-only path]
 
-    Runtime --> Graph[Spanner Graph\ncompany graph + facts]
-    Runtime --> Files[(Cloud Storage\nraw data and artifacts)]
-    API --> Graph
+    ToolGateway --> Graph[Spanner Graph\ncompany graph + facts]
+    ToolGateway --> Files[(Cloud Storage\nraw data and artifacts)]
 
     API --> Telemetry[OpenTelemetry]
     Temporal --> Telemetry
@@ -241,14 +240,15 @@ Blueprints remain provider-neutral execution graphs that consume source
 evidence; Workflow Templates remain a separate discovery/catalog layer and do
 not reference source IDs or become executable definitions.
 
-The first implementation exposes source registration, PDF upload, immutable
-revision metadata, source detail/status projection, and an ingestion launch
-route in the Gateway API. PDF bytes are written through the Gateway's scoped
-Cloud Storage adapter (with an explicit development/test memory fallback), and
-only the resulting artifact reference crosses the revision and Temporal
-boundaries. The Runtime validates the versioned envelope and still returns an
-explicit deferred result until concrete PDF parsing, provider parsers, Graph
-projection, and Memory adapters are wired.
+The implementation exposes source registration, PDF upload, immutable revision
+metadata, source detail/status projection, and an ingestion launch route in the
+Gateway API. PDF bytes are written through the Gateway's scoped Cloud Storage
+adapter (with an explicit development/test memory fallback), and only the
+resulting artifact reference crosses the revision and Temporal boundaries. The
+Runtime validates the versioned envelope, reads through Agent Gateway, and
+returns a completed result after deterministic facts, provenance, Graph, and
+Memory stages. OCR/transcription and live provider acquisition remain
+provider-specific adapters.
 
 #### Initial Google Cloud control-plane implementation
 
@@ -330,16 +330,13 @@ Temporal Workflows
   -> private Agent Gateway client
 ```
 
-The current repository implements the Workflow/Activity layer, ADK bundle, and
-private Agent Gateway client. Memory Bank and Spanner Graph remain target
-data-plane adapters, and Runtime/Agent Gateway provider-artifact Cloud Storage
-access is not active yet; they should be added behind Activities or the Agent
-Gateway after the hosted synthetic path is proven. The Gateway API already
-uses its scoped Cloud Storage adapter for the initial PDF source-upload path.
-The Runtime already applies the Memory redaction boundary and emits
-typed freshness/provenance/retention metadata, but provider persistence remains
-deferred. The Runtime must continue to receive references and stateless context,
-not connect to the Gateway API's control-plane Postgres.
+The current repository implements the Workflow/Activity layer, ADK bundle,
+private Agent Gateway client, local mock data plane, and GCP adapters. The
+Agent Gateway owns Cloud Storage and Spanner access; Runtime Activities own
+scoped Vertex AI Memory Bank calls. The Runtime continues to receive
+references and stateless context, not connect to the Gateway API's control-plane
+Postgres. Hosted adapter validation, retention, deletion, and provider quality
+remain deployment concerns.
 
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
 
@@ -514,8 +511,8 @@ The Agent Gateway is a private policy-enforcing tool broker. It is a separate in
 The initial implementation is a Gin-based internal HTTP service in
 `apps/agent-gateway`. Its MVP boundary is intentionally small: authorization
 checks, a fixture-level MCP-shaped tool catalog and invocation boundary, a
-Spanner Graph query boundary, and a Cloud Storage-shaped artifact boundary
-backed by in-memory/deferred adapters. Agent-specific Memory Bank access is a
+scope-aware Graph query/upsert boundary, and a Cloud Storage artifact
+read/write boundary backed by selectable mock/GCP adapters. Agent-specific Memory Bank access is a
 separate typed Runtime Activity boundary, not a public Gateway data source.
 Knowledge Source registration remains in the Gateway API control plane; the
 Agent Gateway only brokers source acquisition, artifact access, provider
@@ -526,10 +523,10 @@ availability, approval metadata, and required scope fields; invocation checks
 the registered capability and required scope after policy authorization. The
 policy implementation is explicitly limited to a deterministic read-only
 fixture policy, while Jira and GitHub tool responses are synthetic. Connector
-grants, persisted manifests, live providers, and the Agent Gateway's provider-
-artifact Cloud Storage adapter are still required before production; arbitrary
-tool execution and unsafe artifact paths are already denied by the current
-boundary.
+grants, persisted manifests, and live providers are still required before
+production; arbitrary tool execution and unsafe artifact paths are already
+denied by the current boundary. The Cloud Storage adapter itself is
+implemented and selected by the Gateway data mode.
 
 In a hosted deployment, Cloud Run IAM authenticates the Runtime with a Google
 ID token targeted at the Gateway service URL. The Runtime sends the Encois
@@ -895,8 +892,9 @@ readiness as the example rather than as a platform workflow type:
 6. Gemini/ADK synthesizes a structured result with confidence and evidence references.
 7. The Gateway API exposes the result to React with scope, workflow status, and trace links.
 
-Spanner Graph, Memory Bank, Cloud Storage raw evidence, and real provider
-adapters are subsequent capabilities. They extend the same contracts; they do
+Spanner Graph, Memory Bank, and Cloud Storage raw evidence now extend the same
+contracts through selectable local/GCP adapters; real provider acquisition and
+hosted retention/quality verification remain subsequent capabilities. They do
 not define a new workflow type.
 
 The first runtime deployment is intentionally small:
@@ -993,7 +991,8 @@ User: “Are we on track for the August 30 release, and what changed after yeste
 - Final identity provider and SSO protocol.
 - Temporal Cloud versus self-hosted Temporal for customer deployments.
 - Exact Spanner Graph edition, region, and cost profile.
-- Exact Go Memory Bank client/API integration from the Temporal ADK runtime.
+- Native Temporal `googleadk` execution integration; the current Activity-level
+  ADK path already has a real Vertex AI Memory Bank adapter.
 - Graph schema evolution and entity-resolution strategy.
 - Data retention, deletion, export, and residency controls.
 - Persisted explicit scope grants/restrictions and hierarchy administration.

@@ -13,6 +13,7 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/config"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/health"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/integrations/corecoordinator"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
@@ -63,7 +64,18 @@ func main() {
 	activities := workflows.NewActivities(agentBundle, cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)
 	controlPlaneClient := corecoordinator.NewHTTPClient(cfg.ControlPlaneURL, cfg.ControlPlaneToken, cfg.ControlPlaneAudience)
 	controlPlaneActivities := workflows.NewCoordinatorControlPlaneActivities(controlPlaneClient)
-	memoryActivities := workflows.NewMemoryActivities(memory.DeferredStore{})
+	memoryStore, closeMemory, err := memory.NewStore(context.Background(), cfg.MemoryMode, cfg.MemoryReasoningEngine)
+	if err != nil {
+		logger.Error("failed to initialize agent memory", "error", err, "mode", cfg.MemoryMode)
+		os.Exit(1)
+	}
+	defer func() { _ = closeMemory() }()
+	memoryActivities := workflows.NewMemoryActivities(memoryStore)
+	var agentGateway *gatewayclient.Client
+	if cfg.AgentGatewayURL != "" {
+		agentGateway = gatewayclient.NewWithAudience(cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)
+	}
+	sourceActivities := workflows.NewSourceIngestionActivities(agentGateway, memoryStore)
 	w := worker.New(temporalClient, cfg.TaskQueue, worker.Options{
 		OnFatalError: func(err error) {
 			healthServer.Ready.Store(false)
@@ -81,7 +93,7 @@ func main() {
 	w.RegisterActivity(workflows.ValidateBlueprintResult)
 	w.RegisterActivity(workflows.ValidateSourceIngestionContract)
 	w.RegisterActivity(workflows.ValidateSourceIngestionResult)
-	w.RegisterActivity(workflows.ProcessSourceRevision)
+	w.RegisterActivity(sourceActivities.ProcessSourceRevision)
 	w.RegisterActivity(activities.CreateBootstrapPlan)
 	w.RegisterActivity(activities.CreateCoordinatorPlan)
 	w.RegisterActivity(activities.ExecuteBlueprintStep)

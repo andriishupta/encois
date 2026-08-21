@@ -44,7 +44,8 @@ flowchart LR
     Runtime --> Gateway[Private Agent Gateway]
     Gateway --> Providers[GitHub / Jira / Google / monitoring]
     Runtime --> Gemini[Vertex AI / Gemini]
-    Runtime --> Graph[(Optional Spanner Graph)]
+    Runtime --> Memory[Vertex AI Memory Bank]
+    Gateway --> Graph[(Optional Spanner Graph)]
     Gateway --> Objects[(Cloud Storage)]
     Gateway --> Secrets[Secret Manager]
 ```
@@ -117,7 +118,8 @@ The canonical full local stack is:
 - `pnpm dev:local` runs `compose.local.yaml` with Postgres, the official
   Temporal development image, migrations, Firebase Auth Emulator, the local
   auth seed, all four application services, and the dashboard. The local
-  Runtime uses `AGENT_AI_MODE=mock`; no Gemini key or GCP credentials are
+  Runtime uses `AGENT_AI_MODE=mock`, the data plane uses local adapters, and
+  the dashboard fixture mode is explicit; no Gemini key or GCP credentials are
   required. See [`docs/local.md`](local.md) for the login and onboarding test.
 
 For the existing Go runtime, both paths are supported: the Temporal CLI's
@@ -146,9 +148,9 @@ The safe defaults create only the API/service foundation and secret containers w
 - Cloud Run service creation is disabled until an immutable image is supplied.
 - Identity Platform is disabled until the project has billing and the auth policy is confirmed.
 - The external load balancer and managed certificate are disabled until DNS is ready.
-- Spanner is disabled because it is billable and its Graph/data model is not yet finalized.
+- Spanner is disabled because it is billable; enabling the Agent Gateway requires the current Graph schema and database IAM bindings.
 - Cloud SQL is disabled because it is billable; when enabled it is the control-plane database for Drizzle migrations and API runtime state.
-- Cloud Storage is disabled unless a globally unique bucket name is provided.
+- Cloud Storage is disabled unless a globally unique bucket name is provided. The API uses object-admin access for upload rollback; the Agent Gateway uses separate read/write data-plane access.
 
 The Artifact Registry repository is part of the base stack. Image builds and pushes belong in CI, not in Terraform. Use immutable image tags or digests for deploys; do not use `latest` in production.
 
@@ -217,12 +219,14 @@ This is deliberately not Kubernetes. Cloud Run provides revisioned deployments, 
 - Cloud project creation, billing attachment, organization/folder policy, and DNS registrar changes.
 - Temporal Cloud namespace/provider automation; credentials are external secret inputs.
 - Cloud Armor, IAP, VPC Service Controls, private egress, and customer-specific data residency.
-- Spanner Graph schema, Memory Bank configuration, database migrations, and retention/deletion workflows.
+- Hosted Spanner schema/IAM verification, Memory Bank reasoning-engine setup,
+  and retention/deletion workflows. The application adapters and Terraform DDL
+  are present; these items require a real GCP project.
 - Cloud SQL private-IP/HA topology, IAM database authentication, and the first migration execution in the target project.
 - GitHub Actions/Cloud Build workflow files, vulnerability scanning, SBOM, image signing, and production approval policy.
 - Landing-page Cloud Run service. Until it exists, `/` falls back to the dashboard backend.
 
-These are not hidden assumptions; they are the next infrastructure decisions after the first vertical slice runs locally.
+These are explicit deferred infrastructure decisions after the first vertical slice runs locally.
 
 ## References
 

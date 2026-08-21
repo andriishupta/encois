@@ -9,8 +9,10 @@ import (
 const (
 	ToolRequestContractVersion         = string(contracts.ContractToolRequest)
 	GraphQueryContractVersion          = string(contracts.ContractGraphQuery)
+	GraphUpsertContractVersion         = string(contracts.ContractGraphUpsert)
 	GraphQueryResultContractVersion    = string(contracts.ContractGraphQueryResult)
 	ArtifactWriteContractVersion       = string(contracts.ContractArtifactWrite)
+	ArtifactReadContractVersion        = string(contracts.ContractArtifactRead)
 	ArtifactWriteResultContractVersion = string(contracts.ContractArtifactWriteResult)
 	AuthorizationContractVersion       = string(contracts.ContractAuthorizationCheck)
 	ToolResultContractVersion          = string(contracts.ContractToolResult)
@@ -140,6 +142,23 @@ type ArtifactWriteResponse struct {
 	Status          string                           `json:"status"`
 	RetentionClass  contracts.ArtifactRetentionClass `json:"retentionClass,omitempty"`
 	RetentionUntil  string                           `json:"retentionUntil,omitempty"`
+}
+
+type ArtifactReadRequest struct {
+	ExecutionContext
+	ArtifactRef string `json:"artifactRef"`
+}
+
+type ArtifactReadResponse struct {
+	ArtifactRef string `json:"artifactRef"`
+	ContentType string `json:"contentType"`
+	Bytes       []byte `json:"bytes"`
+}
+
+type GraphMutation struct {
+	ExecutionContext
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
 }
 
 // WorkflowStep is a builder node. Steps with the same satisfied dependencies

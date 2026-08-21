@@ -15,7 +15,7 @@ export function createSourcesRouter(options: SourceServiceOptions & { artifactSt
   router.get("/", listKnowledgeSourcesRoute);
   router.post("/", createKnowledgeSourceRoute);
   router.post("/uploads", uploadPdfKnowledgeSourceRoute(options.artifactStore));
-  router.get("/:sourceId", getKnowledgeSourceRoute);
+  router.get("/:sourceId", getKnowledgeSourceRoute(options));
   router.post("/:sourceId/revisions", createSourceRevisionRoute);
   router.post("/:sourceId/revisions/:revisionId/ingest", startSourceIngestionRoute(options));
   return router;

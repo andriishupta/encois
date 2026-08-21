@@ -14,7 +14,6 @@ This file is the working guide for contributors and coding agents. The source of
 - [`docs/security.md`](docs/security.md) — repository-wide security baseline, trust boundaries, and security invariants.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
 - [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state service and execution diagram.
-- [`docs/next-steps.md`](docs/next-steps.md) — current implementation review and ordered next-step backlog.
 - [`docs/hackaton.md`](docs/hackaton.md) — the local digest of the All Things Agentic hackathon requirements.
 
 Do not invent product requirements that conflict with those documents. If implementation reveals a meaningful architectural decision, update the relevant document or add a decision record rather than hiding the decision in code. The architecture documents are a baseline and should evolve with the first working vertical slice.
@@ -82,7 +81,7 @@ integrations/persistence -> domain ports
 
 Domain packages must not import Hono, React, Google Cloud SDKs, database clients, or vendor-specific integration code. Adapters implement domain-defined ports. Keep provider-specific payloads at the adapter boundary and map them into small internal models. Cross-language API, workflow, and private Agent Gateway payloads must use versioned OpenAPI/JSON Schema contracts. Do not share TypeScript source files with Go.
 
-If the control plane uses Postgres and Drizzle, the TypeScript API owns its schema and migrations. The Go Runtime and Agent Gateway do not connect to the control-plane database; they use Temporal payloads, internal contracts, Cloud Storage references, Spanner Graph, and Memory Bank through their own adapters.
+If the control plane uses Postgres and Drizzle, the TypeScript API owns its schema and migrations. The Go Runtime and Agent Gateway do not connect to the control-plane database: Runtime Activities use Temporal payloads, the private Agent Gateway, and the Memory Bank adapter; the Agent Gateway owns Cloud Storage and Spanner Graph access.
 
 Use scoped package names such as `@encois/domain` and `@encois/contracts`. Keep package APIs intentional: export stable entry points, avoid deep imports, and do not expose database or SDK types to every consumer.
 
@@ -115,7 +114,8 @@ pnpm -r lint
 pnpm -r test
 pnpm --filter @encois/dashboard dev
 pnpm --filter @encois/api-gateway dev
-(cd apps/agent-runtime && go run .)
+(cd apps/agent-gateway && AGENT_GATEWAY_DATA_MODE=mock go run .)
+(cd apps/agent-runtime && AGENT_AI_MODE=mock AGENT_MEMORY_MODE=mock go run .)
 ```
 
 Prefer the narrowest filter while iterating, then run the full checks before handoff.
@@ -252,8 +252,8 @@ Before submission, also verify the checklist in [`docs/hackaton.md`](docs/hackat
 These are intentionally not prerequisites for the first MVP, but should become tracked work as the product grows:
 
 - TODO: add a formal architecture decision record process and record decisions that materially change `docs/architecture.md`.
-- TODO: define the canonical organization, identity, and authorization model for multi-tenant data.
-- TODO: validate the Temporal Cloud deployment profile, Memory Bank integration from the Go runtime, and the Spanner Graph schema/cost model.
+- TODO: complete production authorization semantics for explicit grants/restrictions and hierarchy administration.
+- TODO: validate the hosted Temporal profile, Memory Bank/Spanner IAM, schema, and cost model in a real GCP project.
 - TODO: integrate Model Armor or an equivalent policy layer if required by the final Fortified Enterprise Fleet design.
 - TODO: define retention, deletion, export, and customer-data residency policies.
 - TODO: add CI with dependency scanning, secret scanning, SBOM generation, tests, and deploy previews.

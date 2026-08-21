@@ -7,8 +7,8 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
 )
 
-func TestMemoryActivityReturnsTypedDeferredResult(t *testing.T) {
-	activity := NewMemoryActivities(memory.DeferredStore{})
+func TestMemoryActivityReturnsTypedMockResult(t *testing.T) {
+	activity := NewMemoryActivities(memory.NewMockStore())
 	result, err := activity.ExecuteAgentMemory(context.Background(), memory.Request{
 		ContractVersion: "agent-memory.v1",
 		RequestID:       "memory-activity-1",
@@ -24,12 +24,12 @@ func TestMemoryActivityReturnsTypedDeferredResult(t *testing.T) {
 		MaxResults:      5,
 	})
 	if err != nil {
-		t.Fatalf("expected deferred memory operation to be non-fatal: %v", err)
+		t.Fatalf("expected mock memory operation to succeed: %v", err)
 	}
-	if result.Status != "deferred" || result.RequestID != "memory-activity-1" || len(result.Memories) != 0 {
-		t.Fatalf("unexpected deferred result: %+v", result)
+	if result.Status != "completed" || result.RequestID != "memory-activity-1" || len(result.Memories) != 0 {
+		t.Fatalf("unexpected mock result: %+v", result)
 	}
 	if err := memory.ValidateResult(result); err != nil {
-		t.Fatalf("deferred result must satisfy the result contract: %v", err)
+		t.Fatalf("mock result must satisfy the result contract: %v", err)
 	}
 }

@@ -128,6 +128,7 @@ export function createIdentityPlatformAuthenticator(
 }
 
 export type InternalServiceAuthenticatorOptions = {
+  allowDatabaseScopeFallback?: boolean;
   serviceToken: string;
   serviceUserId?: string;
 };
@@ -148,9 +149,9 @@ async function resolveOrganizationScope(
       .where(and(eq(membershipScopes.membershipId, membershipId), eq(membershipScopes.organizationId, organizationId))),
   ]);
 
-  // Direct membership scopes currently act as roots. Explicit grants and
-  // restrictions have a typed domain boundary, but their persistence table is
-  // intentionally deferred until the control-plane permission UI is needed.
+  // Direct membership scopes are the durable roots. Effective descendants are
+  // computed deterministically; separate explicit grant/restriction records
+  // are not part of the current control-plane model.
   const effective = resolveEffectiveScope({
     units: units.map((unit) => ({
       id: unit.id,
@@ -167,7 +168,8 @@ async function resolveOrganizationScope(
  * Authenticates the private Runtime -> Gateway control-plane boundary. In a
  * database-backed environment the configured service user must have an active
  * organization membership, and its scopes are loaded from persistence. The
- * header scope fallback exists only for the database-free local scaffold.
+ * The header scope fallback exists only when the caller explicitly enables the
+ * database-free local/test scaffold.
  */
 export function createInternalServiceAuthenticator(options: InternalServiceAuthenticatorOptions): AosAuthenticator {
   return async (context): Promise<AosAuthenticationResult> => {
@@ -211,6 +213,10 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
       return principal
         ? { principal, status: "authenticated" }
         : { reason: "service_user_has_no_active_membership", status: "unauthenticated" };
+    }
+
+    if (!options.allowDatabaseScopeFallback) {
+      return { reason: "database_authorization_unavailable", status: "unconfigured" };
     }
 
     const scope = (context.req.header("X-Encois-Scope") ?? "")

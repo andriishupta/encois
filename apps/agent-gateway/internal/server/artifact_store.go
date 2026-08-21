@@ -13,12 +13,13 @@ import (
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
-// ArtifactStore is the narrow boundary that the real Cloud Storage adapter
-// will implement. The first slice keeps an in-memory implementation so the
-// execution contract can already return scoped references without contacting
-// GCP or placing raw data in Temporal history.
+// ArtifactStore is the data-plane boundary for tenant-scoped raw artifacts.
+// The local implementation is deterministic; hosted wiring uses Cloud Storage
+// without changing the execution contract or placing raw data in Temporal
+// history.
 type ArtifactStore interface {
 	Write(context.Context, domain.ArtifactWriteRequest) (domain.ArtifactWriteResponse, error)
+	Read(context.Context, domain.ArtifactReadRequest) (domain.ArtifactReadResponse, error)
 }
 
 type memoryArtifactStore struct {
@@ -64,6 +65,30 @@ func (s *memoryArtifactStore) Write(_ context.Context, request domain.ArtifactWr
 		Status:          "mocked",
 		RetentionClass:  defaultRetentionClass(request.RetentionClass),
 		RetentionUntil:  request.RetentionUntil,
+	}, nil
+}
+
+func (s *memoryArtifactStore) Read(_ context.Context, request domain.ArtifactReadRequest) (domain.ArtifactReadResponse, error) {
+	if strings.TrimSpace(request.ArtifactRef) == "" {
+		return domain.ArtifactReadResponse{}, fmt.Errorf("artifactRef is required")
+	}
+	s.mu.Lock()
+	object, ok := s.objects[request.ArtifactRef]
+	s.mu.Unlock()
+	if !ok {
+		// The API Gateway's local upload store is intentionally process-local. A
+		// deterministic fixture keeps the multi-process local flow useful while
+		// the GCP mode reads the real object from Cloud Storage.
+		return domain.ArtifactReadResponse{
+			ArtifactRef: request.ArtifactRef,
+			ContentType: "text/plain",
+			Bytes:       []byte("Encois mock source\nsource=" + request.ArtifactRef),
+		}, nil
+	}
+	return domain.ArtifactReadResponse{
+		ArtifactRef: request.ArtifactRef,
+		ContentType: object.ContentType,
+		Bytes:       []byte(object.DataRef),
 	}, nil
 }
 

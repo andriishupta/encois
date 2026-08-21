@@ -2,15 +2,13 @@ package memory
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
 
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
-
-// ErrNotConfigured is returned until a hosted Memory Bank adapter is selected
-// and configured. The Workflow should treat it as a deferred capability, not
-// as an empty successful memory result.
-var ErrNotConfigured = errors.New("agent memory store is not configured")
 
 type Scope struct {
 	IDs        []string `json:"ids"`
@@ -73,10 +71,60 @@ type Store interface {
 	Execute(context.Context, Request) (Result, error)
 }
 
-type DeferredStore struct{}
+type MockStore struct {
+	mu      sync.RWMutex
+	records map[string][]Record
+}
 
-func (DeferredStore) Execute(context.Context, Request) (Result, error) {
-	return Result{}, ErrNotConfigured
+func NewMockStore() *MockStore {
+	return &MockStore{records: make(map[string][]Record)}
+}
+
+func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) {
+	key := scopeKey(request)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if request.Operation == "distill" && request.Distillation != nil {
+		record := Record{
+			ID:              fmt.Sprintf("mock-memory-%d", time.Now().UnixNano()),
+			AgentDefinition: request.MemoryScope.AgentDefinition,
+			Summary:         request.Distillation.Summary,
+			EvidenceRefs:    append([]string(nil), request.Distillation.EvidenceRefs...),
+			ObservedAt:      request.Distillation.ObservedAt,
+		}
+		s.records[key] = append(s.records[key], record)
+		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{record}}, nil
+	}
+	records := append([]Record(nil), s.records[key]...)
+	if request.Query != "" {
+		filtered := records[:0]
+		for _, record := range records {
+			if strings.Contains(strings.ToLower(record.Summary), strings.ToLower(request.Query)) {
+				filtered = append(filtered, record)
+			}
+		}
+		records = filtered
+	}
+	if request.MaxResults > 0 && len(records) > request.MaxResults {
+		records = records[len(records)-request.MaxResults:]
+	}
+	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: records}, nil
+}
+
+func scopeKey(request Request) string {
+	return strings.Join([]string{request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID}, "\x00")
+}
+
+func NewStore(ctx context.Context, mode, reasoningEngine string) (Store, func() error, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "mock":
+		return NewMockStore(), func() error { return nil }, nil
+	case "gcp", "vertex", "memory-bank":
+		store, err := NewGCPStore(ctx, reasoningEngine)
+		return store, func() error { return nil }, err
+	default:
+		return nil, nil, fmt.Errorf("unsupported agent memory mode %q", mode)
+	}
 }
 
 func ValidateRequest(request Request) error {

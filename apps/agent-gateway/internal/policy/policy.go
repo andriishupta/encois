@@ -55,19 +55,26 @@ func (p *ReadOnlyToolPolicy) Authorize(_ context.Context, request domain.Authori
 		response.Reason = "execution scope is empty"
 		return response
 	}
-	if request.Action != "invoke_tool" {
-		response.Decision = "deny"
-		response.Reason = fmt.Sprintf("action %q is not enabled by the read-only MVP policy", request.Action)
+	if request.Action == "invoke_tool" {
+		if _, ok := p.tools[request.Resource]; !ok {
+			response.Decision = "deny"
+			response.Reason = fmt.Sprintf("tool %q is not allowlisted", request.Resource)
+			return response
+		}
+		response.Allowed = true
+		response.Decision = "allow"
+		response.Reason = "allowlisted synthetic read-only tool"
 		return response
 	}
-	if _, ok := p.tools[request.Resource]; !ok {
-		response.Decision = "deny"
-		response.Reason = fmt.Sprintf("tool %q is not allowlisted", request.Resource)
+	if (request.Resource == "spanner.graph" && (request.Action == "read" || request.Action == "write_facts")) ||
+		(request.Resource == "cloud-storage" && (request.Action == "read_artifact" || request.Action == "write_artifact")) {
+		response.Allowed = true
+		response.Decision = "allow"
+		response.Reason = "allowlisted internal data-plane operation"
 		return response
 	}
-	response.Allowed = true
-	response.Decision = "allow"
-	response.Reason = "allowlisted synthetic read-only tool"
+	response.Decision = "deny"
+	response.Reason = fmt.Sprintf("action %q is not enabled by the read-only MVP policy", request.Action)
 	return response
 }
 

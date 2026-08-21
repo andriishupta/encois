@@ -14,6 +14,10 @@ export type WorkflowClient = {
   cancel(workflowId: string, organizationId: string, namespace: string): Promise<void>;
 };
 
+export type WorkflowResultReader = {
+  GetResult(workflowId: string, organizationId: string, namespace: string): Promise<unknown | null>;
+};
+
 function now(): string {
   return new Date().toISOString();
 }
@@ -38,7 +42,7 @@ function temporalStatus(value: string): WorkflowRunStatus {
   return WorkflowExecutionStatus.Running;
 }
 
-function createInMemoryWorkflowClient(): WorkflowClient {
+function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
   const executions = new Map<string, WorkflowExecutionProjection>();
   const requestHashes = new Map<string, string>();
   const updateHashes = new Map<string, string>();
@@ -73,6 +77,10 @@ function createInMemoryWorkflowClient(): WorkflowClient {
     async get(workflowId, organizationId) {
       const execution = executions.get(workflowId);
       return execution?.organizationId === organizationId ? execution : null;
+    },
+
+    async GetResult() {
+      return null;
     },
 
     async list(organizationId) {
@@ -134,7 +142,7 @@ type TemporalWorkflowClientOptions = {
   defaultNamespace: string;
 };
 
-function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): WorkflowClient {
+function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): WorkflowClient & WorkflowResultReader {
   let connectionPromise: Promise<Connection> | undefined;
   let clientPromise: Promise<Client> | undefined;
 
@@ -241,6 +249,12 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         createdAt: description.startTime?.toISOString() ?? timestamp,
         updatedAt: timestamp,
       };
+    },
+
+    async GetResult(workflowId, organizationId) {
+      if (!workflowId.startsWith(`workflow:${organizationId}:`)) return null;
+      const handle = (await getClient()).workflow.getHandle(workflowId);
+      return handle.result();
     },
 
     async list(organizationId, namespace) {

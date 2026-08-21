@@ -24,8 +24,10 @@ const (
 	SchemaToolRequest           SchemaName = "toolRequest"
 	SchemaToolResult            SchemaName = "toolResult"
 	SchemaArtifactWrite         SchemaName = "artifactWrite"
+	SchemaArtifactRead          SchemaName = "artifactRead"
 	SchemaArtifactWriteResult   SchemaName = "artifactWriteResult"
 	SchemaGraphQuery            SchemaName = "graphQuery"
+	SchemaGraphUpsert           SchemaName = "graphUpsert"
 	SchemaGraphQueryResult      SchemaName = "graphQueryResult"
 	SchemaAgentMemory           SchemaName = "agentMemory"
 	SchemaAgentMemoryResult     SchemaName = "agentMemoryResult"
@@ -50,8 +52,10 @@ var schemaPaths = map[SchemaName]string{
 	SchemaToolRequest:           "schemas/tool-request.v1.json",
 	SchemaToolResult:            "schemas/tool-result.v1.json",
 	SchemaArtifactWrite:         "schemas/artifact-write.v1.json",
+	SchemaArtifactRead:          "schemas/artifact-read.v1.json",
 	SchemaArtifactWriteResult:   "schemas/artifact-write-result.v1.json",
 	SchemaGraphQuery:            "schemas/graph-query.v1.json",
+	SchemaGraphUpsert:           "schemas/graph-upsert.v1.json",
 	SchemaGraphQueryResult:      "schemas/graph-query-result.v1.json",
 	SchemaAgentMemory:           "schemas/agent-memory.v1.json",
 	SchemaAgentMemoryResult:     "schemas/agent-memory-result.v1.json",

@@ -2,14 +2,14 @@
 
 **Status:** living current-state map  
 **Last reviewed:** 2026-08-21
-**Purpose:** keep one diagram that shows the current system shape, deployable boundaries, and the parts that are still scaffold or deferred.
+**Purpose:** keep one diagram that shows the current system shape, deployable boundaries, and the remaining hosted/provider work.
 
 This document is the visual map of the repository. It should be updated when a service boundary, runtime responsibility, data store, or deployment path changes. Detailed behavioral scenarios belong in [`flows.md`](flows.md); component decisions belong in [`architecture.md`](architecture.md).
 
 ## Legend
 
 - Green: implemented boundary or working local path.
-- Yellow: implemented boundary with a mock, deferred adapter, or incomplete hosted enforcement.
+- Yellow: implemented boundary with a local mock and/or incomplete hosted enforcement.
 - Blue: target capability with no current repository boundary.
 - Gray: external system or managed platform.
 - Dashed arrows: optional, future, or not yet connected in the current vertical slice.
@@ -45,9 +45,9 @@ flowchart TB
 
     subgraph Knowledge[Knowledge and evidence plane]
         Gemini[Vertex AI / Gemini\nADK model calls and synthesis]
-        Memory[Agent-specific Memory Bank\nTyped Runtime Activity + redaction boundary\nCurrent: deferred store; target: hosted memory]
-        Graph[(Spanner Graph\nTyped query boundary\nCurrent: deferred store; target: normalized facts)]
-        Storage[(Cloud Storage\nTyped artifact + retention boundary\nCurrent: in-memory refs; target: raw artifacts)]
+        Memory[Agent-specific Memory Bank\nTyped Runtime Activity + redaction boundary\nCurrent: mock or Vertex AI adapter]
+        Graph[(Spanner Graph\nTyped query/upsert boundary\nCurrent: mock or Spanner adapter)]
+        Storage[(Cloud Storage\nTyped artifact + retention boundary\nCurrent: mock or GCS adapter)]
     end
 
     Sources[GitHub / Jira / Google Workspace / monitoring\nExternal systems]
@@ -71,9 +71,9 @@ flowchart TB
     AgentGateway --> Integrations
     Integrations --> Sources
     Runtime --> Gemini
-    Runtime -. typed memory Activity\nprovider deferred .-> Memory
-    AgentGateway -. typed graph query\nprovider deferred .-> Graph
-    AgentGateway -. typed artifact refs\nprovider deferred .-> Storage
+    Runtime --> Memory
+    AgentGateway --> Graph
+    AgentGateway --> Storage
     API -.-> Ops
     Temporal -.-> Ops
     Runtime -.-> Ops
@@ -144,9 +144,9 @@ flowchart LR
     SQL[(PostgreSQL)]
     Google[Vertex AI / Gemini]
     Provider[External provider APIs / MCP]
-    Evidence[(Cloud Storage\nCurrent: in-memory ArtifactStore)]
-    CompanyGraph[(Spanner Graph\nCurrent: deferred GraphStore)]
-        AgentMemory[(Memory Bank\nCurrent: deferred store + active redaction boundary)]
+    Evidence[(Cloud Storage\nCurrent: mock or GCS ArtifactStore)]
+    CompanyGraph[(Spanner Graph\nCurrent: mock or Spanner GraphStore)]
+        AgentMemory[(Memory Bank\nCurrent: mock or Vertex AI adapter + redaction boundary)]
 
     Dashboard --> Routes
     RuntimeClient -. private control plane .-> RuntimeControl
@@ -162,9 +162,9 @@ flowchart LR
     GatewayHTTP --> GatewayAuth --> GatewayPolicy --> ToolRegistry --> ProviderAdapters
     ProviderAdapters --> Provider
     ADK --> Google
-    Activities -. typed artifact refs\nprovider deferred .-> Evidence
-    RuntimeClient -. typed graph query\nprovider deferred .-> CompanyGraph
-    ADK -. typed memory Activity\nprovider deferred .-> AgentMemory
+    Activities --> Evidence
+    RuntimeClient --> CompanyGraph
+    ADK --> AgentMemory
 
     classDef live fill:#dcfce7,stroke:#15803d,color:#14532d
     classDef scaffold fill:#fef3c7,stroke:#b45309,color:#78350f
@@ -217,7 +217,7 @@ sequenceDiagram
     GitHub-->>AG: Evidence batch
     AG-->>RT: Validated scoped result
 
-    RT-->>Data: Optional typed evidence/graph/memory boundary\n(current providers deferred)
+    RT-->>Data: Typed evidence/graph/memory boundary\n(mock locally or GCP hosted)
     RT->>RT: Keep structured evidence references in result
     RT->>RT: Synthesize structured result with Gemini/ADK
     RT-->>TC: Complete workflow or wait for Signal

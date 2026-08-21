@@ -20,8 +20,9 @@ secret_names = [
   "control-plane-service-token",
 ]
 
-# This must be globally unique if artifact storage is enabled.
-artifact_bucket_name = "replace-with-globally-unique-artifact-bucket"
+# Leave empty until the Cloud Storage data plane is enabled. If set, the name
+# must be globally unique and the bucket is created by Terraform.
+artifact_bucket_name = ""
 
 # Set these only when the corresponding service is enabled.
 dashboard_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"

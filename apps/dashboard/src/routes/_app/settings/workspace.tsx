@@ -5,6 +5,7 @@ import { Check, Save, SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { isDashboardMockMode } from '@/lib/auth'
 import { updateMockOnboardingState } from '@/lib/onboarding'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/_app/settings/workspace')({
 function WorkspaceSettingsPage() {
   const queryClient = useQueryClient()
   const { workspace } = useWorkspace()
+  const mockMode = isDashboardMockMode()
   const [name, setName] = useState(workspace?.workspaceName ?? '')
   const [scope, setScope] = useState('Organization-wide')
   const [preference, setPreference] = useState('Evidence first')
@@ -22,6 +24,7 @@ function WorkspaceSettingsPage() {
 
   function saveSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!mockMode) return
     queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ workspaceName: name }))
     setSaved(true)
     window.setTimeout(() => setSaved(false), 1800)
@@ -34,13 +37,13 @@ function WorkspaceSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden="true" />Workspace</CardTitle>
-            <CardDescription>These preferences apply to the current organization scope.</CardDescription>
+            <CardDescription>{mockMode ? 'These preferences apply to the current organization scope.' : 'Workspace preference persistence is not exposed by the current API.'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="settings-workspace-name">Workspace name<input id="settings-workspace-name" value={name} onChange={(event) => setName(event.target.value)} className={inputClassName} /></label>
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="settings-scope">Default scope<select id="settings-scope" value={scope} onChange={(event) => setScope(event.target.value)} className={inputClassName}><option>Organization-wide</option><option>Engineering</option><option>Selected projects</option></select></label>
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="settings-preference">Default investigation preference<select id="settings-preference" value={preference} onChange={(event) => setPreference(event.target.value)} className={inputClassName}><option>Evidence first</option><option>Fast summary</option><option>Deep investigation</option></select></label>
-            <div className="flex justify-end"><Button type="submit">{saved ? <><Check data-icon="inline-start" />Saved</> : <><Save data-icon="inline-start" />Save changes</>}</Button></div>
+            <div className="flex justify-end"><Button type="submit" disabled={!mockMode}>{saved ? <><Check data-icon="inline-start" />Saved</> : <><Save data-icon="inline-start" />Save changes</>}</Button></div>
           </CardContent>
         </Card>
         <Card className="h-fit">
@@ -55,4 +58,3 @@ function WorkspaceSettingsPage() {
 }
 
 const inputClassName = 'h-9 rounded-md border border-input bg-background px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
-

@@ -9,7 +9,7 @@ exposes only internal liveness/readiness endpoints for Cloud Run.
 Start the private Agent Gateway first, then a local Temporal server, and run:
 
 ```bash
-go run ./cmd/agent-runtime
+AGENT_AI_MODE=mock AGENT_MEMORY_MODE=mock go run ./cmd/agent-runtime
 ```
 
 Configuration is environment-based:
@@ -43,6 +43,11 @@ Configuration is environment-based:
   without it ADK agent steps return a deferred status instead of calling
   Gemini. Use `AGENT_AI_MODE=mock` when the local workflow should produce a
   short deterministic AI result instead;
+- `AGENT_MEMORY_MODE` — `gcp` (default) calls Vertex AI Memory Bank through the
+  configured Reasoning Engine; use the explicit `mock` value for local/test
+  runs;
+- `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
+  name required by `AGENT_MEMORY_MODE=gcp`;
 - `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.
 - `GEMINI_COORDINATOR_MODEL` — defaults to `gemini-3.1-pro-preview`; used by
   the Coordinator and Workflow Creator instead of the lower-latency specialist
@@ -89,9 +94,10 @@ Registered workflows:
   reconciliation loop; uses Signals, timers, and Continue-As-New;
 - `BootstrapProjectWorkflow` — short initial bootstrap phase.
 - `encois.source-ingestion.v1` — platform-owned source/revision ingestion
-  coordinator. It is distinct from user Blueprints and currently returns a
-  typed deferred result until artifact/provider parsers, Graph projection, and
-  Memory Bank adapters are configured.
+  coordinator. It is distinct from user Blueprints and runs the shared
+  acquire → parse → facts/provenance → Graph → Memory pipeline. Local mode
+  uses deterministic source fixtures; hosted mode reads artifacts through the
+  Agent Gateway and writes to the configured GCP adapters.
 
 The Coordinator and Workflow Creator prompts are present in the ADK bundle. The
 bootstrap Workflow calls a `CreateBootstrapPlan` Activity, which discards raw
@@ -114,10 +120,11 @@ are invoked by explicit `tool` steps.
 Knowledge Source ingestion uses the same private data-plane boundary after a
 Source and immutable Revision are registered by the Gateway API. The Workflow
 input carries only source/revision IDs, scope, trigger, and artifact/provider
-references; raw bytes and credentials never enter Temporal history. The common
-pipeline is acquisition, parse/OCR/transcription, scope and PII checks,
-extraction, provenance, Graph projection, and optional agent-memory
-distillation.
+references; raw bytes and credentials never enter Temporal history. The
+current MVP pipeline performs acquisition, text normalization, deterministic
+fact extraction, provenance, Graph projection, and Memory distillation. OCR,
+transcription, and live provider adapters remain provider-specific follow-up
+work.
 
 The generic interpreter currently supports dependency ordering, parallel ready
 steps, tool and agent Activities, deterministic transform/condition steps,
@@ -129,16 +136,17 @@ TypeScript API, Runtime contract Activities, and Agent Gateway tool boundary;
 the `tool-manifest.v1` catalog schema is also shared. The generic
 `blueprint-context` Update is now registered and exercised locally; broader
 Update types, hosted migration/concurrency verification, and the visibility
-integration remain the next boundaries. Signal/Update command receipts are
+integration remain deferred boundaries. Signal/Update command receipts are
 implemented in the Gateway persistence boundary.
 
 Agent-specific Memory Bank access has a separate typed boundary in
 `internal/memory`. It supports scoped `retrieve` and evidence-linked
 `distill` requests, validates the canonical contracts, and is registered as the
-`ExecuteAgentMemory` Activity. The default store returns a typed deferred result
-because no hosted Memory Bank adapter is configured. Memory operations are not
-Workflow state and are never a substitute for the company Graph or control-plane
-Postgres.
+`ExecuteAgentMemory` Activity. `AGENT_MEMORY_MODE=mock` is enabled explicitly
+by the local Compose configuration; `gcp` uses the official Vertex AI Memory
+Bank REST client. Memory operations are
+not Workflow state and are never a substitute for the company Graph or
+control-plane Postgres.
 
 The runtime must not connect directly to the TypeScript control-plane database
 or expose a public HTTP API. `GET /health/live` and `GET /health/ready` exist

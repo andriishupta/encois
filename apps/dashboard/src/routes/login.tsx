@@ -2,15 +2,19 @@ import { useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { Activity, ArrowRight, Chrome } from 'lucide-react'
 import { getAuthStatus, isApiError } from '@/lib/api'
-import { getAuthSession, getDevelopmentAuthSession, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
+import { getAuthSession, getDevelopmentAuthSession, isDashboardMockMode, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+function postAuthPath(): '/' | '/onboarding/workspace' {
+  return isDashboardMockMode() && !getMockOnboardingState()?.onboardingComplete ? '/onboarding/workspace' : '/'
+}
+
 export const Route = createFileRoute('/login')({
   beforeLoad: () => {
     if (getAuthSession()) {
-      throw redirect({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+      throw redirect({ to: postAuthPath() })
     }
   },
   component: LoginPage,
@@ -37,7 +41,7 @@ function LoginPage() {
         await navigate({ to: '/waitlist' })
         return
       }
-      await navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+      await navigate({ to: postAuthPath() })
     } catch (cause) {
       if (isApiError(cause) && cause.code === 'PERSISTENCE_UNAVAILABLE') {
         setError('Access provisioning is not available yet. Please try again later.')
@@ -64,7 +68,7 @@ function LoginPage() {
         await navigate({ to: '/waitlist' })
         return
       }
-      await navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+      await navigate({ to: postAuthPath() })
     } catch (cause) {
       if (isApiError(cause) && cause.status === 401) {
         setError('This local account is not enabled for Encois yet.')
@@ -79,7 +83,7 @@ function LoginPage() {
   function useLocalDevelopmentSession() {
     if (!developmentSession) return
     setAuthSession(developmentSession)
-    void navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+    void navigate({ to: postAuthPath() })
   }
 
   return (

@@ -9,15 +9,16 @@ source acquisition, provider tools, raw artifact access, and future Graph
 projection; it is not a second Source registry.
 
 The current implementation provides the HTTP boundary, service authentication,
-a deterministic read-only fixture policy, and an in-memory artifact-store
-adapter. Spanner, Cloud Storage, and real provider adapters are still deferred.
+a deterministic read-only fixture policy, and selectable mock/GCP data-plane
+adapters. Local mode is process-local; GCP mode uses Cloud Storage and Spanner
+through Application Default Credentials.
 
 ## Run
 
 From this directory:
 
 ```bash
-go run ./cmd/agent-gateway
+AGENT_GATEWAY_DATA_MODE=mock go run ./cmd/agent-gateway
 ```
 
 Default address: `http://127.0.0.1:8080`.
@@ -38,10 +39,13 @@ Endpoints:
 - `POST /v1/tools/invoke` — mock `jira.project_tasks` and
   `github.project_activity` tools;
 - `POST /v1/graph/query` — typed, scope-constrained Spanner Graph boundary;
-  the current fixture policy denies it, and an allowed request returns `501`
-  until a GraphStore adapter is configured;
+  supports named logical queries against the mock or Spanner-backed node/edge
+  projection;
+- `POST /v1/graph/upsert` — internal normalized fact/provenance projection;
 - `POST /v1/artifacts` — tenant-scoped artifact reference boundary; currently
-  backed by an injectable in-memory adapter, with Cloud Storage deferred.
+  backed by the selected mock or Cloud Storage adapter;
+- `POST /v1/artifacts/read` — internal scoped raw artifact read used by source
+  ingestion;
 - `GET /v1/workflow-capabilities` — registered builder capabilities and the
   generic Temporal workflow type;
 - `POST /v1/workflows/validate` — validates a user blueprint and derives its
@@ -65,9 +69,14 @@ The following provider-facing pieces remain future work:
 
 - resolve scoped provider credentials through managed secret storage;
 - route allowlisted live provider or MCP calls;
-- replace the in-memory artifact adapter with Cloud Storage for large raw
-  responses and artifacts; and
-- read or write normalized, authorized company context through Spanner.
+- connector grants, live provider/MCP discovery, and non-fixture provider calls;
+- retention/deletion verification and production operational policies for the
+  hosted adapters.
+
+Set `AGENT_GATEWAY_DATA_MODE=mock` explicitly for local/test development. The
+default is `gcp`; set it with `GCP_STORAGE_BUCKET` and `SPANNER_DATABASE` to
+activate the hosted adapters.
+The Spanner database must contain the tables from `infra/spanner-schema.sql`.
 
 The current policy already validates execution context, policy version, scope,
 and the read-only tool allowlist. A revision without service authentication

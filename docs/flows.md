@@ -273,12 +273,13 @@ Manual:      validated note/fact -> shared pipeline
 Media:       transcript/metadata -> shared pipeline
 ```
 
-The current scaffold persists the first three control-plane records, accepts a
-validated PDF upload into the configured Cloud Storage adapter, exposes source
-revisions and ingestion runs to the Dashboard, and starts the registered
-Runtime Workflow. It returns `deferred` at the acquisition/parser stage while
-PDF parsing, live Jira/GitHub adapters, PII classification, Graph writes, and
-Memory Bank distillation remain explicit adapter work.
+The current implementation persists the first three control-plane records,
+accepts a validated PDF upload into the configured Cloud Storage adapter,
+exposes source revisions and ingestion runs to the Dashboard, and starts the
+registered Runtime Workflow. Local mode uses a deterministic reader/parser and
+mock data stores; hosted mode reads through Agent Gateway and projects facts to
+Spanner plus distilled context to Memory Bank. OCR/transcription and live
+Jira/GitHub acquisition remain provider-specific adapters.
 
 ## 2. Request-to-worker flow
 
@@ -679,4 +680,5 @@ Deferred:
 - customer-specific physical deployment;
 - enterprise SSO and complex policy administration;
 - advanced graph algorithms and full GraphRAG document pipelines;
-- Agent Engine Memory Bank and Spanner Graph integrations beyond the generic store boundaries;
+- live provider acquisition and production-grade Memory Bank/Spanner quality,
+  retention, and deletion controls;

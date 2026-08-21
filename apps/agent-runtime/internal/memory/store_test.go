@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 )
@@ -22,10 +21,35 @@ func TestSanitizeRequestRedactsObviousPIIAndSecrets(t *testing.T) {
 	}
 }
 
-func TestDeferredStoreDoesNotPretendMemoryIsAvailable(t *testing.T) {
-	_, err := (DeferredStore{}).Execute(context.Background(), Request{})
-	if !errors.Is(err, ErrNotConfigured) {
-		t.Fatalf("expected ErrNotConfigured, got %v", err)
+func TestMockStoreDistillsAndRetrievesScopedMemory(t *testing.T) {
+	store := NewMockStore()
+	request := Request{
+		ContractVersion: "agent-memory.v1",
+		RequestID:       "memory-mock-1",
+		WorkflowID:      "workflow:org-1:release-1",
+		OrganizationID:  "org-1",
+		ActorID:         "actor-1",
+		Scope:           Scope{IDs: []string{"team-1"}},
+		PolicyVersion:   "policy-1",
+		AgentDefinition: "source-ingestion",
+		Operation:       "distill",
+		MemoryScope:     MemoryScope{AgentDefinition: "source-ingestion", ProjectID: "project-1"},
+		Distillation: &Distillation{
+			Summary:      "A release blocker requires QA confirmation.",
+			EvidenceRefs: []string{"source:source-1:revision-1"},
+			ObservedAt:   "2026-08-20T16:00:00Z",
+		},
+	}
+	if _, err := store.Execute(context.Background(), request); err != nil {
+		t.Fatalf("distill failed: %v", err)
+	}
+	retrieval := request
+	retrieval.Operation = "retrieve"
+	retrieval.Distillation = nil
+	retrieval.Query = "blocker"
+	result, err := store.Execute(context.Background(), retrieval)
+	if err != nil || len(result.Memories) != 1 {
+		t.Fatalf("expected one scoped mock memory, result=%+v err=%v", result, err)
 	}
 }
 

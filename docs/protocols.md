@@ -63,7 +63,7 @@ sink, and a one-shot `coordinator-dispatcher` process that can run from the API
 image. Applied plans with an explicit `start` intent now emit `workflowStarts`
 and the Coordinator starts those immutable snapshots through the private
 Gateway Activity. Cloud Run Job/Cloud Scheduler wiring, persisted manifests,
-and a hosted Temporal/Cloud Run smoke path remain next-step work.
+and a hosted Temporal/Cloud Run smoke path remain deferred implementation work.
 
 An executable plan change may carry an explicit `start` intent containing a
 business key and optional business input. Applying the plan converts those
@@ -202,10 +202,10 @@ the business meaning of a tool result.
 
 The repository reserves `agent-memory.v1` and `agent-memory-result.v1` for
 scoped agent-memory retrieval and evidence-linked distillation. The Go Runtime
-exposes this through an Activity-side `memory.Store` boundary; its default
-adapter is deferred until a hosted Memory Bank provider is selected. Memory
-results are summaries and references, not raw provider payloads or Workflow
-history.
+exposes this through an Activity-side `memory.Store` boundary with a scoped
+local mock and a Vertex AI Memory Bank adapter selected by `AGENT_MEMORY_MODE`.
+Memory results are summaries and references, not raw provider payloads or
+Workflow history.
 
 ### 4. Tool protocol
 
@@ -270,11 +270,10 @@ source-ingestion-result.v1 typed stage, status, fact count, evidence refs
 
 The Gateway API owns source registration and revision metadata. The Runtime
 owns the durable ingestion orchestration. The Agent Gateway owns the final
-policy check and data-plane access to provider APIs, artifact storage, and
-future Graph projection. No service sends raw bytes or credentials through a
-Temporal payload. A result may be `deferred` when an adapter is unavailable;
-that is different from a successful Graph projection and must remain visible
-to the caller.
+policy check and data-plane access to provider APIs, Cloud Storage, and Graph
+projection. No service sends raw bytes or credentials through a Temporal
+payload. Local mode uses deterministic adapters; hosted mode uses the GCP
+adapters and reports provider failures as failed/degraded results.
 
 The same revision can be triggered by `bootstrap`, `manual`, `webhook`,
 `schedule`, or `reconcile`. Trigger type changes why ingestion starts, not the

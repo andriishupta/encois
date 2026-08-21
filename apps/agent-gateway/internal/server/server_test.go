@@ -28,6 +28,10 @@ func (s *recordingArtifactStore) Write(_ context.Context, request domain.Artifac
 	}, nil
 }
 
+func (s *recordingArtifactStore) Read(_ context.Context, request domain.ArtifactReadRequest) (domain.ArtifactReadResponse, error) {
+	return domain.ArtifactReadResponse{ArtifactRef: request.ArtifactRef, ContentType: "text/plain", Bytes: []byte("fixture")}, nil
+}
+
 type recordingGraphStore struct {
 	queries int
 }
@@ -42,6 +46,8 @@ func (s *recordingGraphStore) Query(_ context.Context, request domain.GraphQuery
 		Edges:           []domain.GraphEdge{{ID: "edge-1", SourceID: "project-1", TargetID: "team-1", Relationship: "belongs_to", Properties: map[string]any{}}},
 	}, nil
 }
+
+func (s *recordingGraphStore) Upsert(context.Context, domain.GraphMutation) error { return nil }
 
 func TestMockToolInvocation(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
@@ -273,7 +279,7 @@ func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
 	}
 }
 
-func TestGraphQueryIsDeferredWithoutAnAdapter(t *testing.T) {
+func TestGraphQueryUsesDefaultMockAdapter(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
 	body := `{"contractVersion":"graph-query.v1","requestId":"graph-deferred","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"query":"project.related_entities"}`
 	response := httptest.NewRecorder()
@@ -281,8 +287,8 @@ func TestGraphQueryIsDeferredWithoutAnAdapter(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer test-token")
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusNotImplemented {
-		t.Fatalf("expected deferred graph adapter to return 501, got %d: %s", response.Code, response.Body.String())
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected default mock graph adapter to return 200, got %d: %s", response.Code, response.Body.String())
 	}
 }
 

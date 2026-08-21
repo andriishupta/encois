@@ -1,10 +1,11 @@
 import { Outlet, createFileRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
 import { Activity, Check, Circle } from 'lucide-react'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthSession, isDashboardMockMode } from '@/lib/auth'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: () => {
     if (!getAuthSession()) throw redirect({ to: '/login' })
+    if (!isDashboardMockMode()) throw redirect({ to: '/' })
   },
   component: OnboardingLayout,
 })

@@ -4,8 +4,10 @@ import executionContextSchema from "../schemas/execution-context.v1.json" with {
 import toolRequestSchema from "../schemas/tool-request.v1.json" with { type: "json" };
 import toolResultSchema from "../schemas/tool-result.v1.json" with { type: "json" };
 import artifactWriteSchema from "../schemas/artifact-write.v1.json" with { type: "json" };
+import artifactReadSchema from "../schemas/artifact-read.v1.json" with { type: "json" };
 import artifactWriteResultSchema from "../schemas/artifact-write-result.v1.json" with { type: "json" };
 import graphQuerySchema from "../schemas/graph-query.v1.json" with { type: "json" };
+import graphUpsertSchema from "../schemas/graph-upsert.v1.json" with { type: "json" };
 import graphQueryResultSchema from "../schemas/graph-query-result.v1.json" with { type: "json" };
 import agentMemorySchema from "../schemas/agent-memory.v1.json" with { type: "json" };
 import agentMemoryResultSchema from "../schemas/agent-memory-result.v1.json" with { type: "json" };
@@ -28,8 +30,10 @@ export const CONTRACT_SCHEMA_FILES = {
   toolRequest: "tool-request.v1.json",
   toolResult: "tool-result.v1.json",
   artifactWrite: "artifact-write.v1.json",
+  artifactRead: "artifact-read.v1.json",
   artifactWriteResult: "artifact-write-result.v1.json",
   graphQuery: "graph-query.v1.json",
+  graphUpsert: "graph-upsert.v1.json",
   graphQueryResult: "graph-query-result.v1.json",
   agentMemory: "agent-memory.v1.json",
   agentMemoryResult: "agent-memory-result.v1.json",
@@ -59,8 +63,10 @@ const schemas: Record<ContractSchemaName, object> = {
   toolRequest: toolRequestSchema,
   toolResult: toolResultSchema,
   artifactWrite: artifactWriteSchema,
+  artifactRead: artifactReadSchema,
   artifactWriteResult: artifactWriteResultSchema,
   graphQuery: graphQuerySchema,
+  graphUpsert: graphUpsertSchema,
   graphQueryResult: graphQueryResultSchema,
   agentMemory: agentMemorySchema,
   agentMemoryResult: agentMemoryResultSchema,

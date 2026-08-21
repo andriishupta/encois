@@ -26,6 +26,7 @@ const FIREBASE_AUTH_SENTINEL = 'identity-platform-sdk'
 
 type DashboardEnv = {
   MODE?: string
+  VITE_ENCOIS_UI_MODE?: string
   VITE_ENCOIS_ACCESS_TOKEN?: string
   VITE_ENCOIS_ORGANIZATION_ID?: string
   VITE_FIREBASE_API_KEY?: string
@@ -195,6 +196,14 @@ export function getDevelopmentAuthSession(): AuthSession | null {
       ? { organizationId: env.VITE_ENCOIS_ORGANIZATION_ID.trim() }
       : {}),
   }
+}
+
+/**
+ * The local UI fixture is opt-in. API-backed pages must not silently turn
+ * transient API failures into fabricated organization or workspace state.
+ */
+export function isDashboardMockMode(): boolean {
+  return environment().VITE_ENCOIS_UI_MODE?.trim().toLowerCase() === 'mock'
 }
 
 export function authSessionEventName(): string {

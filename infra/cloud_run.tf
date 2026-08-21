@@ -104,6 +104,11 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
         name  = "CORS_ORIGINS"
         value = var.domain_name == "" ? "" : "https://${var.domain_name}"
       }
@@ -306,6 +311,16 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
         value = var.region
       }
 
+      env {
+        name  = "AGENT_MEMORY_MODE"
+        value = "gcp"
+      }
+
+      env {
+        name  = "VERTEX_MEMORY_REASONING_ENGINE"
+        value = var.vertex_memory_reasoning_engine
+      }
+
       dynamic "env" {
         for_each = var.temporal_address == "" ? [] : [true]
 
@@ -431,6 +446,10 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       error_message = "The current Go runtime requires enable_agent_gateway because tool Activities use the private HTTP Gateway."
     }
     precondition {
+      condition     = !var.enable_agent_runtime || var.vertex_memory_reasoning_engine != ""
+      error_message = "vertex_memory_reasoning_engine must be set when the hosted Agent Runtime is enabled."
+    }
+    precondition {
       condition     = !var.enable_agent_runtime || contains(var.secret_names, var.agent_gateway_secret_name)
       error_message = "agent_gateway_secret_name must name one of the secret_names when the agent runtime is enabled."
     }
@@ -496,6 +515,34 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
         }
       }
 
+      env {
+        name  = "AGENT_GATEWAY_DATA_MODE"
+        value = "gcp"
+      }
+
+      env {
+        name  = "GIN_MODE"
+        value = "release"
+      }
+
+      dynamic "env" {
+        for_each = var.artifact_bucket_name == "" ? [] : [true]
+
+        content {
+          name  = "GCP_STORAGE_BUCKET"
+          value = var.artifact_bucket_name
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_spanner ? [true] : []
+
+        content {
+          name  = "SPANNER_DATABASE"
+          value = "projects/${var.project_id}/instances/${google_spanner_instance.context[0].name}/databases/${google_spanner_database.context[0].name}"
+        }
+      }
+
       dynamic "env" {
         for_each = var.enable_agent_gateway ? [true] : []
 
@@ -527,6 +574,14 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
     precondition {
       condition     = contains(var.secret_names, var.agent_gateway_secret_name)
       error_message = "agent_gateway_secret_name must name one of the secret_names when the Agent Gateway is enabled."
+    }
+    precondition {
+      condition     = var.artifact_bucket_name != ""
+      error_message = "artifact_bucket_name must be set when the Agent Gateway is enabled."
+    }
+    precondition {
+      condition     = var.enable_spanner
+      error_message = "enable_spanner must be true when the Agent Gateway is enabled."
     }
   }
 }

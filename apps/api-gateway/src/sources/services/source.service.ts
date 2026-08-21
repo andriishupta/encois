@@ -12,6 +12,7 @@ import {
   type KnowledgeSource,
   type KnowledgeSourceCreateRequest,
   type SourceIngestionRun,
+  type SourceIngestionResult,
   type SourceIngestionRequest,
   type SourceRevision,
   type SourceRevisionCreateRequest,
@@ -29,7 +30,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
-import type { WorkflowClient } from "../../workflows/temporal-client.js";
+import type { WorkflowClient, WorkflowResultReader } from "../../workflows/temporal-client.js";
 import { buildWorkflowId } from "../../workflows/types.js";
 
 type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
@@ -81,6 +82,51 @@ export type SourceServiceOptions = {
   taskQueue: string;
   policyVersion: string;
 };
+
+function isSourceIngestionResult(value: unknown): value is SourceIngestionResult {
+  if (!isJsonObject(value)) return false;
+  return value.contractVersion === ContractVersion.SourceIngestionResult &&
+    typeof value.requestId === "string" && typeof value.sourceId === "string" &&
+    typeof value.sourceRevisionId === "string" && typeof value.status === "string" &&
+    typeof value.stage === "string" && typeof value.factsCount === "number" && Array.isArray(value.evidenceRefs);
+}
+
+async function reconcileSourceIngestion(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+  run: typeof sourceIngestionRuns.$inferSelect,
+  options: SourceServiceOptions,
+): Promise<void> {
+  let projection;
+  try {
+    projection = await options.workflowClient.get(run.temporalWorkflowId, principal.organizationId, options.namespace);
+  } catch {
+    return;
+  }
+  if (!projection || projection.status !== "completed") return;
+  const reader = options.workflowClient as unknown as WorkflowResultReader;
+  if (typeof reader.GetResult !== "function") return;
+  const rawResult = await reader.GetResult(run.temporalWorkflowId, principal.organizationId, options.namespace).catch(() => null);
+  if (!isSourceIngestionResult(rawResult)) return;
+  const nextStatus = rawResult.status === "completed" || rawResult.status === "deferred" || rawResult.status === "failed" ? rawResult.status : "failed";
+  const completed = nextStatus === "completed";
+  await db.update(sourceIngestionRuns).set({
+    status: nextStatus,
+    currentStage: rawResult.stage,
+    factsCount: rawResult.factsCount,
+    error: nextStatus === "failed" ? (rawResult.message ?? "Source ingestion failed.").slice(0, 2000) : null,
+    completedAt: new Date(),
+    updatedAt: new Date(),
+  }).where(and(eq(sourceIngestionRuns.id, run.id), eq(sourceIngestionRuns.organizationId, principal.organizationId)));
+  await db.update(sourceRevisions).set({
+    status: completed ? SourceRevisionStatus.Active : SourceRevisionStatus.Failed,
+    ingestedAt: completed ? new Date() : undefined,
+  }).where(and(eq(sourceRevisions.id, run.sourceRevisionId), eq(sourceRevisions.organizationId, principal.organizationId)));
+  await db.update(knowledgeSources).set({
+    status: completed ? KnowledgeSourceStatus.Active : nextStatus === "deferred" ? KnowledgeSourceStatus.Degraded : KnowledgeSourceStatus.Failed,
+    updatedAt: new Date(),
+  }).where(and(eq(knowledgeSources.id, run.sourceId), eq(knowledgeSources.organizationId, principal.organizationId)));
+}
 
 export function sourceServiceError(code: string, message: string): SourceServiceError {
   const error = new Error(message) as SourceServiceError;
@@ -326,6 +372,7 @@ export async function listKnowledgeSources(principal: AosPrincipal): Promise<rea
 export async function getKnowledgeSource(
   principal: AosPrincipal,
   sourceId: string,
+  options?: SourceServiceOptions,
 ): Promise<SourceSummary | null> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   return withOrganizationContext(database, principal.organizationId, async (db) => {
@@ -341,12 +388,28 @@ export async function getKnowledgeSource(
       .from(sourceRevisions)
       .where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId)))
       .orderBy(asc(sourceRevisions.createdAt));
-    const ingestionRuns = await db
+    let ingestionRuns = await db
       .select()
       .from(sourceIngestionRuns)
       .where(and(eq(sourceIngestionRuns.sourceId, sourceId), eq(sourceIngestionRuns.organizationId, principal.organizationId)))
       .orderBy(asc(sourceIngestionRuns.createdAt));
-    return { source: toKnowledgeSource(row), revisions: revisions.map(toSourceRevision), ingestionRuns: ingestionRuns.map(toSourceIngestionRun) };
+    if (options) {
+      for (const run of ingestionRuns) {
+        if (run.status === "queued" || run.status === "running") await reconcileSourceIngestion(db, principal, run, options);
+      }
+      ingestionRuns = await db
+        .select()
+        .from(sourceIngestionRuns)
+        .where(and(eq(sourceIngestionRuns.sourceId, sourceId), eq(sourceIngestionRuns.organizationId, principal.organizationId)))
+        .orderBy(asc(sourceIngestionRuns.createdAt));
+    }
+    const [freshSource] = options
+      ? await db.select().from(knowledgeSources).where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId))).limit(1)
+      : [row];
+    const freshRevisions = options
+      ? await db.select().from(sourceRevisions).where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId))).orderBy(asc(sourceRevisions.createdAt))
+      : revisions;
+    return { source: toKnowledgeSource(freshSource ?? row), revisions: freshRevisions.map(toSourceRevision), ingestionRuns: ingestionRuns.map(toSourceIngestionRun) };
   });
 }
 

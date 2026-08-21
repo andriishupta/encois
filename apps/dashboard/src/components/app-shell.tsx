@@ -41,10 +41,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { workspace } = useWorkspace()
   const { units, currentUnitId, setCurrentUnitId } = useOrganization()
-  const workspaceName = workspace?.workspaceName ?? 'Acme workspace'
+  const workspaceName = workspace?.workspaceName ?? 'Encois'
   const organizationUnitOptions = flattenUnitOptions(units)
   const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
-  const currentScopeLabel = currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id)
+  const currentScopeLabel = currentUnit ? currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id) : 'Organization scope unavailable'
 
   useEffect(() => {
     const handleSessionChange = () => {

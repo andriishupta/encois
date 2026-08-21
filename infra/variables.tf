@@ -218,6 +218,12 @@ variable "artifact_bucket_name" {
   default     = ""
 }
 
+variable "vertex_memory_reasoning_engine" {
+  description = "Full Vertex AI Reasoning Engine resource name hosting the project's Memory Bank. Required when the hosted runtime is enabled."
+  type        = string
+  default     = ""
+}
+
 variable "artifact_retention_days" {
   description = "Lifecycle retention for raw artifacts."
   type        = number

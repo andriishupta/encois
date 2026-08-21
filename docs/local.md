@@ -21,8 +21,8 @@ The stack starts:
 | Firebase Auth Emulator | http://localhost:9099 | Local Firebase-compatible identity service |
 | Emulator UI | http://localhost:4000 | Inspect local Auth users |
 | Temporal UI | http://localhost:8233 | Inspect local workflow executions |
-| Agent Gateway | http://localhost:8080 | Private policy/tool fixture |
-| Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI |
+| Agent Gateway | http://localhost:8080 | Private policy/tool broker in mock data mode |
+| Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
 `local-auth-seed` runs after migrations. It creates a verified Firebase
@@ -74,10 +74,13 @@ curl http://localhost:8787/health/ready
 docker compose -f compose.local.yaml logs -f api-gateway local-auth-seed
 ```
 
-The local Agent Runtime uses `AGENT_AI_MODE=mock`, so no Gemini key or GCP
-credentials are required. Temporal and the synthetic Agent Gateway tools are
-real local services; Graph, Memory Bank, Cloud Storage, and external provider
-adapters remain deferred fixtures.
+The local Agent Runtime uses `AGENT_AI_MODE=mock` and the local data plane uses
+`AGENT_GATEWAY_DATA_MODE=mock` plus `AGENT_MEMORY_MODE=mock`, while the
+dashboard explicitly uses `VITE_ENCOIS_UI_MODE=mock`. No Gemini key or GCP
+credentials are required. Temporal, source ingestion, Graph, Memory Bank,
+Cloud Storage, and the synthetic Agent Gateway tools all have local
+implementations. External Jira/GitHub calls remain deterministic fixtures;
+live provider credentials and adapters are hosted follow-up work.
 
 ## Reset
 

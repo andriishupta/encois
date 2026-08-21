@@ -38,7 +38,6 @@ Architecture references:
 
 - [`docs/architecture.md`](docs/architecture.md) — system boundaries, runtime, memory, authorization, and deployment.
 - [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state diagram with service boundaries and execution flow.
-- [`docs/next-steps.md`](docs/next-steps.md) — current implementation review and prioritized next steps.
 - [`docs/infra.md`](docs/infra.md) — initial GCP/Terraform deployment blueprint, state, IAM, and rollout procedure.
 - [`docs/CI-CD.md`](docs/CI-CD.md) — proposed local/manual, GitHub Actions, and GCP-native CI/CD approaches.
 - [`docs/flows.md`](docs/flows.md) — user, integration, investigation, query, permission, and recovery flows.
@@ -53,7 +52,7 @@ Architecture references:
 
 - Node.js current LTS compatible with pnpm 11.
 - pnpm 11. The repository declares the expected package-manager family in `package.json`.
-- Google Cloud access is only required for the later deployed path, not for the local dashboard/API scaffold.
+- Google Cloud access is only required for the later deployed path; the full local Compose stack uses explicit mock modes for the data plane.
 
 ## Install and run
 
@@ -110,9 +109,10 @@ installed:
 temporal server start-dev --headless --log-level error
 ```
 
-In separate terminals, start `apps/agent-gateway` with
-`AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
-`apps/agent-runtime` with the same token and `AGENT_GATEWAY_URL`, then run:
+In separate terminals, start `apps/agent-gateway` with explicit local mock
+mode and `AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
+`apps/agent-runtime` with explicit `AGENT_AI_MODE=mock` and
+`AGENT_MEMORY_MODE=mock`, then run:
 
 ```bash
 TEMPORAL_ADDRESS=127.0.0.1:7233 \
@@ -138,7 +138,9 @@ pnpm dev:local
 This starts Postgres, the Temporal development server, migrations, API Gateway,
 Firebase Auth Emulator, local auth seed, Agent Gateway, Agent Runtime, and the
 Nginx-served dashboard through `compose.local.yaml`. The local Runtime uses
-`AGENT_AI_MODE=mock`, so no Gemini key or Google Cloud credentials are required.
+`AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters; and
+the dashboard uses explicit `VITE_ENCOIS_UI_MODE=mock`, so no Gemini key or
+Google Cloud credentials are required.
 The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `http://localhost:5173`; the Firebase Emulator UI is at
 `http://localhost:4000`; and the API health endpoints are at
@@ -165,7 +167,9 @@ pnpm -r build
 pnpm -r test
 ```
 
-The actual environment variables, local emulators, seed data, and deployment commands will be documented here as each app is introduced. Copy `.env.example` to a local environment file when it exists; never commit the resulting file or cloud credentials.
+Application-specific environment variables and local startup details live in
+the relevant app `.env.example` files and [`docs/local.md`](docs/local.md).
+Never commit generated env files or cloud credentials.
 
 ## Development expectations
 
