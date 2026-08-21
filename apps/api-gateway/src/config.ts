@@ -4,6 +4,7 @@ export type AppConfig = {
   corsOrigins: readonly string[];
   host: string;
   identityPlatformProjectId?: string;
+  identityPlatformAllowedSignInProviders?: readonly string[];
   controlPlaneServiceToken?: string;
   controlPlaneServiceUserId?: string;
   nodeEnv: string;
@@ -38,6 +39,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const identityPlatformAllowedSignInProviders = (env.IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS ?? "google.com")
+    .split(",")
+    .map((provider) => provider.trim())
+    .filter(Boolean);
 
   return {
     bodyLimitBytes: positiveInteger(env.BODY_LIMIT_BYTES, DEFAULTS.bodyLimitBytes),
@@ -45,6 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigins,
     host: env.HOST?.trim() || DEFAULTS.host,
     identityPlatformProjectId: env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || undefined,
+    identityPlatformAllowedSignInProviders,
     controlPlaneServiceToken: env.CONTROL_PLANE_SERVICE_TOKEN?.trim() || undefined,
     controlPlaneServiceUserId: env.CONTROL_PLANE_SERVICE_USER_ID?.trim() || undefined,
     nodeEnv: env.NODE_ENV?.trim() || DEFAULTS.nodeEnv,

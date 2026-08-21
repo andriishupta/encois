@@ -35,7 +35,11 @@
       "required": ["source", "observedAt"],
       "properties": {
         "source": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "sourceRevisionId": { "type": "string", "minLength": 1 },
         "sourceRecordId": { "type": "string", "minLength": 1 },
+        "artifactRef": { "type": "string", "minLength": 1 },
+        "locator": { "type": "object" },
         "observedAt": { "type": "string", "minLength": 1 },
         "ingestedAt": { "type": "string", "minLength": 1 },
         "transformationVersion": { "type": "string", "minLength": 1 },

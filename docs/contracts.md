@@ -32,6 +32,7 @@ live manifests, and real provider adapters remain deferred.
 | Workflow change plans | Versioned JSON Schema | Workflow Creator, Go Runtime, Gateway API approval/application boundary |
 | Agent Gateway tool catalog and invocation | MCP-shaped JSON Schema plus Encois execution envelope | Go Runtime, Agent Gateway, integration adapters |
 | Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
+| Knowledge Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
 | Integration manifests and evidence events | Versioned JSON Schema | registry, adapters, graph/memory pipeline |
 | Control-plane persistence | SQL migrations owned by Gateway API | Gateway API only |
 | Temporal command receipts | Gateway-owned tenant-scoped SQL table | TypeScript Gateway API only; never sent to Go or Temporal |
@@ -101,6 +102,10 @@ packages/contracts/
     workflow-change-plan.v1.json
     workflow-change-plan.v2.json
     coordinator-event.v1.json
+    knowledge-source.v1.json
+    source-revision.v1.json
+    source-ingestion.v1.json
+    source-ingestion-result.v1.json
   # canonical schemas are consumed by both TypeScript and Go
 ```
 
@@ -138,10 +143,25 @@ Workflow Start Request
   -> structured result and evidence references
 ```
 
-The only platform-owned long-lived workflow types are the Coordinator and the
-bootstrap/reconciliation workflows. A user-created or company-created
-workflow uses the registered generic Temporal Workflow. Release readiness
+The platform-owned workflow types include the long-lived Coordinator and
+bootstrap/reconciliation workflows plus the short-lived generic
+`encois.source-ingestion.v1` source/revision pipeline. A user-created or
+company-created workflow uses the registered generic Temporal Workflow.
+Release readiness
 is only an example Blueprint, not a required Encois workflow type.
+
+### Knowledge Source contracts
+
+`Knowledge Source` is the logical organization-scoped origin of knowledge.
+`Integration`, `uploaded_document`, `manual`, and `media` are source kinds.
+`Source Revision` is immutable and carries an artifact or provider-object
+reference; it does not carry raw bytes or credentials. The API owns source and
+revision registration. The Runtime receives `source-ingestion.v1`, validates
+the source/revision identity and scope, and returns
+`source-ingestion-result.v1` with a stage, status, fact count, and evidence
+references. Provider acquisition, parsing, PII filtering, normalized Graph
+writes, and optional Memory distillation are Activities/adapters behind that
+stable envelope.
 
 ### Workflow start request
 

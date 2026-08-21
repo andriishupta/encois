@@ -9,6 +9,7 @@
     "dispatch:coordinator": "node dist/coordinator-dispatcher.js",
     "auth:bootstrap-organization": "tsx scripts/bootstrap-organization.ts",
     "auth:invite-user": "tsx scripts/invite-user.ts",
+    "auth:seed-local": "tsx src/local-seed.ts",
     "auth:list-waitlist": "tsx scripts/list-waitlist.ts",
     "auth:revoke-invite": "tsx scripts/revoke-invite.ts",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",

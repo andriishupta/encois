@@ -34,6 +34,10 @@ const (
 	SchemaWorkflowChangePlan   SchemaName = "workflowChangePlan"
 	SchemaWorkflowChangePlanV2 SchemaName = "workflowChangePlanV2"
 	SchemaCoordinatorEvent     SchemaName = "coordinatorEvent"
+	SchemaKnowledgeSource      SchemaName = "knowledgeSource"
+	SchemaSourceRevision       SchemaName = "sourceRevision"
+	SchemaSourceIngestion      SchemaName = "sourceIngestion"
+	SchemaSourceIngestionResult SchemaName = "sourceIngestionResult"
 )
 
 //go:embed schemas/*.json
@@ -57,6 +61,10 @@ var schemaPaths = map[SchemaName]string{
 	SchemaWorkflowChangePlan:   "schemas/workflow-change-plan.v1.json",
 	SchemaWorkflowChangePlanV2: "schemas/workflow-change-plan.v2.json",
 	SchemaCoordinatorEvent:     "schemas/coordinator-event.v1.json",
+	SchemaKnowledgeSource:      "schemas/knowledge-source.v1.json",
+	SchemaSourceRevision:       "schemas/source-revision.v1.json",
+	SchemaSourceIngestion:      "schemas/source-ingestion.v1.json",
+	SchemaSourceIngestionResult: "schemas/source-ingestion-result.v1.json",
 }
 
 var resolvedSchemas sync.Map // map[SchemaName]*jsonschema.Resolved

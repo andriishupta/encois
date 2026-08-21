@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
+  Building2,
   ChevronDown,
   ChevronRight,
   CircleGauge,
@@ -19,6 +20,8 @@ import { cn } from '@/lib/utils'
 import { authSessionEventName, clearAuthSession, getAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/lib/workspace'
+import { flattenUnitOptions, formatUnitPath, getOrganizationUnit } from '@/lib/organization'
+import { useOrganization } from '@/lib/organization-context'
 
 const primaryNavigation = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
@@ -26,7 +29,10 @@ const primaryNavigation = [
   { label: 'Integrations', to: '/integrations', icon: PlugZap },
 ] as const
 
-const secondaryNavigation = [{ label: 'Settings', to: '/settings', icon: Settings }] as const
+const secondaryNavigation = [
+  { label: 'Organization', to: '/organization', icon: Building2 },
+  { label: 'Settings', to: '/settings', icon: Settings },
+] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
@@ -34,7 +40,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { workspace } = useWorkspace()
+  const { units, currentUnitId, setCurrentUnitId } = useOrganization()
   const workspaceName = workspace?.workspaceName ?? 'Acme workspace'
+  const organizationUnitOptions = flattenUnitOptions(units)
+  const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
+  const currentScopeLabel = currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id)
 
   useEffect(() => {
     const handleSessionChange = () => {
@@ -75,21 +85,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{workspaceName}</span>
-              <span className="block truncate text-xs text-muted-foreground">Organization scope</span>
+              <span className="block truncate text-xs text-muted-foreground">{currentScopeLabel}</span>
             </span>
             <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
           </button>
           {organizationOpen ? <div className="absolute inset-x-3 top-[calc(100%-0.5rem)] z-10 rounded-lg border bg-background p-1 shadow-lg">
-            <button type="button" onClick={() => setOrganizationOpen(false)} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-accent">
-              <span className="flex size-7 items-center justify-center rounded-md bg-muted"><CircleGauge className="size-3.5 text-muted-foreground" aria-hidden="true" /></span>
-              <span className="min-w-0 flex-1 truncate font-medium">{workspaceName}</span>
-              <span className="text-xs text-muted-foreground">Current</span>
-            </button>
-            <button type="button" disabled className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground disabled:opacity-60">
-              <span className="flex size-7 items-center justify-center rounded-md border"><Plus className="size-3.5" aria-hidden="true" /></span>
-              <span className="flex-1">Add new organization</span>
-              <span className="text-[11px]">Soon</span>
-            </button>
+            <p className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Change organization unit</p>
+            <div className="max-h-64 overflow-y-auto">
+              {organizationUnitOptions.map(({ unit, depth }) => <button key={unit.id} type="button" onClick={() => { setCurrentUnitId(unit.id); setOrganizationOpen(false) }} className={cn('flex w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-sm hover:bg-accent', currentUnitId === unit.id && 'bg-accent')} style={{ paddingLeft: `${8 + depth * 14}px` }}>
+                <span className="min-w-0 flex-1 truncate">{unit.name}</span>
+                {currentUnitId === unit.id ? <span className="text-[11px] text-muted-foreground">Current</span> : null}
+              </button>)}
+            </div>
+            <div className="mt-1 border-t pt-1">
+              <Link to="/organization" onClick={() => setOrganizationOpen(false)} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground">
+                <Plus className="size-3.5" aria-hidden="true" />
+                Manage organization units
+              </Link>
+            </div>
           </div> : null}
         </div>
 
@@ -144,7 +157,7 @@ function NavSection({
   onNavigate,
 }: {
   label: string
-  items: readonly { label: string; to: '/' | '/workflows' | '/integrations' | '/settings'; icon: typeof LayoutDashboard }[]
+  items: readonly { label: string; to: '/' | '/workflows' | '/integrations' | '/organization' | '/settings'; icon: typeof LayoutDashboard }[]
   onNavigate: () => void
 }) {
   return (
@@ -171,7 +184,7 @@ function Breadcrumbs({ pathname, rootLabel }: { pathname: string; rootLabel: str
   return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link to="/" className="max-w-40 truncate text-muted-foreground transition-colors hover:text-foreground">{rootLabel}</Link>{items.map((item) => <span key={item.label} className="flex min-w-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="truncate text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="truncate font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/integrations' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/integrations' | '/organization' | '/organization/permissions' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
 
 function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
@@ -181,6 +194,8 @@ function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbR
   if (pathname === '/integrations') return [{ label: 'Integrations' }]
   if (pathname === '/integrations/new') return [{ label: 'Integrations', to: '/integrations' }, { label: 'Add integration' }]
   if (pathname.startsWith('/integrations/')) return [{ label: 'Integrations', to: '/integrations' }, { label: getIntegrationLabel(pathname) }]
+  if (pathname === '/organization') return [{ label: 'Organization' }]
+  if (pathname === '/organization/permissions') return [{ label: 'Organization', to: '/organization' }, { label: 'Permissions' }]
   if (pathname === '/settings') return [{ label: 'Settings' }]
   if (pathname === '/settings/workspace') return [{ label: 'Settings', to: '/settings' }, { label: 'Workspace' }]
   if (pathname === '/settings/notifications') return [{ label: 'Settings', to: '/settings' }, { label: 'Notifications' }]

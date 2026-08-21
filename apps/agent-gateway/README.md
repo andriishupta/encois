@@ -3,6 +3,11 @@
 The private Go policy and tool broker for the Agent Runtime. It is the final
 internal boundary before provider, graph, and artifact access.
 
+Knowledge Source registration and revision metadata belong to the Gateway API
+control plane. This service remains the Runtime-facing data-plane boundary for
+source acquisition, provider tools, raw artifact access, and future Graph
+projection; it is not a second Source registry.
+
 The current implementation provides the HTTP boundary, service authentication,
 a deterministic read-only fixture policy, and an in-memory artifact-store
 adapter. Spanner, Cloud Storage, and real provider adapters are still deferred.

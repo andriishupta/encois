@@ -7,8 +7,9 @@ It connects signals from systems such as GitHub, Jira, Google Workspace, Stripe,
 ## How it works
 
 ```text
-company systems and MCP/API tools
-  -> Integration Packs and MCP-shaped tool catalog
+company systems, uploaded documents, manual notes, and MCP/API tools
+  -> Knowledge Sources and Integration Packs
+  -> unified ingestion and provenance
   -> company-specific Workflow Blueprint
   -> Temporal generic durable execution
   -> Go Agent Runtime with Google ADK
@@ -45,6 +46,7 @@ Architecture references:
 - [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint and MCP/ADK/Temporal communication model.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
 - [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
+- [`docs/local.md`](docs/local.md) — complete local Compose, Auth Emulator, onboarding, and reset flow.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical meanings for Worker, Workflow, Activity, Agent, Integration, MCP, and related terms.
 
 ## Prerequisites
@@ -134,12 +136,15 @@ pnpm dev:local
 ```
 
 This starts Postgres, the Temporal development server, migrations, API Gateway,
-Agent Gateway, Agent Runtime, and the Nginx-served dashboard through
-`compose.local.yaml`. The local Runtime uses `AGENT_AI_MODE=mock`, so no Gemini
-key or Google Cloud credentials are required. The Temporal UI is available at
-`http://localhost:8233`; the dashboard is at `http://localhost:5173`; and the
-API health endpoints are at `http://localhost:8787/health/live` and
-`/health/ready`. Follow service logs with
+Firebase Auth Emulator, local auth seed, Agent Gateway, Agent Runtime, and the
+Nginx-served dashboard through `compose.local.yaml`. The local Runtime uses
+`AGENT_AI_MODE=mock`, so no Gemini key or Google Cloud credentials are required.
+The Temporal UI is available at `http://localhost:8233`; the dashboard is at
+`http://localhost:5173`; the Firebase Emulator UI is at
+`http://localhost:4000`; and the API health endpoints are at
+`http://localhost:8787/health/live` and `/health/ready`. Local login uses
+`dev@local.test` / `local-password-1234`. See [`docs/local.md`](docs/local.md)
+for the onboarding and database verification flow. Follow service logs with
 `docker compose -f compose.local.yaml logs -f`.
 
 Stop the stack with `pnpm dev:local:down`. To reset local Postgres and Temporal

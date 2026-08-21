@@ -10,6 +10,7 @@ import { validateWorkflowPlanRoute } from "./routes/validate-workflow-plan.route
 import { submitWorkflowPlanRoute } from "./routes/submit-workflow-plan.route.js";
 import { approveWorkflowPlanRoute } from "./routes/approve-workflow-plan.route.js";
 import { applyWorkflowPlanRoute } from "./routes/apply-workflow-plan.route.js";
+import { listWorkflowTemplatesRoute } from "./routes/list-workflow-templates.route.js";
 import type { AppConfig } from "../config.js";
 
 export function createWorkflowsRouter(
@@ -29,6 +30,7 @@ export function createWorkflowsRouter(
   router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());
   router.post("/plans/:planId/apply", applyWorkflowPlanRoute(options));
+  router.get("/templates", listWorkflowTemplatesRoute);
   router.get("/", listWorkflowsRoute(options));
   router.post("/:workflowId/signals", signalWorkflowRoute(options));
   router.post("/:workflowId/updates", updateWorkflowRoute(options));

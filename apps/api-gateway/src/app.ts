@@ -27,6 +27,8 @@ import { webhooksRouter } from "./webhooks/router.js";
 import { createWorkflowClient, type WorkflowClient } from "./workflows/temporal-client.js";
 import { createWorkflowsRouter } from "./workflows/router.js";
 import { createInternalCoordinatorRouter } from "./workflows/internal-coordinator.router.js";
+import { createOrganizationRouter } from "./organization/router.js";
+import { createSourcesRouter } from "./sources/router.js";
 
 const ACTIVE_API_VERSION = "v1" as const;
 
@@ -45,13 +47,14 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
     options.verifyIdentity ??
     (config.identityPlatformProjectId
       ? createIdentityPlatformIdentityVerifier({
-          allowedSignInProviders: ["google.com"],
+          allowedSignInProviders: config.identityPlatformAllowedSignInProviders,
           projectId: config.identityPlatformProjectId,
         })
       : undefined);
   const accessResolver = options.resolveAccess ?? createDatabaseAccessResolver();
   const identityAuthenticator = config.identityPlatformProjectId
     ? createIdentityPlatformAuthenticator({
+        allowedSignInProviders: config.identityPlatformAllowedSignInProviders,
         projectId: config.identityPlatformProjectId,
         resolvePrincipal: createDatabasePrincipalResolver(),
       })
@@ -107,6 +110,16 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   const v1Router = new Hono<GatewayEnv>();
   v1Router.use("*", aosMiddleware({ authenticate }));
   v1Router.route("/integrations", createIntegrationsRouter());
+  v1Router.route(
+    "/sources",
+    createSourcesRouter({
+      namespace: config.temporalNamespace,
+      taskQueue: config.temporalTaskQueue,
+      policyVersion: config.agentGatewayPolicyVersion,
+      workflowClient,
+    }),
+  );
+  v1Router.route("/organization", createOrganizationRouter());
   v1Router.route(
     "/workflows",
     createWorkflowsRouter(

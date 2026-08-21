@@ -257,6 +257,31 @@ tool-manifest versions and the allowlist captured by its validated Blueprint.
 The model must not discover an arbitrary new server or tool in the middle of
 an execution.
 
+### 5. Knowledge Source ingestion protocol
+
+Knowledge Source control-plane records use the following versioned contracts:
+
+```text
+knowledge-source.v1        logical source, kind, provider, scopes, status
+source-revision.v1         immutable revision, artifact/source object reference
+source-ingestion.v1        Temporal execution context + revision + trigger
+source-ingestion-result.v1 typed stage, status, fact count, evidence refs
+```
+
+The Gateway API owns source registration and revision metadata. The Runtime
+owns the durable ingestion orchestration. The Agent Gateway owns the final
+policy check and data-plane access to provider APIs, artifact storage, and
+future Graph projection. No service sends raw bytes or credentials through a
+Temporal payload. A result may be `deferred` when an adapter is unavailable;
+that is different from a successful Graph projection and must remain visible
+to the caller.
+
+The same revision can be triggered by `bootstrap`, `manual`, `webhook`,
+`schedule`, or `reconcile`. Trigger type changes why ingestion starts, not the
+provenance or scope rules. Source revisions are immutable; replacing a PDF or
+reconciling changed provider data creates a new revision rather than mutating
+the evidence that produced an earlier fact.
+
 Approval Signals use the versioned `workflow-signal.v1` envelope and require a
 caller-generated `signalId`. The generic Workflow deduplicates that ID before
 applying an approval or denial, while authorization remains an API concern.

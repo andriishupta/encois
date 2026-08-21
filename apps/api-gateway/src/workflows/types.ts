@@ -4,6 +4,7 @@ import {
   TemporalWorkflowType,
   type CoordinatorEvent,
   type ExecutionScope,
+  type KnowledgeSourceScope,
   type JsonObject,
   type WorkflowBlueprint,
 } from "@encois/contracts";
@@ -15,7 +16,7 @@ export type WorkflowStartCommand = {
   workflowId: string;
   taskQueue: string;
   input: {
-    contractVersion: typeof ContractVersion.WorkflowBlueprint;
+    contractVersion: typeof ContractVersion.WorkflowBlueprint | typeof ContractVersion.SourceIngestion;
     actorId: string;
     organizationId: string;
     requestId: string;
@@ -25,9 +26,19 @@ export type WorkflowStartCommand = {
     scope: ExecutionScope;
     userId?: string;
     blueprint?: WorkflowBlueprint;
-    businessInput: JsonObject;
-    payload: JsonObject;
+    businessInput?: JsonObject;
+    payload?: JsonObject;
     idempotencyKey?: string;
+    sourceId?: string;
+    sourceRevisionId?: string;
+    sourceKind?: string;
+    provider?: string;
+    artifactRef?: string;
+    sourceObjectId?: string;
+    contentType?: string;
+    trigger?: string;
+    readScope?: KnowledgeSourceScope;
+    visibilityScope?: KnowledgeSourceScope;
   };
   requestHash: string;
 };

@@ -1,7 +1,7 @@
 # Current Review and Next Steps
 
 **Reviewed:** 2026-08-21
-**Scope:** repository state after generic Blueprint execution, Agent Runtime bootstrap planning, workflow-plan persistence, Agent Runtime execution-profile review, and invite-only Identity Platform access
+**Scope:** repository state after generic Blueprint execution, Knowledge Source ingestion scaffolding, Agent Runtime bootstrap planning, workflow-plan persistence, Agent Runtime execution-profile review, and invite-only Identity Platform access
 
 ## Review conclusion
 
@@ -120,6 +120,11 @@ Google provider and Firebase browser settings, run a real invited-user smoke,
 verify Cloud Run ADC and token audience/issuer settings, and decide later
 whether a provider-side blocking function is worth the operational complexity.
 
+The local Compose path now includes Firebase Auth Emulator, a verified local
+account, a pending invite seed, and the same `/api/v1/auth/me` provisioning
+boundary. Local browser onboarding remains a manual verification step; it is
+not a replacement for the hosted Identity Platform smoke.
+
 ## Implemented in the current slice
 
 - `packages/contracts` exists with TypeScript types and JSON Schema sources for the generic Blueprint, workflow result, execution context, tool request/result, artifact write/reference, Signals, tool manifests, and Workflow Updates.
@@ -142,12 +147,15 @@ whether a provider-side blocking function is worth the operational complexity.
 - `coordinator-event.v1` is now a separate generic lifecycle contract from `workflow-signal.v1`. The Go Coordinator receives the event signal, filters organization/Coordinator mismatches, deduplicates event IDs, and updates pending-plan/active-workflow state. Gateway plan approve/apply now enqueue small tenant-scoped events transactionally in `coordinator_event_outbox`; applied plans include `workflowStarts` only for explicit change-level `start` intents. API contract tests prove that approval emits no start and apply emits only explicit starts. The API has a bounded lease/retry dispatcher, Temporal sink, and one-shot `coordinator-dispatcher` entrypoint. Cloud Scheduler/Cloud Run Job deployment and hosted delivery remain pending.
 - The Gateway API exposes a non-mutating `POST /api/v1/workflows/plans/validate` preview. It enforces organization identity and required scopes and returns `validated_not_applied`; persistence and application are separate control-plane operations.
 - The control plane now has `workflow_change_plans` and tenant-scoped `workflow_blueprints` Drizzle models/migrations plus submit, approve, and apply routes. Approved `create` proposals and v2 Blueprint update/deprecate changes are materialized as tenant-scoped registry snapshots and audited; cancel-only plans call the scoped Temporal client before the plan is marked applied, while Temporal/Coordinator notification is delivered through the transactional outbox and bounded dispatcher. The public examples now match the canonical plan shape: registry changes use Blueprint targets, execution cancellation uses a Temporal workflow target, and create/update changes carry a complete nested Blueprint.
+- The Gateway now has a separate `workflow_templates` catalog and immutable `workflow_template_versions` JSONB snapshots. The migration seeds ten provider-neutral templates, and `GET /api/v1/workflows/templates` returns up to ten published entries after AOS/RLS tenant context. These templates are discovery input for Workflow Creator and are intentionally outside the Go Runtime contract.
+- The control plane now has `knowledge_sources`, immutable `source_revisions`, and durable `source_ingestion_runs`. `GET/POST /api/v1/sources`, source revision creation, and `POST /api/v1/sources/:sourceId/revisions/:revisionId/ingest` preserve organization scope, source kind, provider references, artifact references, and ingestion trigger. Workflow Templates remain independent: they do not create Sources or reference source IDs.
+- The Go Runtime now registers the platform-owned `encois.source-ingestion.v1` Workflow. Its versioned envelope validates source/revision identity, trigger, read/visibility scope, and returns an explicit `source-ingestion-result.v1` deferred result at the acquisition stage until provider parsers, raw artifact reads, PII classification, Graph projection, and Memory Bank adapters are wired. It is not a dynamic user Workflow type.
 - The Agent Gateway now exposes a fixture-level MCP-shaped capability catalog with tool versions, descriptions, input/output schemas, behavior annotations, availability, approval requirements, and required scope fields. Invocation enforces the registered capability and its required scope after the deterministic policy check. Connector grants, persisted manifests, and live MCP/API discovery remain deferred.
 - The Agent Gateway now has a narrow injectable `ArtifactStore` boundary and a tenant/workflow-prefixed in-memory implementation for `POST /v1/artifacts`. The artifact request/result are canonical cross-language schemas embedded and validated by Go; the endpoint returns an immutable-looking reference and rejects path traversal. Router tests prove a future Cloud Storage adapter can be supplied without changing the HTTP, authentication, or policy layers. The real Cloud Storage adapter, object bytes, retention, and hosted IAM remain deferred.
 - The Graph boundary now has canonical `graph-query.v1` and `graph-query-result.v1` schemas, Go/TypeScript validators, an injectable `GraphStore`, and a default deferred adapter. The route still fails closed until a scope-aware Spanner implementation and explicit graph policy grant exist; no graph provider or arbitrary raw query execution is enabled.
 - Agent-specific memory now has canonical `agent-memory.v1` and `agent-memory-result.v1` schemas plus a Go Runtime `memory.Store` boundary with a deferred adapter. The request supports only scoped `retrieve`/`distill` operations and evidence-linked summaries; it does not persist raw provider data or Workflow history. `ExecuteAgentMemory` is registered as an Activity, applies deterministic `regex-v1` redaction before distillation and on returned records, and returns a typed deferred result until a hosted Memory Bank provider is configured; retention/deletion policy remains deferred.
 - The `tool-manifest.v1` schema is now canonical in `packages/contracts` and is embedded/validated by the Go Agent Gateway before catalog responses. This covers the manifest wire shape; persisted registry records and provider discovery remain deferred.
-- The dashboard now has a centralized authenticated API client with shared workflow/integration contracts, organization-aware React Query keys, workflow list/detail/start polling, and integration list/update mutations. Route access fails closed without a session; production login uses the Firebase browser SDK for Google-only sign-in, pending users see the waitlist, and the only local token fixture is development-only and session-scoped. Workflow execution state is no longer kept in localStorage. Overview counters are derived from Gateway projections; events, activity/evidence history, freshness, and agent health remain explicit deferred projections instead of static fake data.
+- The dashboard now has a centralized authenticated API client with shared workflow/integration/organization contracts, organization-aware React Query keys, workflow list/detail/start polling, integration list/update mutations, and Gateway-backed organization-unit and membership-permission administration. Route access fails closed without a session; production login uses the Firebase browser SDK for Google-only sign-in, pending users see the waitlist, and the only local token fixture is development-only and session-scoped. Workflow execution state is no longer kept in localStorage. Overview counters are derived from Gateway projections; events, activity/evidence history, freshness, and agent health remain explicit deferred projections instead of static fake data. Organization scopes use the existing `organization_units` and `membership_scopes` tables; direct scopes inherit descendants, and permission changes are audited.
 - The Go Temporal test suite executes a generic Blueprint with parallel-ready tool steps and a dependent agent step without a Temporal server.
 - Coordinator tests cover scoped event deduplication, explicit approved-snapshot starts, and retention/retry of a failed start until a later reconciliation signal.
 - Opt-in `pnpm smoke:release` and `pnpm smoke:approval` harnesses exercise the real TypeScript Temporal client, API projection, context Update, and approval Signal path. `pnpm smoke:release:local` now starts the local Temporal dev server, Agent Gateway, and Go Runtime, waits for readiness, runs both smokes, and cleans up.
@@ -162,20 +170,21 @@ whether a provider-side blocking function is worth the operational complexity.
 
 | Addendum | Current state | Next boundary |
 | --- | --- | --- |
-| Organization-unit tree | Direct organization/dept/team/project roots existed; hierarchy expansion is now computed by the Gateway and contract helper; service/custom unit types are in the schema contract | Persist explicit grants/restrictions and add administration UI |
-| Effective scope | Deterministic inherited descendant calculation is implemented; direct membership roots remain the only durable input | Add persisted grant/restrict rules and object-level scope tests |
+| Organization-unit tree | Gateway exposes scoped organization projection, unit listing, and child-unit creation; the Dashboard canvas and stepped child/sibling flow consume the API | Add object-level authorization tests and unit rename/archive operations when product semantics are defined |
+| Effective scope | Deterministic inherited descendant calculation is implemented in the shared contract and Gateway; direct membership roots are durable in `membership_scopes` | Add explicit grant/restrict rules only if direct-root inheritance becomes insufficient |
 | Temporal Namespace | Shared Namespace is documented as operational isolation only; organization-prefixed IDs and scoped commands remain the security boundary | Add dedicated Namespace/project deployment profiles when needed |
 | Events + schedules | Coordinator handles events and a durable timer; outbox/dispatcher exists | Add source-specific Temporal Schedules/Cloud Scheduler wiring |
 | Freshness | Typed freshness metadata is available on tool/graph/memory result boundaries; synthetic tools emit `fresh` | Add provider freshness budgets and stale-result policy in adapters/UI |
 | Graph vs Memory | Separate deferred GraphStore and MemoryStore boundaries already exist | Implement scoped Spanner facts/provenance and hosted Memory Bank retrieval |
 | Memory PII boundary | `regex-v1` redaction runs before distillation and again on returned memory records | Add provider-aware classification, retention, deletion, and export |
 | Cloud Storage | Scoped in-memory artifact adapter records retention class | Add real GCS bytes, TTL/lifecycle, content/size limits, and IAM |
+| Knowledge Sources | Tenant-scoped source/revision/ingestion metadata, provenance fields, API registration and platform ingestion Workflow | Add upload/signing flow, source-specific fetch/parse adapters, result visibility projection, revision reconciliation, and Graph/Memory writes |
 | Workflow failure reasons | Typed reason codes and waiting/degraded result fields are defined; missing local capabilities now return a durable waiting reason | Map Temporal/provider errors into persisted projections and UI |
 | Runtime workers | Correct single Go Worker deployment model is already implemented | Scale worker replicas/queues only for load or isolation |
 
-The addendum does not require a database-backed implementation before the next
-synthetic vertical slice. It defines the boundaries now and leaves hosted
-providers, migrations, and policy administration as explicit follow-up work.
+The organization-unit and direct-permission boundaries are now database-backed
+and exposed through the Gateway. Hosted providers and the remaining explicit
+grant/restrict policy model remain separate follow-up work.
 
 ## Requirement audit
 
@@ -197,6 +206,7 @@ providers, migrations, and policy administration as explicit follow-up work.
 | Cloud Storage evidence | Canonical artifact request/result schemas, tenant-scoped artifact request, path validation, in-memory reference adapter | Partial; real GCS object writes, raw bytes, retention, size/content limits, and hosted IAM pending |
 | Graph normalized facts | Versioned query/result contracts, scope/policy boundary, injectable deferred `GraphStore` | Partial; scope-aware Spanner implementation, normalized schema, provenance writes, and hosted IAM pending |
 | Agent-specific Memory Bank | Versioned retrieve/distill contracts, scoped Go `memory.Store`, registered Activity with deferred store | Partial; Google Memory Bank adapter, retention/deletion, and hosted IAM pending |
+| Unified source ingestion | `knowledge-source.v1`, `source-revision.v1`, `source-ingestion.v1`, `source-ingestion-result.v1`; common Runtime Workflow | Partial; acquisition/parsing, PII/scope pipeline, normalized Graph projection, optional Memory distillation, and hosted adapter IAM pending |
 
 ## Remaining work, in order
 

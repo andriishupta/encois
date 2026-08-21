@@ -2,6 +2,12 @@ import type {
   AuthStatusResponse,
   IntegrationProjection,
   IntegrationUpdateRequest,
+  OrganizationPermissionCreateRequest,
+  OrganizationPermissionProjection,
+  OrganizationPermissionUpdateRequest,
+  OrganizationProjection,
+  OrganizationUnitCreateRequest,
+  OrganizationUnitProjection,
   WaitlistRequest,
   WaitlistSubmissionResponse,
   WorkflowExecutionProjection,
@@ -9,7 +15,7 @@ import type {
   WorkflowStartRequest,
   WorkflowUpdateRequest,
 } from '@encois/contracts'
-import { IntegrationStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
+import { AccessLevel, IntegrationStatus, OrganizationMembershipStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
 import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
@@ -60,6 +66,52 @@ function isIntegrationProjection(value: unknown): value is IntegrationProjection
     && typeof value.name === 'string'
     && typeof value.provider === 'string'
     && Object.values(IntegrationStatus).includes(value.status as IntegrationStatus)
+}
+
+function isOrganizationUnitProjection(value: unknown): value is OrganizationUnitProjection {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && (value.parentId === null || typeof value.parentId === 'string')
+    && typeof value.type === 'string'
+    && typeof value.slug === 'string'
+    && typeof value.name === 'string'
+    && typeof value.description === 'string'
+    && typeof value.manager === 'string'
+    && typeof value.memberCount === 'number'
+}
+
+function isOrganizationMemberProjection(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.initials === 'string'
+    && typeof value.name === 'string'
+    && typeof value.role === 'string'
+    && typeof value.roleKey === 'string'
+    && typeof value.status === 'string'
+    && Object.values(OrganizationMembershipStatus).includes(value.status as OrganizationMembershipStatus)
+}
+
+function isOrganizationPermissionProjection(value: unknown): value is OrganizationPermissionProjection {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.memberId === 'string'
+    && typeof value.unitId === 'string'
+    && Object.values(AccessLevel).includes(value.access as AccessLevel)
+    && value.propagateToChildren === true
+}
+
+function isOrganizationProjection(value: unknown): value is OrganizationProjection {
+  if (!isRecord(value) || !isRecord(value.organization)) return false
+  return typeof value.organization.id === 'string'
+    && typeof value.organization.slug === 'string'
+    && typeof value.organization.name === 'string'
+    && Array.isArray(value.units)
+    && value.units.every(isOrganizationUnitProjection)
+    && Array.isArray(value.members)
+    && value.members.every(isOrganizationMemberProjection)
+    && Array.isArray(value.permissions)
+    && value.permissions.every(isOrganizationPermissionProjection)
 }
 
 function parseList<T>(value: unknown, guard: (item: unknown) => item is T, name: string): readonly T[] {
@@ -192,4 +244,42 @@ export async function updateIntegration(integrationId: string, input: Integratio
   })
   if (!isIntegrationProjection(value)) throw new ApiError(200, 'API returned an invalid integration response.', 'INVALID_RESPONSE')
   return value
+}
+
+export async function getOrganization(): Promise<OrganizationProjection> {
+  const value = await request<unknown>('/organization')
+  if (!isOrganizationProjection(value)) throw new ApiError(200, 'API returned an invalid organization response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function createOrganizationUnit(input: OrganizationUnitCreateRequest): Promise<OrganizationUnitProjection> {
+  const value = await request<unknown>('/organization/units', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  if (!isOrganizationUnitProjection(value)) throw new ApiError(200, 'API returned an invalid organization unit response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function createOrganizationPermission(input: OrganizationPermissionCreateRequest): Promise<OrganizationPermissionProjection> {
+  const value = await request<unknown>('/organization/permissions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  if (!isOrganizationPermissionProjection(value)) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function updateOrganizationPermission(permissionId: string, input: OrganizationPermissionUpdateRequest): Promise<OrganizationPermissionProjection> {
+  const value = await request<unknown>(`/organization/permissions/${encodeURIComponent(permissionId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+  if (!isOrganizationPermissionProjection(value)) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function deleteOrganizationPermission(permissionId: string): Promise<void> {
+  const value = await request<unknown>(`/organization/permissions/${encodeURIComponent(permissionId)}`, { method: 'DELETE' })
+  if (!isRecord(value) || value.deleted !== true) throw new ApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
 }

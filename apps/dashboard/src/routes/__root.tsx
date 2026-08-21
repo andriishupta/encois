@@ -40,6 +40,8 @@ function getPageTitle(pathname: string) {
   if (pathname === '/integrations') return 'Integrations'
   if (pathname === '/integrations/new') return 'Add integration'
   if (pathname.startsWith('/integrations/')) return getIntegrationTitle(pathname)
+  if (pathname === '/organization') return 'Organization'
+  if (pathname === '/organization/permissions') return 'Organization permissions'
   if (pathname === '/settings') return 'Settings'
   if (pathname === '/settings/workspace') return 'Workspace settings'
   if (pathname === '/settings/notifications') return 'Notifications'

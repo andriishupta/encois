@@ -1,0 +1,1 @@
+ALTER TABLE "suggested_workflow_versions" ADD CONSTRAINT "suggested_workflow_versions_template_version_check" CHECK ("suggested_workflow_versions"."template"->>'version' = "suggested_workflow_versions"."version" AND "suggested_workflow_versions"."template"->>'schemaVersion' = "suggested_workflow_versions"."schema_version");

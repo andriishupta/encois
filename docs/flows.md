@@ -225,6 +225,59 @@ policy authorization. External-write nodes such as `email.send` produce an
 approval requirement; the current read-only fixture policy denies it before
 execution, and a future write policy must preserve the approval boundary.
 
+## 2.4 Knowledge Source ingestion
+
+Workflow Templates and Knowledge Sources are separate concepts. A Template is
+a provider-neutral suggestion for a user Blueprint; a Source is an actual,
+scoped origin of evidence. Creating a Template never creates an Integration,
+Source, or ingestion run.
+
+```mermaid
+sequenceDiagram
+    participant Admin as Admin / dashboard
+    participant API as Gateway API
+    participant DB as Control-plane DB
+    participant Temporal as Temporal Cloud
+    participant Runtime as Go Agent Runtime
+    participant AgentGW as Agent Gateway
+    participant Raw as Cloud Storage / artifact store
+    participant Graph as Spanner Graph
+    participant Memory as Memory Bank
+
+    Admin->>API: create Knowledge Source + scope
+    API->>DB: persist source metadata
+    Admin->>API: create immutable Source Revision
+    API->>DB: persist artifactRef and provenance metadata
+    Admin->>API: start source ingestion(trigger)
+    API->>DB: persist queued ingestion run
+    API->>Temporal: start encois.source-ingestion.v1
+    Runtime-->>Temporal: poll task queue
+    Temporal-->>Runtime: deliver revision envelope
+    Runtime->>AgentGW: acquire/fetch source under execution scope
+    AgentGW->>Raw: read/write raw artifact reference
+    AgentGW-->>Runtime: bounded data/evidence references
+    Runtime->>Runtime: parse, validate scope, redact, extract, normalize
+    Runtime->>Graph: project facts/edges with provenance
+    Runtime->>Memory: optionally distill scoped agent context
+    Runtime-->>Temporal: typed result and evidence refs
+    API-->>Admin: source/revision/ingestion status projection
+```
+
+The common flow is deliberately split into source-specific acquisition and a
+shared downstream pipeline:
+
+```text
+Integration: discover/fetch/webhook/reconcile -> shared pipeline
+Uploaded:    artifact reference -> parse/OCR -> shared pipeline
+Manual:      validated note/fact -> shared pipeline
+Media:       transcript/metadata -> shared pipeline
+```
+
+The current scaffold persists the first three control-plane records and starts
+the registered Runtime Workflow. It returns `deferred` at the acquisition
+stage while Cloud Storage bytes, live Jira/GitHub adapters, PII classification,
+Graph writes, and Memory Bank distillation remain explicit adapter work.
+
 ## 2. Request-to-worker flow
 
 The normal path from a dashboard action to running code is:
@@ -243,7 +296,9 @@ React SPA
 For a Workflow Creator plan, the control path is deliberately separate:
 
 ```text
-Workflow Creator
+User / Workflow Creator
+  -> GET /api/v1/workflows/templates
+  -> resolve a provider-neutral template and provider slots
   -> validate/submit plan
   -> human approval
   -> apply immutable registry snapshot
@@ -531,9 +586,10 @@ explicit grants         -> additional descendants
 explicit restrictions   -> subtract restricted descendants
 ```
 
-The current API computes inheritance from the organization-unit tree. Persisted
-grant/restriction rules are the next control-plane permission migration; until
-then direct membership scopes are the only durable input.
+The current API computes inheritance from the organization-unit tree and
+exposes Gateway-backed organization-unit and direct membership permission
+administration. Persisted grant/restriction rules remain a later control-plane
+extension; direct membership scopes are the current durable input.
 
 ## 10. Canvas and observability flow
 

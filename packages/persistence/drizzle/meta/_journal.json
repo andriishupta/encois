@@ -57,6 +57,48 @@
       "when": 1787343600000,
       "tag": "0007_invites_waitlist",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787347200000,
+      "tag": "0008_dapper_mysterio",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787350800000,
+      "tag": "0009_complete_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787354400000,
+      "tag": "0010_oval_expediter",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787358000000,
+      "tag": "0011_organization_scope_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787361600000,
+      "tag": "0012_dry_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787318471070,
+      "tag": "0013_clumsy_justin_hammer",
+      "breakpoints": true
     }
   ]
 }

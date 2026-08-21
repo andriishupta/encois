@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/source-revision.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "id", "sourceId", "organizationId", "revision", "status", "createdAt"],
+  "properties": {
+    "contractVersion": { "const": "source-revision.v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "sourceId": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "revision": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "status": { "enum": ["pending", "ingesting", "active", "failed", "superseded"] },
+    "artifactRef": { "type": "string", "minLength": 1 },
+    "sourceObjectId": { "type": "string", "minLength": 1 },
+    "contentType": { "type": "string", "minLength": 1 },
+    "checksum": { "type": "string", "minLength": 1 },
+    "observedAt": { "type": "string", "minLength": 1 },
+    "ingestedAt": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "minLength": 1 }
+  }
+}

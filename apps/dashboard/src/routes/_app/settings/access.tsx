@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Check, LockKeyhole, Plus, ShieldCheck, Users } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { Check, LockKeyhole, ShieldCheck, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,7 @@ export const Route = createFileRoute('/_app/settings/access')({
 function AccessSettingsPage() {
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Access" description="Organization membership and information boundaries." actions={<Button type="button" disabled><Plus data-icon="inline-start" />Invite member</Button>} />
+      <PageHeader title="Access" description="Organization membership and information boundaries." actions={<Button type="button" variant="outline" asChild><Link to="/organization/permissions"><LockKeyhole data-icon="inline-start" />Open permission board</Link></Button>} />
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-4 text-muted-foreground" aria-hidden="true" />Organization membership</CardTitle><CardDescription>People who can access this workspace.</CardDescription></CardHeader>
@@ -35,4 +35,3 @@ function AccessSettingsPage() {
 function MemberRow({ initials, name, email, role }: { initials: string; name: string; email: string; role: string }) {
   return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">{initials}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{name}</p><p className="truncate text-xs text-muted-foreground">{email}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">{role}</span></div>
 }
-

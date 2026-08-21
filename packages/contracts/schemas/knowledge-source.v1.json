@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/knowledge-source.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "id", "organizationId", "name", "kind", "status", "readScope", "visibilityScope", "createdAt", "updatedAt"],
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  },
+  "properties": {
+    "contractVersion": { "const": "knowledge-source.v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "kind": { "enum": ["integration", "uploaded_document", "manual", "media"] },
+    "provider": { "type": "string", "minLength": 1 },
+    "integrationId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["draft", "connecting", "discovering", "ingesting", "active", "degraded", "needs_reauth", "failed", "disabled"] },
+    "readScope": { "$ref": "#/$defs/scope" },
+    "visibilityScope": { "$ref": "#/$defs/scope" },
+    "contentType": { "type": "string", "minLength": 1 },
+    "currentRevisionId": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "minLength": 1 },
+    "updatedAt": { "type": "string", "minLength": 1 }
+  }
+}

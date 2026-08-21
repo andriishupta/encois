@@ -7,7 +7,7 @@ This package owns the Gateway API's PostgreSQL schema, Drizzle migrations, runti
 - `DATABASE_MIGRATION_URL` — privileged migration connection, used only by CI/deployment or an operator.
 - `DATABASE_RUNTIME_URL` — `api_gateway_runtime` connection, used by the API. It must not be the Cloud SQL admin or migration user.
 
-The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables. It has no `DELETE`, `TRUNCATE`, schema, role-management, or table-management privileges. `withOrganizationContext` sets `app.organization_id` with `SET LOCAL` inside a transaction so RLS policies can provide defense in depth.
+The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables. It has no general `DELETE`, `TRUNCATE`, schema, role-management, or table-management privileges. The Gateway has a tenant-scoped permission-removal exception for `membership_scopes`; authorization is enforced before the delete and RLS remains the database defense in depth. `withOrganizationContext` sets `app.organization_id` with `SET LOCAL` inside a transaction so RLS policies can provide defense in depth.
 
 ## Commands
 

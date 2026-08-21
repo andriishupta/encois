@@ -36,13 +36,33 @@ match a non-expired `organization_invites` row before the Gateway transaction
 creates the local user, membership, and organization-unit scope. There is no
 email/password signup or self-service organization creation.
 
+The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
+`password` provider, and uses `src/local-seed.ts` to create a verified local
+Firebase account plus a pending organization invite. It does not create the
+Encois `users` row ahead of time; the normal `/api/v1/auth/me` provisioning path
+does that after local login.
+
 Current blueprint routes:
 
 - `GET /api/v1/integrations` — list integrations visible to the authenticated user's organization scope.
 - `POST /api/v1/integrations/:integrationId` — update an integration after object-level authorization.
+- `GET /api/v1/sources` — list scoped Knowledge Sources.
+- `POST /api/v1/sources` — register an integration, uploaded-document, manual, or media Source.
+- `GET /api/v1/sources/:sourceId` — read a Source and its immutable revisions.
+- `POST /api/v1/sources/:sourceId/revisions` — register a revision by artifact/provider reference; raw bytes are not stored in Postgres or Temporal.
+- `POST /api/v1/sources/:sourceId/revisions/:revisionId/ingest` — start the platform-owned `encois.source-ingestion.v1` Workflow.
+- `GET /api/v1/organization` — return the caller-visible organization, units, members, and direct membership permissions.
+- `GET /api/v1/organization/units` — list organization units visible to the caller.
+- `POST /api/v1/organization/units` — create a child unit inside an administrator or manager scope.
+- `GET /api/v1/organization/members` — list members visible to the caller's management scope.
+- `GET /api/v1/organization/permissions` — list direct membership scopes the caller can administer.
+- `POST /api/v1/organization/permissions` — create or update a direct membership scope.
+- `PATCH /api/v1/organization/permissions/:permissionId` — change a direct scope's access level.
+- `DELETE /api/v1/organization/permissions/:permissionId` — remove a direct scope; the Gateway writes an audit event.
 - `POST /api/v1/workflows` — start a workflow through Temporal (or the local in-memory adapter).
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
+- `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
 - `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` create proposal or `workflow-change-plan.v2` lifecycle proposal without applying it.
 - `POST /api/v1/workflows/plans` — persist an idempotent v1/v2 proposal as `proposed` when Postgres is configured.
 - `POST /api/v1/workflows/plans/:planId/approve` — approve a persisted proposal; application is still a separate step.
@@ -53,6 +73,14 @@ Current blueprint routes:
 - `GET /api/v1/workflows/:workflowId` — read a tenant-authorized workflow projection.
 - `POST /api/v1/workflows/:workflowId/signals` — send an authorized approval Signal.
 - `POST /api/v1/workflows/:workflowId/updates` — apply an authorized context Update to an active workflow.
+
+Workflow Templates are stored in the Gateway control plane as searchable
+metadata plus immutable JSONB versions. They use logical capabilities and
+provider slots, so a template can resolve to GitHub or GitLab, Jira or Linear,
+and Slack or Teams. Workflow Creator later maps a selected template to a
+validated tenant Blueprint; the Go Runtime does not read this catalog.
+Knowledge Sources are a separate control-plane model. Templates do not create
+Sources, revisions, or ingestion runs.
 
 When `TEMPORAL_ADDRESS` is empty, workflow calls use the in-memory adapter so the API can be developed without Temporal credentials. Set `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, and either `TEMPORAL_API_KEY` or mTLS settings to switch to Temporal Cloud. The API starts executions; the Go runtime owns the workers that poll the task queue.
 
@@ -98,6 +126,7 @@ Each feature owns its router, routes, and services:
 src/
   app.ts                 active API version and version router
   integrations/{router.ts,routes/,services/}
+  organization/{router.ts,services/}
   workflows/{router.ts,routes/,services/,temporal-client.ts,types.ts}
   webhooks/{router.ts,routes/}
   health/router.ts

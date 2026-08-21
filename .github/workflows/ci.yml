@@ -172,6 +172,8 @@ jobs:
             file: apps/agent-gateway/Dockerfile
           - name: persistence-migrations
             file: packages/persistence/Dockerfile
+          - name: firebase-auth
+            file: docker/firebase/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

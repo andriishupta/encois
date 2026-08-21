@@ -6,4 +6,6 @@ export * from "./workflow-commands.js";
 export * from "./identity.js";
 export * from "./integrations.js";
 export * from "./organizations.js";
+export * from "./workflow-templates.js";
+export * from "./knowledge-sources.js";
 export * from "./workflows.js";

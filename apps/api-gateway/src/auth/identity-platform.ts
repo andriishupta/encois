@@ -374,6 +374,9 @@ export function createDatabaseAccessResolver(): IdentityAccessResolver {
     if (organizationId) {
       const existingPrincipal = await resolvePrincipalForOrganization(identity, organizationId);
       if (existingPrincipal) return { principal: existingPrincipal, status: "active" };
+    } else {
+      const existingPrincipal = await resolveExistingIdentity(identity);
+      if (existingPrincipal) return { principal: existingPrincipal, status: "active" };
     }
 
     const provisioned = await provisionInvitedIdentity(identity, organizationId);
@@ -421,6 +424,30 @@ async function resolvePrincipalForOrganization(
       scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
     } satisfies AosPrincipal;
   });
+}
+
+async function resolveExistingIdentity(identity: IdentityPlatformIdentity): Promise<AosPrincipal | null> {
+  if (!database) return null;
+
+  // Memberships are tenant-RLS protected, so an /auth/me request without an
+  // organization cannot enumerate them. Accepted invites are pre-auth
+  // control-plane records and retain the safe bridge to the admitted tenant.
+  const [user] = await database
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.identityProvider, identity.identityProvider), eq(users.identitySubject, identity.subject)))
+    .limit(1);
+  if (!user) return null;
+
+  const acceptedInvites = await database
+    .select({ organizationId: organizationInvites.organizationId })
+    .from(organizationInvites)
+    .where(and(eq(organizationInvites.acceptedUserId, user.id), eq(organizationInvites.status, "accepted")))
+    .orderBy(asc(organizationInvites.acceptedAt), asc(organizationInvites.createdAt));
+  const organizationIds = [...new Set(acceptedInvites.map((invite) => invite.organizationId))];
+  if (organizationIds.length !== 1) return null;
+
+  return resolvePrincipalForOrganization(identity, organizationIds[0]!);
 }
 
 /**

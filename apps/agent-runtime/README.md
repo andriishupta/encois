@@ -88,6 +88,10 @@ Registered workflows:
 - `CoordinatorWorkflow` — long-lived organization/project onboarding and
   reconciliation loop; uses Signals, timers, and Continue-As-New;
 - `BootstrapProjectWorkflow` — short initial bootstrap phase.
+- `encois.source-ingestion.v1` — platform-owned source/revision ingestion
+  coordinator. It is distinct from user Blueprints and currently returns a
+  typed deferred result until artifact/provider parsers, Graph projection, and
+  Memory Bank adapters are configured.
 
 The Coordinator and Workflow Creator prompts are present in the ADK bundle. The
 bootstrap Workflow calls a `CreateBootstrapPlan` Activity, which discards raw
@@ -106,6 +110,14 @@ exposes two in-memory, read-only fixtures: 10 Jira tasks with 8 completed,
 plus mock GitHub pull-request/check data. Agent steps currently run ADK
 reasoning over their validated input and prior step results; provider tools
 are invoked by explicit `tool` steps.
+
+Knowledge Source ingestion uses the same private data-plane boundary after a
+Source and immutable Revision are registered by the Gateway API. The Workflow
+input carries only source/revision IDs, scope, trigger, and artifact/provider
+references; raw bytes and credentials never enter Temporal history. The common
+pipeline is acquisition, parse/OCR/transcription, scope and PII checks,
+extraction, provenance, Graph projection, and optional agent-memory
+distillation.
 
 The generic interpreter currently supports dependency ordering, parallel ready
 steps, tool and agent Activities, deterministic transform/condition steps,

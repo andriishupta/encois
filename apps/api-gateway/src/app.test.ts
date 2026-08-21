@@ -39,6 +39,25 @@ describe("API Gateway", () => {
     });
   });
 
+  it("exposes tenant-protected workflow templates with a hard result limit", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const invalidLimit = await app.request("/api/v1/workflows/templates?q=github&limit=11");
+    expect(invalidLimit.status).toBe(400);
+
+    const unavailable = await app.request("/api/v1/workflows/templates?q=github,jira&limit=10");
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: "PERSISTENCE_UNAVAILABLE" },
+    });
+  });
+
   it("exposes authentication status separately from tenant-protected routes", async () => {
     const app = createApp({
       config: testConfig,
@@ -135,6 +154,28 @@ describe("API Gateway", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
+  it("mounts tenant-protected organization units and permissions endpoints", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const invalidUnit = await app.request("/api/v1/organization/units", {
+      method: "POST",
+      body: JSON.stringify({ name: "Platform" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalidUnit.status).toBe(400);
+    await expect(invalidUnit.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
+
+    const organization = await app.request("/api/v1/organization");
+    expect(organization.status).toBe(503);
+    await expect(organization.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
   });
 
   it("starts and reads a workflow through the local Temporal blueprint", async () => {

@@ -29,12 +29,12 @@ flowchart TB
         Outbox[(Coordinator event outbox\nPostgres + RLS\nCurrent: transactional enqueue)]
         Dispatcher[Coordinator dispatcher\none-shot API image entrypoint\nCurrent: lease/retry + Temporal sink]
         Auth[Identity Platform\nGoogle-only browser sign-in\nGateway ID-token verification]
-        SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nUsers, memberships, invites, waitlist)]
+        SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nUsers, memberships, sources, revisions, ingestion runs)]
     end
 
     subgraph Durable[Durable execution plane]
         Temporal[Temporal Cloud\nCurrent: client integration + passing local smoke\nTarget: hosted execution history, retries, Signals, timers]
-        Runtime[Go Agent Runtime\napps/agent-runtime\nTemporal worker + Google ADK\nCurrent: generic workflow, ADK-in-Activity, health, fixtures]
+        Runtime[Go Agent Runtime\napps/agent-runtime\nTemporal worker + Google ADK\nCurrent: generic Blueprint + source ingestion, ADK-in-Activity, health]
     end
 
     subgraph Private[Private agent plane]
@@ -127,7 +127,7 @@ flowchart LR
 
     subgraph RuntimeService[Cloud Run or worker host: Go Agent Runtime]
         Worker[Temporal Go worker]
-        Workflows[Workflow definitions\nCoordinator + generic Blueprint\nRelease readiness is an example]
+        Workflows[Workflow definitions\nCoordinator + source ingestion + generic Blueprint\nRelease readiness is an example]
         Activities[Activities\nprovider calls, synthesis, persistence references]
         ADK[Google ADK agents\nplanner, specialists, synthesizer\nCurrent: Activity boundary\nCandidate: googleadk v0.2.0 spike]
         RuntimeClient[Private Agent Gateway client]

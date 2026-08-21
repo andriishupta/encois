@@ -1,10 +1,12 @@
 import { initializeApp } from 'firebase/app'
 import {
   browserSessionPersistence,
+  connectAuthEmulator,
   getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
@@ -29,6 +31,7 @@ type DashboardEnv = {
   VITE_FIREBASE_AUTH_DOMAIN?: string
   VITE_FIREBASE_PROJECT_ID?: string
   VITE_FIREBASE_APP_ID?: string
+  VITE_FIREBASE_AUTH_EMULATOR_HOST?: string
 }
 
 function environment(): DashboardEnv {
@@ -54,6 +57,11 @@ const firebaseAuth = configuredFirebase()
       }),
     )
   : null
+
+const firebaseAuthEmulatorHost = environment().VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim()
+if (firebaseAuth && firebaseAuthEmulatorHost) {
+  connectAuthEmulator(firebaseAuth, `http://${firebaseAuthEmulatorHost}`, { disableWarnings: true })
+}
 
 let currentFirebaseUser: User | null = null
 let authStateReadyResolve: (() => void) | undefined
@@ -156,6 +164,13 @@ export async function signInWithGoogle(): Promise<User> {
   return result.user
 }
 
+export async function signInWithEmail(email: string, password: string): Promise<User> {
+  if (!firebaseAuth || !firebaseAuthEmulatorHost) throw new Error('Local Firebase Auth Emulator is not configured.')
+
+  const result = await signInWithEmailAndPassword(firebaseAuth, email, password)
+  return result.user
+}
+
 export async function signOutFromIdentityPlatform(): Promise<void> {
   if (firebaseAuth) await signOut(firebaseAuth)
   clearAuthSession()
@@ -163,6 +178,10 @@ export async function signOutFromIdentityPlatform(): Promise<void> {
 
 export function isIdentityPlatformConfigured(): boolean {
   return firebaseAuth !== null
+}
+
+export function isFirebaseAuthEmulatorConfigured(): boolean {
+  return firebaseAuth !== null && Boolean(firebaseAuthEmulatorHost)
 }
 
 export function getDevelopmentAuthSession(): AuthSession | null {

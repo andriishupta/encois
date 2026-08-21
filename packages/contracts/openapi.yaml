@@ -79,6 +79,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationResponse'
+  /api/v1/sources:
+    get:
+      operationId: listKnowledgeSources
+      summary: List Knowledge Sources visible in the caller's scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scoped Knowledge Sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSourceListResponse'
+    post:
+      operationId: createKnowledgeSource
+      summary: Register a scoped Knowledge Source
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeSourceCreateRequest'
+      responses:
+        '201':
+          description: Source registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSourceResponse'
+  /api/v1/sources/{sourceId}:
+    get:
+      operationId: getKnowledgeSource
+      summary: Get a Knowledge Source and its immutable revisions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Source detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSourceDetailResponse'
+        '404':
+          description: Source not found
+  /api/v1/sources/{sourceId}/revisions:
+    post:
+      operationId: createSourceRevision
+      summary: Register an immutable source revision by artifact/provider reference
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRevisionCreateRequest'
+      responses:
+        '201':
+          description: Revision registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceRevisionResponse'
+  /api/v1/sources/{sourceId}/revisions/{revisionId}/ingest:
+    post:
+      operationId: startSourceIngestion
+      summary: Start the platform-owned source ingestion Workflow
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: revisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                trigger:
+                  $ref: '#/components/schemas/SourceIngestionTrigger'
+      responses:
+        '202':
+          description: Ingestion accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceIngestionLaunchResponse'
   /api/v1/workflows:
     post:
       operationId: startWorkflow
@@ -388,6 +499,135 @@ components:
     IntegrationStatus:
       type: string
       enum: [pending, active, disabled, error]
+    KnowledgeSourceKind:
+      type: string
+      enum: [integration, uploaded_document, manual, media]
+    KnowledgeSourceStatus:
+      type: string
+      enum: [draft, connecting, discovering, ingesting, active, degraded, needs_reauth, failed, disabled]
+    SourceRevisionStatus:
+      type: string
+      enum: [pending, ingesting, active, failed, superseded]
+    SourceIngestionTrigger:
+      type: string
+      enum: [bootstrap, manual, webhook, schedule, reconcile]
+    KnowledgeSourceScope:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+        teamIds:
+          type: array
+          items: { type: string, minLength: 1 }
+        projectIds:
+          type: array
+          items: { type: string, minLength: 1 }
+    KnowledgeSource:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, id, organizationId, name, kind, status, readScope, visibilityScope, createdAt, updatedAt]
+      properties:
+        contractVersion: { const: knowledge-source.v1 }
+        id: { type: string }
+        organizationId: { type: string }
+        name: { type: string }
+        kind: { $ref: '#/components/schemas/KnowledgeSourceKind' }
+        provider: { type: string }
+        integrationId: { type: string }
+        status: { $ref: '#/components/schemas/KnowledgeSourceStatus' }
+        readScope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+        visibilityScope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+        contentType: { type: string }
+        currentRevisionId: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    KnowledgeSourceCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, kind, readScope, visibilityScope]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        kind: { $ref: '#/components/schemas/KnowledgeSourceKind' }
+        provider: { type: string }
+        integrationId: { type: string }
+        readScope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+        visibilityScope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+        contentType: { type: string }
+        configuration: { type: object, additionalProperties: true }
+    SourceRevision:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, id, sourceId, organizationId, revision, status, createdAt]
+      properties:
+        contractVersion: { const: source-revision.v1 }
+        id: { type: string }
+        sourceId: { type: string }
+        organizationId: { type: string }
+        revision: { type: string }
+        status: { $ref: '#/components/schemas/SourceRevisionStatus' }
+        artifactRef: { type: string }
+        sourceObjectId: { type: string }
+        contentType: { type: string }
+        checksum: { type: string }
+        observedAt: { type: string }
+        ingestedAt: { type: string }
+        createdAt: { type: string }
+    SourceRevisionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { type: string, minLength: 1, maxLength: 128 }
+        artifactRef: { type: string }
+        sourceObjectId: { type: string }
+        contentType: { type: string }
+        checksum: { type: string }
+        observedAt: { type: string }
+    KnowledgeSourceResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/KnowledgeSource' }
+    KnowledgeSourceListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeSource' }
+    KnowledgeSourceDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [source, revisions]
+          properties:
+            source: { $ref: '#/components/schemas/KnowledgeSource' }
+            revisions:
+              type: array
+              items: { $ref: '#/components/schemas/SourceRevision' }
+    SourceRevisionResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/SourceRevision' }
+    SourceIngestionLaunchResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [source, revision, workflow, resultContract]
+          properties:
+            source: { $ref: '#/components/schemas/KnowledgeSource' }
+            revision: { $ref: '#/components/schemas/SourceRevision' }
+            workflow: { $ref: '#/components/schemas/WorkflowExecutionResponse' }
+            resultContract: { const: source-ingestion-result.v1 }
     IntegrationProjection:
       type: object
       additionalProperties: false

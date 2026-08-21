@@ -303,6 +303,35 @@ GitHub Integration
 Monitoring Integration
 ~~~
 
+### Knowledge Source
+
+An organization-scoped logical origin of company knowledge. An Integration is
+one source kind; other kinds include uploaded documents, manual input, and
+media. A Knowledge Source carries read/visibility scope and lifecycle state,
+but never stores provider credentials.
+
+### Source Revision
+
+An immutable version of a Knowledge Source. It points to raw data through an
+artifact reference or a provider object ID and preserves observed time,
+checksum, content type, and later provenance locators. Replacing an uploaded
+file or reconciling changed provider data creates a new revision.
+
+### Source Ingestion Workflow
+
+The platform-owned `encois.source-ingestion.v1` Temporal Workflow that runs
+acquisition, parsing, scope validation, redaction, fact/entity/relationship
+extraction, provenance creation, Graph projection, and optional Memory
+distillation. It is not a user Blueprint and does not create Go code
+dynamically.
+
+### Knowledge Ingestion
+
+The common pipeline after source-specific acquisition. Jira, GitHub, PDF,
+Markdown, manual notes, and future media sources converge on the same typed
+evidence/provenance model. The first slice may return `deferred` until a
+concrete parser or storage adapter is configured.
+
 ### Integration Pack
 
 A versioned product package that bundles an Integration, health checks, tool definitions, evidence mappings, and one or more approved Specialist Agent Definitions.

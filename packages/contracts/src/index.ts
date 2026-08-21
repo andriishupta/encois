@@ -2,6 +2,7 @@ import { validateContract } from "./validation.js";
 import {
   AgentMemoryOperation,
   AgentMemoryStatus,
+  AccessLevel,
   AuthAccessStatus,
   ArtifactRetentionClass,
   ContractVersion,
@@ -12,6 +13,7 @@ import {
   IntegrationStatus,
   MemoryRedactionStatus,
   OrganizationUnitType,
+  OrganizationMembershipStatus,
   ScopeRuleMode,
   ToolResultStatus,
   ToolSideEffects,
@@ -23,6 +25,11 @@ import {
   WorkflowStepKind,
   WorkflowUpdateName,
   WorkflowStatusReason,
+  KnowledgeSourceKind,
+  KnowledgeSourceStatus,
+  SourceRevisionStatus,
+  SourceIngestionTrigger,
+  SourceIngestionStatus,
 } from "./values.js";
 
 export { resolveEffectiveScope, type EffectiveScope, type OrganizationUnitNode, type ScopeRule } from "./scope.js";
@@ -31,6 +38,7 @@ export { validateWaitlistRequest, WaitlistLimits, type WaitlistRequest, type Wai
 export {
   AgentMemoryOperation,
   AgentMemoryStatus,
+  AccessLevel,
   AuthAccessStatus,
   ArtifactRetentionClass,
   ContractVersion,
@@ -41,6 +49,7 @@ export {
   IntegrationStatus,
   MemoryRedactionStatus,
   OrganizationUnitType,
+  OrganizationMembershipStatus,
   ScopeRuleMode,
   ToolResultStatus,
   ToolSideEffects,
@@ -52,6 +61,11 @@ export {
   WorkflowStepKind,
   WorkflowUpdateName,
   WorkflowStatusReason,
+  KnowledgeSourceKind,
+  KnowledgeSourceStatus,
+  SourceRevisionStatus,
+  SourceIngestionTrigger,
+  SourceIngestionStatus,
 } from "./values.js";
 
 export { CONTRACT_SCHEMA_FILES, validateContract, type ContractSchemaName, type ContractValidationResult } from "./validation.js";
@@ -74,11 +88,97 @@ export type SourceFreshness = {
 
 export type DataProvenance = {
   source: string;
+  sourceId?: string;
+  sourceRevisionId?: string;
   sourceRecordId?: string;
+  artifactRef?: string;
+  locator?: JsonObject;
   observedAt: string;
   ingestedAt?: string;
   transformationVersion?: string;
   visibilityScope?: readonly string[];
+};
+
+export type KnowledgeSourceScope = ExecutionScope;
+
+export type KnowledgeSource = {
+  contractVersion: typeof ContractVersion.KnowledgeSource;
+  id: string;
+  organizationId: string;
+  name: string;
+  kind: KnowledgeSourceKind;
+  provider?: string;
+  integrationId?: string;
+  status: KnowledgeSourceStatus;
+  readScope: KnowledgeSourceScope;
+  visibilityScope: KnowledgeSourceScope;
+  contentType?: string;
+  currentRevisionId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SourceRevision = {
+  contractVersion: typeof ContractVersion.SourceRevision;
+  id: string;
+  sourceId: string;
+  organizationId: string;
+  revision: string;
+  status: SourceRevisionStatus;
+  artifactRef?: string;
+  sourceObjectId?: string;
+  contentType?: string;
+  checksum?: string;
+  observedAt?: string;
+  ingestedAt?: string;
+  createdAt: string;
+};
+
+export type SourceIngestionRequest = ExecutionEnvelope & {
+  contractVersion: typeof ContractVersion.SourceIngestion;
+  sourceId: string;
+  sourceRevisionId: string;
+  sourceKind: KnowledgeSourceKind;
+  provider?: string;
+  artifactRef?: string;
+  sourceObjectId?: string;
+  contentType?: string;
+  trigger: SourceIngestionTrigger;
+  readScope: KnowledgeSourceScope;
+  visibilityScope: KnowledgeSourceScope;
+};
+
+export type SourceIngestionResult = {
+  contractVersion: typeof ContractVersion.SourceIngestionResult;
+  requestId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  status: SourceIngestionStatus;
+  stage: "acquired" | "parsed" | "normalized" | "graph_projected" | "memory_distilled";
+  factsCount: number;
+  evidenceRefs: readonly string[];
+  freshness?: readonly SourceFreshness[];
+  message?: string;
+};
+
+export type KnowledgeSourceCreateRequest = {
+  name: string;
+  kind: KnowledgeSourceKind;
+  provider?: string;
+  integrationId?: string;
+  readScope: KnowledgeSourceScope;
+  visibilityScope: KnowledgeSourceScope;
+  contentType?: string;
+  configuration?: JsonObject;
+};
+
+export type SourceRevisionCreateRequest = {
+  revision: string;
+  artifactRef?: string;
+  sourceObjectId?: string;
+  contentType?: string;
+  checksum?: string;
+  observedAt?: string;
 };
 
 export type ExecutionContext = {
@@ -162,6 +262,66 @@ export type IntegrationProjection = {
 export type IntegrationUpdateRequest = {
   displayName?: string;
   status?: IntegrationStatus;
+};
+
+export type OrganizationUnitProjection = {
+  id: string;
+  organizationId: string;
+  parentId: string | null;
+  type: OrganizationUnitType;
+  slug: string;
+  name: string;
+  description: string;
+  manager: string;
+  memberCount: number;
+};
+
+export type OrganizationMemberProjection = {
+  id: string;
+  initials: string;
+  name: string;
+  email?: string;
+  role: string;
+  roleKey: string;
+  homeUnitId?: string;
+  status: OrganizationMembershipStatus;
+};
+
+export type OrganizationPermissionProjection = {
+  id: string;
+  memberId: string;
+  unitId: string;
+  access: AccessLevel;
+  /** Direct membership scopes inherit descendants in the current policy model. */
+  propagateToChildren: true;
+};
+
+export type OrganizationProjection = {
+  organization: {
+    id: string;
+    slug: string;
+    name: string;
+  };
+  units: readonly OrganizationUnitProjection[];
+  members: readonly OrganizationMemberProjection[];
+  permissions: readonly OrganizationPermissionProjection[];
+};
+
+export type OrganizationUnitCreateRequest = {
+  parentId?: string | null;
+  type: OrganizationUnitType;
+  name: string;
+  slug?: string;
+};
+
+export type OrganizationPermissionCreateRequest = {
+  memberId: string;
+  unitId: string;
+  access: AccessLevel;
+};
+
+export type OrganizationPermissionUpdateRequest = {
+  access: AccessLevel;
 };
 
 export type AuthStatusResponse =

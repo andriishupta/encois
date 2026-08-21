@@ -26,6 +26,10 @@ const (
 	ContractBootstrapProject     ContractVersion = "bootstrap-project.v1"
 	ContractAuthorizationCheck   ContractVersion = "authorization-check.v1"
 	ContractWorkflowDefinition   ContractVersion = "workflow-definition.v1"
+	ContractKnowledgeSource      ContractVersion = "knowledge-source.v1"
+	ContractSourceRevision       ContractVersion = "source-revision.v1"
+	ContractSourceIngestion      ContractVersion = "source-ingestion.v1"
+	ContractSourceIngestionResult ContractVersion = "source-ingestion-result.v1"
 )
 
 type TemporalWorkflowType string
@@ -34,6 +38,7 @@ const (
 	WorkflowTypeUserBlueprint    TemporalWorkflowType = "encois.user-blueprint.v1"
 	WorkflowTypeCoordinator      TemporalWorkflowType = "CoordinatorWorkflow"
 	WorkflowTypeBootstrapProject TemporalWorkflowType = "BootstrapProjectWorkflow"
+	WorkflowTypeSourceIngestion TemporalWorkflowType = "encois.source-ingestion.v1"
 )
 
 type WorkflowStepKind string
@@ -199,6 +204,57 @@ const (
 	IntegrationError    IntegrationStatus = "error"
 )
 
+type KnowledgeSourceKind string
+
+const (
+	SourceKindIntegration       KnowledgeSourceKind = "integration"
+	SourceKindUploadedDocument  KnowledgeSourceKind = "uploaded_document"
+	SourceKindManual            KnowledgeSourceKind = "manual"
+	SourceKindMedia             KnowledgeSourceKind = "media"
+)
+
+type KnowledgeSourceStatus string
+
+const (
+	SourceStatusDraft       KnowledgeSourceStatus = "draft"
+	SourceStatusConnecting  KnowledgeSourceStatus = "connecting"
+	SourceStatusDiscovering KnowledgeSourceStatus = "discovering"
+	SourceStatusIngesting   KnowledgeSourceStatus = "ingesting"
+	SourceStatusActive      KnowledgeSourceStatus = "active"
+	SourceStatusDegraded    KnowledgeSourceStatus = "degraded"
+	SourceStatusNeedsReauth KnowledgeSourceStatus = "needs_reauth"
+	SourceStatusFailed      KnowledgeSourceStatus = "failed"
+	SourceStatusDisabled    KnowledgeSourceStatus = "disabled"
+)
+
+type SourceRevisionStatus string
+
+const (
+	RevisionStatusPending    SourceRevisionStatus = "pending"
+	RevisionStatusIngesting  SourceRevisionStatus = "ingesting"
+	RevisionStatusActive     SourceRevisionStatus = "active"
+	RevisionStatusFailed     SourceRevisionStatus = "failed"
+	RevisionStatusSuperseded SourceRevisionStatus = "superseded"
+)
+
+type SourceIngestionTrigger string
+
+const (
+	IngestionTriggerBootstrap  SourceIngestionTrigger = "bootstrap"
+	IngestionTriggerManual     SourceIngestionTrigger = "manual"
+	IngestionTriggerWebhook    SourceIngestionTrigger = "webhook"
+	IngestionTriggerSchedule   SourceIngestionTrigger = "schedule"
+	IngestionTriggerReconcile  SourceIngestionTrigger = "reconcile"
+)
+
+type SourceIngestionStatus string
+
+const (
+	IngestionStatusCompleted SourceIngestionStatus = "completed"
+	IngestionStatusDeferred  SourceIngestionStatus = "deferred"
+	IngestionStatusFailed    SourceIngestionStatus = "failed"
+)
+
 type SourceFreshness struct {
 	Source     string          `json:"source"`
 	ObservedAt string          `json:"observedAt"`
@@ -209,7 +265,11 @@ type SourceFreshness struct {
 
 type DataProvenance struct {
 	Source                string   `json:"source"`
+	SourceID              string   `json:"sourceId,omitempty"`
+	SourceRevisionID      string   `json:"sourceRevisionId,omitempty"`
 	SourceRecordID        string   `json:"sourceRecordId,omitempty"`
+	ArtifactRef           string   `json:"artifactRef,omitempty"`
+	Locator               map[string]any `json:"locator,omitempty"`
 	ObservedAt            string   `json:"observedAt"`
 	IngestedAt            string   `json:"ingestedAt,omitempty"`
 	TransformationVersion string   `json:"transformationVersion,omitempty"`

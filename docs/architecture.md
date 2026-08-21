@@ -110,9 +110,11 @@ effective scope = direct membership descendants
 ```
 
 The current persistence slice stores direct membership roots and the shared
-contract/domain helper already computes inheritance and future grant/restrict
-rules. Persisted explicit scope rules and an administration UI are deferred
-until the control-plane permission surface is needed.
+contract/domain helper computes descendant inheritance. The Gateway owns the
+organization projection, child-unit mutations, direct membership permission
+mutations, role/scope checks, and audit events; the Dashboard consumes those
+endpoints. Persisted explicit grant/restrict rules remain a separate extension
+if direct-root inheritance becomes insufficient.
 
 ## 4. Core components
 
@@ -127,6 +129,10 @@ Use a React SPA. Astro is not part of the product architecture.
 - Business rules, credentials, provider SDKs, and authorization decisions stay outside the browser.
 - The UI receives only scoped projections and never queries Temporal, Spanner Graph, Memory Bank, or providers directly.
 - The Dashboard route tree fails closed without an authenticated browser session. The current local scaffold accepts a development-only bearer token through a session boundary; production token acquisition and refresh must be supplied by the Identity Platform/Firebase client adapter before hosted rollout.
+- The full Compose path also provides a Firebase Auth Emulator and a verified
+  local fixture account. This exercises the production-shaped bearer-token and
+  invite provisioning path without GCP credentials; the development bearer
+  fixture remains available for database-free UI work.
 
 Primary screens:
 
@@ -178,6 +184,69 @@ rejected. This complements, rather than replaces, Temporal Update IDs and the
 Go Workflow's Signal deduplication.
 
 The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_workflow` or `get_workflow_status`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
+
+#### Workflow Template catalog
+
+The Gateway owns a provider-neutral Workflow Template catalog for onboarding
+and workflow discovery. `workflow_templates` stores searchable metadata such as
+category, keywords, required capabilities, publication state, and the current
+published version. `workflow_template_versions` stores immutable JSONB
+snapshots. A template uses logical capability names and provider slots (for
+example, `issue-tracker` can resolve to Jira or Linear); it contains no
+credentials, integration IDs, provider payloads, or executable code.
+
+`GET /api/v1/workflows/templates` returns the published version of up to ten
+catalog entries after tenant context is established. Workflow Creator may use
+the selected template as input for a typed, deterministic conversion into the
+canonical `workflow-blueprint.v1` contract. The resulting tenant Blueprint is
+then validated, approved, versioned, and persisted through the existing plan
+boundary. Workflow Templates are a Gateway helper and are deliberately
+unknown to the Go Agent Runtime, which continues to execute only validated
+Blueprint snapshots.
+
+#### Knowledge Sources and unified ingestion
+
+`Integration` is one kind of `Knowledge Source`, not the parent concept for
+all company knowledge. A source is an organization-scoped logical origin and
+has a `kind`, read scope, visibility scope, lifecycle status, and optional
+provider/integration reference. MVP kinds are `integration`,
+`uploaded_document`, `manual`, and `media`. An Integration row still owns the
+provider connection and credential reference; a Knowledge Source may point to
+that connection without copying credentials into source configuration.
+
+Uploaded or provider data is represented by an immutable `Source Revision`.
+Postgres stores source/revision metadata and an `artifactRef`; raw bytes stay
+in the artifact store boundary (target: Cloud Storage), not in Postgres,
+Temporal history, or model context. Every normalized fact must retain
+`sourceId`, `sourceRevisionId`, an optional `sourceRecordId`, an artifact
+reference, and a precise locator such as page, object ID, or timestamp.
+
+All source kinds converge after acquisition on the same platform-owned
+`encois.source-ingestion.v1` Workflow:
+
+```text
+Source / Revision
+  -> acquire or fetch through Agent Gateway/data adapter
+  -> parse, OCR, or transcribe
+  -> validate scope and redact model-facing data
+  -> extract entities, facts, relationships, and evidence
+  -> normalize and project to Spanner Graph
+  -> optionally distill scoped agent context to Memory Bank
+```
+
+The Workflow is registered Go code and is not a user Blueprint. Integration
+bootstrap, webhook, schedule, reconciliation, and an uploaded-document ingest
+all start this same Workflow with a different trigger and revision. User
+Blueprints remain provider-neutral execution graphs that consume source
+evidence; Workflow Templates remain a separate discovery/catalog layer and do
+not reference source IDs or become executable definitions.
+
+The first implementation exposes source registration, revision metadata, and
+an ingestion launch route in the Gateway API. The Runtime validates the
+versioned envelope and returns an explicit deferred result until concrete
+artifact, provider parser, Graph projection, and Memory adapters are wired.
+This is intentional: the boundary and provenance model are real before any
+provider-specific parser is allowed to become product behavior.
 
 #### Initial Google Cloud control-plane implementation
 
@@ -271,8 +340,9 @@ not connect to the Gateway API's control-plane Postgres.
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
 
 Current code status: the worker registers `encois.user-blueprint.v1`, the
-Coordinator, and bootstrap workflows; it does not register provider-specific
-Temporal Workflow types. The generic interpreter, scope propagation,
+Coordinator, bootstrap, and platform-owned `encois.source-ingestion.v1`
+workflows; it does not register provider-specific or user-specific Temporal
+Workflow types. The generic interpreter, source-revision envelope, scope propagation,
 authenticated Runtime-to-Gateway calls, read-only policy, worker health
 listener, and API → Temporal → Go → Agent Gateway synthetic smoke path are
 tested locally. The TypeScript API and the Go Runtime/Agent Gateway now consume
@@ -443,6 +513,9 @@ checks, a fixture-level MCP-shaped tool catalog and invocation boundary, a
 Spanner Graph query boundary, and a Cloud Storage-shaped artifact boundary
 backed by in-memory/deferred adapters. Agent-specific Memory Bank access is a
 separate typed Runtime Activity boundary, not a public Gateway data source.
+Knowledge Source registration remains in the Gateway API control plane; the
+Agent Gateway only brokers source acquisition, artifact access, provider
+tools, and future Graph projection under the Runtime execution context.
 Catalog
 entries include a version, input/output schemas, behavior annotations,
 availability, approval metadata, and required scope fields; invocation checks

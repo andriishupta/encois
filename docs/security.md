@@ -152,10 +152,11 @@ direct membership descendants
 - explicit restriction descendants
 ```
 
-The current API computes inherited descendants from the organization-unit tree.
+The current API computes inherited descendants from the organization-unit tree
+and enforces role-aware direct membership permission mutations in the Gateway.
 Explicit grant/restriction persistence is intentionally deferred, but the
-contract boundary already models it so a future permission UI cannot replace
-the authorization algorithm with client or model logic.
+contract boundary already models it so the Dashboard cannot replace the
+authorization algorithm with client or model logic.
 
 ## 5. Database and persistence security
 
@@ -183,6 +184,24 @@ and must not execute arbitrary code. The Go Runtime receives a snapshot through
 Temporal input and never receives database credentials or queries the registry.
 Registry rows should be append-only by version in normal operation; lifecycle
 changes must be explicit, audited, and never implemented as an implicit delete.
+
+Workflow Template catalog rows are either platform-wide (`organization_id IS
+NULL`) or explicitly tenant-scoped. The templates endpoint is still behind
+AOS and establishes tenant context before reading RLS-protected rows. Published
+templates are configuration, not executable workflows: they may contain
+logical capabilities and provider slots, but never credentials, provider tokens,
+integration IDs, raw provider payloads, or arbitrary code. A selected template
+must pass the same deterministic Blueprint validation, authorization, approval,
+and audit boundary before it can become a tenant workflow.
+
+Knowledge Sources are tenant-scoped control-plane records with separate
+immutable revisions and ingestion-run projections. A Source's read and
+visibility scope must be checked before acquisition, and the same scope must
+be carried into artifact prefixes, provider queries, Graph writes, and Memory
+Bank distillation. `artifactRef` is a typed reference, not a URL to fetch
+arbitrarily; only approved `artifact://` or `gs://` references may cross the
+source revision boundary. Source configuration must never contain credentials,
+even nested inside JSON.
 
 Spanner Graph, Cloud Storage, Memory Bank, and any vector or retrieval system follow the same tenant, scope, retention, and service-identity rules. A graph edge or memory retrieved without an authorization filter is a security defect even if the UI later hides it.
 

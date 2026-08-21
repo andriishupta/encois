@@ -17,6 +17,10 @@ export const ContractVersion = {
   WorkflowChangePlan: "workflow-change-plan.v1",
   WorkflowChangePlanV2: "workflow-change-plan.v2",
   CoordinatorEvent: "coordinator-event.v1",
+  KnowledgeSource: "knowledge-source.v1",
+  SourceRevision: "source-revision.v1",
+  SourceIngestion: "source-ingestion.v1",
+  SourceIngestionResult: "source-ingestion-result.v1",
   Coordinator: "coordinator.v1",
   BootstrapProject: "bootstrap-project.v1",
   AuthorizationCheck: "authorization-check.v1",
@@ -28,6 +32,7 @@ export const TemporalWorkflowType = {
   UserBlueprint: "encois.user-blueprint.v1",
   Coordinator: "CoordinatorWorkflow",
   BootstrapProject: "BootstrapProjectWorkflow",
+  SourceIngestion: "encois.source-ingestion.v1",
 } as const;
 export type TemporalWorkflowType = (typeof TemporalWorkflowType)[keyof typeof TemporalWorkflowType];
 
@@ -40,6 +45,52 @@ export const WorkflowStepKind = {
   Approval: "approval",
 } as const;
 export type WorkflowStepKind = (typeof WorkflowStepKind)[keyof typeof WorkflowStepKind];
+
+export const KnowledgeSourceKind = {
+  Integration: "integration",
+  UploadedDocument: "uploaded_document",
+  Manual: "manual",
+  Media: "media",
+} as const;
+export type KnowledgeSourceKind = (typeof KnowledgeSourceKind)[keyof typeof KnowledgeSourceKind];
+
+export const KnowledgeSourceStatus = {
+  Draft: "draft",
+  Connecting: "connecting",
+  Discovering: "discovering",
+  Ingesting: "ingesting",
+  Active: "active",
+  Degraded: "degraded",
+  NeedsReauth: "needs_reauth",
+  Failed: "failed",
+  Disabled: "disabled",
+} as const;
+export type KnowledgeSourceStatus = (typeof KnowledgeSourceStatus)[keyof typeof KnowledgeSourceStatus];
+
+export const SourceRevisionStatus = {
+  Pending: "pending",
+  Ingesting: "ingesting",
+  Active: "active",
+  Failed: "failed",
+  Superseded: "superseded",
+} as const;
+export type SourceRevisionStatus = (typeof SourceRevisionStatus)[keyof typeof SourceRevisionStatus];
+
+export const SourceIngestionTrigger = {
+  Bootstrap: "bootstrap",
+  Manual: "manual",
+  Webhook: "webhook",
+  Schedule: "schedule",
+  Reconcile: "reconcile",
+} as const;
+export type SourceIngestionTrigger = (typeof SourceIngestionTrigger)[keyof typeof SourceIngestionTrigger];
+
+export const SourceIngestionStatus = {
+  Completed: "completed",
+  Deferred: "deferred",
+  Failed: "failed",
+} as const;
+export type SourceIngestionStatus = (typeof SourceIngestionStatus)[keyof typeof SourceIngestionStatus];
 
 export const WorkflowExecutionStatus = {
   Queued: "queued",
@@ -136,6 +187,21 @@ export const OrganizationUnitType = {
   Custom: "custom",
 } as const;
 export type OrganizationUnitType = (typeof OrganizationUnitType)[keyof typeof OrganizationUnitType];
+
+export const AccessLevel = {
+  Viewer: "viewer",
+  Contributor: "contributor",
+  Manager: "manager",
+  Admin: "admin",
+} as const;
+export type AccessLevel = (typeof AccessLevel)[keyof typeof AccessLevel];
+
+export const OrganizationMembershipStatus = {
+  Invited: "invited",
+  Active: "active",
+  Suspended: "suspended",
+} as const;
+export type OrganizationMembershipStatus = (typeof OrganizationMembershipStatus)[keyof typeof OrganizationMembershipStatus];
 
 export const ScopeRuleMode = {
   Grant: "grant",
