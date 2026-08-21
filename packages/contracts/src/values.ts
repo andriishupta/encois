@@ -183,3 +183,9 @@ export const IntegrationStatus = {
   Error: "error",
 } as const;
 export type IntegrationStatus = (typeof IntegrationStatus)[keyof typeof IntegrationStatus];
+
+export const AuthAccessStatus = {
+  Active: "active",
+  Pending: "pending",
+} as const;
+export type AuthAccessStatus = (typeof AuthAccessStatus)[keyof typeof AuthAccessStatus];

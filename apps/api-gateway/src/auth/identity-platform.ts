@@ -1,8 +1,17 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { resolveEffectiveScope, type OrganizationUnitNode } from "@encois/contracts";
-import { membershipScopes, organizationMemberships, organizationUnits, users, withOrganizationContext, type PersistenceTransaction } from "@encois/persistence";
+import {
+  membershipScopes,
+  organizationInvites,
+  organizationMemberships,
+  organizationUnits,
+  roles,
+  users,
+  withOrganizationContext,
+  type PersistenceTransaction,
+} from "@encois/persistence";
 import type { Context } from "hono";
 import type { AosAuthenticationResult, AosAuthenticator, AosPrincipal, GatewayEnv } from "../middleware/aos.js";
 import { database } from "../database.js";
@@ -10,15 +19,42 @@ import { database } from "../database.js";
 export type IdentityPlatformIdentity = {
   email?: string;
   emailVerified: boolean;
-  identityProvider: string;
+  /** Stable Encois provider namespace, not the provider used for this sign-in. */
+  identityProvider: "identity-platform";
+  signInProvider: string;
   subject: string;
   tenantId?: string;
 };
+
+export type IdentityPlatformVerificationResult =
+  | { identity: IdentityPlatformIdentity; status: "authenticated" }
+  | { reason?: string; status: "unauthenticated" | "unconfigured" };
+
+export type IdentityPlatformVerifier = (
+  context: Context<GatewayEnv>,
+) => Promise<IdentityPlatformVerificationResult>;
+
+export type IdentityAccessResolution =
+  | { principal: AosPrincipal; status: "active" }
+  | { organizationId?: string; status: "pending" }
+  | { status: "unavailable" };
+
+export type IdentityAccessResolver = (
+  identity: IdentityPlatformIdentity,
+  context: Context<GatewayEnv>,
+) => Promise<IdentityAccessResolution>;
 
 export type IdentityPlatformAuthenticatorOptions = {
   checkRevoked?: boolean;
   projectId: string;
   resolvePrincipal: (identity: IdentityPlatformIdentity, context: Context<GatewayEnv>) => Promise<AosPrincipal | null>;
+  allowedSignInProviders?: readonly string[];
+};
+
+export type IdentityPlatformVerifierOptions = {
+  allowedSignInProviders?: readonly string[];
+  checkRevoked?: boolean;
+  projectId: string;
 };
 
 function bearerToken(context: Context<GatewayEnv>): string | null {
@@ -31,44 +67,63 @@ function bearerToken(context: Context<GatewayEnv>): string | null {
 
 function identityFromToken(token: DecodedIdToken): IdentityPlatformIdentity {
   const firebase = token.firebase as { identities?: Record<string, unknown>; sign_in_provider?: string } | undefined;
-  const identityProvider = firebase?.sign_in_provider ?? "identity-platform";
+  const signInProvider = firebase?.sign_in_provider ?? "identity-platform";
 
   return {
     email: typeof token.email === "string" ? token.email : undefined,
     emailVerified: token.email_verified === true,
-    identityProvider,
+    identityProvider: "identity-platform",
+    signInProvider,
     subject: token.uid,
     tenantId: typeof token.firebase?.tenant === "string" ? token.firebase.tenant : undefined,
   };
 }
 
-export function createIdentityPlatformAuthenticator(
-  options: IdentityPlatformAuthenticatorOptions,
-): AosAuthenticator {
+function createIdentityPlatformVerifier(options: IdentityPlatformVerifierOptions): IdentityPlatformVerifier {
   const app =
     getApps().find((candidate) => candidate.options.projectId === options.projectId) ??
-    initializeApp({
-      credential: applicationDefault(),
-      projectId: options.projectId,
-    }, `identity-platform-${options.projectId}`);
+    initializeApp(
+      {
+        credential: applicationDefault(),
+        projectId: options.projectId,
+      },
+      `identity-platform-${options.projectId}`,
+    );
   const auth = getAuth(app);
+  const allowedProviders = new Set(options.allowedSignInProviders ?? ["google.com"]);
 
-  return async (context): Promise<AosAuthenticationResult> => {
+  return async (context): Promise<IdentityPlatformVerificationResult> => {
     const token = bearerToken(context);
-    if (!token) {
-      return { reason: "missing_bearer_token", status: "unauthenticated" };
-    }
+    if (!token) return { reason: "missing_bearer_token", status: "unauthenticated" };
 
     try {
       const decodedToken = await auth.verifyIdToken(token, options.checkRevoked ?? false);
-      const principal = await options.resolvePrincipal(identityFromToken(decodedToken), context);
-
-      return principal
-        ? { principal, status: "authenticated" }
-        : { reason: "identity_has_no_active_membership", status: "unauthenticated" };
+      const identity = identityFromToken(decodedToken);
+      if (!allowedProviders.has(identity.signInProvider)) {
+        return { reason: "identity_provider_not_allowed", status: "unauthenticated" };
+      }
+      return { identity, status: "authenticated" };
     } catch {
       return { reason: "invalid_identity_platform_token", status: "unauthenticated" };
     }
+  };
+}
+
+export function createIdentityPlatformIdentityVerifier(options: IdentityPlatformVerifierOptions): IdentityPlatformVerifier {
+  return createIdentityPlatformVerifier(options);
+}
+
+export function createIdentityPlatformAuthenticator(
+  options: IdentityPlatformAuthenticatorOptions,
+): AosAuthenticator {
+  const verifyIdentity = createIdentityPlatformVerifier(options);
+
+  return async (context): Promise<AosAuthenticationResult> => {
+    const result = await verifyIdentity(context);
+    if (result.status !== "authenticated") return result;
+
+    const principal = await options.resolvePrincipal(result.identity, context);
+    return principal ? { principal, status: "authenticated" } : { reason: "identity_has_no_active_membership", status: "unauthenticated" };
   };
 }
 
@@ -174,6 +229,200 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
   };
 }
 
+export function normalizeEmail(email: string): string {
+  return email.normalize("NFKC").trim().toLowerCase();
+}
+
+function accessForRoleKey(roleKey: string): "admin" | "manager" | "contributor" | "viewer" {
+  if (roleKey === "organization_admin" || roleKey === "admin") return "admin";
+  if (roleKey === "manager") return "manager";
+  if (roleKey === "member") return "contributor";
+  return "viewer";
+}
+
+async function findPendingInvite(identity: IdentityPlatformIdentity, organizationId?: string) {
+  if (!database || !identity.email || !identity.emailVerified) return null;
+
+  const now = new Date();
+  const conditions = [
+    eq(organizationInvites.emailNormalized, normalizeEmail(identity.email)),
+    eq(organizationInvites.status, "pending"),
+    or(isNull(organizationInvites.expiresAt), gt(organizationInvites.expiresAt, now)),
+  ];
+  if (organizationId) conditions.push(eq(organizationInvites.organizationId, organizationId));
+
+  const [invite] = await database
+    .select()
+    .from(organizationInvites)
+    .where(and(...conditions))
+    .orderBy(asc(organizationInvites.createdAt))
+    .limit(1);
+  return invite ?? null;
+}
+
+async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, organizationId?: string): Promise<AosPrincipal | null> {
+  if (!database) return null;
+
+  const invite = await findPendingInvite(identity, organizationId);
+  if (!invite) return null;
+
+  return withOrganizationContext(database, invite.organizationId, async (db) => {
+    const [user] = await db
+      .insert(users)
+      .values({
+        identityProvider: identity.identityProvider,
+        identitySubject: identity.subject,
+        email: identity.email,
+      })
+      .onConflictDoUpdate({
+        target: [users.identityProvider, users.identitySubject],
+        set: {
+          email: identity.email,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: users.id });
+    if (!user) return null;
+
+    const [existingMembership] = await db
+      .select({ id: organizationMemberships.id })
+      .from(organizationMemberships)
+      .where(
+        and(
+          eq(organizationMemberships.organizationId, invite.organizationId),
+          eq(organizationMemberships.userId, user.id),
+          eq(organizationMemberships.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    const membershipId = existingMembership?.id ?? (
+      await db
+        .insert(organizationMemberships)
+        .values({
+          organizationId: invite.organizationId,
+          userId: user.id,
+          roleId: invite.roleId,
+          status: "active",
+        })
+        .onConflictDoNothing({ target: [organizationMemberships.organizationId, organizationMemberships.userId] })
+        .returning({ id: organizationMemberships.id })
+    )[0]?.id ?? (
+      await db
+        .select({ id: organizationMemberships.id })
+        .from(organizationMemberships)
+        .where(
+          and(
+            eq(organizationMemberships.organizationId, invite.organizationId),
+            eq(organizationMemberships.userId, user.id),
+            eq(organizationMemberships.status, "active"),
+          ),
+        )
+        .limit(1)
+    )[0]?.id;
+    if (!membershipId) return null;
+
+    const organizationUnitId = invite.organizationUnitId ?? (
+      await db
+        .select({ id: organizationUnits.id })
+        .from(organizationUnits)
+        .where(and(eq(organizationUnits.organizationId, invite.organizationId), eq(organizationUnits.type, "organization")))
+        .limit(1)
+    )[0]?.id;
+    if (!organizationUnitId) return null;
+
+    const [role] = await db
+      .select({ key: roles.key })
+      .from(roles)
+      .where(eq(roles.id, invite.roleId))
+      .limit(1);
+
+    await db
+      .insert(membershipScopes)
+      .values({
+        organizationId: invite.organizationId,
+        membershipId,
+        organizationUnitId,
+        access: accessForRoleKey(role?.key ?? "viewer"),
+      })
+      .onConflictDoNothing();
+
+    await db
+      .update(organizationInvites)
+      .set({
+        status: "accepted",
+        acceptedUserId: user.id,
+        acceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(organizationInvites.id, invite.id), eq(organizationInvites.status, "pending")));
+
+    return {
+      actorId: identity.subject,
+      userId: user.id,
+      organizationId: invite.organizationId,
+      scope: await resolveOrganizationScope(db, invite.organizationId, membershipId),
+    } satisfies AosPrincipal;
+  });
+}
+
+export function createDatabaseAccessResolver(): IdentityAccessResolver {
+  return async (identity, context): Promise<IdentityAccessResolution> => {
+    if (!database) return { status: "unavailable" };
+
+    const organizationId = context.req.header("X-Organization-ID")?.trim() || undefined;
+    if (organizationId) {
+      const existingPrincipal = await resolvePrincipalForOrganization(identity, organizationId);
+      if (existingPrincipal) return { principal: existingPrincipal, status: "active" };
+    }
+
+    const provisioned = await provisionInvitedIdentity(identity, organizationId);
+    if (provisioned) return { principal: provisioned, status: "active" };
+
+    const invite = await findPendingInvite(identity, organizationId);
+    return {
+      ...(invite ? { organizationId: invite.organizationId } : {}),
+      status: "pending",
+    };
+  };
+}
+
+async function resolvePrincipalForOrganization(
+  identity: IdentityPlatformIdentity,
+  organizationId: string,
+): Promise<AosPrincipal | null> {
+  if (!database) return null;
+
+  return withOrganizationContext(database, organizationId, async (db) => {
+    const [membership] = await db
+      .select({ userId: users.id, membershipId: organizationMemberships.id })
+      .from(users)
+      .innerJoin(
+        organizationMemberships,
+        and(
+          eq(organizationMemberships.userId, users.id),
+          eq(organizationMemberships.organizationId, organizationId),
+          eq(organizationMemberships.status, "active"),
+        ),
+      )
+      .where(
+        and(
+          eq(users.identityProvider, identity.identityProvider),
+          eq(users.identitySubject, identity.subject),
+        ),
+      )
+      .limit(1);
+    if (!membership) return null;
+
+    return {
+      actorId: identity.subject,
+      userId: membership.userId,
+      organizationId,
+      scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
+    } satisfies AosPrincipal;
+  });
+}
+
 /**
  * Resolves the external Identity Platform subject into the local tenant and
  * exact organization-unit scope. The organization header is only a lookup
@@ -181,37 +430,7 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
  */
 export function createDatabasePrincipalResolver() {
   return async (identity: IdentityPlatformIdentity, context: Context<GatewayEnv>): Promise<AosPrincipal | null> => {
-    if (!database) return null;
-    const organizationId = context.req.header("X-Organization-ID")?.trim() || identity.tenantId;
-    if (!organizationId) return null;
-
-    return withOrganizationContext(database, organizationId, async (db) => {
-      const [membership] = await db
-        .select({ userId: users.id, membershipId: organizationMemberships.id })
-        .from(users)
-        .innerJoin(
-          organizationMemberships,
-          and(
-            eq(organizationMemberships.userId, users.id),
-            eq(organizationMemberships.organizationId, organizationId),
-            eq(organizationMemberships.status, "active"),
-          ),
-        )
-        .where(
-          and(
-            eq(users.identityProvider, identity.identityProvider),
-            eq(users.identitySubject, identity.subject),
-          ),
-        )
-        .limit(1);
-      if (!membership) return null;
-
-      return {
-        actorId: identity.subject,
-        userId: membership.userId,
-        organizationId,
-        scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
-      };
-    });
+    const access = await createDatabaseAccessResolver()(identity, context);
+    return access.status === "active" ? access.principal : null;
   };
 }

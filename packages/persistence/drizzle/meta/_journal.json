@@ -50,6 +50,13 @@
       "when": 1787340000000,
       "tag": "0006_organization_unit_types",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787343600000,
+      "tag": "0007_invites_waitlist",
+      "breakpoints": true
     }
   ]
 }

@@ -1,13 +1,16 @@
 import type {
+  AuthStatusResponse,
   IntegrationProjection,
   IntegrationUpdateRequest,
+  WaitlistRequest,
+  WaitlistSubmissionResponse,
   WorkflowExecutionProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
   WorkflowUpdateRequest,
 } from '@encois/contracts'
-import { IntegrationStatus, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
-import { clearAuthSession, getAuthSession } from '@/lib/auth'
+import { IntegrationStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
+import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
 const apiBaseUrl = (environment.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
@@ -72,15 +75,17 @@ function isUpdateResponse(value: unknown): value is { accepted: true; updateId: 
   return isRecord(value) && value.accepted === true && typeof value.updateId === 'string'
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const session = getAuthSession()
-  if (!session) throw new ApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
+async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
+  const session = requiresAuth ? await getAuthSessionToken() : null
+  if (requiresAuth && !session) throw new ApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
 
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   if (init?.body !== undefined) headers.set('Content-Type', 'application/json')
-  headers.set('Authorization', `Bearer ${session.accessToken}`)
-  if (session.organizationId) headers.set('X-Organization-ID', session.organizationId)
+  if (session) {
+    headers.set('Authorization', `Bearer ${session.accessToken}`)
+    if (session.organizationId) headers.set('X-Organization-ID', session.organizationId)
+  }
 
   let response: Response
   try {
@@ -108,6 +113,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function listWorkflows(): Promise<readonly WorkflowExecutionProjection[]> {
   return request<unknown>('/workflows').then((value) => parseList(value, isWorkflowProjection, 'workflow list'))
+}
+
+export async function getAuthStatus(): Promise<AuthStatusResponse> {
+  const value = await request<unknown>('/auth/me')
+  if (!isRecord(value) || (value.status !== 'active' && value.status !== 'pending')) {
+    throw new ApiError(200, 'API returned an invalid authentication status.', 'INVALID_RESPONSE')
+  }
+  if (value.status === 'pending') return { status: 'pending' }
+  if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string') {
+    throw new ApiError(200, 'API returned an invalid active authentication status.', 'INVALID_RESPONSE')
+  }
+  setAuthOrganizationId(value.organizationId)
+  return {
+    status: 'active',
+    userId: value.userId,
+    organizationId: value.organizationId,
+    ...(typeof value.displayName === 'string' ? { displayName: value.displayName } : {}),
+  }
+}
+
+export function submitWaitlist(input: WaitlistRequest): Promise<WaitlistSubmissionResponse> {
+  const validation = validateWaitlistRequest(input)
+  if (!validation.ok) {
+    return Promise.reject(new ApiError(400, validation.issue.message, 'INVALID_REQUEST'))
+  }
+
+  return request<unknown>('/public/waitlist', {
+    method: 'POST',
+    body: JSON.stringify(validation.value),
+  }, false).then((value) => {
+    if (!isRecord(value) || value.accepted !== true) throw new ApiError(200, 'API returned an invalid waitlist response.', 'INVALID_RESPONSE')
+    return { accepted: true }
+  })
 }
 
 export async function getWorkflow(workflowId: string): Promise<WorkflowExecutionProjection> {

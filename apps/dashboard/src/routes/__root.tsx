@@ -29,7 +29,7 @@ function DocumentTitle() {
 function getPageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard'
   if (pathname === '/login') return 'Sign in'
-  if (pathname === '/sign-up') return 'Create account'
+  if (pathname === '/sign-up' || pathname === '/waitlist') return 'Join the waitlist'
   if (pathname === '/onboarding/workspace') return 'Workspace setup'
   if (pathname === '/onboarding/memory') return 'Project memory setup'
   if (pathname === '/onboarding/coordination') return 'Coordinator setup'

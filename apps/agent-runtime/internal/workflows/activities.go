@@ -91,7 +91,7 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 		}
 		return BlueprintStepResult{StepID: input.Step.ID, Status: result.Status, Data: result.Data, EvidenceRefs: result.EvidenceRefs, Freshness: result.Freshness}, nil
 	case "agent":
-		if a.agentBundle == nil || !a.agentBundle.Enabled || a.agentBundle.AgentModel == nil {
+		if a.agentBundle == nil || !a.agentBundle.Enabled || (a.agentBundle.Mode != agents.ModeMock && a.agentBundle.AgentModel == nil) {
 			return BlueprintStepResult{
 				StepID:       input.Step.ID,
 				Status:       string(contractschemas.WorkflowResultWaiting),

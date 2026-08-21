@@ -1,6 +1,6 @@
 # Encois CI/CD blueprint
 
-**Status:** repository CI baseline and local synthetic smoke implemented; cloud delivery and hosted smoke remain proposed.
+**Status:** repository CI baseline, local synthetic smoke, and local Compose scaffold implemented; cloud delivery and hosted smoke remain proposed.
 
 This document describes how the current repository can move from local development to a repeatable Google Cloud deployment without turning Terraform into an application runner or putting long-lived GCP keys in GitHub.
 
@@ -92,7 +92,11 @@ Build only after CI passes. Each deployable app gets its own image and immutable
 Images are pushed to the Artifact Registry repository created by `infra/`. The deploy input should use the commit SHA or image digest, never `latest`. Dockerfiles and repeatable container entrypoints exist for all four deployable services; the Go runtime and Agent Gateway expose internal health endpoints, while the dashboard/API use their platform server ports.
 
 Build the dashboard image with `VITE_BASE_PATH=/dashboard/` for the hosted
-load-balancer path; the local image can keep the default `/` base path.
+load-balancer path; the local image can keep the default `/` base path. For
+real invite-only Google login, also pass the public Firebase web configuration
+as `VITE_FIREBASE_*` build arguments. These are browser identifiers, not service
+credentials; keep provider secrets and the API runtime configuration outside
+the dashboard image.
 
 The local synthetic execution smoke command is `pnpm smoke:release`; it is
 opt-in and expects Temporal, Agent Gateway, and the Go Runtime to be started
@@ -108,7 +112,13 @@ The Docker build context is the repository root because the API and dashboard
 images consume workspace packages:
 
 ```bash
-docker build -f apps/dashboard/Dockerfile --build-arg VITE_BASE_PATH=/dashboard/ -t encois-dashboard:dev .
+docker build -f apps/dashboard/Dockerfile \
+  --build-arg VITE_BASE_PATH=/dashboard/ \
+  --build-arg VITE_FIREBASE_API_KEY="$VITE_FIREBASE_API_KEY" \
+  --build-arg VITE_FIREBASE_AUTH_DOMAIN="$VITE_FIREBASE_AUTH_DOMAIN" \
+  --build-arg VITE_FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID" \
+  --build-arg VITE_FIREBASE_APP_ID="$VITE_FIREBASE_APP_ID" \
+  -t encois-dashboard:dev .
 docker build -f apps/api-gateway/Dockerfile -t encois-api:dev .
 docker build -f apps/agent-gateway/Dockerfile -t encois-agent-gateway:dev .
 docker build -f apps/agent-runtime/Dockerfile -t encois-agent-runtime:dev .
@@ -191,6 +201,19 @@ Each environment should have its own:
 Do not reuse demo credentials or production data. The hackathon environment should use synthetic or explicitly authorized data.
 
 ## Local deployment options
+
+The canonical full local stack is now:
+
+```bash
+pnpm dev:local
+```
+
+It runs `compose.local.yaml` with Postgres, the Temporal development server,
+the migration job, API Gateway, Agent Gateway, Agent Runtime, and the Nginx
+dashboard. The Runtime is configured with `AGENT_AI_MODE=mock`, so this path is
+deterministic and does not require GCP or Gemini credentials. The existing
+`pnpm smoke:release:local` remains the smaller backend acceptance smoke used by
+CI; it is not a replacement for the interactive Compose stack.
 
 ### Option A — recommended now: local application, manual cloud deploy
 

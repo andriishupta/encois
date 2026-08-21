@@ -62,8 +62,10 @@ Cloud Run does not perform multi-service path routing by itself. The global exte
 
 The React image must be built with `--build-arg VITE_BASE_PATH=/dashboard/` for
 the hosted path. Vite assets and TanStack Router now use the same base path;
-local development keeps `/` by default. Terraform can route the request, but
-it cannot rewrite SPA asset URLs or client-side routes after the image is built.
+local development keeps `/` by default. Pass the public Firebase web
+configuration as `VITE_FIREBASE_*` build arguments when hosted Google login is
+enabled. Terraform can route the request, but it cannot rewrite SPA asset URLs
+or client-side routes after the image is built.
 
 ## Terraform layout
 
@@ -108,15 +110,14 @@ Run the API in a second terminal:
 pnpm --filter @encois/api-gateway dev
 ```
 
-Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/health/live` or `/health/ready` for the API. The API defaults are documented in [`apps/api-gateway/.env.example`](../apps/api-gateway/.env.example). Database-backed behavior requires a valid `DATABASE_RUNTIME_URL`; the current local scaffold does not create a PostgreSQL container or emulator.
+Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/health/live` or `/health/ready` for the API. The API defaults are documented in [`apps/api-gateway/.env.example`](../apps/api-gateway/.env.example). The Compose stack provides PostgreSQL and applies migrations before starting the API.
 
-The following pieces remain intentionally separate from the basic local smoke:
+The canonical full local stack is:
 
-- Dockerfiles now exist for dashboard, API, Go Agent Runtime, and private Agent Gateway. A local Compose stack is still intentionally deferred because it would need a PostgreSQL and Temporal strategy that matches the hosted setup.
-- A local PostgreSQL strategy that matches the Cloud SQL/Drizzle permissions model.
-- A single command that starts all services and synthetic data together; the
-  current smoke command assumes Temporal, Runtime, and Agent Gateway are
-  already running.
+- `pnpm dev:local` runs `compose.local.yaml` with Postgres, the official
+  Temporal development image, migrations, all four application services, and
+  the dashboard. The local Runtime uses `AGENT_AI_MODE=mock`; no Gemini key or
+  GCP credentials are required.
 
 For the existing Go runtime, both paths are supported: the Temporal CLI's
 development server for local work, or Temporal Cloud credentials injected
@@ -131,7 +132,11 @@ development can use the legacy static bearer token without Cloud Run IAM. The
 Agent Gateway readiness probe fails closed when the service token is missing,
 so a misconfigured revision does not receive Runtime traffic.
 
-For the hackathon, the practical progression is: prove dashboard/API locally, add worker/runtime containers, build immutable images in CI, deploy the same images to Cloud Run, and show the hosted Cloud Run/API/agent run evidence in the demo. Local Docker is useful for reproducibility but is not a substitute for the required Google Cloud deployment proof.
+For the hackathon, the practical progression is: run the complete local Compose
+stack, build immutable images in CI, deploy the same application images to
+Cloud Run, and show the hosted Cloud Run/API/agent run evidence in the demo.
+Local Docker is useful for reproducibility but is not a substitute for the
+required Google Cloud deployment proof.
 
 ## What is enabled by default
 

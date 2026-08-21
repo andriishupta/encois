@@ -1,0 +1,122 @@
+name: encois-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: encois
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - encois-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init/00-runtime-role.sql:/docker-entrypoint-initdb.d/00-runtime-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d encois"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  temporal:
+    image: ${TEMPORAL_IMAGE:-temporalio/temporal:1.8.2}
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-port", "8233"]
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    volumes:
+      - encois-temporal-data:/tmp
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  migrations:
+    build:
+      context: .
+      dockerfile: packages/persistence/Dockerfile
+    environment:
+      DATABASE_MIGRATION_URL: postgresql://postgres:postgres@postgres:5432/encois
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  agent-gateway:
+    build:
+      context: .
+      dockerfile: apps/agent-gateway/Dockerfile
+    environment:
+      AGENT_GATEWAY_HTTP_ADDR: ":8080"
+      AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
+      AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
+      GIN_MODE: debug
+    ports:
+      - "8080:8080"
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: "8787"
+      CORS_ORIGINS: http://localhost:5173
+      CORS_CREDENTIALS: "false"
+      AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
+      DATABASE_RUNTIME_URL: postgresql://api_gateway:api_gateway@postgres:5432/encois
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: encois-agent-runtime
+    ports:
+      - "8787:8787"
+    depends_on:
+      temporal:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  agent-runtime:
+    build:
+      context: .
+      dockerfile: apps/agent-runtime/Dockerfile
+    environment:
+      AGENT_RUNTIME_HTTP_ADDR: ":8090"
+      TEMPORAL_HOST_PORT: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: encois-agent-runtime
+      AGENT_AI_MODE: mock
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
+    ports:
+      - "8090:8090"
+    depends_on:
+      temporal:
+        condition: service_healthy
+      agent-gateway:
+        condition: service_started
+      api-gateway:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        VITE_BASE_PATH: /
+        VITE_API_BASE_URL: http://localhost:8787/api/v1
+        VITE_FIREBASE_API_KEY: ""
+        VITE_FIREBASE_AUTH_DOMAIN: ""
+        VITE_FIREBASE_PROJECT_ID: ""
+        VITE_FIREBASE_APP_ID: ""
+    ports:
+      - "5173:8080"
+    depends_on:
+      api-gateway:
+        condition: service_started
+
+volumes:
+  encois-postgres-data:
+  encois-temporal-data:

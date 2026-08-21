@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	localmock "github.com/andriishupta/encois/apps/agent-runtime/internal/mock"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
 	"google.golang.org/adk/v2/model"
@@ -14,6 +15,7 @@ import (
 )
 
 type Config struct {
+	Mode                string
 	APIKey              string
 	UseVertexAI         bool
 	GoogleCloudProject  string
@@ -24,6 +26,7 @@ type Config struct {
 }
 
 type Bundle struct {
+	Mode                     string
 	Coordinator              agent.Agent
 	WorkflowCreator          agent.Agent
 	AgentModel               model.LLM
@@ -35,7 +38,19 @@ type Bundle struct {
 	Enabled                  bool
 }
 
+const (
+	ModeGemini = "gemini"
+	ModeMock   = "mock"
+)
+
 func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	if mode == "" {
+		mode = ModeGemini
+	}
+	if mode != ModeGemini && mode != ModeMock {
+		return nil, fmt.Errorf("unsupported agent AI mode %q; use mock or gemini", cfg.Mode)
+	}
 	modelName := cfg.ModelName
 	if modelName == "" {
 		modelName = "gemini-3.7-flash"
@@ -49,9 +64,14 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		return nil, err
 	}
 	bundle := &Bundle{
+		Mode:                     mode,
 		ModelName:                modelName,
 		CoordinatorModelName:     coordinatorModelName,
 		CoordinatorThinkingLevel: thinkingLevel,
+	}
+	if mode == ModeMock {
+		bundle.Enabled = true
+		return bundle, nil
 	}
 	if !cfg.UseVertexAI && cfg.APIKey == "" {
 		return bundle, nil
@@ -125,6 +145,9 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 // The definition and its tool allowlist are validated before this Activity is
 // scheduled; this method does not let model output create capabilities.
 func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string, input map[string]any) (string, error) {
+	if b != nil && b.Mode == ModeMock {
+		return localmock.AgentStepSummary(definition), nil
+	}
 	if b == nil || b.AgentModel == nil {
 		return "", nil
 	}
@@ -162,6 +185,9 @@ func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string,
 }
 
 func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (string, error) {
+	if b != nil && b.Mode == ModeMock {
+		return localmock.Summary(), nil
+	}
 	if b == nil || b.Runner == nil {
 		return "", nil
 	}
@@ -185,6 +211,9 @@ func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (strin
 }
 
 func (b *Bundle) CreateWorkflowPlan(ctx context.Context, sessionID, prompt string) (string, error) {
+	if b != nil && b.Mode == ModeMock {
+		return localmock.WorkflowChangePlanJSON(prompt)
+	}
 	if b == nil || b.WorkflowCreatorRunner == nil {
 		return "", nil
 	}

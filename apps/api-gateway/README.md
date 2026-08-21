@@ -21,6 +21,21 @@ Public endpoints:
 
 Application routes are mounted under `/api/v1`. Protected routes use the AOS middleware. When `IDENTITY_PLATFORM_PROJECT_ID` and the runtime database are configured, `createApp` wires the Firebase Admin Identity Platform verifier and resolves local membership/scope. Tests and local scaffolds can still inject an authenticator.
 
+Invite-only access routes are intentionally outside the active-membership
+middleware:
+
+- `GET /api/v1/auth/me` — verifies the Identity Platform bearer token and
+  returns `active` or `pending`; it never grants access from token claims alone.
+- `POST /api/v1/public/waitlist` — accepts a bounded contact request without
+  authentication. It requires a plausible work email, company name, and
+  company website or LinkedIn URL; it does not create an Identity Platform
+  account or local membership.
+
+The production browser flow enables only Google sign-in. A verified email must
+match a non-expired `organization_invites` row before the Gateway transaction
+creates the local user, membership, and organization-unit scope. There is no
+email/password signup or self-service organization creation.
+
 Current blueprint routes:
 
 - `GET /api/v1/integrations` — list integrations visible to the authenticated user's organization scope.
@@ -60,6 +75,18 @@ per invocation and use a service identity with only the required job/runtime
 permissions.
 
 Identity Platform verification is available through `src/auth/identity-platform.ts`. It uses Firebase Admin SDK + Application Default Credentials, so Cloud Run can use its service identity without a checked-in key. The resolver that maps an external subject to an organization membership is intentionally injected and must use the persistence package.
+
+Operator lifecycle scripts use `DATABASE_MIGRATION_URL`:
+
+```bash
+pnpm --filter @encois/api-gateway auth:bootstrap-organization -- --organization "Example Company" --email owner@example.com
+pnpm --filter @encois/api-gateway auth:invite-user -- --organization-id <organization-id> --email member@example.com
+pnpm --filter @encois/api-gateway auth:list-waitlist
+pnpm --filter @encois/api-gateway auth:revoke-invite -- --invite-id <invite-id>
+```
+
+They are private operator tooling and intentionally do not create provider
+accounts. The first invited user accepts access by completing Google login.
 
 Cloud SQL access is owned by `@encois/persistence`. Use `DATABASE_RUNTIME_URL` for the API and `DATABASE_MIGRATION_URL` only for migrations; never point the API at the Cloud SQL admin connection.
 

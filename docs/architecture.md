@@ -658,6 +658,46 @@ AuditEvent
 
 ### 4.11 Identity and authorization
 
+#### Invite-only human access (MVP)
+
+The first product access mode is invite-only Google authentication. Encois does
+not expose email/password authentication, public sign-up, or self-service
+organization creation. Google/Identity Platform proves the external identity;
+the Gateway decides whether that identity has Encois access.
+
+An operator creates the first organization, root organizational unit, system
+roles, and an `organization_invites` row using the API package's operator
+scripts. The invite is keyed by a normalized email address and carries the
+organization, role, and initial scope. On the first successful Google sign-in,
+the Gateway verifies the ID token, requires a verified email and the allowed
+`google.com` sign-in provider, accepts the pending invite in one transaction,
+creates the local `users` row and active membership, and sends the user to
+onboarding.
+
+An authenticated Google identity without a pending invite receives a
+`pending` status, is not given a principal, and cannot access any
+tenant-scoped route. The Dashboard signs the user out and presents the public
+waitlist page. The waitlist is a product-access request, not a membership or
+authorization source.
+
+The MVP intentionally accepts that an unknown Google first sign-in may create
+an Identity Platform user record while creating no Encois access. A future
+Identity Platform `beforeCreate` blocking function may enforce the allowlist
+before the external record is created; that deployment boundary is deferred
+until the access store and blocking-function latency budget are operational.
+
+There is no separate management UI in this phase. `apps/api-gateway/scripts`
+owns operator-only bootstrap, invite, revoke, and waitlist-listing commands.
+`packages/persistence` owns only the schema and migrations; it does not import
+Identity Platform SDKs.
+
+The email is only the invite/admission key. The durable local identity is the
+pair `(identityProvider, identitySubject)`, where the subject is the Identity
+Platform UID. An email alias such as `admin@example.com` versus
+`creator@example.com` therefore needs its own invite unless Google presents it
+as the same verified account email; it must not be used to merge two external
+subjects automatically.
+
 Authorization is deterministic and never delegated to Gemini. A request is evaluated using:
 
 ```text

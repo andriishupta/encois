@@ -374,6 +374,8 @@ details. The currently implemented browser-facing routes are mounted under
 `/api/v1`:
 
 ```text
+GET  /api/v1/auth/me
+POST /api/v1/public/waitlist
 POST /api/v1/workflows
 GET  /api/v1/workflows
 GET  /api/v1/workflows/{workflowId}
@@ -386,6 +388,17 @@ POST /api/v1/workflows/plans
 POST /api/v1/workflows/plans/{planId}/approve
 POST /api/v1/workflows/plans/{planId}/apply
 ```
+
+`GET /api/v1/auth/me` is the pre-membership access-resolution contract. It
+returns `active` with the local user and organization when an invite has been
+accepted, or `pending` when the verified Identity Platform identity has no
+active Encois membership. Invalid tokens remain `401`; provider or persistence
+configuration failures remain `503`. `POST /api/v1/public/waitlist` is the
+unauthenticated contact form for pending/unknown visitors. It requires a
+plausible work email, company name, and at least one company website or company
+LinkedIn URL. It stores only that bounded contact context and never creates an
+account or grants access. Work-email validation is a heuristic; mailbox
+ownership verification is a later step.
 
 The Dashboard currently consumes workflow list/detail/start and integration
 list/update. Overview counters are derived from those projections. Workflow

@@ -8,6 +8,7 @@ type Config struct {
 	TemporalNamespace    string
 	TemporalAPIKey       string
 	TaskQueue            string
+	AgentAIMode          string
 	GeminiAPIKey         string
 	UseVertexAI          bool
 	GoogleCloudProject   string
@@ -34,6 +35,7 @@ func FromEnv() Config {
 		TemporalNamespace:    envOrDefault("TEMPORAL_NAMESPACE", "default"),
 		TemporalAPIKey:       os.Getenv("TEMPORAL_API_KEY"),
 		TaskQueue:            envOrDefault("TEMPORAL_TASK_QUEUE", "encois-agent-runtime"),
+		AgentAIMode:          envOrDefault("AGENT_AI_MODE", "gemini"),
 		GeminiAPIKey:         geminiKey,
 		UseVertexAI:          envBool("GOOGLE_GENAI_USE_VERTEXAI"),
 		GoogleCloudProject:   os.Getenv("GOOGLE_CLOUD_PROJECT"),

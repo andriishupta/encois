@@ -1,14 +1,13 @@
 # Encois Product and Runtime Flows
 
-**Status:** proposed final flow baseline
+**Status:** proposed final flow baseline with invite-only identity slice implemented
 
 This document describes what a person sees and what the system does. It complements [`architecture.md`](architecture.md), which defines the components and deployment model.
 
-The current repository implements the generic Workflow Blueprint skeleton and
-synthetic Agent Gateway tools. The flows below describe the target behavior as
-well as the current direction; real authentication, provider APIs, Graph,
-Memory Bank, and production policy enforcement are intentionally marked as
-later steps rather than treated as implemented.
+The current repository implements the generic Workflow Blueprint skeleton,
+synthetic Agent Gateway tools, and the invite-only Identity Platform access
+slice. Provider APIs, Graph, Memory Bank, and production policy enforcement
+remain explicit later boundaries rather than being treated as implemented.
 
 Cross-language payloads and generation rules are defined in [`contracts.md`](contracts.md). The generic MCP/ADK/Temporal communication model is defined in [`protocols.md`](protocols.md). The public API uses OpenAPI; Temporal and private Agent Gateway payloads use versioned JSON Schema.
 
@@ -38,6 +37,52 @@ Coordinator remains one durable Workflow; it is not a process or server per
 agent.
 
 The execution vocabulary is defined in [`dictionary.md`](dictionary.md). In particular, a Worker is a deployable Go process, an Activity is a registered function executed by that Worker, and a specialist Agent is a logical role rather than a separate server.
+
+## 2. Invite-only authentication and access
+
+There is no public signup or email/password flow in the MVP. Google is the only
+browser sign-in provider, and a Google identity becomes an Encois user only
+after a local pending invite is accepted.
+
+```mermaid
+sequenceDiagram
+    participant Operator as Operator script
+    participant DB as Cloud SQL control plane
+    participant Browser as Dashboard
+    participant Google as Identity Platform / Google
+    participant API as Gateway API
+
+    Operator->>DB: create organization, root unit, role, pending invite
+    Browser->>Google: sign in with Google
+    Google-->>Browser: Identity Platform ID token
+    Browser->>API: GET /api/v1/auth/me with bearer token
+    API->>Google: verify token and allowed provider
+    API->>DB: find verified email invite
+    alt pending invite exists
+        API->>DB: transactionally create user/membership/scope
+        API-->>Browser: active + organizationId
+        Browser->>Browser: start onboarding
+    else no invite
+        API-->>Browser: pending
+        Browser->>API: POST /api/v1/public/waitlist
+        Browser->>Google: sign out locally
+    end
+```
+
+The operator path is intentionally script-based for the first slice:
+`auth:bootstrap-organization` creates the first organization and admin invite;
+`auth:invite-user` adds later members; `auth:list-waitlist` and
+`auth:revoke-invite` support the basic lifecycle. The scripts use the
+privileged migration connection and are not browser endpoints.
+
+The Gateway exposes `/api/v1/auth/me` outside the active-membership middleware
+so it can distinguish invalid authentication from pending access. All tenant
+routes remain protected. A pending user can only see the waitlist experience;
+the waitlist requires a plausible work email, company name, and company
+website or LinkedIn URL. It does not create an Identity Platform account or
+organization membership. The work-email check rejects common personal mailbox
+providers but does not prove mailbox ownership; email verification remains a
+later hardening step.
 
 ## 2.1 Mandatory onboarding and Coordinator bootstrap
 

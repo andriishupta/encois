@@ -27,6 +27,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Build workspace packages before runtime tests
+        run: |
+          pnpm --filter @encois/contracts build
+          pnpm --filter @encois/persistence build
       - run: pnpm test
       - run: pnpm build
 
@@ -166,11 +170,22 @@ jobs:
             file: apps/agent-runtime/Dockerfile
           - name: agent-gateway
             file: apps/agent-gateway/Dockerfile
+          - name: persistence-migrations
+            file: packages/persistence/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
       - name: Build image without pushing
         run: docker build --file "${{ matrix.file }}" --tag "encois/${{ matrix.name }}:ci" .
+
+  compose-config:
+    name: Local Compose configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Compose file
+        run: docker compose -f compose.local.yaml config --quiet
 
   terraform:
     name: Terraform configuration

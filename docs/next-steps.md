@@ -1,7 +1,7 @@
 # Current Review and Next Steps
 
-**Reviewed:** 2026-08-20  
-**Scope:** repository state after generic Blueprint execution, Agent Runtime bootstrap planning, workflow-plan persistence, and Agent Runtime execution-profile review
+**Reviewed:** 2026-08-21
+**Scope:** repository state after generic Blueprint execution, Agent Runtime bootstrap planning, workflow-plan persistence, Agent Runtime execution-profile review, and invite-only Identity Platform access
 
 ## Review conclusion
 
@@ -96,6 +96,30 @@ Memory Bank, and Cloud Storage should enter through typed Runtime Activities
 or Agent Gateway/data adapters; they must not turn the Runtime into a second
 control-plane API or give it Postgres access.
 
+## Invite-only identity slice
+
+The current MVP access path is intentionally smaller than a general identity
+platform:
+
+- the Dashboard supports Google-only Identity Platform login and has no public
+  signup or email/password flow;
+- the Gateway exposes `/api/v1/auth/me` to resolve `active` versus `pending`
+  access before active-membership middleware runs;
+- a verified Google email accepts a non-expired `organization_invites` row in a
+  transaction that provisions the local user, membership, and scope;
+- unknown/pending users are signed out and sent to the public waitlist, whose
+  bounded contact data is not an authorization source;
+- the waitlist uses one shared validator in Contracts, the Dashboard client,
+  and Gateway API: common personal email providers are rejected, company name
+  is required, and a company website or LinkedIn URL is required;
+- organization bootstrap, later invites, waitlist review, and invite revocation
+  are operator scripts, not a new platform-management UI.
+
+The next identity work is deployment proof: configure the Identity Platform
+Google provider and Firebase browser settings, run a real invited-user smoke,
+verify Cloud Run ADC and token audience/issuer settings, and decide later
+whether a provider-side blocking function is worth the operational complexity.
+
 ## Implemented in the current slice
 
 - `packages/contracts` exists with TypeScript types and JSON Schema sources for the generic Blueprint, workflow result, execution context, tool request/result, artifact write/reference, Signals, tool manifests, and Workflow Updates.
@@ -103,7 +127,7 @@ control-plane API or give it Postgres access.
 - The Blueprint contains parallel synthetic Jira/GitHub tool steps and a dependent ADK synthesis step.
 - The API passes separate `businessInput`, effective scope, actor, workflow ID, policy version, and request ID to the Go workflow input.
 - Stable tenant-prefixed workflow IDs prevent duplicate active investigations for the same project/release. Local Temporal fallback and the Postgres path compare a stable request fingerprint: identical requests reuse the existing projection, while a different payload under the same workflow/idempotency key returns `409 IDEMPOTENCY_CONFLICT`. Real Temporal also uses conflict/reuse policies. Postgres persistence records workflow identity and explicit idempotency keys when configured.
-- Identity Platform authentication is now wired conditionally when `IDENTITY_PLATFORM_PROJECT_ID` is configured. The resolver requires a valid local membership and resolves exact organization-unit scope from Postgres.
+- Identity Platform authentication is now wired conditionally when `IDENTITY_PLATFORM_PROJECT_ID` is configured. The resolver allows Google-only sign-in, accepts a verified non-expired local invite transactionally, provisions the local user/membership/scope, and resolves exact organization-unit scope from Postgres; unknown identities remain pending.
 - Agent Runtime sends a service token, and the Agent Gateway requires it when configured. Hosted configuration additionally supports a Cloud Run ID token audience. The first deterministic policy allows only the two synthetic read-only tools. Tool requests also require a non-empty scope, matching policy version, and object arguments.
 - Generic Blueprint payloads are validated at the TypeScript API boundary, and approval Signals now require workflow ownership or `workflows:run`/`workflows:manage` when persistence is enabled. The API rejects Signals for terminal workflows with `409 WORKFLOW_NOT_SIGNALABLE`; accepted Signals are recorded as workflow events when Postgres is configured.
 - Postgres now has tenant-scoped `workflow_command_receipts` for Signal/Update delivery. The Gateway claims a command before sending it to Temporal, records `accepted` or `failed`, rejects the same command ID with a different payload, and safely replays `in_flight` commands after an API crash. Temporal Update IDs and Go Signal IDs remain the second idempotency barrier.
@@ -123,7 +147,7 @@ control-plane API or give it Postgres access.
 - The Graph boundary now has canonical `graph-query.v1` and `graph-query-result.v1` schemas, Go/TypeScript validators, an injectable `GraphStore`, and a default deferred adapter. The route still fails closed until a scope-aware Spanner implementation and explicit graph policy grant exist; no graph provider or arbitrary raw query execution is enabled.
 - Agent-specific memory now has canonical `agent-memory.v1` and `agent-memory-result.v1` schemas plus a Go Runtime `memory.Store` boundary with a deferred adapter. The request supports only scoped `retrieve`/`distill` operations and evidence-linked summaries; it does not persist raw provider data or Workflow history. `ExecuteAgentMemory` is registered as an Activity, applies deterministic `regex-v1` redaction before distillation and on returned records, and returns a typed deferred result until a hosted Memory Bank provider is configured; retention/deletion policy remains deferred.
 - The `tool-manifest.v1` schema is now canonical in `packages/contracts` and is embedded/validated by the Go Agent Gateway before catalog responses. This covers the manifest wire shape; persisted registry records and provider discovery remain deferred.
-- The dashboard now has a centralized authenticated API client with shared workflow/integration contracts, organization-aware React Query keys, workflow list/detail/start polling, and integration list/update mutations. Route access fails closed without a session; the only current token fixture is development-only and session-scoped. Workflow execution state is no longer kept in localStorage. Overview counters are derived from Gateway projections; events, activity/evidence history, freshness, and agent health remain explicit deferred projections instead of static fake data.
+- The dashboard now has a centralized authenticated API client with shared workflow/integration contracts, organization-aware React Query keys, workflow list/detail/start polling, and integration list/update mutations. Route access fails closed without a session; production login uses the Firebase browser SDK for Google-only sign-in, pending users see the waitlist, and the only local token fixture is development-only and session-scoped. Workflow execution state is no longer kept in localStorage. Overview counters are derived from Gateway projections; events, activity/evidence history, freshness, and agent health remain explicit deferred projections instead of static fake data.
 - The Go Temporal test suite executes a generic Blueprint with parallel-ready tool steps and a dependent agent step without a Temporal server.
 - Coordinator tests cover scoped event deduplication, explicit approved-snapshot starts, and retention/retry of a failed start until a later reconciliation signal.
 - Opt-in `pnpm smoke:release` and `pnpm smoke:approval` harnesses exercise the real TypeScript Temporal client, API projection, context Update, and approval Signal path. `pnpm smoke:release:local` now starts the local Temporal dev server, Agent Gateway, and Go Runtime, waits for readiness, runs both smokes, and cleans up.
@@ -164,7 +188,7 @@ providers, migrations, and policy administration as explicit follow-up work.
 | Authentication and organization scope | Conditional Identity Platform adapter and Postgres membership resolver | Done in code; hosted verification pending |
 | Agent Gateway service auth and scope policy | Service token, local `401`/`403` smoke checks, Cloud Run audience support, non-empty scope and allowlist checks | Done for fixture policy; hosted IAM verification pending |
 | Local end-to-end flow | `pnpm smoke:release` plus `pnpm smoke:approval` passed with local Temporal/Go processes | Done |
-| Dashboard typed API integration | Authenticated client, shared contracts, workflow/integration queries and mutations | Done for current Gateway endpoints; production Identity Platform client adapter and event/overview projections pending |
+| Dashboard typed API integration | Authenticated client, shared contracts, Google Identity Platform login, invite/pending routing, workflow/integration queries and mutations | Done for current Gateway endpoints; event/overview projections pending |
 | Workflow Creator plan boundary | `workflow-change-plan.v1`/`.v2`, explicit `start` intent, cancel-only Temporal plans, `coordinator-event.v1` with `workflowStarts`, Go bootstrap/reconciliation proposal Activities, Runtime-to-Gateway submit/start routes, Coordinator event receiver, transactional Gateway outbox, bounded dispatcher/sink, one-shot dispatcher entrypoint, API validation/submit/approve/apply routes, Blueprint registry persistence, audit | Partial; Cloud Run Job/Scheduler IAM and tenant scheduling, persistence-backed cancel verification, and DB migration hosted verification pending |
 | Audit/logs/IDs/projection | Audit events, durable Signal/Update receipts, request/trace IDs, workflow/run IDs, read reconciliation | Partial; OpenTelemetry export/visibility consumer pending |
 | Docker/health/Cloud Run configuration | Four Dockerfiles, health endpoints, Terraform env/secrets/IAM, Vertex AI ADC and Runtime control-plane wiring, CI smoke/persistence/container/Terraform jobs | Code and CI wiring complete; hosted CI image/provider validation pending |

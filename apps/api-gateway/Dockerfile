@@ -11,7 +11,7 @@ COPY apps/api-gateway apps/api-gateway
 COPY packages/contracts packages/contracts
 COPY packages/persistence packages/persistence
 RUN pnpm --filter @encois/api-gateway... build
-RUN pnpm deploy --filter @encois/api-gateway --prod /out
+RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out
 RUN cp -R apps/api-gateway/dist /out/dist
 
 FROM node:22-bookworm-slim

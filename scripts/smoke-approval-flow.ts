@@ -5,6 +5,7 @@ const temporalAddress = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "default";
 const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? "encois-agent-runtime";
 const timeoutMs = Number(process.env.ENCOIS_SMOKE_TIMEOUT_MS ?? 30_000);
+const workflowKey = process.env.ENCOIS_SMOKE_WORKFLOW_KEY ?? "approval-smoke";
 const traceId = process.env.ENCOIS_SMOKE_TRACE_ID ?? "fedcba9876543210fedcba9876543210";
 
 const config = loadConfig({
@@ -31,7 +32,7 @@ const startResponse = await app.request("/api/v1/workflows", {
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
     workflowType: "encois.user-blueprint.v1",
-    key: "approval-smoke",
+    key: workflowKey,
     input: {
       blueprint: {
         contractVersion: "workflow-blueprint.v1",

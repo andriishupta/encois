@@ -39,6 +39,85 @@ describe("API Gateway", () => {
     });
   });
 
+  it("exposes authentication status separately from tenant-protected routes", async () => {
+    const app = createApp({
+      config: testConfig,
+      verifyIdentity: async () => ({
+        identity: {
+          email: "admin@example.com",
+          emailVerified: true,
+          identityProvider: "identity-platform" as const,
+          signInProvider: "google.com",
+          subject: "identity-1",
+        },
+        status: "authenticated" as const,
+      }),
+      resolveAccess: async () => ({ status: "pending" as const }),
+    });
+
+    const response = await app.request("/api/v1/auth/me", {
+      headers: { authorization: "Bearer fixture-id-token" },
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ data: { status: "pending" } });
+  });
+
+  it("returns active auth status without exposing the protected route middleware", async () => {
+    const app = createApp({
+      config: testConfig,
+      verifyIdentity: async () => ({
+        identity: {
+          email: "admin@example.com",
+          emailVerified: true,
+          identityProvider: "identity-platform" as const,
+          signInProvider: "google.com",
+          subject: "identity-1",
+        },
+        status: "authenticated" as const,
+      }),
+      resolveAccess: async () => ({
+        principal: { actorId: "identity-1", userId: "user-1", organizationId: "org-1", scope: ["root"] },
+        status: "active" as const,
+      }),
+    });
+
+    const response = await app.request("/api/v1/auth/me", {
+      headers: { authorization: "Bearer fixture-id-token" },
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: { status: "active", userId: "user-1", organizationId: "org-1" },
+    });
+  });
+
+  it("fails waitlist submission closed when persistence is unavailable", async () => {
+    const app = createApp({ config: testConfig });
+    const response = await app.request("/api/v1/public/waitlist", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "person@company.example",
+        companyName: "Example Company",
+        companyWebsite: "https://company.example",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
+  it("validates waitlist qualification before checking persistence", async () => {
+    const app = createApp({ config: testConfig });
+    const response = await app.request("/api/v1/public/waitlist", {
+      method: "POST",
+      body: JSON.stringify({ email: "person@gmail.com", companyName: "Example Company" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "INVALID_REQUEST", field: "email" },
+    });
+  });
+
   it("fails closed when persistence is not configured", async () => {
     const app = createApp({
       authenticate: async () => ({

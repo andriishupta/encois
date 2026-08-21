@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as WaitlistRouteImport } from './routes/waitlist'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
@@ -51,6 +52,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaitlistRoute = WaitlistRouteImport.update({
+  id: '/waitlist',
+  path: '/waitlist',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
+  '/waitlist': typeof WaitlistRoute
   '/integrations': typeof AppIntegrationsRouteWithChildren
   '/profile': typeof AppProfileRoute
   '/settings': typeof AppSettingsRouteWithChildren
@@ -184,6 +191,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/sign-up': typeof SignUpRoute
+  '/waitlist': typeof WaitlistRoute
   '/profile': typeof AppProfileRoute
   '/onboarding/coordination': typeof OnboardingCoordinationRoute
   '/onboarding/memory': typeof OnboardingMemoryRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
+  '/waitlist': typeof WaitlistRoute
   '/_app/integrations': typeof AppIntegrationsRouteWithChildren
   '/_app/profile': typeof AppProfileRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/sign-up'
+    | '/waitlist'
     | '/integrations'
     | '/profile'
     | '/settings'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/sign-up'
+    | '/waitlist'
     | '/profile'
     | '/onboarding/coordination'
     | '/onboarding/memory'
@@ -282,6 +293,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/sign-up'
+    | '/waitlist'
     | '/_app/integrations'
     | '/_app/profile'
     | '/_app/settings'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRouteWithChildren
   SignUpRoute: typeof SignUpRoute
+  WaitlistRoute: typeof WaitlistRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -339,6 +352,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-up'
       fullPath: '/sign-up'
       preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/waitlist': {
+      id: '/waitlist'
+      path: '/waitlist'
+      fullPath: '/waitlist'
+      preLoaderRoute: typeof WaitlistRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -577,6 +597,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRouteWithChildren,
   SignUpRoute: SignUpRoute,
+  WaitlistRoute: WaitlistRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

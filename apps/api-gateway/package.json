@@ -7,10 +7,15 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "dispatch:coordinator": "node dist/coordinator-dispatcher.js",
-    "lint": "tsc -p tsconfig.json --noEmit",
+    "auth:bootstrap-organization": "tsx scripts/bootstrap-organization.ts",
+    "auth:invite-user": "tsx scripts/invite-user.ts",
+    "auth:list-waitlist": "tsx scripts/list-waitlist.ts",
+    "auth:revoke-invite": "tsx scripts/revoke-invite.ts",
+    "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "verify:command-receipts": "tsx scripts/verify-command-receipts.ts"
   },
   "dependencies": {

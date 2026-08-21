@@ -4,7 +4,7 @@ WORKDIR /src
 COPY apps/agent-gateway/go.mod apps/agent-gateway/go.sum ./apps/agent-gateway/
 COPY packages/contracts/go.mod packages/contracts/go.sum ./packages/contracts/
 RUN cd apps/agent-gateway && go mod download
-COPY packages/contracts/schema.go ./packages/contracts/schema.go
+COPY packages/contracts/*.go ./packages/contracts/
 COPY packages/contracts/schemas ./packages/contracts/schemas
 COPY apps/agent-gateway ./apps/agent-gateway
 RUN cd apps/agent-gateway && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/agent-gateway ./cmd/agent-gateway

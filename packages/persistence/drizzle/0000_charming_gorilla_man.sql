@@ -201,6 +201,10 @@ CREATE TABLE "workflow_runs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "integrations_id_organization_id_idx" ON "integrations" USING btree ("id","organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organization_memberships_id_organization_idx" ON "organization_memberships" USING btree ("id","organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organization_units_id_organization_id_idx" ON "organization_units" USING btree ("id","organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "workflow_runs_id_organization_idx" ON "workflow_runs" USING btree ("id","organization_id");--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration_bindings" ADD CONSTRAINT "integration_bindings_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -231,13 +235,10 @@ ALTER TABLE "workflow_runs" ADD CONSTRAINT "workflow_runs_definition_id_workflow
 ALTER TABLE "workflow_runs" ADD CONSTRAINT "workflow_runs_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "users_identity_provider_subject_idx" ON "users" USING btree ("identity_provider","identity_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "integration_bindings_unique_idx" ON "integration_bindings" USING btree ("integration_id","organization_unit_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "integrations_id_organization_id_idx" ON "integrations" USING btree ("id","organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "webhook_deliveries_endpoint_event_idx" ON "webhook_deliveries" USING btree ("endpoint_id","provider_event_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "webhook_endpoints_organization_key_idx" ON "webhook_endpoints" USING btree ("organization_id","endpoint_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "membership_scopes_unique_idx" ON "membership_scopes" USING btree ("membership_id","organization_unit_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "organization_memberships_organization_user_idx" ON "organization_memberships" USING btree ("organization_id","user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "organization_memberships_id_organization_idx" ON "organization_memberships" USING btree ("id","organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "organization_units_id_organization_id_idx" ON "organization_units" USING btree ("id","organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "organization_units_slug_idx" ON "organization_units" USING btree ("organization_id","parent_id","slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "organizations_slug_idx" ON "organizations" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "role_permissions_role_permission_idx" ON "role_permissions" USING btree ("role_id","permission");--> statement-breakpoint
@@ -246,8 +247,6 @@ CREATE UNIQUE INDEX "idempotency_keys_organization_key_idx" ON "idempotency_keys
 CREATE UNIQUE INDEX "workflow_definitions_key_version_idx" ON "workflow_definitions" USING btree ("organization_id","key","version");--> statement-breakpoint
 CREATE UNIQUE INDEX "workflow_events_id_organization_idx" ON "workflow_events" USING btree ("id","organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "workflow_runs_organization_temporal_id_idx" ON "workflow_runs" USING btree ("organization_id","temporal_workflow_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "workflow_runs_id_organization_idx" ON "workflow_runs" USING btree ("id","organization_id");
---> statement-breakpoint
 INSERT INTO "roles" ("organization_id", "key", "name", "description", "is_system")
 VALUES
   (NULL, 'organization_admin', 'Organization administrator', 'Full control within one organization.', true),

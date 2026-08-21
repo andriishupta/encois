@@ -28,6 +28,30 @@ The token subject is an external identity reference, not an Encois authorization
 
 `createIdentityPlatformAuthenticator` is the verification adapter. Its principal resolver remains an explicit application boundary so authentication and organization authorization do not get coupled to Firebase claims.
 
+### Invite-only Google access (MVP)
+
+The browser enables only the Google provider through the Identity Platform /
+Firebase client SDK. There is no email/password signup and no self-service
+organization creation. An operator uses the Gateway scripts with
+`DATABASE_MIGRATION_URL` to create an organization, its root unit, and a
+pending invite. The invite stores the normalized email, organization, role,
+and optional unit scope; it does not store a password or provider token.
+
+On `/api/v1/auth/me`, the Gateway verifies the ID token, requires the Google
+sign-in provider and a verified email, then accepts a matching non-expired
+invite in one database transaction. That transaction creates the local user
+projection, membership, and scope before marking the invite accepted. An
+Identity Platform account without a local invite may exist at Google but has
+no Encois membership and can only submit `/api/v1/public/waitlist`.
+
+The first implementation does not need a private management UI. Use
+`pnpm --filter @encois/api-gateway auth:bootstrap-organization -- --organization
+\"Example\" --email owner@example.com` for the first organization, then
+`auth:invite-user` for later members. These commands are operator tooling, not
+public HTTP routes. A future Identity Platform blocking function can reject
+unknown users at provider sign-up time, but Gateway authorization remains the
+required security boundary.
+
 ## Cloud SQL and Drizzle
 
 `packages/persistence` owns the PostgreSQL schema and migrations. The API runtime and migration runner use different connections:
@@ -42,6 +66,8 @@ The migration enables PostgreSQL RLS on tenant-scoped tables. The API must execu
 ## Initial control-plane entities
 
 - `users` — Identity Platform subject and minimal profile projection; no provider tokens.
+- `organization_invites` — pre-auth operator-controlled invitations keyed by normalized email; no passwords or provider credentials.
+- `waitlist_requests` — bounded contact requests containing a plausible work email, company name, and company website or LinkedIn URL; not an authorization source.
 - `organizations` — tenant root.
 - `organization_units` — organization, department, team, project, service, and future custom hierarchy nodes.
 - `roles`, `role_permissions` — system/custom role definitions and permissions.
@@ -95,6 +121,7 @@ dedicated GCP project plus Temporal environment.
 - Cloud SQL regional/HA tier and private IP topology.
 - Cloud SQL IAM database authentication versus Secret Manager password for the runtime login role.
 - Cloud Storage bucket retention, deletion, and customer data residency policy.
+- Retention and deletion policy for invite email addresses and waitlist contact data.
 - Explicit organization-unit grant/restriction tables and permission-admin UI.
 - Per-provider freshness budgets and Cloud Scheduler/Temporal Schedule wiring.
 - Redis product and topology for rate limits, cache, and short-lived locks.

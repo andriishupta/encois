@@ -11,11 +11,17 @@ import { traceContextMiddleware } from "./middleware/trace-context.js";
 import type { AppConfig } from "./config.js";
 import { loadConfig } from "./config.js";
 import {
+  createDatabaseAccessResolver,
   createDatabasePrincipalResolver,
   createIdentityPlatformAuthenticator,
+  createIdentityPlatformIdentityVerifier,
   createInternalServiceAuthenticator,
+  type IdentityAccessResolver,
+  type IdentityPlatformVerifier,
 } from "./auth/identity-platform.js";
+import { createAuthRouter } from "./auth/router.js";
 import { healthRouter } from "./health/router.js";
+import { createPublicRouter } from "./public/router.js";
 import { createIntegrationsRouter } from "./integrations/router.js";
 import { webhooksRouter } from "./webhooks/router.js";
 import { createWorkflowClient, type WorkflowClient } from "./workflows/temporal-client.js";
@@ -27,12 +33,23 @@ const ACTIVE_API_VERSION = "v1" as const;
 export type CreateAppOptions = {
   authenticate?: AosAuthenticator;
   config?: AppConfig;
+  resolveAccess?: IdentityAccessResolver;
+  verifyIdentity?: IdentityPlatformVerifier;
   workflowClient?: WorkflowClient;
 };
 
 export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   const config = options.config ?? loadConfig();
   const workflowClient = options.workflowClient ?? createWorkflowClient(config);
+  const identityVerifier =
+    options.verifyIdentity ??
+    (config.identityPlatformProjectId
+      ? createIdentityPlatformIdentityVerifier({
+          allowedSignInProviders: ["google.com"],
+          projectId: config.identityPlatformProjectId,
+        })
+      : undefined);
+  const accessResolver = options.resolveAccess ?? createDatabaseAccessResolver();
   const identityAuthenticator = config.identityPlatformProjectId
     ? createIdentityPlatformAuthenticator({
         projectId: config.identityPlatformProjectId,
@@ -84,9 +101,11 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   app.route("/health", healthRouter);
 
   const apiRouter = new Hono<GatewayEnv>();
-  apiRouter.use("*", aosMiddleware({ authenticate }));
+  apiRouter.route(`/${ACTIVE_API_VERSION}/auth`, createAuthRouter({ resolveAccess: accessResolver, verifyIdentity: identityVerifier }));
+  apiRouter.route(`/${ACTIVE_API_VERSION}/public`, createPublicRouter());
 
   const v1Router = new Hono<GatewayEnv>();
+  v1Router.use("*", aosMiddleware({ authenticate }));
   v1Router.route("/integrations", createIntegrationsRouter());
   v1Router.route(
     "/workflows",

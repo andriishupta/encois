@@ -121,14 +121,26 @@ Roles are policy inputs, not permissions by themselves. A role must be combined 
 
 For the Google Cloud baseline, Identity Platform/Firebase ID tokens establish the external identity only. The Gateway verifies the token with Application Default Credentials, maps the subject to the local `users` and `organization_memberships` tables, and computes effective scope from local roles and hierarchy grants. Do not treat arbitrary token claims, email domains, or client-selected organization IDs as authorization.
 
+The MVP human-access policy is invite-only Google sign-in. The Gateway accepts
+only the configured Google provider, requires a verified email, and matches it
+against a non-expired pending `organization_invites` record before creating an
+active local membership. An Identity Platform account without a matching
+invite may exist at the provider but has no Encois principal and cannot reach
+tenant routes. There is no email/password signup or self-service organization
+creation. Invite and waitlist tables are pre-auth control-plane records: they
+are reachable only through server-side Gateway/operator code, never through a
+client-selected organization context.
+
 The Dashboard must fail closed when no bearer session exists. Its current local
 development scaffold stores a tab-scoped bearer session in `sessionStorage`
 and accepts a token supplied through a development-only
 fixture environment variable; `VITE_*` values are embedded in the bundle and
 must never hold a hosted or production credential. The production browser
-adapter must use the Identity Platform/Firebase client SDK with token refresh,
-logout, and revocation handling, while the Gateway remains the authorization
-source of truth.
+adapter uses the Identity Platform/Firebase client SDK with Google-only sign-in,
+token refresh, logout, and revocation handling, while the Gateway remains the
+authorization source of truth. An authenticated but not-invited browser
+session may resolve `/api/v1/auth/me` to `pending` and submit the public
+waitlist form, but it is not an application session.
 
 Never let the model select a role, organization, user identity, connector, or scope. Never infer authorization from a natural-language request.
 
@@ -386,6 +398,8 @@ The MVP may use simplified UI and synthetic data, but it must still enforce auth
 Before shipping a component or vertical slice, verify:
 
 - [ ] public routes authenticate and authorize before loading tenant data;
+- [ ] the invite-only boundary verifies the Google provider, verified email, invite status, and expiry before provisioning a local membership;
+- [ ] pending/unknown identities cannot reach tenant routes, and waitlist data is not used as an authorization source;
 - [ ] every query, cache, job, graph, memory, object, and audit record is tenant-scoped;
 - [ ] database runtime roles cannot alter schema or access unrelated tenants;
 - [ ] secrets are in managed secret storage and absent from code, logs, prompts, and Temporal history;
@@ -395,6 +409,7 @@ Before shipping a component or vertical slice, verify:
 - [ ] external writes are approval-gated, idempotent, auditable, and recoverable;
 - [ ] model and provider content is treated as untrusted data;
 - [ ] raw data, graph facts, memory, projections, and audit records have retention and deletion behavior;
+- [ ] invite and waitlist PII has a documented retention/deletion policy before real customer rollout;
 - [ ] Memory writes pass deterministic redaction before provider persistence, with a documented limitation for semantic PII;
 - [ ] stale source data is marked stale/unknown and cannot be presented as fresh;
 - [ ] logs and traces are redacted and still provide useful correlation;

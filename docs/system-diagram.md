@@ -1,7 +1,7 @@
 # Encois System Diagram
 
 **Status:** living current-state map  
-**Last reviewed:** 2026-08-20  
+**Last reviewed:** 2026-08-21
 **Purpose:** keep one diagram that shows the current system shape, deployable boundaries, and the parts that are still scaffold or deferred.
 
 This document is the visual map of the repository. It should be updated when a service boundary, runtime responsibility, data store, or deployment path changes. Detailed behavioral scenarios belong in [`flows.md`](flows.md); component decisions belong in [`architecture.md`](architecture.md).
@@ -28,8 +28,8 @@ flowchart TB
         CoordinatorRoutes[Private Coordinator control routes\nservice token + organization scope\nCurrent: plan submit + approved-start boundary]
         Outbox[(Coordinator event outbox\nPostgres + RLS\nCurrent: transactional enqueue)]
         Dispatcher[Coordinator dispatcher\none-shot API image entrypoint\nCurrent: lease/retry + Temporal sink]
-        Auth[Identity Platform\nCurrent: conditional adapter wiring\nRequires project + DB config]
-        SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nCurrent: schema and migration foundation)]
+        Auth[Identity Platform\nGoogle-only browser sign-in\nGateway ID-token verification]
+        SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nUsers, memberships, invites, waitlist)]
     end
 
     subgraph Durable[Durable execution plane]
@@ -91,6 +91,12 @@ flowchart TB
 ```
 
 The diagram intentionally shows the architecture and the implementation status together. The current local proof path uses the real TypeScript Temporal client, a local Temporal server, the Go Worker, the Agent Gateway, and synthetic provider fixtures; the API-only development path can still use the in-memory adapter. The target path keeps the same boundaries but replaces local services and fixtures with hosted authenticated services and managed Google Cloud resources.
+
+Human access is invite-only in the current slice: Google/Identity Platform
+provides the external identity, the Gateway matches a verified email to a
+pending invite and provisions local membership, and unknown identities can
+only submit the waitlist form. Identity Platform accounts and Encois users are
+separate records; the local `users` row is the authorization projection.
 
 All data-plane arrows are expected to carry organization scope, provenance, and
 freshness. Memory writes additionally pass the deterministic `regex-v1`

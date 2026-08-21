@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
-import { Activity, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Activity, ArrowRight, Chrome } from 'lucide-react'
+import { ApiError, getAuthStatus } from '@/lib/api'
+import { getAuthSession, getDevelopmentAuthSession, isIdentityPlatformConfigured, setAuthSession, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
+import { getMockOnboardingState } from '@/lib/onboarding'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getAuthSession, getDevelopmentAuthSession, setAuthSession } from '@/lib/auth'
-import { getMockOnboardingState } from '@/lib/onboarding'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: () => {
@@ -16,9 +18,39 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const navigate = useNavigate()
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const developmentSession = getDevelopmentAuthSession()
+  const googleConfigured = isIdentityPlatformConfigured()
 
-  function signInWithDevelopmentSession() {
+  async function continueWithGoogle() {
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      await signInWithGoogle()
+      const status = await getAuthStatus()
+      if (status.status === 'pending') {
+        await signOutFromIdentityPlatform()
+        await navigate({ to: '/waitlist' })
+        return
+      }
+      await navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.code === 'PERSISTENCE_UNAVAILABLE') {
+        setError('Access provisioning is not available yet. Please try again later.')
+      } else if (cause instanceof ApiError && cause.status === 401) {
+        setError('This Google account is not enabled for Encois yet.')
+      } else if (cause instanceof Error && cause.message.includes('popup')) {
+        setError('Google sign-in was cancelled.')
+      } else {
+        setError('We could not complete Google sign-in. Please try again.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  function useLocalDevelopmentSession() {
     if (!developmentSession) return
     setAuthSession(developmentSession)
     void navigate({ to: getMockOnboardingState()?.onboardingComplete ? '/' : '/onboarding/workspace' })
@@ -33,40 +65,34 @@ function LoginPage() {
             Encois
           </Link>
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-            <CardDescription>Sign in to continue to your workspace.</CardDescription>
+            <CardTitle className="text-2xl">Welcome back</CardTitle>
+            <CardDescription>Encois is currently available by invitation only.</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="email">
-            Email
-            <input id="email" name="email" type="email" placeholder="you@company.com" className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="password">
-            Password
-            <input id="password" name="password" type="password" placeholder="••••••••" className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" />
-          </label>
-          <Button type="button" className="w-full" disabled={!developmentSession} onClick={signInWithDevelopmentSession}>
-            {developmentSession ? 'Use local development session' : 'Sign in'}
+          <Button type="button" className="w-full" disabled={!googleConfigured || isSubmitting} onClick={() => void continueWithGoogle()}>
+            <Chrome data-icon="inline-start" />
+            {isSubmitting ? 'Connecting to Google…' : 'Continue with Google'}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            {developmentSession
-              ? 'Identity Platform token loaded from the local development environment.'
-              : 'Identity Platform client sign-in is not configured for this build.'}
-          </p>
+
+          {developmentSession ? (
+            <Button type="button" variant="outline" className="w-full" onClick={useLocalDevelopmentSession}>
+              Use local development session
+            </Button>
+          ) : null}
+
+          {!googleConfigured && !developmentSession ? (
+            <p className="text-center text-xs text-muted-foreground">Google sign-in is not configured for this build.</p>
+          ) : null}
+          {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+
           <p className="text-center text-sm text-muted-foreground">
-            New to Encois?{' '}
-            <Link to="/sign-up" className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4">
-              Create an account
+            Don&apos;t have access yet?{' '}
+            <Link to="/waitlist" className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-4">
+              Join the waitlist
               <ArrowRight className="size-3.5" aria-hidden="true" />
             </Link>
           </p>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/login">
-              <ArrowLeft data-icon="inline-start" />
-              Stay on sign in
-            </Link>
-          </Button>
         </CardContent>
       </Card>
     </main>

@@ -21,6 +21,9 @@ Configuration is environment-based:
 - `TEMPORAL_NAMESPACE` — defaults to `default`;
 - `TEMPORAL_TASK_QUEUE` — defaults to `encois-agent-runtime`;
 - `TEMPORAL_API_KEY` — optional Temporal Cloud API key;
+- `AGENT_AI_MODE` — `gemini` (default) uses the configured Gemini/Vertex AI
+  backend; `mock` enables the deterministic local fixture in
+  `internal/mock` and requires no model credentials;
 - `AGENT_GATEWAY_URL` — defaults to `http://127.0.0.1:8080`;
 - `AGENT_GATEWAY_SERVICE_TOKEN` — bearer token used for private Gateway calls;
 - `AGENT_GATEWAY_AUDIENCE` — optional Cloud Run service URL; when set, the
@@ -38,7 +41,8 @@ Configuration is environment-based:
   region; the location defaults to `us-central1`;
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — optional for the local scaffold;
   without it ADK agent steps return a deferred status instead of calling
-  Gemini;
+  Gemini. Use `AGENT_AI_MODE=mock` when the local workflow should produce a
+  short deterministic AI result instead;
 - `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.
 - `GEMINI_COORDINATOR_MODEL` — defaults to `gemini-3.1-pro-preview`; used by
   the Coordinator and Workflow Creator instead of the lower-latency specialist

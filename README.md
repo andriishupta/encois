@@ -75,12 +75,31 @@ pnpm --filter @encois/api-gateway dev
 
 The API listens on `http://127.0.0.1:8787`. Its local health checks are available at `/health/live` and `/health/ready`. The Go Agent Runtime and Agent Gateway are separate processes and are not part of the default `pnpm dev` command.
 
-Dashboard routes are protected and do not use the old mock sign-up flow. For
-the local scaffold, copy `apps/dashboard/.env.example` to a local env file and
-provide a development-only bearer fixture; the login screen can then create a
-tab-scoped session. Never put a hosted or production credential in a `VITE_*`
-variable. The production Identity Platform/Firebase browser adapter is still a
-follow-up before hosted user sign-in.
+Dashboard routes are protected and do not use a sign-up flow. The MVP supports
+Google-only Identity Platform sign-in for emails that an operator has invited.
+Copy `apps/dashboard/.env.example` to a local env file and provide the Firebase
+browser configuration (`VITE_FIREBASE_*`) for real Google sign-in. The API
+verifies the ID token and provisions the local `users` row and organization
+membership only when a pending invite matches the verified email. Unknown or
+pending users are sent to `/waitlist`; they cannot reach tenant routes.
+
+For database-free local UI work, the development-only bearer fixture remains
+available and is session-scoped. Never put a hosted or production credential
+in a `VITE_*` variable.
+
+The first organization and invited admin are created with the operator script
+after migrations have run:
+
+```bash
+DATABASE_MIGRATION_URL=... \
+pnpm --filter @encois/api-gateway auth:bootstrap-organization -- \
+  --organization "Example Company" --email owner@example.com
+```
+
+Use `auth:invite-user` for later members and `auth:list-waitlist` to review
+unknown visitors. These are private operator scripts, not a public management
+UI; the waitlist requires work email, company name, and a company website or
+LinkedIn URL, but never grants access.
 
 The generic execution path can be smoke-tested locally when the Temporal CLI is
 installed:
@@ -108,19 +127,37 @@ With the Temporal CLI installed, `pnpm smoke:release:local` starts the Temporal
 dev server and both Go services automatically, waits for readiness, executes
 the release and approval smokes, and cleans up the child processes.
 
+For the full containerized local stack, run:
+
+```bash
+pnpm dev:local
+```
+
+This starts Postgres, the Temporal development server, migrations, API Gateway,
+Agent Gateway, Agent Runtime, and the Nginx-served dashboard through
+`compose.local.yaml`. The local Runtime uses `AGENT_AI_MODE=mock`, so no Gemini
+key or Google Cloud credentials are required. The Temporal UI is available at
+`http://localhost:8233`; the dashboard is at `http://localhost:5173`; and the
+API health endpoints are at `http://localhost:8787/health/live` and
+`/health/ready`. Follow service logs with
+`docker compose -f compose.local.yaml logs -f`.
+
+Stop the stack with `pnpm dev:local:down`. To reset local Postgres and Temporal
+state, remove the named volumes explicitly with
+`docker compose -f compose.local.yaml down -v`.
+
 Terraform does not run the application locally. It provisions cloud resources
-and references container images; it does not replace `pnpm dev`, build Docker
-images, or start a local Temporal server. Docker Compose remains deferred; the
-four deployable services already have Dockerfiles, and the Go Runtime exposes
-health-only `/health/live` and `/health/ready` endpoints.
+and references container images; Docker Compose is the local orchestration
+layer. The four deployable services have Dockerfiles, while Postgres and
+Temporal use their official development images.
 
 For a full validation pass:
 
 ```bash
 pnpm -r typecheck
 pnpm -r lint
-pnpm -r test
 pnpm -r build
+pnpm -r test
 ```
 
 The actual environment variables, local emulators, seed data, and deployment commands will be documented here as each app is introduced. Copy `.env.example` to a local environment file when it exists; never commit the resulting file or cloud credentials.

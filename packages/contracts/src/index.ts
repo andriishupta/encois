@@ -2,6 +2,7 @@ import { validateContract } from "./validation.js";
 import {
   AgentMemoryOperation,
   AgentMemoryStatus,
+  AuthAccessStatus,
   ArtifactRetentionClass,
   ContractVersion,
   CoordinatorSignalName,
@@ -25,10 +26,12 @@ import {
 } from "./values.js";
 
 export { resolveEffectiveScope, type EffectiveScope, type OrganizationUnitNode, type ScopeRule } from "./scope.js";
+export { validateWaitlistRequest, WaitlistLimits, type WaitlistRequest, type WaitlistValidationField, type WaitlistValidationResult } from "./waitlist.js";
 
 export {
   AgentMemoryOperation,
   AgentMemoryStatus,
+  AuthAccessStatus,
   ArtifactRetentionClass,
   ContractVersion,
   CoordinatorSignalName,
@@ -159,6 +162,21 @@ export type IntegrationProjection = {
 export type IntegrationUpdateRequest = {
   displayName?: string;
   status?: IntegrationStatus;
+};
+
+export type AuthStatusResponse =
+  | {
+      status: typeof AuthAccessStatus.Active;
+      userId: string;
+      organizationId: string;
+      displayName?: string;
+    }
+  | {
+      status: typeof AuthAccessStatus.Pending;
+    };
+
+export type WaitlistSubmissionResponse = {
+  accepted: true;
 };
 
 export type BlueprintWorkflowInput = {

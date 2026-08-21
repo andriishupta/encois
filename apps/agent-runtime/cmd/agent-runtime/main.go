@@ -39,6 +39,7 @@ func main() {
 	defer temporalClient.Close()
 
 	agentBundle, err := agents.NewBundle(context.Background(), agents.Config{
+		Mode:                cfg.AgentAIMode,
 		APIKey:              cfg.GeminiAPIKey,
 		UseVertexAI:         cfg.UseVertexAI,
 		GoogleCloudProject:  cfg.GoogleCloudProject,
@@ -51,8 +52,8 @@ func main() {
 		logger.Error("failed to initialize ADK bundle", "error", err)
 		os.Exit(1)
 	}
-	modelBackend := "gemini-api"
-	if cfg.UseVertexAI {
+	modelBackend := agentBundle.Mode
+	if agentBundle.Mode == agents.ModeGemini && cfg.UseVertexAI {
 		modelBackend = "vertex-ai"
 	}
 	logger.Info("agent bundle initialized", "specialistModel", agentBundle.ModelName, "coordinatorModel", agentBundle.CoordinatorModelName, "coordinatorThinkingLevel", agentBundle.CoordinatorThinkingLevel, "modelBackend", modelBackend, "geminiEnabled", agentBundle.Enabled)
