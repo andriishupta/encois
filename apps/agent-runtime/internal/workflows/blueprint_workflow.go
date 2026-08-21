@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.temporal.io/sdk/converter"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
@@ -13,13 +14,18 @@ import (
 const UserBlueprintWorkflowType = coordinator.UserBlueprintWorkflowType
 
 type BlueprintWorkflowInput struct {
-	Blueprint      coordinator.WorkflowBlueprint `json:"blueprint,omitempty"`
-	Payload        coordinator.WorkflowBlueprint `json:"payload,omitempty"`
-	RequestID      string                        `json:"requestId"`
-	WorkflowID     string                        `json:"workflowId"`
-	OrganizationID string                        `json:"organizationId"`
-	ActorID        string                        `json:"actorId"`
-	PolicyVersion  string                        `json:"policyVersion"`
+	ContractVersion string                        `json:"contractVersion"`
+	Blueprint       coordinator.WorkflowBlueprint `json:"blueprint,omitempty"`
+	Payload         coordinator.WorkflowBlueprint `json:"payload,omitempty"`
+	RequestID       string                        `json:"requestId"`
+	TraceID         string                        `json:"traceId,omitempty"`
+	WorkflowID      string                        `json:"workflowId"`
+	OrganizationID  string                        `json:"organizationId"`
+	ActorID         string                        `json:"actorId"`
+	PolicyVersion   string                        `json:"policyVersion"`
+	Scope           map[string]any                `json:"scope"`
+	BusinessInput   map[string]any                `json:"businessInput"`
+	IdempotencyKey  string                        `json:"idempotencyKey,omitempty"`
 }
 
 type BlueprintWorkflowResult struct {
@@ -37,18 +43,34 @@ type BlueprintStepResult struct {
 
 type BlueprintStepInput struct {
 	RequestID      string                         `json:"requestId"`
+	TraceID        string                         `json:"traceId,omitempty"`
 	WorkflowID     string                         `json:"workflowId"`
+	RunID          string                         `json:"runId"`
 	OrganizationID string                         `json:"organizationId"`
 	ActorID        string                         `json:"actorId"`
 	PolicyVersion  string                         `json:"policyVersion"`
+	Scope          map[string]any                 `json:"scope"`
+	BusinessInput  map[string]any                 `json:"businessInput"`
 	Step           coordinator.WorkflowStep       `json:"step"`
 	PriorResults   map[string]BlueprintStepResult `json:"priorResults,omitempty"`
 }
 
 type BlueprintApprovalSignal struct {
+	SignalID string `json:"signalId"`
 	StepID   string `json:"stepId"`
 	Approved bool   `json:"approved"`
 	Reason   string `json:"reason,omitempty"`
+}
+
+type BlueprintContextUpdate struct {
+	UpdateID      string         `json:"updateId"`
+	BusinessInput map[string]any `json:"businessInput"`
+	Reason        string         `json:"reason,omitempty"`
+}
+
+type BlueprintContextUpdateResult struct {
+	UpdateID string `json:"updateId"`
+	Accepted bool   `json:"accepted"`
 }
 
 // DynamicBlueprintWorkflow is one generic executable for user-created
@@ -58,6 +80,9 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	var input BlueprintWorkflowInput
 	if err := args.Get(&input); err != nil {
 		return BlueprintWorkflowResult{}, fmt.Errorf("decode blueprint workflow input: %w", err)
+	}
+	if err := validateBlueprintWorkflowInput(input); err != nil {
+		return BlueprintWorkflowResult{}, err
 	}
 	blueprint := input.Blueprint
 	if blueprint.WorkflowType == "" {
@@ -72,12 +97,42 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    2 * time.Second,
+			BackoffCoefficient: 2,
+			MaximumAttempts:    3,
+		},
 	})
+	if err := workflow.ExecuteActivity(activityCtx, "ValidateBlueprintContract", input).Get(ctx, nil); err != nil {
+		return BlueprintWorkflowResult{}, err
+	}
 	completed := make(map[string]bool, len(blueprint.Steps))
 	stepResults := make(map[string]BlueprintStepResult, len(blueprint.Steps))
 	results := make([]BlueprintStepResult, 0, len(blueprint.Steps))
+	businessInput := cloneMap(input.BusinessInput)
+	processedUpdateIDs := make(map[string]bool)
+	if err := workflow.SetUpdateHandler(ctx, "blueprint-context", func(_ workflow.Context, update BlueprintContextUpdate) (BlueprintContextUpdateResult, error) {
+		if update.UpdateID == "" {
+			return BlueprintContextUpdateResult{}, fmt.Errorf("updateId is required")
+		}
+		if len(update.BusinessInput) == 0 {
+			return BlueprintContextUpdateResult{}, fmt.Errorf("businessInput must not be empty")
+		}
+		if processedUpdateIDs[update.UpdateID] {
+			return BlueprintContextUpdateResult{UpdateID: update.UpdateID, Accepted: true}, nil
+		}
+		for key, value := range update.BusinessInput {
+			businessInput[key] = value
+		}
+		processedUpdateIDs[update.UpdateID] = true
+		return BlueprintContextUpdateResult{UpdateID: update.UpdateID, Accepted: true}, nil
+	}); err != nil {
+		return BlueprintWorkflowResult{}, fmt.Errorf("register blueprint context update: %w", err)
+	}
 	approvalChannel := workflow.GetSignalChannel(ctx, "blueprint-approval")
 	pendingApprovals := make(map[string]BlueprintApprovalSignal)
+	processedSignalIDs := make(map[string]bool)
+	runID := workflow.GetInfo(ctx).WorkflowExecution.RunID
 
 	for len(results) < len(blueprint.Steps) {
 		ready := make([]coordinator.WorkflowStep, 0)
@@ -98,10 +153,14 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			case "tool", "agent":
 				futures = append(futures, workflow.ExecuteActivity(activityCtx, "ExecuteBlueprintStep", BlueprintStepInput{
 					RequestID:      input.RequestID,
+					TraceID:        input.TraceID,
 					WorkflowID:     input.WorkflowID,
+					RunID:          runID,
 					OrganizationID: input.OrganizationID,
 					ActorID:        input.ActorID,
 					PolicyVersion:  input.PolicyVersion,
+					Scope:          input.Scope,
+					BusinessInput:  businessInput,
 					Step:           step,
 					PriorResults:   dependencyResults(step, stepResults),
 				}))
@@ -134,6 +193,10 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 				for !ok {
 					var received BlueprintApprovalSignal
 					approvalChannel.Receive(ctx, &received)
+					if received.SignalID == "" || received.StepID == "" || processedSignalIDs[received.SignalID] {
+						continue
+					}
+					processedSignalIDs[received.SignalID] = true
 					if received.StepID == step.ID {
 						approval, ok = received, true
 						continue
@@ -165,11 +228,96 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 		}
 	}
 
-	return BlueprintWorkflowResult{
+	result := BlueprintWorkflowResult{
 		ContractVersion: "blueprint-workflow-result.v1",
 		Status:          "completed",
 		Steps:           results,
-	}, nil
+	}
+	if err := workflow.ExecuteActivity(activityCtx, "ValidateBlueprintResult", result).Get(ctx, nil); err != nil {
+		return BlueprintWorkflowResult{}, err
+	}
+	return result, nil
+}
+
+func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
+	if input.ContractVersion != "workflow-blueprint.v1" {
+		return fmt.Errorf("unsupported workflow contractVersion %q", input.ContractVersion)
+	}
+	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" {
+		return fmt.Errorf("workflow execution context is incomplete")
+	}
+	if err := validateScope(input.Scope); err != nil {
+		return err
+	}
+	blueprint := input.Blueprint
+	if blueprint.WorkflowType == "" {
+		blueprint = input.Payload
+	}
+	if blueprint.ContractVersion != "workflow-blueprint.v1" {
+		return fmt.Errorf("unsupported blueprint contractVersion %q", blueprint.ContractVersion)
+	}
+	if blueprint.WorkflowType != UserBlueprintWorkflowType {
+		return fmt.Errorf("unsupported blueprint workflow type %q", blueprint.WorkflowType)
+	}
+	if blueprint.BlueprintID == "" || blueprint.Version == "" || blueprint.Name == "" || blueprint.Purpose == "" {
+		return fmt.Errorf("blueprint identity and purpose are required")
+	}
+	if len(blueprint.Steps) == 0 {
+		return fmt.Errorf("blueprint contains no steps")
+	}
+	stepIDs := make(map[string]struct{}, len(blueprint.Steps))
+	for _, step := range blueprint.Steps {
+		if step.ID == "" {
+			return fmt.Errorf("blueprint step id is required")
+		}
+		if _, exists := stepIDs[step.ID]; exists {
+			return fmt.Errorf("blueprint contains duplicate step %q", step.ID)
+		}
+		stepIDs[step.ID] = struct{}{}
+		switch step.Kind {
+		case "tool":
+			if step.Tool == "" {
+				return fmt.Errorf("tool step %q requires tool", step.ID)
+			}
+		case "agent":
+			if step.AgentDefinition == "" {
+				return fmt.Errorf("agent step %q requires agentDefinition", step.ID)
+			}
+		case "transform", "condition", "wait", "approval":
+		default:
+			return fmt.Errorf("unsupported blueprint step kind %q", step.Kind)
+		}
+	}
+	for _, step := range blueprint.Steps {
+		for _, dependency := range step.DependsOn {
+			if _, exists := stepIDs[dependency]; !exists {
+				return fmt.Errorf("step %q depends on unknown step %q", step.ID, dependency)
+			}
+		}
+	}
+	return nil
+}
+
+func validateScope(scope map[string]any) error {
+	if len(scope) == 0 {
+		return fmt.Errorf("workflow execution scope is empty")
+	}
+	validKeys := map[string]struct{}{"ids": {}, "teamIds": {}, "projectIds": {}}
+	for key, raw := range scope {
+		if _, ok := validKeys[key]; !ok {
+			return fmt.Errorf("unsupported scope field %q", key)
+		}
+		values, ok := raw.([]any)
+		if !ok || len(values) == 0 {
+			return fmt.Errorf("scope field %q must contain at least one value", key)
+		}
+		for _, value := range values {
+			if text, ok := value.(string); !ok || text == "" {
+				return fmt.Errorf("scope field %q contains an invalid value", key)
+			}
+		}
+	}
+	return nil
 }
 
 func completeStep(step coordinator.WorkflowStep, result BlueprintStepResult, completed map[string]bool, stepResults map[string]BlueprintStepResult, results *[]BlueprintStepResult) {
@@ -198,4 +346,12 @@ func dependenciesCompleted(step coordinator.WorkflowStep, completed map[string]b
 		}
 	}
 	return true
+}
+
+func cloneMap(source map[string]any) map[string]any {
+	clone := make(map[string]any, len(source))
+	for key, value := range source {
+		clone[key] = value
+	}
+	return clone
 }

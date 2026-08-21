@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/graph-query-result.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "requestId", "status", "nodes", "edges"],
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "properties"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "properties": { "type": "object" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceId", "targetId", "relationship", "properties"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "targetId": { "type": "string", "minLength": 1 },
+        "relationship": { "type": "string", "minLength": 1 },
+        "properties": { "type": "object" }
+      }
+    }
+  },
+  "properties": {
+    "contractVersion": { "const": "graph-query-result.v1" },
+    "requestId": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "deferred", "failed"] },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } },
+    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

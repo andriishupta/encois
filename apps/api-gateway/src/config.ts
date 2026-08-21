@@ -4,9 +4,12 @@ export type AppConfig = {
   corsOrigins: readonly string[];
   host: string;
   identityPlatformProjectId?: string;
+  controlPlaneServiceToken?: string;
+  controlPlaneServiceUserId?: string;
   nodeEnv: string;
   port: number;
   requestTimeoutMs: number;
+  agentGatewayPolicyVersion: string;
   temporalAddress?: string;
   temporalApiKey?: string;
   temporalTlsClientCertPath?: string;
@@ -42,9 +45,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigins,
     host: env.HOST?.trim() || DEFAULTS.host,
     identityPlatformProjectId: env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || undefined,
+    controlPlaneServiceToken: env.CONTROL_PLANE_SERVICE_TOKEN?.trim() || undefined,
+    controlPlaneServiceUserId: env.CONTROL_PLANE_SERVICE_USER_ID?.trim() || undefined,
     nodeEnv: env.NODE_ENV?.trim() || DEFAULTS.nodeEnv,
     port: positiveInteger(env.PORT, DEFAULTS.port),
     requestTimeoutMs: positiveInteger(env.REQUEST_TIMEOUT_MS, DEFAULTS.requestTimeoutMs),
+    agentGatewayPolicyVersion: env.AGENT_GATEWAY_POLICY_VERSION?.trim() || "policy-read-only-fixture-v1",
     temporalAddress: env.TEMPORAL_ADDRESS?.trim() || undefined,
     temporalApiKey: env.TEMPORAL_API_KEY?.trim() || undefined,
     temporalTlsClientCertPath: env.TEMPORAL_TLS_CLIENT_CERT_PATH?.trim() || undefined,

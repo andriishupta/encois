@@ -36,6 +36,8 @@ read-only intelligence.
 sequenceDiagram
     participant User as User/Admin
     participant API as Gateway API
+    participant Outbox as Coordinator outbox
+    participant Dispatcher as Event dispatcher
     participant Temporal as Temporal Cloud
     participant Runtime as Go Agent Runtime
     participant AgentGW as Private Agent Gateway
@@ -62,7 +64,11 @@ sequenceDiagram
     Runtime->>Gemini: propose typed WorkflowChangePlan
     Gemini-->>Runtime: standard blueprint proposals
     Runtime->>API: submit plan for deterministic validation
-    API->>Temporal: start/update approved workflows or schedules
+    API->>API: persist, approve, and apply approved registry changes
+    API->>Outbox: enqueue coordinator-event.v1
+    Dispatcher->>Outbox: lease pending event
+    Dispatcher->>Temporal: deliver applied plan event
+    Temporal-->>Runtime: Coordinator starts only explicit workflowStarts
     API-->>User: onboarding_ready + enabled workflow catalog
 ```
 
@@ -73,6 +79,18 @@ provider changes from Jira to Linear, the Coordinator proposes a new version,
 marks the old workflow for deprecation, and waits for approval when the change
 could alter behavior or external side effects. It does not silently delete the
 old workflow or copy provider instructions into policy.
+
+Current Runtime boundary: a reconciliation trigger invokes a Go Activity that
+proposes a validated `workflow-change-plan.v1`, followed by a separate Activity
+that submits it to the private Gateway control-plane route. Approval
+notification uses the separate `coordinator-event.v1` envelope, whose Runtime
+receiver now deduplicates and scope-checks events. Gateway approval/application
+transactionally enqueue the event in the outbox. Outbox delivery has a bounded
+lease/retry implementation and a one-shot dispatcher entrypoint. Applying an
+approved plan emits `workflowStarts` only for explicit change-level `start`
+intents; the Coordinator starts those approved snapshots through its private
+Gateway Activity and retains failed starts for retry. Scheduler invocation and
+hosted delivery remain deployment work.
 
 The dashboard gate is deterministic:
 
@@ -95,7 +113,8 @@ CoordinatorWorkflow
   -> ask ADK/Gemini for a typed change proposal
   -> validate Blueprint version, step graph, tools, scope, budget, and approval requirements deterministically
   -> Gateway API persists the blueprint/projection
-  -> Temporal starts or updates a registered Workflow/Schedule
+  -> explicit change.start intent decides whether an applied snapshot is started
+  -> Coordinator starts the approved snapshot through the private Gateway
   -> wait again
   -> Continue-As-New when history becomes large
 ```
@@ -119,16 +138,33 @@ POST /v1/workflows (Gateway API)
   -> create or update the Temporal execution/schedule
   -> return workflowId and permission/approval requirements
 
+Workflow Creator proposal preview:
+
+POST /v1/workflows/plans/validate
+  -> validate workflow-change-plan.v1
+  -> enforce tenant and required-scope ownership
+  -> return validated_not_applied
+  -> POST /v1/workflows/plans persists the proposal when Postgres is configured
+  -> POST /v1/workflows/plans/:planId/approve records explicit approval
+  -> POST /v1/workflows/plans/:planId/apply persists an approved Blueprint revision
+  -> API enqueues coordinator-event.v1 transactionally
+  -> Coordinator receives workflowStarts for changes that explicitly requested start
+  -> Coordinator starts the immutable approved snapshot through the private Gateway
+  -> update/deprecate changes without start only change the registry; cancel-only plans cancel targeted Temporal executions
+
 Temporal start:
   workflowType = encois.user-blueprint.v1
   input        = validated blueprint + execution context
 ```
 
-The Agent Gateway scaffold exposes the corresponding private validation and
-in-memory registration endpoints, but it intentionally does not become a
-second workflow registry or Temporal client. External-write nodes such as
-`email.send` produce an approval requirement; MVP allow-all policy does not
-remove that approval boundary.
+The Agent Gateway exposes the corresponding private validation and
+fixture-level MCP-shaped catalog endpoints, but it intentionally does not
+become a second workflow registry or Temporal client. Catalog metadata includes
+tool schemas, annotations, version, availability, approval requirements, and
+required scope; invocation re-checks the registered capability and scope after
+policy authorization. External-write nodes such as `email.send` produce an
+approval requirement; the current read-only fixture policy denies it before
+execution, and a future write policy must preserve the approval boundary.
 
 ## 2. Request-to-worker flow
 
@@ -145,9 +181,22 @@ React SPA
   -> API/MCP Integration
 ```
 
+For a Workflow Creator plan, the control path is deliberately separate:
+
+```text
+Workflow Creator
+  -> validate/submit plan
+  -> human approval
+  -> apply immutable registry snapshot
+  -> coordinator-event.v1 via transactional outbox
+  -> CoordinatorWorkflow
+  -> private Gateway start Activity, only when change.start exists
+  -> Temporal: encois.user-blueprint.v1
+```
+
 Temporal Cloud stores the Workflow history and schedules tasks. It does not execute Go code. The Go Agent Runtime opens the connection and polls the task queue. The Gateway API starts and controls the Workflow but does not execute long Gemini or provider calls inside the HTTP request.
 
-The Agent Gateway is a private east-west service (or an equivalent in-process Go module for the first slice); it is not a browser-facing route. The Go Runtime sends it a small, validated execution context rather than fetching control-plane data from Postgres.
+The Agent Gateway is a private east-west service (or an equivalent in-process Go module for the first slice); it is not a browser-facing route. The Go Runtime sends it a small, validated execution context rather than fetching control-plane data from Postgres. In Cloud Run, the request carries a platform ID token for the Gateway audience plus a separate Encois service token; local smoke uses the application token directly.
 
 For any company-specific Blueprint, use a stable business ID such as:
 
@@ -369,6 +418,11 @@ Temporal Workflow starts a wait
 
 If a provider has no webhook, a Temporal timer can schedule bounded polling. A new agent is not created for every check.
 
+The local harness verifies this same control shape with a generic approval
+Blueprint: the Workflow reaches a running wait, the API sends the authorized
+Signal, and the existing Go Worker resumes the same execution. The hosted
+implementation still needs Temporal Cloud and Cloud Run validation.
+
 ## 8. Integration Pack installation
 
 ```text
@@ -449,14 +503,15 @@ The first vertical slice needs these API-level projections:
 - `GET /overview` — scoped health, active workflows, warnings, freshness.
 - `GET /workflows/:id` — workflow status, steps, evidence references, result, and errors.
 - `POST /workflows` — start a user-requested Blueprint execution.
-- `POST /workflows/:id/signals` — send an authorized context, approval, cancellation, or external-event Signal.
+- `POST /workflows/:id/signals` — send an authorized approval or external-event Signal. Lifecycle cancellation uses an approved cancel-only workflow plan; a direct public cancel route remains future work.
+- `POST /workflows/:id/updates` — apply an authorized, versioned update to the active Workflow context.
 - `POST /queries` — start a bounded question or return a fresh answer.
 - `GET /agents` — approved definitions and current activity projection.
 - `GET /integrations` — packs, health, granted scopes, and last sync.
 - `GET /org` — hierarchy and permitted scope projection.
 - `GET /graph/paths` — scoped relationship paths for canvas and evidence explanations.
 
-These are intent-level contracts, not final routes. They should be validated and versioned in the planned `packages/contracts` package when the first public vertical-slice routes are promoted from scaffold to stable API.
+These are intent-level contracts, not all final routes. The public vertical-slice contracts are now versioned in `packages/contracts`; future routes must extend the same OpenAPI/JSON Schema boundary rather than introducing app-local cross-language DTOs.
 
 ## 13. Product boundary for the MVP
 

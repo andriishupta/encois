@@ -18,6 +18,7 @@ export type GatewayEnv = {
   Variables: {
     principal: AosPrincipal;
     requestId: string;
+    traceId: string;
   };
 };
 
@@ -50,6 +51,7 @@ export function aosMiddleware(options: AosOptions = {}): MiddlewareHandler<Gatew
           code,
           message,
           requestId: context.get("requestId"),
+          traceId: context.get("traceId"),
         },
       },
       status,

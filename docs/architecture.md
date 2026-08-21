@@ -81,6 +81,15 @@ flowchart LR
 
 The Gateway API is the public north-south application boundary. Temporal Cloud is the durable execution and task-delivery boundary. The Go Agent Runtime is a deployable worker application that opens an outbound connection and polls Temporal task queues; Temporal Cloud does not execute Go code. The private Agent Gateway is the east-west policy and tool boundary. It is not exposed to the browser or public MCP clients. For the first vertical slice it may be an in-process Go module behind the same interface, but the target deployment is a separately deployable internal service.
 
+Gateway-owned Coordinator lifecycle events are written to a tenant-scoped
+transactional outbox in the same database transaction as plan approval or
+application. A bounded one-shot dispatcher (`coordinator-dispatcher`) claims
+events with a lease and retries delivery to the Coordinator Workflow through
+Temporal. It is a process/job entrypoint, not a public route; production
+deployment should invoke it per organization through a Cloud Run Job and
+Scheduler. The Go Runtime never reads this outbox or the control-plane
+database.
+
 ## 4. Core components
 
 ### 4.1 Web application
@@ -119,14 +128,14 @@ It owns:
 - Integration Pack registration and health;
 - starting, signalling, querying, cancelling, and listing Temporal workflows;
 - workflow identity and idempotency rules, such as one active execution per organization, Blueprint, and business key;
-- Memory Bank retrieval requests and scoped memory operations;
-- graph query projections for the UI;
+- user-facing requests for Graph, Memory Bank, and evidence projections;
 - audit events and user-visible run projections;
 - request IDs, rate limits, CORS, validation, and redaction.
 
 The Gateway API does not execute long model or provider calls in an HTTP request. It starts or signals a Temporal Workflow and returns a workflow/investigation identifier.
 
-The first Node.js blueprint exposes `POST /api/v1/workflows` and
+The first Node.js blueprint exposes `POST /api/v1/workflows`,
+`POST /api/v1/workflows/plans/validate`, and
 `GET /api/v1/workflows/:workflowId`. The API derives a tenant-prefixed workflow
 ID from the authenticated organization, workflow type, and request key, then
 uses the Temporal TypeScript Client to start or describe the execution. A local
@@ -134,7 +143,14 @@ in-memory adapter is used only when Temporal is not configured; it is not a
 durable execution substitute. The Go runtime remains the worker and owns the
 actual workflow implementation.
 
-The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It will map those systems into stable, versioned contracts in the planned `packages/contracts` package; until that package exists, the current app-local DTOs are temporary implementation scaffolding.
+The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in [`packages/contracts`](../packages/contracts/), while provider-specific DTOs remain inside their adapters. The API is not the execution-time data-plane owner: Runtime Activities and Agent Gateway/data adapters perform scoped reads and writes, then return references or safe projections to the API. This distinction keeps the Gateway API out of provider/model work and keeps the Go Runtime out of control-plane Postgres.
+
+Temporal commands that originate at the API have a second, database-backed
+receipt boundary. Tenant-scoped Signal/Update receipts are claimed before the
+Temporal call and finalized with the audit event. A crashed API may replay an
+`in_flight` command, but a different payload under the same command ID is
+rejected. This complements, rather than replaces, Temporal Update IDs and the
+Go Workflow's Signal deduplication.
 
 The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_workflow` or `get_workflow_status`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
 
@@ -168,7 +184,7 @@ Temporal provides:
 - workflow visibility and execution IDs;
 - recovery after worker restarts or deployment changes.
 
-The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, and cancel workflows. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls Temporal Cloud; Temporal Cloud never reaches into the runtime to execute code.
+The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, describe, and cancel workflows; cancellation is currently reached through an approved cancel-only `workflow-change-plan.v2`, while a direct public cancel route remains future work. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls the configured Temporal endpoint, local or hosted; Temporal never reaches into the runtime to execute code.
 
 The business workflow is defined in code, but Workflow code must remain deterministic. Gemini calls, database calls, graph writes, Memory Bank calls, and MCP/API calls run as Temporal Activities. Activities are functions registered in a Worker, not independently deployed microservices.
 
@@ -178,9 +194,20 @@ The UI reads a safe projection of Temporal execution through the Gateway API. Te
 
 ### 4.4 Go Agent Runtime
 
-The Go Agent Runtime is one deployable Go application in the MVP. It runs Temporal Workers and hosts Google ADK agents, specialist definitions, Activities, and integration clients. It is isolated from the TypeScript Gateway API by versioned contracts and Temporal task queues. It reaches external systems through the private Agent Gateway. The runtime does not need the Gateway API's control-plane database; it receives stateless execution context and data references through Workflow/Activity inputs.
+The Go Agent Runtime is one deployable Go application in the MVP. It creates a
+Temporal client, registers a Worker on the configured task queue, and hosts
+Google ADK agents, specialist definitions, Activities, and integration clients.
+It is isolated from the TypeScript Gateway API by versioned contracts and
+Temporal task queues. It reaches external systems through the private Agent
+Gateway. The runtime does not need the Gateway API's control-plane database; it
+receives stateless execution context and data references through Workflow/
+Activity inputs.
 
-The Temporal/Google ADK integration provides the intended execution model:
+The runtime has two possible ADK execution profiles. The current profile is the
+simple Activity boundary; the native profile is a migration candidate and is
+not enabled in this repository.
+
+Current Activity-boundary profile:
 
 - the registered generic Blueprint Workflow interprets validated step kinds;
 - ADK runs approved agent steps and provides reasoning, delegation, and structured output;
@@ -189,30 +216,70 @@ The Temporal/Google ADK integration provides the intended execution model:
 - human approval can pause the Workflow and resume it through a Signal or Update;
 - long conversations can use `continue-as-new` to keep history bounded.
 
-The runtime contains:
+Native Temporal/ADK candidate:
+
+- `go.temporal.io/sdk/contrib/googleadk@v0.2.0` runs the ADK loop in Workflow code;
+- `googleadk.NewModel` dispatches each model turn to a worker-side `InvokeModel` Activity;
+- deterministic ADK function tools can run in Workflow code, while network/I/O tools use `ActivityAsTool` or the MCP proxy;
+- the module currently requires Temporal Go SDK `v1.45.0` and an ADK revision containing the required determinism seams;
+- this package was tested independently, but is not yet a repository dependency. The current Activity profile remains the fallback until the one-agent spike proves retry, history, approval, and MCP behavior.
+
+The target runtime composition is:
 
 ```text
 Temporal Workflows
   -> coordinator agents
   -> specialist agents
   -> Activity implementations
-  -> Memory Bank client
-  -> Spanner Graph client
   -> private Agent Gateway client
 ```
+
+The current repository implements the Workflow/Activity layer, ADK bundle, and
+private Agent Gateway client. Memory Bank, Spanner Graph, and Cloud Storage are
+target data-plane adapters, not active Runtime clients yet; they should be
+added behind Activities or the Agent Gateway after the hosted synthetic path is
+proven. The Runtime must continue to receive references and stateless context,
+not connect to the Gateway API's control-plane Postgres.
 
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
 
 Current code status: the worker registers `encois.user-blueprint.v1`, the
 Coordinator, and bootstrap workflows; it does not register provider-specific
-Temporal Workflow types. The generic interpreter and tool Activity are tested
-locally, but shared schemas, complete scope propagation, authenticated
-Runtime-to-Gateway calls, and real Temporal/Cloud Run deployment are not yet
-complete.
+Temporal Workflow types. The generic interpreter, scope propagation,
+authenticated Runtime-to-Gateway calls, read-only policy, worker health
+listener, and API → Temporal → Go → Agent Gateway synthetic smoke path are
+tested locally. The TypeScript API and the Go Runtime/Agent Gateway now consume
+the same embedded canonical JSON Schemas at their active boundaries. The
+Coordinator now calls a proposal Activity and a private control-plane submit
+Activity after reconciliation triggers. Gateway plan approval/application
+enqueue tenant-scoped `coordinator-event.v1` envelopes transactionally in the
+control-plane outbox. The API includes a bounded lease/retry dispatcher,
+Temporal sink, and a one-shot dispatcher entrypoint, but Cloud Run
+Job/Scheduler wiring remain pending. An applied plan emits `workflowStarts`
+only for explicit change-level `start` intents; the Coordinator starts those
+immutable approved snapshots through a typed private Gateway Activity and keeps
+failed starts in Workflow state for retry.
+Generated DTO generation, hosted Temporal/Cloud Run deployment, and real
+provider adapters also remain pending. These Runtime Activities do not access
+Postgres and cannot approve or bypass the registry.
+
+In Google Cloud, the Runtime uses Vertex AI through the GenAI/ADK client with
+Application Default Credentials and its dedicated service account. The
+Runtime-to-Gateway control-plane adapter can send both a Cloud Run ID token and
+the scoped Encois service token; Terraform grants the Runtime service account
+the API invoker role and supplies the API URL/audience. Local development may
+continue using a Gemini API key and a local service token.
 
 The runtime is not a permanent “head agent,” and a specialist is not a server per repository. The registered `encois.user-blueprint.v1` Workflow interprets one validated company-specific Blueprint. It can execute agent or tool steps for Jira, GitHub, monitoring, or any other enabled pack. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
 
-For the first vertical slice, use the official integration pattern or an equivalent boundary in which model calls and external tools are Activities. Do not make arbitrary network calls from deterministic Workflow code. ADK provides agent reasoning, delegation, and structured output; Temporal provides durable state, waiting, retries, Signals, and recovery.
+For the current vertical slice, ADK runs inside a Temporal Activity. This is a
+deliberate simple boundary: the Workflow remains deterministic and Temporal
+durably retries the Activity as one unit, while the internal ADK/model/tool
+turns are not separately represented in Temporal history. The native option is
+a finer-grained execution profile, not a replacement for the generic Blueprint
+contract. Do not make arbitrary network calls from deterministic Workflow code.
+ADK provides agent reasoning, delegation, and structured output; Temporal
+provides durable state, waiting, retries, Signals, and recovery.
 
 The model cannot invent a tool, widen scope, select a different organization, or bypass the Agent Gateway.
 
@@ -345,11 +412,27 @@ The Agent Gateway is a private policy-enforcing tool broker. It is a separate in
 
 The initial implementation is a Gin-based internal HTTP service in
 `apps/agent-gateway`. Its MVP boundary is intentionally small: authorization
-checks, registered-tool invocation, a Spanner Graph query boundary, and a
-Cloud Storage artifact boundary. The policy implementation is explicitly
-allow-all for the hackathon scaffold, while Jira and GitHub tool responses are
-synthetic read-only fixtures. Replacing that policy with deterministic
-organization- and scope-aware authorization must happen before production.
+checks, a fixture-level MCP-shaped tool catalog and invocation boundary, a
+Spanner Graph query boundary, and a Cloud Storage-shaped artifact boundary
+backed by in-memory/deferred adapters. Agent-specific Memory Bank access is a
+separate typed Runtime Activity boundary, not a public Gateway data source.
+Catalog
+entries include a version, input/output schemas, behavior annotations,
+availability, approval metadata, and required scope fields; invocation checks
+the registered capability and required scope after policy authorization. The
+policy implementation is explicitly limited to a deterministic read-only
+fixture policy, while Jira and GitHub tool responses are synthetic.
+Organization-unit, connector-grant, persisted-manifest, live provider, and
+real Cloud Storage expansion is still required before production, but arbitrary
+tool execution and unsafe artifact paths are already denied by the current
+boundary.
+
+In a hosted deployment, Cloud Run IAM authenticates the Runtime with a Google
+ID token targeted at the Gateway service URL. The Runtime sends the Encois
+service token separately in `X-Encois-Service-Token`; the Gateway checks both
+the platform identity and its application-level token before evaluating tool
+policy. Local smoke tests use the same application token as a bearer token
+because there is no Cloud Run IAM boundary.
 
 The invocation path is:
 
@@ -381,7 +464,9 @@ Go Runtime  -> Temporal Cloud       poll task queues and report execution
 Go Runtime  -> Agent Gateway        private tool request with execution context
 Agent Gateway -> provider/MCP       scoped API or MCP call
 Agent Gateway -> Cloud Storage      raw response/artifact, when required
-Agent Gateway -> Spanner Graph      normalized facts and relationships
+Agent Gateway -> Spanner Graph      normalized facts and relationships, when a tool ingestion requires it
+Runtime Activities -> Memory Bank   agent-specific retrieval/distillation, when enabled
+Runtime/API adapters -> Graph       scoped query/projection, when enabled
 ```
 
 The Agent Gateway does not own workflow state, replace Temporal, or become a second public API. It enforces policy at the last point before an external call and returns a minimal normalized result plus evidence/data references.
@@ -406,11 +491,20 @@ Use different contract formats for different boundaries instead of trying to sha
 | Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
 | Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
 | Workflow Blueprints | JSON Schema with MCP-shaped tool references | Coordinator, Creator, Gateway API, Go Runtime, UI builder | Company-specific executable configuration for the generic Workflow |
+| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create or `workflow-change-plan.v2` Blueprint update/deprecate; never queried directly by Go Runtime |
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
+| API Temporal command receipts | Gateway-owned Postgres schema | TypeScript Gateway API | Tenant-scoped Signal/Update idempotency and replay state; never sent to Go or Temporal |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |
 | Database schema | SQL migration source owned by its service | TypeScript control plane or data service | Persistence implementation; never a shared DTO |
 
-The source of truth is the schema, not generated code. Generate TypeScript types for the API/UI and Go types for the runtime/gateway from the same versioned schemas. Keep generated artifacts local to each language package. Do not import TypeScript source into Go, expose database client types in contracts, or pass provider SDK payloads across the boundary. Protobuf and gRPC can be added later if service count or throughput justifies them; they are not required for the MVP.
+The source of truth is the schema, not generated code. TypeScript types and
+Ajv validation live in `packages/contracts`; the Go side embeds the same schema
+files and keeps service-local DTOs plus semantic validators. Generate Go types
+only if they reduce maintenance, and keep generated artifacts local to each
+language package. Do not import TypeScript source into Go, expose database
+client types in contracts, or pass provider SDK payloads across the boundary.
+Protobuf and gRPC can be added later if service count or throughput justifies
+them; they are not required for the MVP.
 
 The detailed layout, naming, validation, compatibility rules, and examples live in [`docs/contracts.md`](contracts.md).
 The standard-selection and generic communication model live in [`docs/protocols.md`](protocols.md).

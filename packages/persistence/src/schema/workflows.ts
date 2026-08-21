@@ -1,5 +1,6 @@
 import {
-  foreignKey,
+	boolean,
+	foreignKey,
   jsonb,
   pgEnum,
   pgTable,
@@ -29,6 +30,42 @@ export const workflowRunStatus = pgEnum("workflow_run_status", [
   "cancelled",
 ]);
 export type WorkflowRunStatus = (typeof workflowRunStatus.enumValues)[number];
+
+export const workflowPlanStatus = pgEnum("workflow_plan_status", [
+  "proposed",
+  "approved",
+  "rejected",
+  "applied",
+  "expired",
+]);
+export type WorkflowPlanStatus = (typeof workflowPlanStatus.enumValues)[number];
+
+export const workflowChangePlans = pgTable(
+  "workflow_change_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    planId: text("plan_id").notNull(),
+    coordinatorId: text("coordinator_id").notNull(),
+    projectId: text("project_id"),
+    planHash: text("plan_hash").notNull(),
+    plan: jsonb("plan").$type<Record<string, unknown>>().notNull(),
+    status: workflowPlanStatus("status").notNull().default("proposed"),
+    approvalRequired: boolean("approval_required").notNull().default(true),
+    submittedByUserId: uuid("submitted_by_user_id").references(() => users.id, { onDelete: "restrict" }),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("workflow_change_plans_organization_plan_idx").on(table.organizationId, table.planId),
+    uniqueIndex("workflow_change_plans_id_organization_idx").on(table.id, table.organizationId),
+  ],
+);
 
 export const workflowDefinitions = pgTable(
   "workflow_definitions",

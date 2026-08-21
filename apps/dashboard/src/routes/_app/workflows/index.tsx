@@ -1,15 +1,19 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowUpRight, CircleDashed, Clock3, GitBranch, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { listWorkflows } from '@/lib/api'
 
 export const Route = createFileRoute('/_app/workflows/')({
   component: WorkflowsPage,
 })
 
 function WorkflowsPage() {
+  const workflows = useQuery({ queryKey: ['workflows'], queryFn: listWorkflows })
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -24,13 +28,12 @@ function WorkflowsPage() {
           </Button>
         }
       />
-      <div className="grid gap-4">
-        <WorkflowPreviewCard id="release-risk-aug-30" title="Release risk investigation" status="Waiting for input" description="Checks release readiness across Jira, GitHub, and monitoring signals." icon={GitBranch} />
-        <WorkflowPreviewCard id="deployment-regression-001" title="Deployment regression" status="Completed" description="Correlates a deployment change with operational health signals." icon={Activity} />
-      </div>
+      {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflows…</p> : null}
+      {workflows.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load workflows: {workflows.error.message}</CardContent></Card> : null}
+      {!workflows.isLoading && !workflows.isError && workflows.data?.length ? <div className="grid gap-4">{workflows.data.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} description="Typed workflow projection from the Gateway API." icon={workflow.status === 'completed' ? Activity : GitBranch} />)}</div> : null}
       <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={CircleDashed} title="More workflows will appear here" description="These two entries are static UI previews. The real list will come from the Gateway API." />
+          <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a release investigation to create the first durable workflow." />
         </CardContent>
       </Card>
     </div>

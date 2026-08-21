@@ -1,6 +1,6 @@
 # Encois CI/CD blueprint
 
-**Status:** proposed approach; no GitHub workflows or cloud triggers are created yet.
+**Status:** repository CI baseline and local synthetic smoke implemented; cloud delivery and hosted smoke remain proposed.
 
 This document describes how the current repository can move from local development to a repeatable Google Cloud deployment without turning Terraform into an application runner or putting long-lived GCP keys in GitHub.
 
@@ -11,18 +11,18 @@ This document describes how the current repository can move from local developme
 | `apps/dashboard` | React/Vite SPA | Static frontend container | Public Cloud Run service behind `/dashboard/*` |
 | `apps/api-gateway` | TypeScript/Hono API | Node.js container | Public Cloud Run service behind `/api/*` |
 | `packages/persistence` | Drizzle/PostgreSQL schema and migrations | No standalone service; migration command | Cloud SQL PostgreSQL |
-| `apps/agent-runtime` | Go/Temporal/ADK scaffold | Go worker container | Private Cloud Run service, later |
-| `apps/agent-gateway` | Go private tool/policy broker scaffold | Go service container | Internal Cloud Run service, later |
+| `apps/agent-runtime` | Go/Temporal/ADK worker scaffold | Go worker container | Private Cloud Run service, hosted smoke pending |
+| `apps/agent-gateway` | Go private tool/policy broker scaffold | Go service container | Internal Cloud Run service, hosted smoke pending |
 | `infra/` | Terraform GCP blueprint | Infrastructure plan/apply | GCP project and shared services |
 
-The first useful pipeline can therefore validate and deploy the dashboard/API. Worker and Agent Gateway jobs should be added only after their container entrypoints, health behavior, Temporal configuration, and contracts are stable.
+The first useful pipeline can validate and deploy the dashboard/API. Worker and Agent Gateway jobs can use the repository Dockerfiles now; hosted rollout should wait for a hosted Temporal smoke check and populated secrets.
 
 ## Recommended approach
 
 Use a hybrid model:
 
 1. **Local bootstrap:** an authorized operator creates the GCP project/billing setup, Terraform state bucket, deployer identity, and first demo environment.
-2. **GitHub Actions CI:** every pull request runs deterministic checks without cloud mutation.
+2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service to verify RLS and command-receipt grants. It does not require GCP credentials or provider APIs.
 3. **GitHub Actions delivery:** merges to the protected deployment branch build immutable images, push them to Artifact Registry, run Terraform plan, and wait for an environment approval before apply.
 4. **Runtime migrations:** Cloud SQL migrations run as a separate protected step using the migration connection; they are not hidden inside Terraform or the API startup.
 
@@ -53,6 +53,20 @@ pnpm -r test
 pnpm -r build
 ```
 
+The CI workflow also checks `gofmt`, `go test`, and `go vet` independently for
+`packages/contracts`, `apps/agent-gateway`, and `apps/agent-runtime`. This
+proves contract/runtime compilation and unit boundaries, but not a hosted
+Temporal or Cloud Run execution.
+
+The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
+privileged Drizzle migrations, and checks the command-receipt table, tenant RLS
+policy, uniqueness index, restricted `api_gateway` grants, and a concurrent
+duplicate insert race. It then runs a full API HTTP-route harness against the
+same database with two concurrent identical Updates. The harness verifies one
+accepted receipt and one logical Temporal Update ID application; the two
+transport attempts are intentional because an `in_flight` receipt may be
+replayed safely after an API crash.
+
 The Terraform check should run separately from application checks:
 
 ```bash
@@ -69,13 +83,36 @@ Because Terraform validation may need provider plugins, CI can run it with a cac
 Build only after CI passes. Each deployable app gets its own image and immutable identifier:
 
 ```text
-dashboard:<git-sha>
-api-gateway:<git-sha>
-agent-runtime:<git-sha>     (future)
-agent-gateway:<git-sha>     (future)
+ dashboard:<git-sha>
+ api-gateway:<git-sha>
+ agent-runtime:<git-sha>
+ agent-gateway:<git-sha>
 ```
 
-Images are pushed to the Artifact Registry repository created by `infra/`. The deploy input should use the commit SHA or image digest, never `latest`. Dockerfiles are intentionally pending because the current app/runtime entrypoints are not finalized.
+Images are pushed to the Artifact Registry repository created by `infra/`. The deploy input should use the commit SHA or image digest, never `latest`. Dockerfiles and repeatable container entrypoints exist for all four deployable services; the Go runtime and Agent Gateway expose internal health endpoints, while the dashboard/API use their platform server ports.
+
+Build the dashboard image with `VITE_BASE_PATH=/dashboard/` for the hosted
+load-balancer path; the local image can keep the default `/` base path.
+
+The local synthetic execution smoke command is `pnpm smoke:release`; it is
+opt-in and expects Temporal, Agent Gateway, and the Go Runtime to be started
+separately. `pnpm smoke:approval` exercises the generic approval Signal path.
+`pnpm smoke:release:local` provides the repeatable local harness: it starts a
+Temporal dev server and both Go services, checks the private Agent Gateway
+`401`/`403` boundary, waits for readiness, runs the release and approval smokes,
+and cleans up the child processes. The CI job uses
+`temporalio/setup-temporal@v0` with CLI `v1.8.2`; hosted Temporal Cloud and
+Cloud Run validation remain a separate deployment check.
+
+The Docker build context is the repository root because the API and dashboard
+images consume workspace packages:
+
+```bash
+docker build -f apps/dashboard/Dockerfile --build-arg VITE_BASE_PATH=/dashboard/ -t encois-dashboard:dev .
+docker build -f apps/api-gateway/Dockerfile -t encois-api:dev .
+docker build -f apps/agent-gateway/Dockerfile -t encois-agent-gateway:dev .
+docker build -f apps/agent-runtime/Dockerfile -t encois-agent-runtime:dev .
+```
 
 ### 3. Infrastructure plan
 
@@ -130,7 +167,7 @@ PR checks
   -> record revision, image digest, migration, and run evidence
 ```
 
-For the Go worker deployment path, add the runtime image and Temporal configuration to the same release only after the worker has a stable health endpoint and bounded startup behavior. Do not make the API deploy wait for a worker service that is not yet deployable.
+For the Go worker deployment path, add the runtime image and Temporal configuration to the same release now that the worker has health endpoints and bounded Temporal startup. Do not make the API deploy wait for a worker image until the local generic flow smoke test passes.
 
 ## Environment model
 
@@ -198,7 +235,7 @@ Every deployment should record the commit SHA, image digests, Terraform plan/app
 
 - Add GitHub Actions workflow files only after the repository owner creates the GitHub repository and selects the demo project. Environment tfvars should remain outside Git and be provided by protected CI configuration.
 - Choose GitHub Actions versus Cloud Build as the canonical image builder.
-- Add Dockerfiles and define health/readiness behavior for each runtime.
+- Build and scan the four Dockerfiles, then add a deployment smoke test for health/readiness and the synthetic workflow.
 - Choose local PostgreSQL and Temporal development tooling.
 - Configure Workload Identity Federation with repository/branch/environment conditions.
 - Reduce the initial Terraform deployer roles and decide whether WIF resources belong in bootstrap or are created manually once.

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/workflow-update.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "updateName", "updateId", "payload"],
+  "properties": {
+    "contractVersion": { "const": "workflow-update.v1" },
+    "updateName": { "const": "blueprint-context" },
+    "updateId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["businessInput"],
+      "properties": {
+        "businessInput": { "type": "object" },
+        "reason": { "type": "string", "maxLength": 2000 }
+      }
+    }
+  }
+}

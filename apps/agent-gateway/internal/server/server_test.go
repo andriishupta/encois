@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,15 +13,50 @@ import (
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/policy"
 )
 
+type recordingArtifactStore struct {
+	writes int
+}
+
+func (s *recordingArtifactStore) Write(_ context.Context, request domain.ArtifactWriteRequest) (domain.ArtifactWriteResponse, error) {
+	s.writes++
+	return domain.ArtifactWriteResponse{
+		ContractVersion: domain.ArtifactWriteResultContractVersion,
+		RequestID:       request.RequestID,
+		ArtifactRef:     "gs://test-bucket/" + request.ObjectKey,
+		ObjectKey:       request.ObjectKey,
+		Status:          "completed",
+	}, nil
+}
+
+type recordingGraphStore struct {
+	queries int
+}
+
+func (s *recordingGraphStore) Query(_ context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
+	s.queries++
+	return domain.GraphQueryResponse{
+		ContractVersion: domain.GraphQueryResultContractVersion,
+		RequestID:       request.RequestID,
+		Status:          "completed",
+		Nodes:           []domain.GraphNode{{ID: "release-1", Type: "release", Properties: map[string]any{"key": "aug-30"}}},
+		Edges:           []domain.GraphEdge{{ID: "edge-1", SourceID: "release-1", TargetID: "project-1", Relationship: "belongs_to", Properties: map[string]any{}}},
+	}, nil
+}
+
 func TestMockToolInvocation(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default())
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
 	request := domain.ToolInvocationRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.ToolRequestContractVersion,
 			RequestID:       "req-test",
+			WorkflowID:      "workflow:org-test:release:one",
 			OrganizationID:  "org-test",
+			ActorID:         "actor-test",
+			PolicyVersion:   "policy-test",
+			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
-		Tool: "jira.release_tasks",
+		Tool:      "jira.release_tasks",
+		Arguments: map[string]any{},
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -30,10 +66,15 @@ func TestMockToolInvocation(t *testing.T) {
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewReader(body))
 	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
+	httpRequest.Header.Set("X-Trace-ID", "trace-test")
 	router.ServeHTTP(response, httpRequest)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("X-Trace-ID") != "trace-test" {
+		t.Fatalf("expected trace ID response header, got %q", response.Header().Get("X-Trace-ID"))
 	}
 	var result domain.ToolInvocationResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
@@ -44,11 +85,241 @@ func TestMockToolInvocation(t *testing.T) {
 	}
 }
 
+func TestRequiresRuntimeServiceAuthentication(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestToolCatalogExposesSchemasAnnotationsAndScopeRequirements(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+
+	var body struct {
+		Tools []domain.WorkflowCapability `json:"tools"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Tools) < 2 {
+		t.Fatalf("expected fixture tools in catalog, got %+v", body.Tools)
+	}
+	for _, tool := range body.Tools {
+		if tool.ContractVersion != domain.ToolManifestContractVersion || tool.Version == "" || tool.Description == "" || tool.InputSchema == nil || tool.OutputSchema == nil {
+			t.Fatalf("catalog entry is missing MCP metadata: %+v", tool)
+		}
+		if len(tool.RequiredScope) == 0 {
+			t.Fatalf("catalog entry is missing required scope: %+v", tool)
+		}
+	}
+}
+
+func TestReadinessFailsClosedWhenServiceAuthenticationIsMissing(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "")
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestAcceptsCloudRunIdentityWithSeparateServiceToken(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
+	request.Header.Set("Authorization", "Bearer cloud-run-id-token")
+	request.Header.Set("X-Encois-Service-Token", "test-token")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestReadOnlyPolicyDeniesUnknownTool(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	request := domain.ToolInvocationRequest{
+		ExecutionContext: domain.ExecutionContext{
+			ContractVersion: domain.ToolRequestContractVersion,
+			RequestID:       "req-test",
+			WorkflowID:      "workflow:org-test:release:one",
+			OrganizationID:  "org-test",
+			ActorID:         "actor-test",
+			PolicyVersion:   "policy-test",
+			Scope:           domain.Scope{IDs: []string{"team-test"}},
+		},
+		Tool:      "unknown.tool",
+		Arguments: map[string]any{},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewReader(body))
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, httpRequest)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
+	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	request := domain.ToolInvocationRequest{
+		ExecutionContext: domain.ExecutionContext{
+			ContractVersion: domain.ToolRequestContractVersion,
+			RequestID:       "req-test",
+			WorkflowID:      "workflow:org-test:release:one",
+			OrganizationID:  "org-test",
+			ActorID:         "actor-test",
+			PolicyVersion:   "policy-old",
+			Scope:           domain.Scope{IDs: []string{"team-test"}},
+		},
+		Tool:      "jira.release_tasks",
+		Arguments: map[string]any{},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewReader(body))
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, httpRequest)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestArtifactWriteReturnsTenantScopedReference(t *testing.T) {
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"evidence/release.json","contentType":"application/json","dataRef":"provider:jira:release-1"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var result domain.ArtifactWriteResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "mocked" || result.ArtifactRef == "" || result.ObjectKey != "org-test/workflow:org-test:release:one/evidence/release.json" {
+		t.Fatalf("unexpected artifact result: %+v", result)
+	}
+}
+
+func TestRouterAcceptsAnInjectedArtifactStore(t *testing.T) {
+	store := &recordingArtifactStore{}
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
+		ArtifactStore: store,
+	})
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-adapter-req","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"evidence/release.json","contentType":"application/json","dataRef":"provider:jira:release-1"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || store.writes != 1 {
+		t.Fatalf("expected injected artifact store to handle one request, got status=%d writes=%d: %s", response.Code, store.writes, response.Body.String())
+	}
+	var result domain.ArtifactWriteResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "completed" || result.ArtifactRef != "gs://test-bucket/evidence/release.json" {
+		t.Fatalf("unexpected injected artifact result: %+v", result)
+	}
+}
+
+func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
+	store := &recordingGraphStore{}
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
+		GraphStore: store,
+	})
+	body := `{"contractVersion":"graph-query.v1","requestId":"graph-req","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"query":"release.related_entities","params":{"releaseKey":"aug-30"}}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/graph/query", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || store.queries != 1 {
+		t.Fatalf("expected injected graph store to handle one request, got status=%d queries=%d: %s", response.Code, store.queries, response.Body.String())
+	}
+	var result domain.GraphQueryResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "completed" || len(result.Nodes) != 1 || len(result.Edges) != 1 {
+		t.Fatalf("unexpected graph result: %+v", result)
+	}
+}
+
+func TestGraphQueryIsDeferredWithoutAnAdapter(t *testing.T) {
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	body := `{"contractVersion":"graph-query.v1","requestId":"graph-deferred","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"query":"release.related_entities"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/graph/query", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNotImplemented {
+		t.Fatalf("expected deferred graph adapter to return 501, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestArtifactWriteRejectsPathTraversal(t *testing.T) {
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"ids":["team-test"]},"objectKey":"../../secret.json","contentType":"application/json","dataRef":"provider:jira:release-1"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestToolBoundaryRequiresCanonicalScopeIDs(t *testing.T) {
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	body := `{"contractVersion":"tool-request.v1","requestId":"req-test","workflowId":"workflow:org-test:release:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","scope":{"projectIds":["project-a"]},"tool":"jira.release_tasks","arguments":{}}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for non-canonical scope, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
 func TestRejectsUnknownContractFields(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default())
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/permissions/check", bytes.NewBufferString(`{"contractVersion":"authorization-check.v1","requestId":"req","organizationId":"org","resource":"jira","action":"read","unexpected":true}`))
 	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
 	router.ServeHTTP(response, httpRequest)
 
 	if response.Code != http.StatusBadRequest {
@@ -57,7 +328,7 @@ func TestRejectsUnknownContractFields(t *testing.T) {
 }
 
 func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default())
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
 	request := domain.WorkflowDefinitionRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.WorkflowDefinitionContractVersion,
@@ -86,6 +357,7 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/workflows", bytes.NewReader(body))
 	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
 	router.ServeHTTP(response, httpRequest)
 
 	if response.Code != http.StatusCreated {
@@ -104,11 +376,12 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 }
 
 func TestRejectsWorkflowDependencyCycle(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default())
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
 	body := `{"contractVersion":"workflow-definition.v1","requestId":"req-cycle","organizationId":"org-test","blueprint":{"contractVersion":"workflow-blueprint.v1","blueprintId":"cycle","version":"1.0.0","name":"Cycle","workflowType":"encois.user-blueprint.v1","steps":[{"id":"a","kind":"tool","tool":"jira.release_tasks","dependsOn":["b"]},{"id":"b","kind":"tool","tool":"github.release_activity","dependsOn":["a"]}]}}`
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/workflows/validate", bytes.NewBufferString(body))
 	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
 	router.ServeHTTP(response, httpRequest)
 
 	if response.Code != http.StatusBadRequest {

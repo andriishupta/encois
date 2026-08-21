@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,33 +14,61 @@ import (
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/policy"
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
 	"github.com/gin-gonic/gin"
 )
 
 type Server struct {
-	policy          policy.Service
-	logger          *slog.Logger
-	workflowMu      sync.RWMutex
-	workflowRecords map[string]domain.WorkflowDefinitionResponse
+	policy                policy.Service
+	logger                *slog.Logger
+	serviceAuthConfigured bool
+	workflowMu            sync.RWMutex
+	workflowRecords       map[string]domain.WorkflowDefinitionResponse
+	artifactStore         ArtifactStore
+	graphStore            GraphStore
+}
+
+// RouterOptions contains replaceable data-plane adapters. The default router
+// deliberately uses local fixtures; hosted wiring can provide a Cloud Storage
+// implementation without changing routes, authentication, or policy code.
+type RouterOptions struct {
+	ArtifactStore ArtifactStore
+	GraphStore    GraphStore
 }
 
 func SetGinMode(mode string) {
 	gin.SetMode(mode)
 }
 
-func NewRouter(policyService policy.Service, logger *slog.Logger) *gin.Engine {
+func NewRouter(policyService policy.Service, logger *slog.Logger, serviceToken string) *gin.Engine {
+	return NewRouterWithOptions(policyService, logger, serviceToken, RouterOptions{})
+}
+
+func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, serviceToken string, options RouterOptions) *gin.Engine {
+	artifactStore := options.ArtifactStore
+	if artifactStore == nil {
+		artifactStore = newMemoryArtifactStore()
+	}
+	graphStore := options.GraphStore
+	if graphStore == nil {
+		graphStore = newDeferredGraphStore()
+	}
 	server := &Server{
-		policy:          policyService,
-		logger:          logger,
-		workflowRecords: make(map[string]domain.WorkflowDefinitionResponse),
+		policy:                policyService,
+		logger:                logger,
+		serviceAuthConfigured: serviceToken != "",
+		workflowRecords:       make(map[string]domain.WorkflowDefinitionResponse),
+		artifactStore:         artifactStore,
+		graphStore:            graphStore,
 	}
 	router := gin.New()
-	router.Use(gin.Recovery(), requestID(), contentTypeJSON())
+	router.Use(gin.Recovery(), requestID(), traceID(), requestLogging(logger), contentTypeJSON())
 
 	router.GET("/health/live", server.live)
 	router.GET("/health/ready", server.ready)
 
 	v1 := router.Group("/v1")
+	v1.Use(serviceAuthentication(serviceToken))
 	v1.POST("/authorize", server.authorize)
 	v1.POST("/permissions/check", server.authorize)
 	v1.GET("/tools", server.tools)
@@ -58,13 +88,20 @@ func (s *Server) live(c *gin.Context) {
 }
 
 func (s *Server) ready(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "ready",
+	status := http.StatusOK
+	state := "ready"
+	if !s.serviceAuthConfigured {
+		status = http.StatusServiceUnavailable
+		state = "service_auth_not_configured"
+	}
+	c.JSON(status, gin.H{
+		"status":  state,
 		"service": "agent-gateway",
 		"dependencies": gin.H{
-			"policy":       "mvp-allow-all",
+			"policy":       "read-only-fixture-policy",
+			"serviceAuth":  s.serviceAuthConfigured,
 			"providers":    "mock-in-memory",
-			"cloudStorage": "not-configured",
+			"cloudStorage": "mock-in-memory",
 			"spanner":      "not-configured",
 		},
 	})
@@ -83,12 +120,17 @@ func (s *Server) authorize(c *gin.Context) {
 }
 
 func (s *Server) tools(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"tools": []gin.H{
-			{"name": "jira.release_tasks", "mode": "mock", "sideEffects": "read-only"},
-			{"name": "github.release_activity", "mode": "mock", "sideEffects": "read-only"},
-		},
-	})
+	tools := make([]domain.WorkflowCapability, 0, len(workflowCapabilities))
+	for _, capability := range workflowCapabilities {
+		if capability.Kind == "tool" {
+			if err := contractschemas.Validate(contractschemas.SchemaToolManifest, capability); err != nil {
+				errorResponse(c, http.StatusInternalServerError, "invalid_tool_manifest", err.Error(), false)
+				return
+			}
+			tools = append(tools, capability)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"tools": tools})
 }
 
 func (s *Server) invokeTool(c *gin.Context) {
@@ -100,7 +142,10 @@ func (s *Server) invokeTool(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "tool is required", false)
 		return
 	}
-
+	if request.Arguments == nil {
+		errorResponse(c, http.StatusBadRequest, "invalid_request", "arguments are required", false)
+		return
+	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{
 		ExecutionContext: request.ExecutionContext,
 		Resource:         request.Tool,
@@ -108,6 +153,19 @@ func (s *Server) invokeTool(c *gin.Context) {
 	})
 	if !decision.Allowed {
 		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
+		return
+	}
+	capability, registered := capabilityByName(request.Tool)
+	if !registered {
+		errorResponse(c, http.StatusNotImplemented, "tool_not_implemented", "tool is not registered", false)
+		return
+	}
+	if err := contractschemas.Validate(contractschemas.SchemaToolManifest, capability); err != nil {
+		errorResponse(c, http.StatusInternalServerError, "invalid_tool_manifest", err.Error(), false)
+		return
+	}
+	if !scopeSatisfies(request.Scope, capability.RequiredScope) {
+		errorResponse(c, http.StatusForbidden, "scope_denied", "tool requires a broader execution scope", false)
 		return
 	}
 
@@ -144,7 +202,20 @@ func (s *Server) graphQuery(c *gin.Context) {
 		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
 		return
 	}
-	errorResponse(c, http.StatusNotImplemented, "spanner_not_configured", "Spanner Graph adapter is intentionally deferred", false)
+	result, err := s.graphStore.Query(c.Request.Context(), request)
+	if errors.Is(err, ErrGraphNotConfigured) {
+		errorResponse(c, http.StatusNotImplemented, "spanner_not_configured", "Spanner Graph adapter is intentionally deferred", false)
+		return
+	}
+	if err != nil {
+		errorResponse(c, http.StatusBadGateway, "graph_query_failed", err.Error(), true)
+		return
+	}
+	if err := contractschemas.Validate(contractschemas.SchemaGraphQueryResult, result); err != nil {
+		errorResponse(c, http.StatusInternalServerError, "invalid_graph_result", err.Error(), false)
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func (s *Server) writeArtifact(c *gin.Context) {
@@ -156,6 +227,10 @@ func (s *Server) writeArtifact(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "objectKey and dataRef are required", false)
 		return
 	}
+	if request.WorkflowID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.Scope.Empty() {
+		errorResponse(c, http.StatusBadRequest, "invalid_request", "workflow execution context is required for artifact storage", false)
+		return
+	}
 	decision := s.policy.Authorize(c.Request.Context(), domain.AuthorizationRequest{
 		ExecutionContext: request.ExecutionContext,
 		Resource:         "cloud-storage",
@@ -165,7 +240,16 @@ func (s *Server) writeArtifact(c *gin.Context) {
 		errorResponse(c, http.StatusForbidden, "policy_denied", decision.Reason, false)
 		return
 	}
-	errorResponse(c, http.StatusNotImplemented, "storage_not_configured", "Cloud Storage adapter is intentionally deferred", false)
+	result, err := s.artifactStore.Write(c.Request.Context(), request)
+	if err != nil {
+		errorResponse(c, http.StatusBadRequest, "invalid_artifact_request", err.Error(), false)
+		return
+	}
+	if err := contractschemas.Validate(contractschemas.SchemaArtifactWriteResult, result); err != nil {
+		errorResponse(c, http.StatusInternalServerError, "invalid_artifact_result", err.Error(), false)
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func mockTool(toolName string) (map[string]any, []string, bool) {
@@ -215,10 +299,19 @@ func bindJSON(c *gin.Context, target any, expectedContract string) bool {
 		validationError = request.ExecutionContext.Validate(expectedContract)
 	case *domain.ToolInvocationRequest:
 		validationError = request.ExecutionContext.Validate(expectedContract)
+		if validationError == nil {
+			validationError = contractschemas.Validate(contractschemas.SchemaToolRequest, request)
+		}
 	case *domain.GraphQueryRequest:
 		validationError = request.ExecutionContext.Validate(expectedContract)
+		if validationError == nil {
+			validationError = contractschemas.Validate(contractschemas.SchemaGraphQuery, request)
+		}
 	case *domain.ArtifactWriteRequest:
 		validationError = request.ExecutionContext.Validate(expectedContract)
+		if validationError == nil {
+			validationError = contractschemas.Validate(contractschemas.SchemaArtifactWrite, request)
+		}
 	}
 	if validationError != nil {
 		errorResponse(c, http.StatusBadRequest, "invalid_contract", validationError.Error(), false)
@@ -239,9 +332,61 @@ func requestID() gin.HandlerFunc {
 	}
 }
 
+func traceID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		value := c.GetHeader("X-Trace-ID")
+		if value == "" {
+			value = c.GetString("requestID")
+		}
+		c.Set("traceID", value)
+		c.Header("X-Trace-ID", value)
+		c.Next()
+	}
+}
+
+func requestLogging(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		startedAt := time.Now()
+		c.Next()
+		logger.Info("http.request.completed",
+			"durationMs", time.Since(startedAt).Milliseconds(),
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"requestId", c.GetString("requestID"),
+			"traceId", c.GetString("traceID"),
+			"status", c.Writer.Status(),
+		)
+	}
+}
+
 func contentTypeJSON() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Content-Type", "application/json")
+		c.Next()
+	}
+}
+
+func serviceAuthentication(expectedToken string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if expectedToken == "" {
+			errorResponse(c, http.StatusServiceUnavailable, "service_auth_not_configured", "Agent Gateway service authentication is not configured", false)
+			return
+		}
+		value := c.GetHeader("X-Encois-Service-Token")
+		if value != "" {
+			if subtle.ConstantTimeCompare([]byte(value), []byte(expectedToken)) != 1 {
+				errorResponse(c, http.StatusUnauthorized, "service_unauthenticated", "Agent Runtime service authentication is required", false)
+				return
+			}
+			c.Next()
+			return
+		}
+		value = c.GetHeader("Authorization")
+		const prefix = "Bearer "
+		if !strings.HasPrefix(value, prefix) || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(value, prefix)), []byte(expectedToken)) != 1 {
+			errorResponse(c, http.StatusUnauthorized, "service_unauthenticated", "Agent Runtime service authentication is required", false)
+			return
+		}
 		c.Next()
 	}
 }

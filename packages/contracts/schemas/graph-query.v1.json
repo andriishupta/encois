@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/graph-query.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "requestId",
+    "workflowId",
+    "organizationId",
+    "actorId",
+    "scope",
+    "policyVersion",
+    "query"
+  ],
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  },
+  "properties": {
+    "contractVersion": { "const": "graph-query.v1" },
+    "requestId": { "type": "string", "minLength": 1 },
+    "traceId": { "type": "string", "minLength": 1 },
+    "workflowId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "actorId": { "type": "string", "minLength": 1 },
+    "scope": { "$ref": "#/$defs/scope" },
+    "policyVersion": { "type": "string", "minLength": 1 },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "A named logical graph query, not raw provider SQL or unrestricted GraphQL."
+    },
+    "params": { "type": "object" }
+  }
+}

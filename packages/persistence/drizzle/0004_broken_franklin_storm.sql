@@ -1,0 +1,1 @@
+ALTER TABLE "coordinator_event_outbox" ADD COLUMN "lease_until" timestamp with time zone;

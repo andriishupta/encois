@@ -1,0 +1,14 @@
+.git
+.gitignore
+.DS_Store
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+tmp
+.env
+.env.*
+!.env.example
+terraform.tfstate*
+infra/.terraform

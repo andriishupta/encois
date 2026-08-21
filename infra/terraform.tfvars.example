@@ -13,6 +13,13 @@ enable_agent_gateway     = false
 enable_edge              = false
 enable_spanner           = false
 
+secret_names = [
+  "cloud-sql-runtime-url",
+  "temporal-client-credentials",
+  "agent-gateway-service-token",
+  "control-plane-service-token",
+]
+
 # This must be globally unique if artifact storage is enabled.
 artifact_bucket_name = "replace-with-globally-unique-artifact-bucket"
 

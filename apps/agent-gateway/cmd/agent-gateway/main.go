@@ -23,7 +23,7 @@ func main() {
 		gatewayserver.SetGinMode(cfg.GinMode)
 	}
 
-	router := gatewayserver.NewRouter(policy.NewAllowAllPolicy(cfg.PolicyVersion), logger)
+	router := gatewayserver.NewRouter(policy.NewReadOnlyToolPolicy(cfg.PolicyVersion), logger, cfg.ServiceToken)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
@@ -34,7 +34,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("agent gateway listening", "address", cfg.HTTPAddr, "policy_mode", "allow_all_mvp")
+		logger.Info("agent gateway listening", "address", cfg.HTTPAddr, "policy_mode", "read_only_fixture", "service_auth_configured", cfg.ServiceToken != "")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("agent gateway stopped unexpectedly", "error", err)
 			os.Exit(1)

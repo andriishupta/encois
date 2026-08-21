@@ -12,6 +12,7 @@ export const requestLoggingMiddleware: MiddlewareHandler<GatewayEnv> = async (co
       method: context.req.method,
       path: new URL(context.req.url).pathname,
       requestId: context.get("requestId"),
+      traceId: context.get("traceId"),
       status: context.res.status,
     }),
   );

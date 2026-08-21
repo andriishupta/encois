@@ -39,8 +39,8 @@ resource "google_cloud_run_v2_service" "dashboard" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION"
-    percent = 100
+    type            = "TRAFFIC_TARGET_ALLOCATION"
+    percent         = 100
     latest_revision = true
   }
 
@@ -108,6 +108,87 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.domain_name == "" ? "" : "https://${var.domain_name}"
       }
 
+      env {
+        name  = "HOST"
+        value = "0.0.0.0"
+      }
+
+      env {
+        name  = "PORT"
+        value = "8080"
+      }
+
+      env {
+        name  = "AGENT_GATEWAY_POLICY_VERSION"
+        value = "policy-read-only-fixture-v1"
+      }
+
+      dynamic "env" {
+        for_each = var.enable_identity_platform ? [true] : []
+
+        content {
+          name  = "IDENTITY_PLATFORM_PROJECT_ID"
+          value = var.project_id
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.temporal_address == "" ? [] : [true]
+
+        content {
+          name  = "TEMPORAL_ADDRESS"
+          value = var.temporal_address
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.temporal_namespace == "" ? [] : [true]
+
+        content {
+          name  = "TEMPORAL_NAMESPACE"
+          value = var.temporal_namespace
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_api && var.temporal_address != "" ? [true] : []
+
+        content {
+          name = "TEMPORAL_API_KEY"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.temporal_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_api && var.enable_agent_runtime ? [true] : []
+
+        content {
+          name = "CONTROL_PLANE_SERVICE_TOKEN"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.control_plane_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_api && var.enable_agent_runtime && var.control_plane_service_user_id != "" ? [true] : []
+
+        content {
+          name  = "CONTROL_PLANE_SERVICE_USER_ID"
+          value = var.control_plane_service_user_id
+        }
+      }
+
       dynamic "env" {
         for_each = var.enable_cloud_sql ? [true] : []
 
@@ -138,8 +219,8 @@ resource "google_cloud_run_v2_service" "api" {
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION"
-    percent = 100
+    type            = "TRAFFIC_TARGET_ALLOCATION"
+    percent         = 100
     latest_revision = true
   }
 
@@ -151,6 +232,10 @@ resource "google_cloud_run_v2_service" "api" {
     precondition {
       condition     = !var.enable_cloud_sql || contains(var.secret_names, "cloud-sql-runtime-url")
       error_message = "cloud-sql-runtime-url must be included in secret_names when enable_cloud_sql is true."
+    }
+    precondition {
+      condition     = !var.enable_api || var.temporal_address == "" || contains(var.secret_names, var.temporal_secret_name)
+      error_message = "temporal_secret_name must name one of the secret_names when API Temporal Cloud is enabled."
     }
   }
 }
@@ -202,11 +287,21 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
         value = var.project_id
       }
 
+      env {
+        name  = "GOOGLE_GENAI_USE_VERTEXAI"
+        value = "true"
+      }
+
+      env {
+        name  = "GOOGLE_CLOUD_LOCATION"
+        value = var.region
+      }
+
       dynamic "env" {
         for_each = var.temporal_address == "" ? [] : [true]
 
         content {
-          name  = "TEMPORAL_ADDRESS"
+          name  = "TEMPORAL_HOST_PORT"
           value = var.temporal_address
         }
       }
@@ -224,7 +319,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
         for_each = var.enable_agent_runtime ? [true] : []
 
         content {
-          name = "TEMPORAL_CLIENT_CREDENTIALS"
+          name = "TEMPORAL_API_KEY"
 
           value_source {
             secret_key_ref {
@@ -234,12 +329,78 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
           }
         }
       }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_agent_gateway ? [true] : []
+
+        content {
+          name  = "AGENT_GATEWAY_URL"
+          value = google_cloud_run_v2_service.agent_gateway[0].uri
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_api ? [true] : []
+
+        content {
+          name  = "CONTROL_PLANE_URL"
+          value = google_cloud_run_v2_service.api[0].uri
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_api ? [true] : []
+
+        content {
+          name  = "CONTROL_PLANE_AUDIENCE"
+          value = google_cloud_run_v2_service.api[0].uri
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_api ? [true] : []
+
+        content {
+          name = "CONTROL_PLANE_SERVICE_TOKEN"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.control_plane_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_agent_gateway ? [true] : []
+
+        content {
+          name  = "AGENT_GATEWAY_AUDIENCE"
+          value = google_cloud_run_v2_service.agent_gateway[0].uri
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.enable_agent_runtime && var.enable_agent_gateway ? [true] : []
+
+        content {
+          name = "AGENT_GATEWAY_SERVICE_TOKEN"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.agent_gateway_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
     }
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION"
-    percent = 100
+    type            = "TRAFFIC_TARGET_ALLOCATION"
+    percent         = 100
     latest_revision = true
   }
 
@@ -249,10 +410,39 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       error_message = "agent_runtime_image must be set when enable_agent_runtime is true."
     }
     precondition {
-      condition     = contains(var.secret_names, var.temporal_secret_name)
+      condition     = !var.enable_agent_runtime || var.temporal_address != ""
+      error_message = "temporal_address must be set when the agent runtime is enabled."
+    }
+    precondition {
+      condition     = !var.enable_agent_runtime || contains(var.secret_names, var.temporal_secret_name)
       error_message = "temporal_secret_name must name one of the secret_names when the agent runtime is enabled."
     }
+    precondition {
+      condition     = !var.enable_agent_runtime || var.enable_agent_gateway
+      error_message = "The current Go runtime requires enable_agent_gateway because tool Activities use the private HTTP Gateway."
+    }
+    precondition {
+      condition     = !var.enable_agent_runtime || contains(var.secret_names, var.agent_gateway_secret_name)
+      error_message = "agent_gateway_secret_name must name one of the secret_names when the agent runtime is enabled."
+    }
+    precondition {
+      condition     = !var.enable_agent_runtime || !var.enable_api || contains(var.secret_names, var.control_plane_secret_name)
+      error_message = "control_plane_secret_name must name one of the secret_names when the Runtime and API are enabled."
+    }
+    precondition {
+      condition     = !var.enable_agent_runtime || !var.enable_api || !var.enable_cloud_sql || var.control_plane_service_user_id != ""
+      error_message = "control_plane_service_user_id is required when the Runtime calls a Cloud SQL-backed API control plane."
+    }
   }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "api_runtime_invoker" {
+  count = var.enable_api && var.enable_agent_runtime ? 1 : 0
+
+  name     = google_cloud_run_v2_service.api[0].name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.agent_runtime.email}"
 }
 
 resource "google_cloud_run_v2_service_iam_member" "agent_gateway_invoker" {
@@ -296,12 +486,27 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
           memory = "512Mi"
         }
       }
+
+      dynamic "env" {
+        for_each = var.enable_agent_gateway ? [true] : []
+
+        content {
+          name = "AGENT_GATEWAY_SERVICE_TOKEN"
+
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.application[var.agent_gateway_secret_name].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
     }
   }
 
   traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION"
-    percent = 100
+    type            = "TRAFFIC_TARGET_ALLOCATION"
+    percent         = 100
     latest_revision = true
   }
 
@@ -309,6 +514,10 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
     precondition {
       condition     = var.agent_gateway_image != ""
       error_message = "agent_gateway_image must be set when enable_agent_gateway is true."
+    }
+    precondition {
+      condition     = contains(var.secret_names, var.agent_gateway_secret_name)
+      error_message = "agent_gateway_secret_name must name one of the secret_names when the Agent Gateway is enabled."
     }
   }
 }

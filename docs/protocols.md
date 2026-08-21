@@ -32,12 +32,45 @@ Blueprint data interpreted by the generic `encois.user-blueprint.v1` workflow.
 
 The Go worker now registers the generic Blueprint Workflow together with the
 Coordinator and bootstrap workflows; specialized Release/Jira/GitHub Temporal
-Workflow types are not registered. The current end-to-end implementation is
-still a scaffold: the Gateway can start a generic command, the worker can
-interpret the basic step graph, and the Agent Gateway returns synthetic tools.
-The shared `packages/contracts` schemas, complete scope propagation, MCP
-manifests, authenticated service-to-service calls, and real Temporal smoke
-path remain next-step work.
+Workflow types are not registered. The Gateway accepts a validated generic
+Blueprint command, the worker interprets the basic step graph, and the Agent
+Gateway returns synthetic tools. The shared `packages/contracts` package now
+contains TypeScript types, JSON Schema sources, and API-side Blueprint parsing.
+Runtime-to-Gateway service authentication, scope propagation, read-only policy,
+and a real local multi-process Temporal smoke path are wired for the fixture
+slice. The current ADK loop runs inside a Temporal Activity; finer-grained
+native ADK/Temporal step integration is not yet used. The available
+`go.temporal.io/sdk/contrib/googleadk@v0.2.0` package is a separate, tested
+candidate that requires Temporal Go SDK `v1.45.0` and a compatible ADK revision;
+it is not yet a repository dependency. Canonical schema
+validation is now shared by the TypeScript API, Go Runtime, and Agent Gateway;
+the `tool-manifest.v1` catalog schema and `workflow-change-plan.v1` proposal
+schema are also shared and checked at their respective Go boundaries.
+The lifecycle-aware `workflow-change-plan.v2` schema is now also embedded and
+fixture-validated. The Gateway accepts v1/v2 for validation and submission and
+currently applies v1 create plus v2 Blueprint update/deprecate changes, and
+cancel-only Temporal plans through its Temporal client. Persistence-backed
+application and hosted verification remain pending. The bootstrap
+Workflow can return a validated plan proposal. The Runtime also contains a
+narrow `corecoordinator.Client`, a service-token HTTP adapter, and registered
+Activities for the private Coordinator routes; those Activities do not access
+Postgres. Reconciliation now invokes the proposal and submit Activities after
+a signal or timer. The separate `coordinator-event.v1` envelope and Runtime
+receiver provide the generic lifecycle shape and deduplicate scoped events.
+Gateway plan approval/application now enqueue tenant-scoped events in a
+transactional outbox. The API has a bounded lease/retry dispatcher, a Temporal
+sink, and a one-shot `coordinator-dispatcher` process that can run from the API
+image. Applied plans with an explicit `start` intent now emit `workflowStarts`
+and the Coordinator starts those immutable snapshots through the private
+Gateway Activity. Cloud Run Job/Cloud Scheduler wiring, persisted manifests,
+and a hosted Temporal/Cloud Run smoke path remain next-step work.
+
+An executable plan change may carry an explicit `start` intent containing a
+business key and optional business input. Applying the plan converts those
+intents into `workflowStarts` in `coordinator-event.v1`. The Coordinator does
+not infer starts from registry changes: it invokes the private Gateway start
+boundary only for those explicit intents. This keeps plan application,
+approval, and execution start separate and makes replay idempotent.
 
 ## What each standard does
 
@@ -73,12 +106,64 @@ The Gateway API accepts application requests:
 POST /v1/workflows
 GET  /v1/workflows/{workflowId}
 POST /v1/workflows/{workflowId}/signals
+POST /v1/workflows/{workflowId}/updates
+POST /v1/workflows/plans/validate
+POST /v1/workflows/plans
+POST /v1/workflows/plans/{planId}/approve
+POST /v1/workflows/plans/{planId}/apply
 GET  /v1/workflows/{workflowId}/events
+```
+
+Private Runtime/Coordinator boundary:
+
+```text
+POST /v1/internal/coordinator/plans/validate
+POST /v1/internal/coordinator/plans
+POST /v1/internal/coordinator/workflows
 ```
 
 The public request contains a Blueprint identity/version and business input.
 It does not expose Temporal credentials, provider tokens, arbitrary MCP
 invocation, or internal service addresses.
+
+An execution may provide an inline validated `blueprint`, or reference an
+approved tenant registry snapshot with `blueprintId` and `blueprintVersion`.
+The latter is resolved by the Gateway API inside the organization-scoped
+transaction and copied into Temporal input; the Go Runtime never reads the
+registry database.
+
+The plan-validation endpoint is a non-mutating preview for
+`workflow-change-plan.v1` and `.v2`. It checks tenant identity and required
+scopes and returns `validated_not_applied`; persistence, approval, and
+application remain separate control-plane operations. When Postgres is
+configured, the submit route stores a proposal idempotently as `proposed`, and
+the approval route transitions it to `approved` with an audit event. The
+private Coordinator route uses the same service layer; it cannot bypass the
+approval step or start a Blueprint that is not resolved as an approved
+registry snapshot.
+
+When Postgres is configured, `POST /v1/workflows/plans` persists the validated
+v1/v2 proposal with an idempotent `planId` and status `proposed`. The approval
+route transitions it to `approved` and writes an audit event, but does not start
+or mutate a Temporal Workflow. Applying an approved create/update/deprecate
+plan persists or retires tenant-scoped Blueprint snapshots; the private
+Coordinator start route accepts only a registry reference and the Gateway
+passes the resolved immutable snapshot to the generic Temporal Workflow. The
+The v2 cancel operation is supported only for cancel-only plans. The Gateway
+checks organization ownership, cancels each targeted Temporal Workflow, and
+then marks the approved plan applied. A repeated cancellation is idempotent;
+mixed Blueprint-registry and Temporal-execution changes remain rejected.
+
+The Runtime-to-Gateway Coordinator boundary is intentionally small:
+
+```text
+Go Coordinator Activity
+  -> X-Encois-Service-Token + X-Organization-ID
+  -> POST /v1/internal/coordinator/plans
+  -> human approval/application in the Gateway control plane
+  -> POST /v1/internal/coordinator/workflows
+  -> approved Blueprint snapshot -> Temporal
+```
 
 ### 2. Workflow Blueprint protocol
 
@@ -107,14 +192,26 @@ workflowType = encois.user-blueprint.v1
 input = execution context + immutable blueprint snapshot + validated input
 ```
 
-The Go Worker interprets only known step kinds. Each external call, model call,
-database operation, graph operation, Memory Bank operation, and MCP/API call is
-an Activity. Temporal owns retries and replay; it does not inspect or decide
+The Go Worker interprets only known step kinds. In the current Activity-boundary
+profile, each external call, model call, database operation, graph operation,
+Memory Bank operation, and MCP/API call is an Activity. A future native ADK
+profile keeps the same Blueprint and tool envelopes but lets the ADK loop run
+in Workflow code, dispatching model turns and I/O tools through Temporal
+Activities. Temporal owns retries and replay; it does not inspect or decide
 the business meaning of a tool result.
+
+The repository reserves `agent-memory.v1` and `agent-memory-result.v1` for
+scoped agent-memory retrieval and evidence-linked distillation. The Go Runtime
+exposes this through an Activity-side `memory.Store` boundary; its default
+adapter is deferred until a hosted Memory Bank provider is selected. Memory
+results are summaries and references, not raw provider payloads or Workflow
+history.
 
 ### 4. Tool protocol
 
-The Agent Gateway maintains an MCP-compatible tool catalog. Each tool has:
+The Agent Gateway maintains an MCP-shaped tool catalog. The current fixture
+catalog already returns the following metadata; a future connector registry
+will persist and version the same shape for installed Integration Packs:
 
 ```text
 name
@@ -125,13 +222,20 @@ annotations: readOnlyHint, destructiveHint, idempotentHint, openWorldHint
 required capabilities/scopes
 ```
 
+The fixture implementation exposes Jira and GitHub read tools plus an
+unavailable approval-gated email capability. It validates the requested tool
+against the catalog and checks the required execution scope before invocation.
+The catalog is not yet a live MCP discovery service: provider manifests,
+connector grants, credential resolution, and real MCP/API adapters are still
+deferred.
+
 The runtime invokes a tool using an Encois envelope:
 
 ```text
 executionContext
 tool name/version
 arguments
-request ID
+request ID, propagated trace ID, and, once known, Temporal run ID
 ```
 
 The Agent Gateway then:
@@ -152,6 +256,17 @@ controlled catalog refresh. A running Workflow executes only immutable
 tool-manifest versions and the allowlist captured by its validated Blueprint.
 The model must not discover an arbitrary new server or tool in the middle of
 an execution.
+
+Approval Signals use the versioned `workflow-signal.v1` envelope and require a
+caller-generated `signalId`. The generic Workflow deduplicates that ID before
+applying an approval or denial, while authorization remains an API concern.
+
+The first generic Update uses `workflow-update.v1` with the
+`blueprint-context` update name. It carries a small `businessInput` patch into
+the existing Workflow and is accepted only for an active, authorized
+execution. Temporal's Update ID provides per-Workflow idempotency at the
+service boundary; broader update operations and a database audit deduplication
+record remain future work.
 
 ## Agent model
 

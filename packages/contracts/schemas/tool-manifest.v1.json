@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/tool-manifest.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "name",
+    "version",
+    "kind",
+    "description",
+    "sideEffects",
+    "inputSchema",
+    "outputSchema",
+    "annotations",
+    "available",
+    "approvalRequired"
+  ],
+  "properties": {
+    "contractVersion": { "const": "tool-manifest.v1" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "kind": { "const": "tool" },
+    "description": { "type": "string", "minLength": 1 },
+    "sideEffects": { "enum": ["read-only", "external-write"] },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"],
+      "properties": {
+        "readOnlyHint": { "type": "boolean" },
+        "destructiveHint": { "type": "boolean" },
+        "idempotentHint": { "type": "boolean" },
+        "openWorldHint": { "type": "boolean" }
+      }
+    },
+    "requiredScope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "available": { "type": "boolean" },
+    "approvalRequired": { "type": "boolean" }
+  }
+}

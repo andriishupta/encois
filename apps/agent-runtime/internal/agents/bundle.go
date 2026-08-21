@@ -15,6 +15,9 @@ import (
 
 type Config struct {
 	APIKey              string
+	UseVertexAI         bool
+	GoogleCloudProject  string
+	GoogleCloudLocation string
 	ModelName           string
 	CoordinatorModel    string
 	CoordinatorThinking string
@@ -50,15 +53,26 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		CoordinatorModelName:     coordinatorModelName,
 		CoordinatorThinkingLevel: thinkingLevel,
 	}
-	if cfg.APIKey == "" {
+	if !cfg.UseVertexAI && cfg.APIKey == "" {
 		return bundle, nil
 	}
 
-	model, err := gemini.NewModel(ctx, modelName, &genai.ClientConfig{APIKey: cfg.APIKey})
+	clientConfig := &genai.ClientConfig{APIKey: cfg.APIKey}
+	if cfg.UseVertexAI {
+		// Cloud Run uses the service account's Application Default Credentials;
+		// no long-lived Gemini API key is required for Vertex AI mode.
+		clientConfig = &genai.ClientConfig{
+			Backend:  genai.BackendVertexAI,
+			Project:  cfg.GoogleCloudProject,
+			Location: cfg.GoogleCloudLocation,
+		}
+	}
+
+	model, err := gemini.NewModel(ctx, modelName, clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create Gemini model: %w", err)
 	}
-	coordinatorModel, err := gemini.NewModel(ctx, coordinatorModelName, &genai.ClientConfig{APIKey: cfg.APIKey})
+	coordinatorModel, err := gemini.NewModel(ctx, coordinatorModelName, clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create coordinator Gemini model: %w", err)
 	}

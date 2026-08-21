@@ -1,6 +1,6 @@
 # Encois Contracts and Cross-Language Boundaries
 
-**Status:** proposed generic protocol; source package not created yet
+**Status:** minimal generic protocol implemented; provider and generated-code expansion pending
 
 This document defines the data contracts between the TypeScript control plane,
 Go Agent Runtime, private Agent Gateway, React SPA, and integrations. The
@@ -8,62 +8,110 @@ contracts are generic: a company-specific workflow is represented by a
 validated Workflow Blueprint, not by a new platform-level DTO or Go workflow
 type.
 
-The repository does not yet contain `packages/contracts`. Current TypeScript
-and Go DTOs are temporary local definitions used by the scaffold. Create the
-package before adding more cross-language workflows or provider-specific
-payloads.
+`packages/contracts` contains the TypeScript contract types, canonical JSON
+Schema sources, and a small Go validator package. The TypeScript API validates
+the public Blueprint, release, and Signal payloads with Ajv-2020, then applies
+semantic authorization and workflow checks. Go services embed and validate the
+same schema files at the Blueprint, workflow change-plan, tool request, tool
+result, artifact reference, and workflow result boundaries. Generated DTOs remain optional
+follow-up work; validation does not require sharing TypeScript source with Go.
 
 The tool names in examples are protocol examples, not a promise that those
 providers are already connected. The current Agent Gateway fixture catalog is
-`jira.release_tasks` and `github.release_activity`; these should later be
-replaced or versioned behind MCP-shaped manifests without changing the generic
-Workflow Blueprint contract.
+`jira.release_tasks` and `github.release_activity`. Its entries now validate
+against the canonical `tool-manifest.v1` schema; persisted connector grants,
+live manifests, and real provider adapters remain deferred.
 
 ## Contract ownership
 
 | Boundary | Source of truth | Generated consumers |
 |---|---|---|
 | Browser and public HTTP API | OpenAPI document | React client and TypeScript API validators/types |
-| Workflow start, Signals, Updates, and results | Versioned JSON Schema | TypeScript Gateway API and Go Runtime |
+| Workflow start, Signals, Updates, Coordinator events, and results | Versioned JSON Schema | TypeScript Gateway API and Go Runtime |
 | Workflow Blueprint | Versioned JSON Schema | Coordinator, Creator, Gateway API, Go Runtime, UI builder |
+| Workflow change plans | Versioned JSON Schema | Workflow Creator, Go Runtime, Gateway API approval/application boundary |
 | Agent Gateway tool catalog and invocation | MCP-shaped JSON Schema plus Encois execution envelope | Go Runtime, Agent Gateway, integration adapters |
+| Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
 | Integration manifests and evidence events | Versioned JSON Schema | registry, adapters, graph/memory pipeline |
 | Control-plane persistence | SQL migrations owned by Gateway API | Gateway API only |
+| Temporal command receipts | Gateway-owned tenant-scoped SQL table | TypeScript Gateway API only; never sent to Go or Temporal |
 
 OpenAPI describes the public application API. JSON Schema describes the
 cross-language objects that must be validated independently by TypeScript and
-Go. MCP supplies the industry-standard shape for tool discovery and
-invocation; it is not used as the durable workflow contract.
+Go. The API validates `workflow-update.v1` before calling Temporal; the Go
+Workflow receives only the validated update payload and applies it
+deterministically. MCP supplies the industry-standard shape for tool discovery
+and invocation; it is not used as the durable workflow contract.
 
-## Planned repository layout
+Execution correlation uses the public `requestId`, a propagated `traceId`, the
+stable logical `workflowId`, and the Temporal `runId` once a concrete execution
+exists. The Go Runtime obtains that `runId` from Temporal and includes it in
+Activity/tool requests; correlation IDs are not trusted as authorization input.
+Approval Signals also carry a caller-generated `signalId`, which the Workflow
+uses for duplicate suppression.
+
+The Gateway also persists a tenant-scoped receipt for each Signal and Update.
+It claims the command before calling Temporal, records `accepted` only after
+the Temporal call and audit event succeed, and may replay `in_flight` commands
+after a process crash. A different payload under the same command ID is a
+conflict. This database receipt is an API delivery safeguard, not a replacement
+for Temporal's Update ID or the Go Workflow's Signal deduplication.
+
+`coordinator-event.v1` is separate from a Blueprint step Signal. It carries
+tenant-scoped lifecycle notifications such as plan approval, plan application,
+provider changes, and workflow completion. The Coordinator receiver deduplicates
+event IDs and rejects events for another organization or Coordinator. Gateway
+plan approval/application now enqueue these small events transactionally in the
+tenant-scoped outbox. An applied plan includes `workflowStarts` only for changes
+with an explicit `start` intent. The Coordinator starts those immutable approved
+Blueprint snapshots through its private Gateway Activity; applying a registry
+revision without `start` does not start an execution. Pending starts remain in
+Coordinator state until the idempotent start Activity succeeds. Scheduler
+invocation and hosted delivery remain deployment work.
+
+## Repository layout
 
 ```text
 packages/contracts/
+  go.mod
+  go.sum
+  schema.go
+  schema_test.go
+  src/index.ts
+  src/validation.ts
+  test-contracts.mjs
   openapi.yaml
   schemas/
-    workflow/
-      start-request.v1.json
-      blueprint.v1.json
-      signal.v1.json
-      result.v1.json
-    agent-gateway/
-      tool-manifest.v1.json
-      tool-invocation.v1.json
-      tool-result.v1.json
-      execution-context.v1.json
-    integrations/
-      manifest.v1.json
-      evidence-event.v1.json
-  generated/
-    typescript/
-
-apps/agent-runtime/internal/contracts/generated/
-apps/agent-gateway/internal/contracts/generated/
+    release-investigation.v1.json
+    workflow-blueprint.v1.json
+    blueprint-workflow-result.v1.json
+    workflow-signal.v1.json
+    execution-context.v1.json
+    tool-request.v1.json
+    tool-result.v1.json
+    artifact-write.v1.json
+    artifact-write-result.v1.json
+    graph-query.v1.json
+    graph-query-result.v1.json
+    agent-memory.v1.json
+    agent-memory-result.v1.json
+    tool-manifest.v1.json
+    workflow-update.v1.json
+    workflow-change-plan.v1.json
+    workflow-change-plan.v2.json
+    coordinator-event.v1.json
+  # canonical schemas are consumed by both TypeScript and Go
 ```
 
-The schemas are edited as the source. Generated TypeScript and Go files are
-build artifacts or checked-in outputs according to the repository's generation
-policy; neither language becomes the schema owner.
+The schemas are edited as the source. TypeScript types currently live in
+`packages/contracts/src/index.ts`, and the public TypeScript boundary uses the
+runtime validators in `src/validation.ts`. The Go package in `schema.go`
+embeds the same `schemas/*.json` files and uses `jsonschema-go` for runtime
+validation; Go DTOs remain local to each service. Generated Go/TypeScript
+types and schema-drift checks in CI are follow-up work; neither language
+becomes the schema owner. `workflow-change-plan.v1` is validated before a
+bootstrap proposal can leave the Go Runtime; raw model text never crosses that
+boundary.
 
 ## Generic workflow model
 
@@ -93,14 +141,13 @@ is only an example Blueprint, not a required Encois workflow type.
   "organizationId": "acme",
   "actorId": "user-123",
   "scope": {
+    "ids": ["team:platform", "project:checkout"],
     "teamIds": ["platform"],
     "projectIds": ["checkout"]
   },
   "policyVersion": "policy-17",
-  "blueprint": {
-    "blueprintId": "release-readiness",
-    "version": "2.1.0"
-  },
+  "blueprintId": "release-readiness",
+  "blueprintVersion": "2.1.0",
   "input": {
     "releaseName": "August checkout release",
     "releaseKey": "aug-30"
@@ -122,14 +169,8 @@ The Go Runtime does not query the control-plane database.
   "version": "2.1.0",
   "name": "Company release readiness",
   "workflowType": "encois.user-blueprint.v1",
-  "inputSchema": {
-    "type": "object",
-    "required": ["releaseName", "releaseKey"]
-  },
-  "outputSchema": {
-    "type": "object",
-    "required": ["status", "findings"]
-  },
+  "inputSchemaRef": "schema://release-readiness/input.v1",
+  "outputSchemaRef": "schema://release-readiness/output.v1",
   "requiredScopes": ["project:checkout"],
   "allowedTools": [
     "jira.search_issues",
@@ -152,8 +193,7 @@ The Go Runtime does not query the control-plane database.
       "id": "synthesis",
       "kind": "agent",
       "agentDefinition": "context-synthesizer@1",
-      "dependsOn": ["jira", "github"],
-      "outputSchema": { "type": "object" }
+      "dependsOn": ["jira", "github"]
     }
   ],
   "requiresApproval": false
@@ -170,7 +210,8 @@ calls registered Activities.
 
 MCP standardizes tool discovery and invocation. Each Integration Pack may
 provide an MCP server or a typed API adapter mapped into the same internal tool
-catalog. The catalog follows the MCP concepts:
+catalog. The cross-language manifest uses `tool-manifest.v1` and follows the
+MCP concepts:
 
 ```json
 {
@@ -192,21 +233,33 @@ catalog. The catalog follows the MCP concepts:
   "annotations": {
     "readOnlyHint": true,
     "destructiveHint": false,
-    "idempotentHint": true
-  }
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "requiredScope": ["ids"],
+  "available": true,
+  "approvalRequired": false,
+  "contractVersion": "tool-manifest.v1",
+  "version": "1.0.0",
+  "kind": "tool",
+  "sideEffects": "read-only"
 }
 ```
+
+The Go Agent Gateway embeds and validates the same manifest schema before
+returning its catalog. This is still an HTTP/JSON MCP-shaped catalog rather
+than a full MCP JSON-RPC transport.
 
 The runtime adds an Encois execution envelope around the MCP-shaped call:
 
 ```json
 {
-  "contractVersion": "tool-invocation.v1",
+  "contractVersion": "tool-request.v1",
   "requestId": "req_123",
   "workflowId": "workflow:acme:release-readiness:checkout:aug-30",
   "organizationId": "acme",
   "actorId": "user-123",
-  "scope": { "projectIds": ["checkout"] },
+  "scope": { "ids": ["project:checkout"], "projectIds": ["checkout"] },
   "policyVersion": "policy-17",
   "tool": "jira.search_issues",
   "arguments": { "query": "release context" }
@@ -245,11 +298,26 @@ Blueprint versions:
   "planId": "plan_123",
   "coordinatorId": "coord_acme_checkout",
   "organizationId": "acme",
+  "observedAt": "2026-08-20T16:00:00.000Z",
   "changes": [
     {
       "kind": "create",
-      "blueprintId": "release-readiness",
-      "version": "2.1.0",
+      "blueprint": {
+        "contractVersion": "workflow-blueprint.v1",
+        "blueprintId": "release-readiness",
+        "version": "2.1.0",
+        "name": "Company release readiness",
+        "workflowType": "encois.user-blueprint.v1",
+        "purpose": "Assess release readiness from approved company sources.",
+        "enabled": true,
+        "steps": [
+          {
+            "id": "jira",
+            "kind": "tool",
+            "tool": "jira.release_tasks"
+          }
+        ]
+      },
       "reason": "The project has Jira and GitHub sources but no monitoring pack"
     }
   ]
@@ -258,6 +326,34 @@ Blueprint versions:
 
 Gemini/ADK may propose the plan. Deterministic registry, permission, policy,
 and compatibility checks decide whether it can be persisted or started.
+
+`workflow-change-plan.v1` remains the create-plan contract used by the current
+bootstrap. `workflow-change-plan.v2` is the lifecycle-aware contract: `update`
+and `deprecate` require `targetBlueprintId` plus `targetBlueprintVersion`, while
+`cancel` requires `targetWorkflowId`; these target families cannot be mixed.
+The Gateway validates and persists both versions, applies v1 create and v2
+Blueprint update/deprecate changes, and supports v2 Temporal cancellation only
+for cancel-only plans through its Temporal client. Repeated cancellation is
+idempotent; mixed Blueprint-registry and Temporal-execution plans are rejected.
+Persistence-backed and hosted cancellation verification remain deployment work.
+
+An executable `create` or `update` change may include an explicit start intent:
+
+```json
+{
+  "kind": "create",
+  "blueprint": { "blueprintId": "release-readiness", "version": "1.0.0" },
+  "start": {
+    "key": "release:checkout:2026-08-30",
+    "businessInput": { "releaseKey": "2026-08-30" }
+  }
+}
+```
+
+The intent is declarative and is validated against the nested Blueprint. It is
+not a direct Temporal command and cannot start a deprecation or cancellation.
+The Gateway emits it as `workflowStarts` only after the plan is applied; the
+Coordinator then performs the private, policy-checked start.
 
 ## Public and internal API boundaries
 
@@ -272,6 +368,22 @@ GET  /v1/workflows/{workflowId}/events
 GET  /v1/tools                 # scoped catalog projection, later
 GET  /v1/integrations
 ```
+
+For the generic workflow, the start request may carry an inline validated
+Blueprint or reference an approved registry snapshot:
+
+```json
+{
+  "workflowType": "encois.user-blueprint.v1",
+  "blueprintId": "release-readiness",
+  "blueprintVersion": "1.0.0",
+  "key": "checkout-aug-30",
+  "input": { "releaseKey": "checkout-aug-30" }
+}
+```
+
+The Gateway resolves the snapshot and sends the complete Blueprint in the
+versioned Temporal input. The Go Runtime does not query the registry.
 
 The private Agent Gateway exposes an authenticated internal tool boundary. For
 the MVP it may use HTTP/JSON with MCP-shaped payloads; a full MCP JSON-RPC

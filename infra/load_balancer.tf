@@ -29,7 +29,7 @@ resource "google_compute_backend_service" "dashboard" {
   protocol              = "HTTPS"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   enable_cdn            = false
-  timeout_sec            = 60
+  timeout_sec           = 60
 
   backend {
     group = google_compute_region_network_endpoint_group.dashboard[0].id
@@ -48,7 +48,7 @@ resource "google_compute_backend_service" "api" {
   protocol              = "HTTPS"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   enable_cdn            = false
-  timeout_sec            = 60
+  timeout_sec           = 60
 
   backend {
     group = google_compute_region_network_endpoint_group.api[0].id

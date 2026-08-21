@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, CircleDashed, Clock3, GitBranch, Play, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { WorkflowCanvas } from '@/components/workflow-canvas'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getWorkflow } from '@/lib/api'
 
 export const Route = createFileRoute('/_app/workflows/$workflowId')({
   component: WorkflowDetailPage,
@@ -17,20 +18,19 @@ const workflowSteps = [
   { name: 'Synthesize release risk', type: 'Gemini synthesis', status: 'Pending', icon: Play },
 ] as const
 
-const WORKFLOW_POLL_INTERVAL_MS = 30_000
-
 function WorkflowDetailPage() {
   const { workflowId } = Route.useParams()
-  const { refreshCount, lastPolledAt } = useWorkflowPolling()
+  const workflow = useQuery({ queryKey: ['workflow', workflowId], queryFn: () => getWorkflow(workflowId), refetchInterval: 30_000 })
+  const status = workflow.data?.status ?? (workflow.isLoading ? 'loading' : 'unavailable')
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Release risk investigation" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
+      <PageHeader title="Release investigation" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Status" value="Waiting for input" icon={CircleDashed} />
+        <SummaryCard label="Status" value={status} icon={CircleDashed} />
         <SummaryCard label="Workflow ID" value={workflowId} icon={GitBranch} mono />
-        <SummaryCard label="Run ID" value="Not available" icon={RotateCcw} />
+        <SummaryCard label="Run ID" value={workflow.data?.runId ?? 'Not available'} icon={RotateCcw} />
         <SummaryCard label="Transitions" value="—" icon={TimerReset} />
       </div>
 
@@ -38,7 +38,7 @@ function WorkflowDetailPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1.5">
             <CardTitle>Workflow canvas</CardTitle>
-            <CardDescription>Mocked execution graph for the release risk investigation.</CardDescription>
+            <CardDescription>Execution graph for the typed release-investigation.v1 Blueprint.</CardDescription>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -46,7 +46,7 @@ function WorkflowDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <WorkflowCanvas refreshCount={refreshCount} lastPolledAt={lastPolledAt} />
+          <WorkflowCanvas refreshCount={workflow.dataUpdatedAt} lastPolledAt={workflow.dataUpdatedAt ? new Date(workflow.dataUpdatedAt) : null} />
         </CardContent>
       </Card>
 
@@ -87,36 +87,6 @@ function WorkflowDetailPage() {
       </Card>
     </div>
   )
-}
-
-function useWorkflowPolling() {
-  const [refreshCount, setRefreshCount] = useState(0)
-  const [lastPolledAt, setLastPolledAt] = useState<Date | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    let timeoutId: number | undefined
-
-    const schedulePoll = () => {
-      timeoutId = window.setTimeout(() => {
-        if (cancelled) return
-
-        // Replace this local tick with the workflow projection request when the API is connected.
-        setRefreshCount((count) => count + 1)
-        setLastPolledAt(new Date())
-        schedulePoll()
-      }, WORKFLOW_POLL_INTERVAL_MS)
-    }
-
-    schedulePoll()
-
-    return () => {
-      cancelled = true
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId)
-    }
-  }, [])
-
-  return { refreshCount, lastPolledAt }
 }
 
 function SummaryCard({

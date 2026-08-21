@@ -44,7 +44,9 @@ Temporal Cloud does not execute Encois Go code. Encois Workers connect to it and
 
 A client connection used by an application to communicate with Temporal Cloud.
 
-- The Gateway API uses a client to start, signal, query, cancel, and describe Workflows.
+- The Gateway API uses a client to start, signal, query, describe, and cancel
+  Workflows. Cancellation is currently reached through an approved cancel-only
+  `workflow-change-plan.v2`; a direct public cancel route remains future work.
 - The Go Agent Runtime uses a client to create a Worker and may use it for child Workflows or Signals.
 
 ### Worker
@@ -158,6 +160,15 @@ A Temporal operation that sends a Signal if the Workflow exists or starts the Wo
 
 The property that repeating the same request does not create duplicate effects. Encois uses stable Workflow IDs, source record IDs, Activity idempotency keys, and provider-aware upserts.
 
+### Workflow Command Receipt
+
+A tenant-scoped Gateway API record for a Signal or Update sent to Temporal. It
+is claimed before delivery and moves through `in_flight`, `accepted`, or
+`failed`. An `in_flight` receipt may be replayed after an API crash; a changed
+payload under the same command ID is rejected. It protects API delivery and
+audit consistency, while Temporal Update IDs and Workflow Signal IDs protect
+the execution boundary.
+
 ## Agent terms
 
 ### Agent Definition
@@ -180,6 +191,29 @@ The long-lived Temporal Workflow that owns one organization/project
 coordination loop. It coordinates onboarding, bootstrap, workflow proposals,
 reconciliation, and waits for Signals or schedules. It is logically persistent
 but uses Continue-As-New to keep each concrete Run History bounded.
+
+### Coordinator Event
+
+A versioned `coordinator-event.v1` lifecycle envelope delivered to a
+Coordinator Workflow. It represents events such as workflow-plan approval or
+application, provider changes, source readiness, or workflow completion. It is
+separate from a `workflow-signal.v1`, which belongs to a step inside one
+generic Blueprint Workflow. Event IDs are deduplicated by the Coordinator, and
+organization/Coordinator identity is checked before state changes.
+
+An applied plan may also contain `workflowStarts`, derived only from explicit
+change-level `start` intents. The Coordinator starts those approved Blueprint
+snapshots through the private Gateway and keeps failed starts pending for
+retry. A registry update without `start` does not launch an execution.
+
+### Workflow Plan Submission
+
+The Runtime-to-Gateway operation that sends a validated Workflow Change Plan to
+the control plane. Submission is not approval and does not start a Workflow;
+the Gateway owns persistence, human approval, and Blueprint registry
+application. A change may explicitly request execution with a `start` intent;
+after approval and application, that intent becomes a `workflowStarts` event
+for the Coordinator.
 
 ### Onboarding
 
@@ -374,6 +408,12 @@ A deterministic allow, deny, wait, or approval-required result for a tool or wor
 Google's Agent Development Kit. In Encois it provides agent construction, coordinator/specialist delegation, tool definitions, sessions, and structured agent behavior.
 
 ADK does not provide durable execution. Temporal remains responsible for Workflow state, waiting, retries, and recovery.
+
+The current Runtime uses ADK inside a Temporal Activity, so the whole agent
+interaction is retried as one Activity. Temporal's separate Go
+`contrib/googleadk` module can instead run the ADK loop in Workflow code and
+turn model calls and I/O tools into durable Activities. That native profile is
+a candidate, not the current Encois runtime implementation.
 
 ### Gemini
 

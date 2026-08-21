@@ -1,7 +1,10 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
+import { and, eq } from "drizzle-orm";
+import { membershipScopes, organizationMemberships, organizationUnits, users, withOrganizationContext } from "@encois/persistence";
 import type { Context } from "hono";
 import type { AosAuthenticationResult, AosAuthenticator, AosPrincipal, GatewayEnv } from "../middleware/aos.js";
+import { database } from "../database.js";
 
 export type IdentityPlatformIdentity = {
   email?: string;
@@ -65,5 +68,152 @@ export function createIdentityPlatformAuthenticator(
     } catch {
       return { reason: "invalid_identity_platform_token", status: "unauthenticated" };
     }
+  };
+}
+
+export type InternalServiceAuthenticatorOptions = {
+  serviceToken: string;
+  serviceUserId?: string;
+};
+
+/**
+ * Authenticates the private Runtime -> Gateway control-plane boundary. In a
+ * database-backed environment the configured service user must have an active
+ * organization membership, and its scopes are loaded from persistence. The
+ * header scope fallback exists only for the database-free local scaffold.
+ */
+export function createInternalServiceAuthenticator(options: InternalServiceAuthenticatorOptions): AosAuthenticator {
+  return async (context): Promise<AosAuthenticationResult> => {
+    const suppliedToken = context.req.header("X-Encois-Service-Token")?.trim();
+    if (!suppliedToken) return { reason: "missing_service_token", status: "unauthenticated" };
+    if (!options.serviceToken || suppliedToken !== options.serviceToken) {
+      return { reason: "invalid_service_token", status: "unauthenticated" };
+    }
+
+    const organizationId = context.req.header("X-Organization-ID")?.trim();
+    if (!organizationId) return { reason: "missing_organization_id", status: "unauthenticated" };
+
+    const actorId = context.req.header("X-Actor-ID")?.trim() || "agent-runtime";
+    if (database) {
+      if (!options.serviceUserId) return { reason: "missing_service_user_id", status: "unauthenticated" };
+
+      const principal = await withOrganizationContext(database, organizationId, async (db) => {
+        const [membership] = await db
+          .select({ userId: users.id, membershipId: organizationMemberships.id })
+          .from(users)
+          .innerJoin(
+            organizationMemberships,
+            and(
+              eq(organizationMemberships.userId, users.id),
+              eq(organizationMemberships.organizationId, organizationId),
+              eq(organizationMemberships.status, "active"),
+            ),
+          )
+          .where(eq(users.id, options.serviceUserId!))
+          .limit(1);
+        if (!membership) return null;
+
+        const scopes = await db
+          .select({ unitId: organizationUnits.id, slug: organizationUnits.slug })
+          .from(membershipScopes)
+          .innerJoin(
+            organizationUnits,
+            and(
+              eq(organizationUnits.id, membershipScopes.organizationUnitId),
+              eq(organizationUnits.organizationId, organizationId),
+            ),
+          )
+          .where(
+            and(
+              eq(membershipScopes.membershipId, membership.membershipId),
+              eq(membershipScopes.organizationId, organizationId),
+            ),
+          );
+
+        return {
+          actorId,
+          userId: membership.userId,
+          organizationId,
+          scope: scopes.flatMap((scope) => [scope.unitId, scope.slug]),
+        } satisfies AosPrincipal;
+      });
+
+      return principal
+        ? { principal, status: "authenticated" }
+        : { reason: "service_user_has_no_active_membership", status: "unauthenticated" };
+    }
+
+    const scope = (context.req.header("X-Encois-Scope") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return {
+      principal: {
+        actorId,
+        ...(options.serviceUserId ? { userId: options.serviceUserId } : {}),
+        organizationId,
+        scope,
+      },
+      status: "authenticated",
+    };
+  };
+}
+
+/**
+ * Resolves the external Identity Platform subject into the local tenant and
+ * exact organization-unit scope. The organization header is only a lookup
+ * hint; the membership query remains the source of truth.
+ */
+export function createDatabasePrincipalResolver() {
+  return async (identity: IdentityPlatformIdentity, context: Context<GatewayEnv>): Promise<AosPrincipal | null> => {
+    if (!database) return null;
+    const organizationId = context.req.header("X-Organization-ID")?.trim() || identity.tenantId;
+    if (!organizationId) return null;
+
+    return withOrganizationContext(database, organizationId, async (db) => {
+      const [membership] = await db
+        .select({ userId: users.id, membershipId: organizationMemberships.id })
+        .from(users)
+        .innerJoin(
+          organizationMemberships,
+          and(
+            eq(organizationMemberships.userId, users.id),
+            eq(organizationMemberships.organizationId, organizationId),
+            eq(organizationMemberships.status, "active"),
+          ),
+        )
+        .where(
+          and(
+            eq(users.identityProvider, identity.identityProvider),
+            eq(users.identitySubject, identity.subject),
+          ),
+        )
+        .limit(1);
+      if (!membership) return null;
+
+      const scopes = await db
+        .select({ unitId: organizationUnits.id, slug: organizationUnits.slug })
+        .from(membershipScopes)
+        .innerJoin(
+          organizationUnits,
+          and(
+            eq(organizationUnits.id, membershipScopes.organizationUnitId),
+            eq(organizationUnits.organizationId, organizationId),
+          ),
+        )
+        .where(
+          and(
+            eq(membershipScopes.membershipId, membership.membershipId),
+            eq(membershipScopes.organizationId, organizationId),
+          ),
+        );
+
+      return {
+        actorId: identity.subject,
+        userId: membership.userId,
+        organizationId,
+        scope: scopes.flatMap((scope) => [scope.unitId, scope.slug]),
+      };
+    });
   };
 }

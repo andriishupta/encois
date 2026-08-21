@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/coordinator-event.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "eventId", "eventType", "coordinatorId", "organizationId"],
+  "properties": {
+    "contractVersion": { "const": "coordinator-event.v1" },
+    "eventId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "eventType": {
+      "enum": [
+        "workflow-plan-approved",
+        "workflow-plan-applied",
+        "workflow-completed",
+        "integration-connected",
+        "source-ready",
+        "reconcile-requested",
+        "provider-changed"
+      ]
+    },
+    "coordinatorId": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "actorId": { "type": "string", "minLength": 1 },
+    "planId": { "type": "string", "minLength": 1 },
+    "approved": { "type": "boolean" },
+    "blueprintId": { "type": "string", "minLength": 1 },
+    "blueprintVersion": { "type": "string", "minLength": 1 },
+    "workflowId": { "type": "string", "minLength": 1 },
+    "key": { "type": "string", "minLength": 1 },
+    "businessInput": { "type": "object" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "projectIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "teamIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "reason": { "type": "string", "maxLength": 2000 },
+    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "workflowStarts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["blueprintId", "blueprintVersion", "key"],
+        "properties": {
+          "blueprintId": { "type": "string", "minLength": 1 },
+          "blueprintVersion": { "type": "string", "minLength": 1 },
+          "key": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "businessInput": { "type": "object" }
+        }
+      }
+    }
+  }
+}

@@ -60,6 +60,15 @@ Temporal Cloud coordinates execution; it does not authorize provider access. The
 
 Workflow payloads and Signals are untrusted application data. Do not place secrets, provider tokens, unrestricted raw company data, or large model responses in Temporal history. Temporal inputs carry identifiers, scope, policy version, and data references.
 
+The Runtime-to-Gateway Coordinator routes are private application routes, not
+browser or public MCP routes. They require the service credential, an
+organization header, and (when persistence is enabled) a configured service
+user with an active tenant membership and resolved scopes. The Runtime may
+submit a proposal or start an approved Blueprint snapshot; it may not use this
+boundary to approve a plan or bypass registry authorization. The first slice
+uses `X-Encois-Service-Token`; Cloud Run IAM/identity tokens should be layered
+on at deployment time.
+
 ## 3. Multi-tenant architecture
 
 Multi-tenancy is required from the first persistent model, even when the demo uses one organization.
@@ -126,6 +135,14 @@ Database requirements:
 - treat database errors and timing as potentially sensitive; do not expose query details to clients.
 
 The initial Google Cloud implementation follows this boundary with Cloud SQL PostgreSQL and Drizzle. The migration connection is separate from the API runtime connection. The runtime capability role has no DDL, role-management, row-delete, or table-delete privileges and must not be the database owner. Tenant-scoped requests set a transaction-local organization context before queries; PostgreSQL RLS is defense in depth, not a replacement for Gateway authorization.
+
+Workflow plans and Blueprint registry snapshots are tenant-scoped control-plane
+records. Only an authorized manager may move a plan through proposal, approval,
+and application; applying a plan must materialize only validated Blueprint JSON
+and must not execute arbitrary code. The Go Runtime receives a snapshot through
+Temporal input and never receives database credentials or queries the registry.
+Registry rows should be append-only by version in normal operation; lifecycle
+changes must be explicit, audited, and never implemented as an implicit delete.
 
 Spanner Graph, Cloud Storage, Memory Bank, and any vector or retrieval system follow the same tenant, scope, retention, and service-identity rules. A graph edge or memory retrieved without an authorization filter is a security defect even if the UI later hides it.
 

@@ -4,6 +4,7 @@ import type { GatewayEnv } from "./aos.js";
 
 export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
   const requestId = context.get("requestId");
+  const traceId = context.get("traceId");
 
   if (error instanceof HTTPException) {
     return context.json(
@@ -12,6 +13,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
           code: "HTTP_ERROR",
           message: error.message,
           requestId,
+          traceId,
         },
       },
       error.status,
@@ -24,6 +26,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
       event: "http.request.failed",
       message: error instanceof Error ? error.message : "Unknown error",
       requestId,
+      traceId,
     }),
   );
 
@@ -33,6 +36,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
         code: "INTERNAL_SERVER_ERROR",
         message: "Internal server error.",
         requestId,
+        traceId,
       },
     },
     500,
@@ -46,6 +50,7 @@ export const notFoundHandler: NotFoundHandler<GatewayEnv> = (context) =>
         code: "NOT_FOUND",
         message: "Route not found.",
         requestId: context.get("requestId"),
+        traceId: context.get("traceId"),
       },
     },
     404,

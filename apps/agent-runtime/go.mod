@@ -2,9 +2,13 @@ module github.com/andriishupta/encois/apps/agent-runtime
 
 go 1.26.6
 
+replace github.com/andriishupta/encois/packages/contracts => ../../packages/contracts
+
 require (
+	github.com/andriishupta/encois/packages/contracts v0.0.0
 	go.temporal.io/sdk v1.44.1
 	google.golang.org/adk/v2 v2.1.0
+	google.golang.org/api v0.279.0
 	google.golang.org/genai v1.63.0
 )
 
@@ -48,7 +52,6 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.279.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260511170946-3700d4141b60 // indirect
 	google.golang.org/grpc v1.81.0 // indirect

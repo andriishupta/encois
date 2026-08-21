@@ -73,9 +73,39 @@ The dashboard is available at `http://localhost:5173`. Run the API in a second t
 pnpm --filter @encois/api-gateway dev
 ```
 
-The API listens on `http://127.0.0.1:8787`. Its local health checks are available at `/health/live` and `/health/ready`. The Go Agent Runtime and Agent Gateway are implemented scaffolds, but they are intentionally not part of the default local start command yet because their local Temporal and container startup path is still being finalized.
+The API listens on `http://127.0.0.1:8787`. Its local health checks are available at `/health/live` and `/health/ready`. The Go Agent Runtime and Agent Gateway are separate processes and are not part of the default `pnpm dev` command.
 
-Terraform does not run the application locally. It provisions cloud resources and references container images; it does not replace `pnpm dev`, build Docker images, or start a local Temporal server. The Docker/Compose setup, worker health endpoint, and local Temporal runtime are still pending.
+The generic execution path can be smoke-tested locally when the Temporal CLI is
+installed:
+
+```bash
+temporal server start-dev --headless --log-level error
+```
+
+In separate terminals, start `apps/agent-gateway` with
+`AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
+`apps/agent-runtime` with the same token and `AGENT_GATEWAY_URL`, then run:
+
+```bash
+TEMPORAL_ADDRESS=127.0.0.1:7233 \
+AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
+pnpm smoke:release
+```
+
+This exercises API → Temporal → Go Runtime → Agent Gateway → synthetic tools →
+API projection. The local harness additionally runs an approval workflow that
+waits for an API Signal and resumes in the Go Worker. Both passed locally;
+hosted Temporal/Cloud Run smoke is still a deployment step.
+
+With the Temporal CLI installed, `pnpm smoke:release:local` starts the Temporal
+dev server and both Go services automatically, waits for readiness, executes
+the release and approval smokes, and cleans up the child processes.
+
+Terraform does not run the application locally. It provisions cloud resources
+and references container images; it does not replace `pnpm dev`, build Docker
+images, or start a local Temporal server. Docker Compose remains deferred; the
+four deployable services already have Dockerfiles, and the Go Runtime exposes
+health-only `/health/live` and `/health/ready` endpoints.
 
 For a full validation pass:
 

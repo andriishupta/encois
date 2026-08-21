@@ -1,15 +1,32 @@
 import { readFileSync } from "node:fs";
-import { Client, Connection } from "@temporalio/client";
+import { Client, Connection, WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from "@temporalio/client";
+import type { CoordinatorEvent } from "@encois/contracts";
 import type { AppConfig } from "../config.js";
-import type { WorkflowExecutionProjection, WorkflowRunStatus, WorkflowStartCommand } from "./types.js";
+import { buildCoordinatorWorkflowId, type WorkflowExecutionProjection, type WorkflowRunStatus, type WorkflowSignalRequest, type WorkflowStartCommand, type WorkflowUpdateRequest } from "./types.js";
 
 export type WorkflowClient = {
   start(command: WorkflowStartCommand, namespace: string): Promise<WorkflowExecutionProjection>;
   get(workflowId: string, organizationId: string, namespace: string): Promise<WorkflowExecutionProjection | null>;
+  list(organizationId: string, namespace: string): Promise<readonly WorkflowExecutionProjection[]>;
+  signal(workflowId: string, organizationId: string, namespace: string, request: WorkflowSignalRequest): Promise<void>;
+  signalCoordinator(coordinatorId: string, organizationId: string, namespace: string, event: CoordinatorEvent): Promise<void>;
+  update(workflowId: string, organizationId: string, namespace: string, request: WorkflowUpdateRequest): Promise<void>;
+  cancel(workflowId: string, organizationId: string, namespace: string): Promise<void>;
 };
 
 function now(): string {
   return new Date().toISOString();
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 function temporalStatus(value: string): WorkflowRunStatus {
@@ -23,9 +40,17 @@ function temporalStatus(value: string): WorkflowRunStatus {
 
 function createInMemoryWorkflowClient(): WorkflowClient {
   const executions = new Map<string, WorkflowExecutionProjection>();
+  const requestHashes = new Map<string, string>();
+  const updateHashes = new Map<string, string>();
 
   return {
     async start(command, namespace) {
+      const existing = executions.get(command.workflowId);
+      if (existing && existing.organizationId === command.input.organizationId) {
+        const previousHash = requestHashes.get(command.workflowId);
+        if (previousHash && previousHash !== command.requestHash) throw new Error("idempotency conflict");
+        return { ...existing, reused: true, updatedAt: now() };
+      }
       const timestamp = now();
       const execution: WorkflowExecutionProjection = {
         workflowId: command.workflowId,
@@ -34,17 +59,67 @@ function createInMemoryWorkflowClient(): WorkflowClient {
         taskQueue: command.taskQueue,
         status: "queued",
         organizationId: command.input.organizationId,
+        blueprintId: command.input.blueprint?.blueprintId,
+        reused: false,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
       executions.set(command.workflowId, execution);
+      requestHashes.set(command.workflowId, command.requestHash);
       return execution;
     },
 
     async get(workflowId, organizationId) {
       const execution = executions.get(workflowId);
       return execution?.organizationId === organizationId ? execution : null;
+    },
+
+    async list(organizationId) {
+      return [...executions.values()].filter((execution) => execution.organizationId === organizationId);
+    },
+
+    async signal(workflowId, organizationId, _namespace, request) {
+      const execution = executions.get(workflowId);
+      if (!execution || execution.organizationId !== organizationId) throw new Error("workflow not found");
+      if (!["queued", "running", "waiting"].includes(execution.status)) {
+        throw new Error(`workflow is ${execution.status} and cannot accept a Signal`);
+      }
+      executions.set(workflowId, { ...execution, status: request.payload.approved === false ? "failed" : "running", updatedAt: now() });
+    },
+
+    async signalCoordinator(coordinatorId, organizationId, _namespace, _event) {
+      const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
+      const execution = executions.get(workflowId);
+      if (!execution || execution.organizationId !== organizationId) throw new Error("Coordinator workflow not found");
+      if (!["queued", "running", "waiting"].includes(execution.status)) {
+        throw new Error(`Coordinator workflow is ${execution.status} and cannot accept an event`);
+      }
+      executions.set(workflowId, { ...execution, status: "running", updatedAt: now() });
+    },
+
+    async update(workflowId, organizationId, _namespace, request) {
+      const execution = executions.get(workflowId);
+      if (!execution || execution.organizationId !== organizationId) throw new Error("workflow not found");
+      if (!["queued", "running", "waiting"].includes(execution.status)) {
+        throw new Error(`workflow is ${execution.status} and cannot accept an Update`);
+      }
+      const updateKey = `${workflowId}:${request.updateId}`;
+      const updateHash = stableSerialize(request.payload);
+      const previousHash = updateHashes.get(updateKey);
+      if (previousHash && previousHash !== updateHash) throw new Error("idempotency conflict");
+      updateHashes.set(updateKey, updateHash);
+      return;
+    },
+
+    async cancel(workflowId, organizationId) {
+      const execution = executions.get(workflowId);
+      if (!execution || execution.organizationId !== organizationId) throw new Error("workflow not found");
+      if (execution.status === "cancelled") return;
+      if (!["queued", "running", "waiting"].includes(execution.status)) {
+        throw new Error(`workflow is ${execution.status} and cannot be cancelled`);
+      }
+      executions.set(workflowId, { ...execution, status: "cancelled", updatedAt: now() });
     },
   };
 }
@@ -93,10 +168,40 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
   return {
     async start(command, namespace) {
       const client = await getClient();
+      const existingHandle = client.workflow.getHandle(command.workflowId);
+      let description: Awaited<ReturnType<typeof existingHandle.describe>> | undefined;
+      try {
+        description = await existingHandle.describe();
+      } catch {
+        // The workflow does not exist yet. The conflict policy below still
+        // protects against a concurrent start race.
+      }
+      if (description) {
+        const existingRequestHash = description.memo?.encoisRequestHash;
+        if (typeof existingRequestHash === "string" && existingRequestHash !== command.requestHash) {
+          throw new Error("idempotency conflict");
+        }
+        return {
+          workflowId: command.workflowId,
+          runId: description.runId,
+          workflowType: description.type,
+          namespace,
+          taskQueue: description.taskQueue,
+          status: temporalStatus(description.status.name),
+          organizationId: command.input.organizationId,
+          blueprintId: command.input.blueprint?.blueprintId,
+          reused: true,
+          createdAt: description.startTime?.toISOString() ?? now(),
+          updatedAt: now(),
+        };
+      }
       const handle = await client.workflow.start(command.workflowType, {
         args: [command.input],
         taskQueue: command.taskQueue,
         workflowId: command.workflowId,
+        memo: { encoisRequestHash: command.requestHash },
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
       });
       const timestamp = now();
 
@@ -108,6 +213,8 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         taskQueue: command.taskQueue,
         status: "queued",
         organizationId: command.input.organizationId,
+        blueprintId: command.input.blueprint?.blueprintId,
+        reused: false,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -132,6 +239,63 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         createdAt: description.startTime?.toISOString() ?? timestamp,
         updatedAt: timestamp,
       };
+    },
+
+    async list(organizationId, namespace) {
+      const temporalClient = await getClient();
+      const executions: WorkflowExecutionProjection[] = [];
+      for await (const info of temporalClient.workflow.list({
+        query: `WorkflowId STARTS_WITH \"workflow:${organizationId}:\"`,
+      })) {
+        executions.push({
+          workflowId: info.workflowId,
+          runId: info.runId,
+          workflowType: info.type,
+          namespace,
+          taskQueue: info.taskQueue,
+          status: temporalStatus(info.status.name),
+          organizationId,
+          createdAt: info.startTime.toISOString(),
+          updatedAt: (info.closeTime ?? info.startTime).toISOString(),
+        });
+      }
+      return executions;
+    },
+
+    async signal(workflowId, organizationId, _namespace, request) {
+      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      const temporalClient = await getClient();
+      await temporalClient.workflow.getHandle(workflowId).signal(request.signalName, request.payload);
+    },
+
+    async signalCoordinator(coordinatorId, organizationId, _namespace, event) {
+      if (!organizationId || !coordinatorId || event.organizationId !== organizationId || event.coordinatorId !== coordinatorId) {
+        throw new Error("Coordinator event scope does not match the target");
+      }
+      const temporalClient = await getClient();
+      const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
+      await temporalClient.workflow.getHandle(workflowId).signal("coordinator-event", event);
+    },
+
+    async update(workflowId, organizationId, _namespace, request) {
+      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      const temporalClient = await getClient();
+      await temporalClient.workflow.getHandle(workflowId).executeUpdate(request.updateName, {
+        args: [{ updateId: request.updateId, ...request.payload }],
+        updateId: request.updateId,
+      });
+    },
+
+    async cancel(workflowId, organizationId) {
+      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      const handle = (await getClient()).workflow.getHandle(workflowId);
+      const description = await handle.describe();
+      const status = temporalStatus(description.status.name);
+      if (status === "cancelled") return;
+      if (!["queued", "running", "waiting"].includes(status)) {
+        throw new Error(`workflow is ${status} and cannot be cancelled`);
+      }
+      await handle.cancel();
     },
   };
 }

@@ -6,15 +6,22 @@ This document describes the smallest deployment that can host the Encois dashboa
 
 ## Current deployment blockers
 
-The Terraform scaffold is ahead of the Go worker container contract and must
-not be applied as a working Agent Runtime deployment yet. In particular,
-Terraform currently names Temporal variables as `TEMPORAL_ADDRESS` and
-`TEMPORAL_CLIENT_CREDENTIALS`, while the Go runtime reads
-`TEMPORAL_HOST_PORT` and `TEMPORAL_API_KEY`. The worker also has no HTTP
-readiness endpoint although the Cloud Run service reserves port 8080. Align
-these names, add a worker health model or use a worker-appropriate deployment,
-and add the private Agent Gateway URL/auth configuration before enabling the
-runtime service in Cloud Run.
+The Cloud Run scaffold now matches the current Go worker contract: the API
+uses `TEMPORAL_ADDRESS`, the worker uses `TEMPORAL_HOST_PORT`, both receive the
+Temporal API key from Secret Manager, and the worker exposes internal
+`/health/live` and `/health/ready` endpoints. When both private services are
+enabled, Terraform also wires the Agent Gateway URL and its separate service
+token to the worker and grants each service only the secret it needs. When the
+API and Runtime are enabled together, it also wires the private control-plane
+URL, Cloud Run audience, shared application token, and Runtime service-account
+invoker grant. Vertex AI mode is enabled with Application Default Credentials;
+the Runtime does not need a Gemini API key in Cloud Run.
+
+This is still an infrastructure blueprint, not a verified deployment. The
+remaining blockers are built/pushed immutable container images, a real Temporal
+Cloud namespace/API key, populated Secret Manager versions, a GCP project, and
+a smoke test against the deployed services. The local multi-process synthetic
+smoke path has already passed.
 
 The broader release options are documented in [`docs/CI-CD.md`](CI-CD.md). This file stays focused on the infrastructure resources and their manual bootstrap.
 
@@ -53,7 +60,10 @@ The initial public edge is one domain with path routing:
 
 Cloud Run does not perform multi-service path routing by itself. The global external HTTPS Application Load Balancer and regional serverless NEGs provide that routing. The Cloud Run services use `internal-and-cloud-load-balancing` ingress so users cannot bypass the edge through the default service URL.
 
-The React app must also be configured for `/dashboard/`: Vite assets need a `/dashboard/` base path and the TanStack Router needs a matching base path. Terraform can route the request, but it cannot rewrite SPA asset URLs or client-side routes.
+The React image must be built with `--build-arg VITE_BASE_PATH=/dashboard/` for
+the hosted path. Vite assets and TanStack Router now use the same base path;
+local development keeps `/` by default. Terraform can route the request, but
+it cannot rewrite SPA asset URLs or client-side routes after the image is built.
 
 ## Terraform layout
 
@@ -100,14 +110,26 @@ pnpm --filter @encois/api-gateway dev
 
 Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/health/live` or `/health/ready` for the API. The API defaults are documented in [`apps/api-gateway/.env.example`](../apps/api-gateway/.env.example). Database-backed behavior requires a valid `DATABASE_RUNTIME_URL`; the current local scaffold does not create a PostgreSQL container or emulator.
 
-The following pieces are intentionally pending rather than being guessed now:
+The following pieces remain intentionally separate from the basic local smoke:
 
-- `Dockerfile`/Compose definitions for dashboard, API, Go Agent Runtime, and private Agent Gateway.
+- Dockerfiles now exist for dashboard, API, Go Agent Runtime, and private Agent Gateway. A local Compose stack is still intentionally deferred because it would need a PostgreSQL and Temporal strategy that matches the hosted setup.
 - A local PostgreSQL strategy that matches the Cloud SQL/Drizzle permissions model.
-- A local Temporal option or a documented Temporal Cloud namespace flow for the existing worker. The remaining work is the container entrypoint, health endpoint, and a repeatable command that starts the worker against the selected Temporal environment.
-- A local end-to-end command that starts all services and synthetic data together.
+- A single command that starts all services and synthetic data together; the
+  current smoke command assumes Temporal, Runtime, and Agent Gateway are
+  already running.
 
-For the existing Go runtime, the remaining choice is either a local Temporal development server for offline work or Temporal Cloud credentials injected through environment/Secret Manager for a cloud-connected demo. That decision should be made together with the worker's Temporal client configuration, not encoded prematurely in Terraform.
+For the existing Go runtime, both paths are supported: the Temporal CLI's
+development server for local work, or Temporal Cloud credentials injected
+through environment/Secret Manager for a hosted demo. The Runtime starts a
+Temporal Worker explicitly, marks `/health/ready` only after the Worker starts,
+and reports fatal worker errors through the process health state.
+
+For hosted Runtime → Agent Gateway calls, Cloud Run IAM supplies the Google ID
+token whose audience is the Agent Gateway service URL. The Runtime also sends a
+separate `X-Encois-Service-Token`; the Gateway validates both layers. Local
+development can use the legacy static bearer token without Cloud Run IAM. The
+Agent Gateway readiness probe fails closed when the service token is missing,
+so a misconfigured revision does not receive Runtime traffic.
 
 For the hackathon, the practical progression is: prove dashboard/API locally, add worker/runtime containers, build immutable images in CI, deploy the same images to Cloud Run, and show the hosted Cloud Run/API/agent run evidence in the demo. Local Docker is useful for reproducibility but is not a substitute for the required Google Cloud deployment proof.
 
@@ -171,8 +193,16 @@ The commands are intentionally manual and reviewable. Nothing runs automatically
 - Agent Runtime: minimum 1, maximum 2. A continuously polling Temporal worker should not scale to zero.
 - Agent Gateway: minimum 1, maximum 2 while it is a separate service; it may be in-process for the first vertical slice.
 - Runtime concurrency is 1 to avoid uncontrolled parallel agent work. API concurrency is higher and should be tuned from metrics.
-- Worker and gateway containers still need to bind the Cloud Run `PORT`; the lack of a public route does not turn a Cloud Run service into a free-form VM.
+- Worker and gateway containers bind the Cloud Run `PORT`; the runtime's HTTP listener is health-only and the lack of a public route does not turn a Cloud Run service into a free-form VM.
 - Timeouts, retries, budgets, provider rate limits, and workflow concurrency remain application/runtime policy, not load-balancer policy.
+
+Coordinator outbox delivery is a separate one-shot process in the API image:
+`dist/coordinator-dispatcher.js`. It requires
+`COORDINATOR_DISPATCH_ORGANIZATION_ID` and is intended to run as a Cloud Run
+Job invoked by Cloud Scheduler, one tenant per invocation. The Terraform
+scaffold does not create the Job or scheduler because their cadence, tenant
+inventory, and deployment IAM are environment-specific; the job must use the
+API/runtime service identity and only the required invocation permissions.
 
 This is deliberately not Kubernetes. Cloud Run provides revisioned deployments, request-driven scaling, health checks, and rollback without operating a cluster. Temporal Cloud remains the durable workflow engine; Cloud Run is only the execution host for the API and workers.
 

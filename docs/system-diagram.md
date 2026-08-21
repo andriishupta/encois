@@ -9,8 +9,8 @@ This document is the visual map of the repository. It should be updated when a s
 ## Legend
 
 - Green: implemented boundary or working local path.
-- Yellow: implemented scaffold, mock, or deliberately incomplete enforcement.
-- Blue: target or deferred capability.
+- Yellow: implemented boundary with a mock, deferred adapter, or incomplete hosted enforcement.
+- Blue: target capability with no current repository boundary.
 - Gray: external system or managed platform.
 - Dashed arrows: optional, future, or not yet connected in the current vertical slice.
 
@@ -23,28 +23,31 @@ flowchart TB
     Edge[HTTPS edge / Load Balancer\nTarget GCP deployment]
 
     subgraph Public[Public application plane]
-        Web[React SPA\napps/dashboard\nTanStack Router + Query\nCurrent: UI scaffold and local state]
+        Web[React SPA\napps/dashboard\nTanStack Router + Query\nCurrent: typed API queries and polling]
         API[Gateway API\napps/api-gateway\nHono + TypeScript\nAuth, scope, registry, workflow control]
-        Auth[Identity Platform\nCurrent: adapter exists\nServer wiring pending]
+        CoordinatorRoutes[Private Coordinator control routes\nservice token + organization scope\nCurrent: plan submit + approved-start boundary]
+        Outbox[(Coordinator event outbox\nPostgres + RLS\nCurrent: transactional enqueue)]
+        Dispatcher[Coordinator dispatcher\none-shot API image entrypoint\nCurrent: lease/retry + Temporal sink]
+        Auth[Identity Platform\nCurrent: conditional adapter wiring\nRequires project + DB config]
         SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nCurrent: schema and migration foundation)]
     end
 
     subgraph Durable[Durable execution plane]
-        Temporal[Temporal Cloud\nCurrent: client integration + local fallback\nTarget: Cloud execution history, retries, Signals, timers]
-        Runtime[Go Agent Runtime\napps/agent-runtime\nTemporal worker + Google ADK\nCurrent: workflows, activities, fixtures]
+        Temporal[Temporal Cloud\nCurrent: client integration + passing local smoke\nTarget: hosted execution history, retries, Signals, timers]
+        Runtime[Go Agent Runtime\napps/agent-runtime\nTemporal worker + Google ADK\nCurrent: generic workflow, ADK-in-Activity, health, fixtures]
     end
 
     subgraph Private[Private agent plane]
-        AgentGateway[Agent Gateway\napps/agent-gateway\nGin policy and tool broker\nCurrent: mock tools + allow-all scaffold]
-        Policy[Deterministic policy\nscope, capability, approval\nTarget: enforced service boundary]
+        AgentGateway[Agent Gateway\napps/agent-gateway\nGin policy and tool broker\nCurrent: service token, Cloud Run audience support, mock tools]
+        Policy[Deterministic policy\nscope, capability, approval\nCurrent: read-only fixture policy]
         Integrations[Integration adapters\nJira, GitHub, Workspace, monitoring\nCurrent: synthetic fixtures]
     end
 
     subgraph Knowledge[Knowledge and evidence plane]
         Gemini[Vertex AI / Gemini\nADK model calls and synthesis]
-        Memory[Agent Engine Sessions + Memory Bank\nTarget: scoped agent memory]
-        Graph[(Spanner Graph\nTarget: company entities, facts, relationships)]
-        Storage[(Cloud Storage\nTarget: raw snapshots and artifacts)]
+        Memory[Agent-specific Memory Bank\nTyped Runtime Activity boundary\nCurrent: deferred store; target: hosted memory]
+        Graph[(Spanner Graph\nTyped query boundary\nCurrent: deferred store; target: normalized facts)]
+        Storage[(Cloud Storage\nTyped artifact boundary\nCurrent: in-memory refs; target: raw artifacts)]
     end
 
     Sources[GitHub / Jira / Google Workspace / monitoring\nExternal systems]
@@ -55,6 +58,10 @@ flowchart TB
     Edge --> Web
     Edge --> API
     Web --> API
+    Runtime -. private control-plane calls .-> CoordinatorRoutes
+    API --> Outbox
+    Dispatcher --> Outbox
+    Dispatcher --> Temporal
     API --> Auth
     API --> SQL
     API --> Temporal
@@ -64,12 +71,9 @@ flowchart TB
     AgentGateway --> Integrations
     Integrations --> Sources
     Runtime --> Gemini
-    Runtime -. scoped memory .-> Memory
-    AgentGateway -. normalized facts .-> Graph
-    AgentGateway -. raw payloads .-> Storage
-    API -. projections / queries .-> Graph
-    API -. scoped memory operations .-> Memory
-    API -. evidence references .-> Storage
+    Runtime -. typed memory Activity\nprovider deferred .-> Memory
+    AgentGateway -. typed graph query\nprovider deferred .-> Graph
+    AgentGateway -. typed artifact refs\nprovider deferred .-> Storage
     API -.-> Ops
     Temporal -.-> Ops
     Runtime -.-> Ops
@@ -80,13 +84,13 @@ flowchart TB
     classDef target fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#1f2937
 
-    class Web,API,SQL,Runtime,Gemini live
+    class Web,API,CoordinatorRoutes,Outbox,Dispatcher,SQL,Runtime,Gemini live
     class Auth,Temporal,AgentGateway,Policy,Integrations,Ops scaffold
-    class Memory,Graph,Storage target
+    class Memory,Graph,Storage scaffold
     class Human,MCP,Edge,Sources external
 ```
 
-The diagram intentionally shows the architecture and the implementation status together. The current demo path can use local UI state, an in-memory Temporal adapter, and synthetic provider fixtures. The target path keeps the same boundaries but replaces those adapters with authenticated services and managed Google Cloud resources.
+The diagram intentionally shows the architecture and the implementation status together. The current local proof path uses the real TypeScript Temporal client, a local Temporal server, the Go Worker, the Agent Gateway, and synthetic provider fixtures; the API-only development path can still use the in-memory adapter. The target path keeps the same boundaries but replaces local services and fixtures with hosted authenticated services and managed Google Cloud resources.
 
 ## Deployable service boundaries
 
@@ -98,6 +102,7 @@ flowchart LR
 
     subgraph ApiService[Cloud Run: Gateway API]
         Routes[Hono routes]
+        RuntimeControl[Private Coordinator routes\nService token + organization scope]
         Middleware[Request ID, auth, validation, rate limits]
         Control[Control-plane services\norganizations, permissions, registry, workflows]
         TemporalClient[Temporal TypeScript client]
@@ -113,7 +118,7 @@ flowchart LR
         Worker[Temporal Go worker]
         Workflows[Workflow definitions\nCoordinator + generic Blueprint\nRelease readiness is an example]
         Activities[Activities\nprovider calls, synthesis, persistence references]
-        ADK[Google ADK agents\nplanner, specialists, synthesizer]
+        ADK[Google ADK agents\nplanner, specialists, synthesizer\nCurrent: Activity boundary\nCandidate: googleadk v0.2.0 spike]
         RuntimeClient[Private Agent Gateway client]
     end
 
@@ -128,11 +133,13 @@ flowchart LR
     SQL[(PostgreSQL)]
     Google[Vertex AI / Gemini]
     Provider[External provider APIs / MCP]
-    Evidence[(Cloud Storage)]
-    CompanyGraph[(Spanner Graph)]
-    AgentMemory[(Memory Bank)]
+    Evidence[(Cloud Storage\nCurrent: in-memory ArtifactStore)]
+    CompanyGraph[(Spanner Graph\nCurrent: deferred GraphStore)]
+    AgentMemory[(Memory Bank\nCurrent: deferred Runtime Store)]
 
     Dashboard --> Routes
+    RuntimeClient -. private control plane .-> RuntimeControl
+    RuntimeControl --> Middleware
     Routes --> Middleware --> Control
     Control --> Persistence --> SQL
     Control --> TemporalClient --> TaskQueue
@@ -144,18 +151,18 @@ flowchart LR
     GatewayHTTP --> GatewayAuth --> GatewayPolicy --> ToolRegistry --> ProviderAdapters
     ProviderAdapters --> Provider
     ADK --> Google
-    Activities -. evidence .-> Evidence
-    Activities -. facts .-> CompanyGraph
-    ADK -. scoped memory .-> AgentMemory
+    Activities -. typed artifact refs\nprovider deferred .-> Evidence
+    RuntimeClient -. typed graph query\nprovider deferred .-> CompanyGraph
+    ADK -. typed memory Activity\nprovider deferred .-> AgentMemory
 
     classDef live fill:#dcfce7,stroke:#15803d,color:#14532d
     classDef scaffold fill:#fef3c7,stroke:#b45309,color:#78350f
     classDef target fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#1f2937
 
-    class Dashboard,Routes,Middleware,Control,TemporalClient,Persistence,Worker,Workflows,Activities,ADK live
+    class Dashboard,Routes,RuntimeControl,Middleware,Control,TemporalClient,Persistence,Worker,Workflows,Activities,ADK live
     class GatewayHTTP,GatewayAuth,GatewayPolicy,ToolRegistry,ProviderAdapters scaffold
-    class Evidence,CompanyGraph,AgentMemory target
+    class Evidence,CompanyGraph,AgentMemory scaffold
     class SQL,Google,Provider external
 ```
 
@@ -199,7 +206,8 @@ sequenceDiagram
     GitHub-->>AG: Evidence batch
     AG-->>RT: Validated scoped result
 
-    RT->>Data: Store evidence references and projection
+    RT-->>Data: Optional typed evidence/graph/memory boundary\n(current providers deferred)
+    RT->>RT: Keep structured evidence references in result
     RT->>RT: Synthesize structured result with Gemini/ADK
     RT-->>TC: Complete workflow or wait for Signal
     TC-->>API: Queryable workflow state

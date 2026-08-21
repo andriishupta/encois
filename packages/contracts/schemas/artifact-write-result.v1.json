@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/artifact-write-result.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "requestId", "artifactRef", "objectKey", "status"],
+  "properties": {
+    "contractVersion": { "const": "artifact-write-result.v1" },
+    "requestId": { "type": "string", "minLength": 1 },
+    "artifactRef": { "type": "string", "minLength": 1 },
+    "objectKey": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["mocked", "completed"] }
+  }
+}

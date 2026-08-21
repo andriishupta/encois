@@ -209,6 +209,9 @@ importers:
 
   apps/api-gateway:
     dependencies:
+      '@encois/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@encois/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
@@ -246,6 +249,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.7.0
         version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@encois/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0
@@ -313,6 +319,16 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)
+
+  packages/contracts:
+    dependencies:
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+    devDependencies:
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
 
   packages/persistence:
     dependencies:

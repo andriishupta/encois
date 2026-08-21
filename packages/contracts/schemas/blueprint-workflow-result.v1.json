@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/blueprint-workflow-result.v1.json",
+  "type": "object",
+  "required": ["contractVersion", "status", "steps"],
+  "$defs": {
+    "stepResult": {
+      "type": "object",
+      "required": ["stepId", "status"],
+      "properties": {
+        "stepId": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "data": { "type": "object" },
+        "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "contractVersion": { "const": "blueprint-workflow-result.v1" },
+    "status": { "enum": ["completed", "waiting", "failed"] },
+    "steps": { "type": "array", "items": { "$ref": "#/$defs/stepResult" } }
+  },
+  "additionalProperties": false
+}

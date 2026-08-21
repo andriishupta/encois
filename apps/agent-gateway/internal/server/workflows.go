@@ -12,9 +12,46 @@ import (
 const genericBlueprintWorkflowType = "encois.user-blueprint.v1"
 
 var workflowCapabilities = []domain.WorkflowCapability{
-	{Name: "jira.release_tasks", Kind: "tool", SideEffects: "read-only"},
-	{Name: "github.release_activity", Kind: "tool", SideEffects: "read-only"},
-	{Name: "email.send", Kind: "tool", SideEffects: "external-write", ApprovalRequired: true},
+	{
+		ContractVersion: domain.ToolManifestContractVersion,
+		Name:            "jira.release_tasks",
+		Version:         "1.0.0",
+		Kind:            "tool",
+		Description:     "Read release task status from Jira.",
+		SideEffects:     "read-only",
+		InputSchema:     releaseToolInputSchema(),
+		OutputSchema:    jiraReleaseOutputSchema(),
+		Annotations:     domain.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+		RequiredScope:   []string{"ids"},
+		Available:       true,
+	},
+	{
+		ContractVersion: domain.ToolManifestContractVersion,
+		Name:            "github.release_activity",
+		Version:         "1.0.0",
+		Kind:            "tool",
+		Description:     "Read pull requests, checks, and commits related to a release.",
+		SideEffects:     "read-only",
+		InputSchema:     releaseToolInputSchema(),
+		OutputSchema:    githubReleaseOutputSchema(),
+		Annotations:     domain.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+		RequiredScope:   []string{"ids"},
+		Available:       true,
+	},
+	{
+		ContractVersion:  domain.ToolManifestContractVersion,
+		Name:             "email.send",
+		Version:          "1.0.0",
+		Kind:             "tool",
+		Description:      "Send an external email after explicit approval.",
+		SideEffects:      "external-write",
+		InputSchema:      map[string]any{"type": "object", "additionalProperties": true},
+		OutputSchema:     map[string]any{"type": "object"},
+		Annotations:      domain.ToolAnnotations{DestructiveHint: true, OpenWorldHint: true},
+		RequiredScope:    []string{"ids"},
+		Available:        false,
+		ApprovalRequired: true,
+	},
 }
 
 func (s *Server) workflowCapabilities(c *gin.Context) {
@@ -24,6 +61,51 @@ func (s *Server) workflowCapabilities(c *gin.Context) {
 		"capabilities":         workflowCapabilities,
 		"execution":            "Agent Gateway validates capabilities; API Gateway starts Temporal",
 	})
+}
+
+func releaseToolInputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"input":         map[string]any{"type": "object"},
+			"businessInput": map[string]any{"type": "object"},
+			"priorResults":  map[string]any{"type": "object"},
+		},
+		"additionalProperties": true,
+	}
+}
+
+func jiraReleaseOutputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"source":         map[string]any{"const": "jira"},
+			"releaseId":      map[string]any{"type": "string"},
+			"totalTasks":     map[string]any{"type": "integer"},
+			"completedTasks": map[string]any{"type": "integer"},
+			"remainingTasks": map[string]any{"type": "integer"},
+			"blockedTasks":   map[string]any{"type": "integer"},
+			"observedAt":     map[string]any{"type": "string"},
+		},
+		"required":             []string{"source", "releaseId", "observedAt"},
+		"additionalProperties": true,
+	}
+}
+
+func githubReleaseOutputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"source":             map[string]any{"const": "github"},
+			"releaseId":          map[string]any{"type": "string"},
+			"openPullRequests":   map[string]any{"type": "integer"},
+			"failingChecks":      map[string]any{"type": "integer"},
+			"commitsSinceCutoff": map[string]any{"type": "integer"},
+			"observedAt":         map[string]any{"type": "string"},
+		},
+		"required":             []string{"source", "releaseId", "observedAt"},
+		"additionalProperties": true,
+	}
 }
 
 func (s *Server) validateWorkflow(c *gin.Context) {
@@ -102,7 +184,7 @@ func workflowResponse(request domain.WorkflowDefinitionRequest, status string, p
 		Status:                status,
 		TemporalWorkflowType:  genericBlueprintWorkflowType,
 		TemporalStartRequired: false,
-		PolicyStatus:          "mvp-allow-all",
+		PolicyStatus:          "deterministic-read-only-fixture",
 		Permissions:           permissions,
 		Blueprint:             request.Blueprint,
 		Warnings:              warnings,
@@ -197,12 +279,39 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 }
 
 func knownCapability(name string) bool {
+	_, ok := capabilityByName(name)
+	return ok
+}
+
+func capabilityByName(name string) (domain.WorkflowCapability, bool) {
 	for _, capability := range workflowCapabilities {
 		if capability.Name == name {
-			return true
+			return capability, true
 		}
 	}
-	return false
+	return domain.WorkflowCapability{}, false
+}
+
+func scopeSatisfies(scope domain.Scope, required []string) bool {
+	for _, requirement := range required {
+		switch requirement {
+		case "ids":
+			if len(scope.IDs) == 0 {
+				return false
+			}
+		case "teamIds":
+			if len(scope.TeamIDs) == 0 {
+				return false
+			}
+		case "projectIds":
+			if len(scope.ProjectIDs) == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func capabilityPermission(tool string, blueprintApproval bool) domain.WorkflowPermissionRequirement {

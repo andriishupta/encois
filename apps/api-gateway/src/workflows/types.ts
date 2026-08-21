@@ -1,4 +1,5 @@
 import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
+import type { CoordinatorEvent, ExecutionScope, JsonObject, WorkflowBlueprint, WorkflowUpdateRequest } from "@encois/contracts";
 
 export type WorkflowRunStatus = PersistenceWorkflowRunStatus;
 
@@ -16,8 +17,12 @@ export type WorkflowStartRequest = {
   workflowType: string;
   version?: string;
   key?: string;
-  input?: Record<string, unknown>;
-  scope?: Record<string, unknown>;
+  blueprintId?: string;
+  blueprintVersion?: string;
+  input?: JsonObject;
+  scope?: Partial<ExecutionScope>;
+  blueprint?: WorkflowBlueprint;
+  idempotencyKey?: string;
 };
 
 export type WorkflowStartCommand = {
@@ -25,26 +30,42 @@ export type WorkflowStartCommand = {
   workflowId: string;
   taskQueue: string;
   input: {
+    contractVersion: "workflow-blueprint.v1";
     actorId: string;
     organizationId: string;
     requestId: string;
+    traceId?: string;
     workflowId: string;
-    scope: readonly string[];
+    policyVersion: string;
+    scope: ExecutionScope;
     userId?: string;
-    blueprint?: Record<string, unknown>;
-    payload: Record<string, unknown>;
-    workflowScope: Record<string, unknown>;
+    blueprint?: WorkflowBlueprint;
+    businessInput: JsonObject;
+    payload: JsonObject;
+    idempotencyKey?: string;
   };
+  requestHash: string;
 };
+
+export type WorkflowSignalRequest = {
+  contractVersion: "workflow-signal.v1";
+  signalName: "blueprint-approval";
+  signalId: string;
+  payload: JsonObject;
+};
+
+export type { WorkflowUpdateRequest };
 
 export type WorkflowExecutionProjection = {
   workflowId: string;
   runId?: string;
   workflowType: string;
+  blueprintId?: string;
   namespace: string;
   taskQueue: string;
   status: WorkflowRunStatus;
   organizationId: string;
+  reused?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,4 +92,13 @@ export function buildWorkflowId(identity: WorkflowIdentity): string {
     safePart(identity.workflowType, "workflow"),
     safePart(identity.key, "request"),
   ].join(":");
+}
+
+/** Stable Temporal id for the long-lived organization/project Coordinator. */
+export function buildCoordinatorWorkflowId(organizationId: string, coordinatorId: string): string {
+  return buildWorkflowId({
+    organizationId,
+    workflowType: COORDINATOR_WORKFLOW_TYPE,
+    key: coordinatorId,
+  });
 }

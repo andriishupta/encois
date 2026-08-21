@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  go:
+    name: Go ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - packages/contracts
+          - apps/agent-gateway
+          - apps/agent-runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache: true
+
+      - name: Check formatting
+        working-directory: ${{ matrix.module }}
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          test -z "$files"
+
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        run: go test ./...
+
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+  local-smoke:
+    name: Local Temporal execution smoke
+    runs-on: ubuntu-latest
+    needs: [typescript, go]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/agent-runtime/go.mod
+          cache: true
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Temporal CLI
+        uses: temporalio/setup-temporal@v0
+        with:
+          version: v1.8.2
+
+      - name: Run local release and approval smoke
+        env:
+          CI: true
+        run: pnpm smoke:release:local
+
+  persistence:
+    name: PostgreSQL migrations and RLS verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: encois
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d encois"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply PostgreSQL migrations
+        env:
+          DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+        run: pnpm --filter @encois/persistence db:migrate
+
+      - name: Verify RLS and command receipt schema
+        env:
+          DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+        run: pnpm --filter @encois/persistence db:verify
+
+      - name: Build shared runtime packages
+        run: |
+          pnpm --filter @encois/contracts build
+          pnpm --filter @encois/persistence build
+
+      - name: Verify concurrent API command delivery
+        env:
+          DATABASE_RUNTIME_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+        run: pnpm --filter @encois/api-gateway verify:command-receipts
+
+  containers:
+    name: Container ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dashboard
+            file: apps/dashboard/Dockerfile
+          - name: api-gateway
+            file: apps/api-gateway/Dockerfile
+          - name: agent-runtime
+            file: apps/agent-runtime/Dockerfile
+          - name: agent-gateway
+            file: apps/agent-gateway/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image without pushing
+        run: docker build --file "${{ matrix.file }}" --tag "encois/${{ matrix.name }}:ci" .
+
+  terraform:
+    name: Terraform configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra
+
+      - name: Initialize providers without backend
+        working-directory: infra
+        run: terraform init -backend=false -input=false
+
+      - name: Validate configuration
+        working-directory: infra
+        run: terraform validate

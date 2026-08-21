@@ -8,6 +8,41 @@
       "when": 1787211822186,
       "tag": "0000_charming_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787245969469,
+      "tag": "0001_red_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787246868708,
+      "tag": "0002_large_stephen_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787251371599,
+      "tag": "0003_nice_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787251504415,
+      "tag": "0004_broken_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787255338297,
+      "tag": "0005_burly_beast",
+      "breakpoints": true
     }
   ]
 }

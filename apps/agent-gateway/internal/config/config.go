@@ -6,13 +6,15 @@ type Config struct {
 	HTTPAddr      string
 	GinMode       string
 	PolicyVersion string
+	ServiceToken  string
 }
 
 func FromEnv() Config {
 	return Config{
 		HTTPAddr:      envOrDefault("AGENT_GATEWAY_HTTP_ADDR", ":8080"),
 		GinMode:       os.Getenv("GIN_MODE"),
-		PolicyVersion: envOrDefault("AGENT_GATEWAY_POLICY_VERSION", "policy-mvp-allow-all-v1"),
+		PolicyVersion: envOrDefault("AGENT_GATEWAY_POLICY_VERSION", "policy-read-only-fixture-v1"),
+		ServiceToken:  os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
 	}
 }
 

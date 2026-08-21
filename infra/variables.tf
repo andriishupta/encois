@@ -135,9 +135,27 @@ variable "temporal_namespace" {
 }
 
 variable "temporal_secret_name" {
-  description = "Secret container containing the Temporal client credential material."
+  description = "Secret containing the Temporal Cloud API key used by the API and Go worker."
   type        = string
   default     = "temporal-client-credentials"
+}
+
+variable "agent_gateway_secret_name" {
+  description = "Secret containing the private Agent Gateway service token."
+  type        = string
+  default     = "agent-gateway-service-token"
+}
+
+variable "control_plane_secret_name" {
+  description = "Secret shared by the Go Runtime and Gateway API for the private Coordinator control-plane boundary."
+  type        = string
+  default     = "control-plane-service-token"
+}
+
+variable "control_plane_service_user_id" {
+  description = "Existing local users.id used by the Runtime service principal when Cloud SQL-backed service authorization is enabled."
+  type        = string
+  default     = ""
 }
 
 variable "agent_runtime_image" {

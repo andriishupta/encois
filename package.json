@@ -7,6 +7,9 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @encois/dashboard dev",
     "dev:api-gateway": "pnpm --filter @encois/api-gateway dev",
+    "smoke:release": "pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-release-flow.ts",
+    "smoke:approval": "pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-approval-flow.ts",
+    "smoke:release:local": "bash scripts/smoke-release-local.sh",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
