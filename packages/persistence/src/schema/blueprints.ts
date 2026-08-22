@@ -1,4 +1,6 @@
 import {
+  boolean,
+  check,
   jsonb,
   pgEnum,
   pgTable,
@@ -7,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { organizations } from "./organizations.js";
 
 export const workflowBlueprintStatus = pgEnum("workflow_blueprint_status", [
@@ -34,6 +37,7 @@ export const workflowBlueprints = pgTable(
     name: text("name").notNull(),
     blueprint: jsonb("blueprint").$type<Record<string, unknown>>().notNull(),
     status: workflowBlueprintStatus("status").notNull().default("draft"),
+    isCurrent: boolean("is_current").notNull().default(false),
     sourcePlanId: text("source_plan_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -46,5 +50,12 @@ export const workflowBlueprints = pgTable(
       table.version,
     ),
     uniqueIndex("workflow_blueprints_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_blueprints_current_idx")
+      .on(table.organizationId, table.blueprintId)
+      .where(sql`is_current = true`),
+    check(
+      "workflow_blueprints_current_approved_check",
+      sql`NOT ${table.isCurrent} OR ${table.status} = 'approved'`,
+    ),
   ],
 );

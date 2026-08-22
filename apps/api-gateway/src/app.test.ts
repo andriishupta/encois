@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import type { AppConfig } from "./config.js";
 import type { WorkflowClient } from "./workflows/temporal-client.js";
 import type { WorkflowExecutionProjection } from "./workflows/types.js";
+import type { WebhookPayloadStore } from "./webhooks/payload-store.js";
 
 const testConfig: AppConfig = {
   bodyLimitBytes: 1_048_576,
@@ -14,10 +15,31 @@ const testConfig: AppConfig = {
   requestTimeoutMs: 10_000,
   agentGatewayPolicyVersion: "policy-read-only-fixture-v1",
   agentGatewayCapabilitySecret: "test-capability-secret",
+  agentGatewayUrl: "http://agent-gateway.test",
+  agentGatewayServiceToken: "test-agent-token",
+  agentRuntimeUrl: "http://agent-runtime.test",
+  agentRuntimeServiceToken: "test-runtime-token",
   executionCapabilityTtlMs: 86_400_000,
   workflowMode: "memory",
   temporalNamespace: "default",
   temporalTaskQueue: "test",
+  workflowRunRetentionDays: 30,
+};
+
+const noOpWorkflowClient: WorkflowClient = {
+  async start() {
+    throw new Error("workflow client is not part of this test");
+  },
+  async get() {
+    return null;
+  },
+  async list() {
+    return [];
+  },
+  async signal() {},
+  async signalCoordinator() {},
+  async update() {},
+  async cancel() {},
 };
 
 describe("API Gateway", () => {
@@ -38,6 +60,39 @@ describe("API Gateway", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-trace-id")).toBe("0123456789abcdef0123456789abcdef");
     expect((await app.request("/health/ready")).status).toBe(200);
+    expect((await app.request("/healthz")).status).toBe(200);
+    expect((await app.request("/healthz/live")).status).toBe(200);
+    expect((await app.request("/healthz/ready")).status).toBe(200);
+  });
+
+  it("fails production readiness when required runtime dependencies are missing", async () => {
+    const app = createApp({
+      config: {
+        ...testConfig,
+        nodeEnv: "production",
+        workflowMode: "temporal",
+        temporalAddress: "temporal.example:7233",
+        identityPlatformProjectId: "encois-production",
+        integrationOAuthConfigJson: "{}",
+        integrationOAuthCallbackUrl: "https://app.example/api/v1/integrations/authorization/callback",
+        integrationOAuthStateSecret: "a-production-state-secret-that-is-long-enough",
+        sourceArtifactBucket: "encois-production-artifacts",
+        corsOrigins: ["https://app.example"],
+      },
+    });
+
+    const response = await app.request("/health/ready");
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        status: "unavailable",
+        checks: {
+          database: "not_configured",
+          agentGateway: "failed",
+          agentRuntime: "failed",
+        },
+      },
+    });
   });
 
   it("fails closed when AOS is not configured", async () => {
@@ -48,6 +103,39 @@ describe("API Gateway", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "AUTHENTICATION_UNAVAILABLE" },
     });
+  });
+
+  it("keeps webhook receipt public while validating its signed boundary", async () => {
+    const app = createApp({ config: testConfig });
+    const response = await app.request("/api/v1/webhooks/00000000-0000-4000-8000-000000000001/github-events", {
+      method: "POST",
+      body: "{}",
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_WEBHOOK_HEADERS" } });
+  });
+
+  it("mounts the integration webhook lifecycle behind the authenticated boundary", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "00000000-0000-4000-8000-000000000001", organizationId: "00000000-0000-4000-8000-000000000002", scope: ["root"], permissions: ["integrations:read", "integrations:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const invalid = await app.request("/api/v1/integrations/00000000-0000-4000-8000-000000000003/webhook", {
+      method: "POST",
+      body: JSON.stringify({ endpointKey: 42 }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({ error: { code: "INVALID_WEBHOOK_ENDPOINT_KEY" } });
+
+    const unavailable = await app.request("/api/v1/integrations/00000000-0000-4000-8000-000000000003/webhook");
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
   });
 
   it("exposes tenant-protected workflow templates with a hard result limit", async () => {
@@ -67,6 +155,78 @@ describe("API Gateway", () => {
     await expect(unavailable.json()).resolves.toMatchObject({
       error: { code: "PERSISTENCE_UNAVAILABLE" },
     });
+  });
+
+  it("mounts the Blueprint lifecycle proposal boundary and rejects unversioned requests", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"], permissions: ["workflows:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const invalid = await app.request("/api/v1/workflows/blueprints/release-readiness/lifecycle", {
+      method: "POST",
+      body: JSON.stringify({ action: "deprecate", reason: "Retire the old revision." }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalid.status).toBe(400);
+
+    const unavailable = await app.request("/api/v1/workflows/blueprints/release-readiness/lifecycle", {
+      method: "POST",
+      body: JSON.stringify({
+        contractVersion: "workflow-blueprint-lifecycle.v1",
+        action: "deprecate",
+        sourceVersion: "1.0.0",
+        reason: "Retire the old revision.",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
+  it("resolves workflow creation intents behind the product-level boundary", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"], permissions: ["workflows:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const invalid = await app.request("/api/v1/workflows/plans/preview", {
+      method: "POST",
+      body: JSON.stringify({ mode: "template", name: "Missing source" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalid.status).toBe(422);
+    await expect(invalid.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_TEMPLATE_REQUIRED" } });
+
+    const manual = await app.request("/api/v1/workflows/plans/preview", {
+      method: "POST",
+      body: JSON.stringify({ mode: "manual", name: "Manual investigation", prompt: "Investigate release blockers" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(manual.status).toBe(422);
+    await expect(manual.json()).resolves.toMatchObject({ error: { code: "MANUAL_PROVIDER_REQUIRED" } });
+
+    const unsupportedProvider = await app.request("/api/v1/workflows/plans/preview", {
+      method: "POST",
+      body: JSON.stringify({ mode: "manual", name: "Linear investigation", prompt: "Investigate Linear blockers" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(unsupportedProvider.status).toBe(422);
+    await expect(unsupportedProvider.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_PROVIDER_UNSUPPORTED" } });
+
+    const missingProvider = await app.request("/api/v1/workflows/plans/preview", {
+      method: "POST",
+      body: JSON.stringify({ mode: "manual", name: "Generic investigation", prompt: "Investigate the release" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(missingProvider.status).toBe(422);
+    await expect(missingProvider.json()).resolves.toMatchObject({ error: { code: "MANUAL_PROVIDER_REQUIRED" } });
   });
 
   it("exposes authentication status separately from tenant-protected routes", async () => {
@@ -377,6 +537,105 @@ describe("API Gateway", () => {
     expect(unresolvedReference.status).toBe(503);
   });
 
+  it("protects provider authorization and rejects raw credential values", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "provider-adapter", organizationId: "org-1", scope: ["engineering"] },
+        status: "authenticated" as const,
+      }),
+      config: { ...testConfig, controlPlaneServiceToken: "control-plane-token" },
+    });
+    const path = "/api/v1/internal/integrations/integration-1/authorization";
+    const denied = await app.request(path, { method: "POST", body: JSON.stringify({ credentialRef: "secretmanager://projects/demo/secrets/github" }), headers: { "content-type": "application/json" } });
+    expect(denied.status).toBe(401);
+
+    const rawCredential = await app.request(path, {
+      method: "POST",
+      body: JSON.stringify({ credentialRef: "raw-token-value" }),
+      headers: { "content-type": "application/json", "X-Encois-Service-Token": "control-plane-token", "X-Organization-ID": "org-1" },
+    });
+    expect(rawCredential.status).toBe(422);
+    await expect(rawCredential.json()).resolves.toMatchObject({ error: { code: "INVALID_CREDENTIAL_REFERENCE" } });
+
+    const directPromotion = await app.request(path, {
+      method: "POST",
+      body: JSON.stringify({ credentialRef: "secretmanager://projects/demo/secrets/github", status: "active" }),
+      headers: { "content-type": "application/json", "X-Encois-Service-Token": "control-plane-token", "X-Organization-ID": "org-1" },
+    });
+    expect(directPromotion.status).toBe(400);
+
+    const healthPath = "/api/v1/internal/integrations/health";
+    const deniedHealth = await app.request(healthPath, {
+      method: "POST",
+      body: JSON.stringify({ integrationId: "integration-1", status: "needs_reauth" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(deniedHealth.status).toBe(401);
+
+    const unavailableHealth = await app.request(healthPath, {
+      method: "POST",
+      body: JSON.stringify({ integrationId: "integration-1", status: "needs_reauth", lastError: "Provider rejected the credential." }),
+      headers: { "content-type": "application/json", "X-Encois-Service-Token": "control-plane-token", "X-Organization-ID": "org-1" },
+    });
+    expect(unavailableHealth.status).toBe(503);
+    await expect(unavailableHealth.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
+    const scheduledHealthPath = "/api/v1/internal/integrations/health-check";
+    const deniedScheduledHealth = await app.request(scheduledHealthPath, { method: "POST" });
+    expect(deniedScheduledHealth.status).toBe(401);
+
+    const unavailableScheduledHealth = await app.request(scheduledHealthPath, {
+      method: "POST",
+      headers: { "X-Encois-Service-Token": "control-plane-token", "X-Organization-ID": "org-1" },
+      body: JSON.stringify({}),
+    });
+    expect(unavailableScheduledHealth.status).toBe(503);
+    await expect(unavailableScheduledHealth.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
+  it("rejects local credential references in production authorization boundaries", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "agent-gateway", organizationId: "org-1", scope: ["*"] },
+        status: "authenticated" as const,
+      }),
+      config: {
+        ...testConfig,
+        nodeEnv: "production",
+        controlPlaneServiceToken: "control-plane-token",
+      },
+      workflowClient: noOpWorkflowClient,
+      webhookPayloadStore: {} as WebhookPayloadStore,
+    });
+
+    const response = await app.request("/api/v1/internal/integrations/integration-1/authorization", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "X-Encois-Service-Token": "control-plane-token",
+      },
+      body: JSON.stringify({ credentialRef: "local://fixture-token", status: "authorized" }),
+    });
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "INVALID_CREDENTIAL_REFERENCE" },
+    });
+  });
+
+  it("mounts the browser-facing authorization start boundary without exposing credentials", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"], permissions: ["integrations:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+    const response = await app.request("/api/v1/integrations/integration-1/authorization/start", { method: "POST" });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
   it("validates a workflow change plan without applying it", async () => {
     const app = createApp({
       authenticate: async () => ({
@@ -589,6 +848,10 @@ describe("API Gateway", () => {
     expect(submit.status).toBe(503);
     await expect(submit.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
 
+    const list = await app.request("/api/v1/workflows/plans");
+    expect(list.status).toBe(503);
+    await expect(list.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
     const approve = await app.request("/api/v1/workflows/plans/plan-persistence-unavailable/approve", {
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -602,6 +865,19 @@ describe("API Gateway", () => {
     });
     expect(apply.status).toBe(503);
     await expect(apply.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+  });
+
+  it("fails closed when Run again has no persisted lineage", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"], permissions: ["workflows:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+    const response = await app.request("/api/v1/workflows/workflow:org-1:encois.user-blueprint.v1:terminal/rerun", { method: "POST" });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
   });
 
   it("fails closed when a workflow references a stored Blueprint without persistence", async () => {
@@ -706,6 +982,26 @@ describe("API Gateway", () => {
       method: "POST",
     });
     expect(signal.status).toBe(200);
+
+    const pause = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
+      body: JSON.stringify({ contractVersion: "workflow-signal.v1", signalName: "workflow-pause", signalId: "pause-test-1", payload: { reason: "Operator review" } }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(pause.status).toBe(200);
+    const resume = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
+      body: JSON.stringify({ contractVersion: "workflow-signal.v1", signalName: "workflow-resume", signalId: "resume-test-1", payload: {} }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(resume.status).toBe(200);
+
+    const cancel = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/cancel`, {
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(cancel.status).toBe(200);
+    await expect(cancel.json()).resolves.toMatchObject({ data: { accepted: true } });
 
     const invalidSignal = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
       body: JSON.stringify({

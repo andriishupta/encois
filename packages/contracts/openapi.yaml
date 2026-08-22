@@ -54,6 +54,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationListResponse'
+    post:
+      operationId: createIntegration
+      summary: Register a pending read-only integration and bind it to an organization unit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationCreateRequest'
+      responses:
+        '201':
+          description: Pending integration registration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationResponse'
   /api/v1/integrations/{integrationId}:
     post:
       operationId: updateIntegration
@@ -79,6 +97,336 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationResponse'
+  /api/v1/integrations/{integrationId}/webhook:
+    get:
+      operationId: getIntegrationWebhookEndpoint
+      summary: Read the scoped webhook endpoint projection for an integration
+      description: Returns endpoint metadata only. The signing secret is never returned by a read operation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Webhook endpoint metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookEndpointResponse' }
+        '403': { description: Caller cannot read this integration }
+        '404': { description: Webhook endpoint or integration is not visible in the caller's scope }
+        '503': { description: Persistence is not configured }
+    post:
+      operationId: provisionIntegrationWebhookEndpoint
+      summary: Provision or repair the signed webhook endpoint for an integration
+      description: The API generates and stores the signing secret in Secret Manager. The response contains the secret once so an administrator can configure the provider; it is not persisted in the dashboard or returned by later reads.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WebhookEndpointProvisionRequest' }
+      responses:
+        '201':
+          description: Endpoint provisioned with one-time signing secret
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookEndpointSecretResponse' }
+        '403': { description: Caller cannot manage this integration }
+        '404': { description: Integration is not visible in the caller's scope }
+        '409': { description: Endpoint already exists or integration is not active }
+        '503': { description: Persistence or Secret Manager is not configured }
+  /api/v1/integrations/{integrationId}/webhook/rotate:
+    post:
+      operationId: rotateIntegrationWebhookSecret
+      summary: Rotate the signing secret for an integration webhook endpoint
+      description: Adds a new Secret Manager version and returns the replacement secret once. The endpoint remains enabled after a successful rotation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Endpoint with one-time replacement secret
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookEndpointSecretResponse' }
+        '403': { description: Caller cannot manage this integration }
+        '404': { description: Endpoint or integration is not visible in the caller's scope }
+        '409': { description: Endpoint is disabled }
+        '503': { description: Persistence or Secret Manager is not configured }
+  /api/v1/integrations/{integrationId}/webhook/enable:
+    post:
+      operationId: enableIntegrationWebhookEndpoint
+      summary: Enable an integration webhook endpoint
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Enabled endpoint projection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookEndpointResponse' }
+        '403': { description: Caller cannot manage this integration }
+        '404': { description: Endpoint or integration is not visible in the caller's scope }
+        '409': { description: Endpoint has no configured signing secret }
+  /api/v1/integrations/{integrationId}/webhook/disable:
+    post:
+      operationId: disableIntegrationWebhookEndpoint
+      summary: Disable an integration webhook endpoint
+      description: Disabling makes the public ingress reject provider deliveries while preserving the endpoint and Secret Manager versions for an auditable recovery.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Disabled endpoint projection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookEndpointResponse' }
+        '403': { description: Caller cannot manage this integration }
+        '404': { description: Endpoint or integration is not visible in the caller's scope }
+  /api/v1/integrations/{integrationId}/authorization/start:
+    post:
+      operationId: startIntegrationAuthorization
+      summary: Start provider authorization without exposing credentials to the browser
+      description: The configured provider adapter owns OAuth, callback, and Secret Manager provisioning. The browser receives only a trusted provider redirect or a pending state.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider authorization handoff
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationAuthorizationStartResponse'
+        '403':
+          description: Caller cannot manage this integration
+        '404':
+          description: Integration not found in the caller's scope
+        '503':
+          description: Provider authorization adapter is not configured
+  /api/v1/integrations/authorization/callback:
+    get:
+      operationId: completeIntegrationAuthorization
+      summary: Complete a provider authorization callback
+      description: Public OAuth callback protected by a signed, one-time state. The callback never accepts credentials from the browser and redirects back to the dashboard after Secret Manager provisioning.
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '303':
+          description: Authorization completed and the browser is redirected to the integration detail view
+        '400':
+          description: Invalid, expired, denied, or replayed authorization state
+        '502':
+          description: Provider token exchange or Secret Manager provisioning failed
+        '503':
+          description: Authorization adapter or persistence is not configured
+  /api/v1/webhooks/{organizationId}/{endpointKey}:
+    post:
+      operationId: receiveWebhookEvent
+      summary: Receive a signed provider webhook and enqueue scoped source ingestion
+      description: Public provider ingress. The request body is signed raw bytes; the gateway validates the signature, retains the payload in Cloud Storage, deduplicates the provider event, and starts the existing source-ingestion workflow without exposing runtime identifiers.
+      security: []
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: endpointKey
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 120 }
+        - name: X-Encois-Event-Id
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+        - name: X-Encois-Signature
+          in: header
+          required: true
+          schema: { type: string, pattern: '^sha256=[A-Fa-f0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+          text/plain: { schema: { type: string } }
+          application/octet-stream: { schema: { type: string, format: binary } }
+      responses:
+        '202':
+          description: Event accepted and source ingestion started or is being processed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookReceiptResponse' }
+        '200':
+          description: Previously received event; no duplicate ingestion was started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookReceiptResponse' }
+        '400': { description: Missing or malformed event headers }
+        '401': { description: Invalid webhook signature }
+        '404': { description: Endpoint not found }
+        '413': { description: Payload exceeds the 1 MiB ingress limit }
+        '415': { description: Unsupported content type }
+        '503': { description: Persistence, Secret Manager, Cloud Storage, or workflow runtime is unavailable }
+  /api/v1/internal/integrations/{integrationId}/authorization:
+    post:
+      operationId: updateIntegrationAuthorization
+      summary: Complete provider authorization with a Secret Manager reference
+      description: Private provider-adapter boundary. Raw credentials are never accepted or returned.
+      security:
+        - serviceTokenAuth: []
+      parameters:
+        - name: integrationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationAuthorizationUpdate'
+      responses:
+        '200':
+          description: Updated authorization lifecycle projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationResponse'
+        '401':
+          description: Internal service authentication failed
+        '422':
+          description: Invalid credential reference or lifecycle state
+  /api/v1/internal/integrations/credentials/resolve:
+    post:
+      operationId: resolveIntegrationCredential
+      summary: Resolve a scoped provider capability to a Secret Manager reference
+      description: Private Agent Gateway boundary. The response contains only a Secret Manager reference; provider tokens are never returned.
+      security:
+        - serviceTokenAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationCredentialResolutionRequest'
+      responses:
+        '200':
+          description: Scoped provider credential reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationCredentialResolutionResponse'
+        '401':
+          description: Internal service authentication failed
+        '404':
+          description: No active, scoped integration satisfies the provider capability
+        '503':
+          description: Persistence is not configured
+  /api/v1/internal/integrations/health:
+    post:
+      operationId: reportIntegrationHealth
+      summary: Report provider health from the private Agent Gateway
+      description: Private data-plane callback. It updates lifecycle state and audit metadata without exposing credentials to the dashboard.
+      security:
+        - serviceTokenAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationHealthUpdate'
+      responses:
+        '200':
+          description: Updated integration lifecycle projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationResponse'
+        '400':
+          description: Invalid health update payload
+        '401':
+          description: Internal service authentication failed
+        '404':
+          description: Integration not found in the organization
+        '502':
+          description: Health update could not be persisted
+        '503':
+          description: Persistence is not configured
+  /api/v1/internal/integrations/health-check:
+    post:
+      operationId: runIntegrationHealthCheck
+      summary: Run bounded provider health probes for an organization
+      description: Private scheduler boundary. The API enumerates active scoped integrations and asks the private Agent Gateway to probe each provider without exposing credentials.
+      security:
+        - serviceTokenAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationHealthCheckRequest'
+      responses:
+        '200':
+          description: Bounded health-check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationHealthCheckResponse'
+        '400':
+          description: Invalid health-check payload
+        '401':
+          description: Internal service authentication failed
+        '503':
+          description: Persistence or Agent Gateway is not configured
   /api/v1/organization:
     get:
       operationId: getOrganization
@@ -212,6 +560,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeletedResponse'
+  /api/v1/context/graph/query:
+    post:
+      operationId: queryContextGraph
+      summary: Inspect the organization-scoped Spanner Graph projection
+      description: The browser-facing query is allowlisted; provider SQL and Agent Gateway credentials are never accepted.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphInspectionQueryRequest'
+      responses:
+        '200':
+          description: Read-only graph projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphInspectionResponse'
+        '403':
+          description: Organization management permission or scope is required
+        '503':
+          description: Graph data plane is unavailable or not configured
+  /api/v1/context/memory/query:
+    post:
+      operationId: queryAgentMemory
+      summary: Inspect tenant-scoped agent memory through the private Agent Runtime
+      description: Read-only administrative retrieval. Memory generation and deletion are not exposed to the browser.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryInspectionQueryRequest'
+      responses:
+        '200':
+          description: Read-only agent memory projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryInspectionResponse'
+        '403':
+          description: Organization management permission or scope is required
+        '503':
+          description: Agent Runtime or memory provider is unavailable
   /api/v1/sources:
     get:
       operationId: listKnowledgeSources
@@ -264,6 +660,12 @@ paths:
                 name:
                   type: string
                   maxLength: 120
+                readScope:
+                  type: string
+                  description: JSON-encoded KnowledgeSourceScope object
+                visibilityScope:
+                  type: string
+                  description: JSON-encoded KnowledgeSourceScope object
       responses:
         '201':
           description: Source and immutable revision created
@@ -546,6 +948,167 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowSignalResponse'
+  /api/v1/workflows/{workflowId}/cancel:
+    post:
+      operationId: cancelWorkflow
+      summary: Request cancellation of an active workflow run
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowSignalResponse'
+        '409':
+          description: Workflow is already terminal or cannot be cancelled
+  /api/v1/workflows/{workflowId}/rerun:
+    post:
+      operationId: rerunWorkflow
+      summary: Start a new run from a terminal workflow's persisted revision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: New run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+        '409':
+          description: Parent run is not rerunnable or its Blueprint revision is unavailable
+  /api/v1/workflows/{workflowId}/retry:
+    post:
+      operationId: retryWorkflow
+      summary: Retry a failed or partial workflow from its persisted revision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Retry accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+        '409':
+          description: Parent run is not retryable or its Blueprint revision is unavailable
+  /api/v1/workflows/templates:
+    get:
+      operationId: listWorkflowTemplates
+      summary: List published workflow Templates available in the caller scope
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: category
+          in: query
+          schema: { type: string, maxLength: 80 }
+      responses:
+        '200':
+          description: Published workflow Templates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplateListResponse'
+  /api/v1/workflows/blueprints:
+    get:
+      operationId: listWorkflowBlueprints
+      summary: List tenant-scoped Blueprint registry entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Blueprint registry projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowBlueprintListResponse'
+  /api/v1/workflows/blueprints/{blueprintId}/lifecycle:
+    post:
+      operationId: proposeWorkflowBlueprintLifecycleChange
+      summary: Submit an audited Blueprint revision or deprecation proposal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: blueprintId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowBlueprintLifecycleRequest'
+      responses:
+        '202':
+          description: Lifecycle proposal persisted and awaiting approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanResponse'
+        '200':
+          description: Idempotent replay of an existing lifecycle proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanResponse'
+  /api/v1/workflows/plans/preview:
+    post:
+      operationId: previewWorkflowCreation
+      summary: Resolve a product-level workflow creation intent into a reviewable plan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowCreationIntent'
+      responses:
+        '200':
+          description: Resolved workflow plan preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowCreationPreviewResponse'
+  /api/v1/workflows/plans/from-intent:
+    post:
+      operationId: submitWorkflowCreationIntent
+      summary: Persist a workflow change plan resolved from a product-level intent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowCreationIntent'
+      responses:
+        '202':
+          description: Workflow plan persisted and awaiting approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanResponse'
   /api/v1/workflows/plans/validate:
     post:
       operationId: validateWorkflowChangePlan
@@ -566,6 +1129,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkflowPlanValidationResponse'
   /api/v1/workflows/plans:
+    get:
+      operationId: listWorkflowChangePlans
+      summary: List tenant-visible persisted workflow change proposals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 100
+      responses:
+        '200':
+          description: Persisted proposals visible in the caller's organization and execution scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanListResponse'
     post:
       operationId: submitWorkflowChangePlan
       summary: Persist a validated workflow change proposal
@@ -628,6 +1212,120 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowPlanResponse'
+  /api/v1/investigations:
+    get:
+      operationId: listSavedInvestigations
+      summary: List saved investigations owned by the caller
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Saved investigation projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedInvestigationListResponse'
+    post:
+      operationId: createSavedInvestigation
+      summary: Save a bounded graph, memory, or workflow investigation query
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedInvestigationCreateRequest'
+      responses:
+        '201':
+          description: Saved investigation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedInvestigationResponse'
+  /api/v1/investigations/{investigationId}:
+    delete:
+      operationId: deleteSavedInvestigation
+      summary: Delete a saved investigation owned by the caller
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: investigationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Saved investigation deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+        '404':
+          description: Saved investigation not found
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      summary: List current user's in-product operational notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notification projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+  /api/v1/notifications/{notificationId}/read:
+    post:
+      operationId: markNotificationRead
+      summary: Mark a notification read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedResponse'
+  /api/v1/settings/notifications:
+    get:
+      operationId: getNotificationPreferences
+      summary: Get current user's notification preferences
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesResponse'
+    put:
+      operationId: updateNotificationPreferences
+      summary: Update current user's notification preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferences'
+      responses:
+        '200':
+          description: Notification preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -679,7 +1377,7 @@ components:
       enum: [viewer, contributor, manager, admin]
     Permission:
       type: string
-      enum: [onboarding:manage, workflows:read, workflows:run, workflows:manage, integrations:read, integrations:manage, knowledge:read, knowledge:manage, organization:read, organization:manage, settings:read, settings:manage]
+      enum: [onboarding:manage, workflows:read, workflows:run, workflows:manage, integrations:read, integrations:manage, knowledge:read, knowledge:manage, context:read, memory:read, organization:read, organization:manage, settings:read, settings:manage]
     OrganizationMembershipStatus:
       type: string
       enum: [invited, active, suspended]
@@ -810,6 +1508,98 @@ components:
           required: [deleted]
           properties:
             deleted: { const: true }
+    AcceptedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [read]
+          properties:
+            read: { const: true }
+    WebhookReceiptResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [accepted, duplicate, matchedSources, status]
+          properties:
+            accepted: { const: true }
+            duplicate: { type: boolean }
+            matchedSources: { type: integer, minimum: 0 }
+            status: { type: string, enum: [received, processed] }
+    SavedInvestigation:
+      type: object
+      required: [id, organizationId, name, kind, query, params, scope, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [graph, memory, workflow] }
+        query: { type: string }
+        params: { type: object, additionalProperties: true }
+        scope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    SavedInvestigationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, kind, query, scope]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        kind: { type: string, enum: [graph, memory, workflow] }
+        query: { type: string, minLength: 1, maxLength: 500 }
+        params: { type: object, additionalProperties: true }
+        scope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
+    SavedInvestigationResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/SavedInvestigation' }
+    SavedInvestigationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/SavedInvestigation' }
+    Notification:
+      type: object
+      required: [id, type, severity, title, message, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        severity: { type: string, enum: [info, warning, error] }
+        title: { type: string }
+        message: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        readAt: { type: string }
+        createdAt: { type: string }
+    NotificationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Notification' }
+    NotificationPreferences:
+      type: object
+      required: [emailEnabled, pushEnabled, workflowUpdates, evidenceReady, weeklyDigest]
+      properties:
+        emailEnabled: { type: boolean }
+        pushEnabled: { type: boolean }
+        workflowUpdates: { type: boolean }
+        evidenceReady: { type: boolean }
+        weeklyDigest: { type: boolean }
+        updatedAt: { type: string, readOnly: true }
+    NotificationPreferencesResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/NotificationPreferences' }
     WaitlistRequest:
       type: object
       additionalProperties: false
@@ -833,7 +1623,7 @@ components:
             accepted: { const: true }
     IntegrationStatus:
       type: string
-      enum: [pending, active, disabled, error]
+      enum: [pending, authorized, active, degraded, needs_reauth, disabled, error]
     KnowledgeSourceKind:
       type: string
       enum: [integration, uploaded_document, manual, media]
@@ -872,8 +1662,19 @@ components:
         visibilityScope: { $ref: '#/components/schemas/KnowledgeSourceScope' }
         contentType: { type: string }
         currentRevisionId: { type: string }
+        freshness: { $ref: '#/components/schemas/SourceFreshness' }
         createdAt: { type: string }
         updatedAt: { type: string }
+    SourceFreshness:
+      type: object
+      additionalProperties: false
+      required: [source, observedAt, status]
+      properties:
+        source: { type: string }
+        observedAt: { type: string }
+        ingestedAt: { type: string }
+        expiresAt: { type: string }
+        status: { type: string, enum: [fresh, stale, unknown] }
     KnowledgeSourceCreateRequest:
       type: object
       additionalProperties: false
@@ -1002,6 +1803,17 @@ components:
         name: { type: string }
         provider: { type: string }
         status: { $ref: '#/components/schemas/IntegrationStatus' }
+        scopeIds:
+          type: array
+          items: { type: string }
+        grantedScopes:
+          type: array
+          items: { type: string }
+        credentialConfigured: { type: boolean }
+        authorizedAt: { type: string }
+        lastHealthCheckAt: { type: string }
+        lastError: { type: string }
+        updatedAt: { type: string }
     IntegrationListResponse:
       type: object
       required: [data]
@@ -1016,6 +1828,104 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/IntegrationProjection'
+    WebhookEndpointProjection:
+      type: object
+      additionalProperties: false
+      required: [integrationId, organizationId, endpointKey, provider, status, secretConfigured, createdAt, updatedAt]
+      properties:
+        integrationId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        endpointKey: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9][a-z0-9_-]{0,119}$' }
+        provider: { type: string }
+        status: { $ref: '#/components/schemas/IntegrationStatus' }
+        secretConfigured: { type: boolean }
+        url: { type: string, format: uri }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WebhookEndpointProvisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        endpointKey: { type: string, minLength: 1, maxLength: 120, pattern: '^[a-z0-9][a-z0-9_-]{0,119}$' }
+    WebhookEndpointResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/WebhookEndpointProjection' }
+    WebhookEndpointSecretResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [endpoint, secret]
+          properties:
+            endpoint: { $ref: '#/components/schemas/WebhookEndpointProjection' }
+            secret: { type: string, minLength: 20, pattern: '^whsec_[A-Za-z0-9_-]+$' }
+    IntegrationCredentialResolutionRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, capabilities]
+      properties:
+        provider: { type: string, minLength: 1, maxLength: 80 }
+        integrationId: { type: string, format: uuid }
+        capabilities:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 120 }
+    IntegrationCredentialResolutionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [integrationId, provider, credentialRef]
+          properties:
+            integrationId: { type: string, format: uuid }
+            provider: { type: string }
+            credentialRef: { type: string, pattern: '^(secretmanager://projects/|local://)' }
+    IntegrationHealthUpdate:
+      type: object
+      additionalProperties: false
+      required: [integrationId, status]
+      properties:
+        integrationId: { type: string, format: uuid }
+        status: { type: string, enum: [active, degraded, needs_reauth, error] }
+        lastError: { type: string, maxLength: 2000 }
+    IntegrationHealthCheckRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        integrationId: { type: string, format: uuid }
+    IntegrationHealthCheckResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [checked, succeeded, failed]
+          properties:
+            checked: { type: integer, minimum: 0, maximum: 50 }
+            succeeded: { type: integer, minimum: 0, maximum: 50 }
+            failed: { type: integer, minimum: 0, maximum: 50 }
+    IntegrationAuthorizationStartResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/IntegrationAuthorizationStart' }
+    IntegrationAuthorizationStart:
+      type: object
+      additionalProperties: false
+      required: [integrationId, provider, status]
+      properties:
+        integrationId: { type: string }
+        provider: { type: string }
+        status: { enum: [redirect, pending] }
+        authorizationUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
     IntegrationUpdateRequest:
       type: object
       additionalProperties: false
@@ -1023,6 +1933,133 @@ components:
       properties:
         displayName: { type: string, minLength: 1 }
         status: { $ref: '#/components/schemas/IntegrationStatus' }
+    IntegrationAuthorizationUpdate:
+      type: object
+      additionalProperties: false
+      required: [credentialRef]
+      properties:
+        credentialRef: { type: string, minLength: 1, maxLength: 1024, pattern: '^(secretmanager://projects/|local://)', description: Secret Manager or local adapter reference; never a raw credential }
+        status: { type: string, enum: [authorized, active, degraded, needs_reauth, error] }
+        lastError: { type: string, maxLength: 2000 }
+    IntegrationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, provider, organizationUnitId]
+      properties:
+        displayName: { type: string, minLength: 2, maxLength: 160 }
+        provider: { type: string, minLength: 1, maxLength: 80 }
+        organizationUnitId: { type: string, format: uuid }
+        grantedScopes:
+          type: array
+          items: { type: string, maxLength: 120 }
+    GraphInspectionQueryName:
+      type: string
+      enum: [all, all_context, source.facts, project.related_entities, release.blockers]
+    ExecutionScope:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+    GraphInspectionQueryRequest:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query: { $ref: '#/components/schemas/GraphInspectionQueryName' }
+        params:
+          type: object
+          additionalProperties: false
+          properties:
+            projectId: { type: string, maxLength: 160 }
+            nodeType: { type: string, minLength: 1, maxLength: 80 }
+            relationship: { type: string, minLength: 1, maxLength: 120 }
+            limit: { type: integer, minimum: 1, maximum: 500 }
+        scope: { $ref: '#/components/schemas/ExecutionScope' }
+    GraphNode:
+      type: object
+      required: [id, type, properties]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        properties: { type: object }
+        provenance: { type: object }
+    GraphEdge:
+      type: object
+      required: [id, sourceId, targetId, relationship, properties]
+      properties:
+        id: { type: string }
+        sourceId: { type: string }
+        targetId: { type: string }
+        relationship: { type: string }
+        properties: { type: object }
+        provenance: { type: object }
+    GraphInspectionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [query, status, nodes, edges, generatedAt]
+          properties:
+            query: { $ref: '#/components/schemas/GraphInspectionQueryName' }
+            status: { type: string, enum: [completed, deferred, failed] }
+            nodes:
+              type: array
+              items: { $ref: '#/components/schemas/GraphNode' }
+            edges:
+              type: array
+              items: { $ref: '#/components/schemas/GraphEdge' }
+            evidenceRefs:
+              type: array
+              items: { type: string }
+            freshness:
+              type: array
+              items: { type: object }
+            generatedAt: { type: string, format: date-time }
+    MemoryInspectionQueryRequest:
+      type: object
+      additionalProperties: false
+      required: [agentDefinition, query]
+      properties:
+        agentDefinition: { type: string, minLength: 1, maxLength: 160 }
+        query: { type: string, minLength: 1, maxLength: 2000 }
+        projectId: { type: string, minLength: 1, maxLength: 160 }
+        scope: { $ref: '#/components/schemas/ExecutionScope' }
+        maxResults: { type: integer, minimum: 1, maximum: 20 }
+    MemoryInspectionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [agentDefinition, query, status, memories, generatedAt]
+          properties:
+            agentDefinition: { type: string }
+            query: { type: string }
+            status: { type: string, enum: [completed, deferred, failed] }
+            memories:
+              type: array
+              items:
+                type: object
+                required: [id, agentDefinition, summary, evidenceRefs, observedAt]
+                properties:
+                  id: { type: string }
+                  agentDefinition: { type: string }
+                  summary: { type: string }
+                  evidenceRefs:
+                    type: array
+                    items: { type: string }
+                  observedAt: { type: string }
+                  workflowId: { type: string }
+                  runId: { type: string }
+                  retentionClass: { $ref: '#/components/schemas/ArtifactRetentionClass' }
+                  retentionUntil: { type: string, format: date-time }
+                  freshness: { type: object }
+            generatedAt: { type: string, format: date-time }
     WorkflowStartRequest:
       type: object
       additionalProperties: false
@@ -1053,7 +2090,7 @@ components:
             namespace: { type: string }
             taskQueue: { type: string }
             blueprintId: { type: string }
-            status: { type: string, enum: [queued, running, waiting, partial, failed, completed, cancelled] }
+            status: { type: string, enum: [queued, running, waiting, paused, partial, failed, completed, cancelled] }
             statusReason:
               type: string
               enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
@@ -1082,6 +2119,28 @@ components:
         activityName: { type: string }
         agentRunId: { type: string }
         evidenceRef: { type: string }
+        evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [reference]
+            properties:
+              reference: { type: string, minLength: 1 }
+              provenance: { type: object }
+              freshness: { type: object }
+              confidence: { type: number, minimum: 0, maximum: 1 }
+        trace:
+          type: object
+          additionalProperties: false
+          properties:
+            provider: { type: string }
+            model: { type: string }
+            durationMs: { type: number, minimum: 0 }
+            attempt: { type: integer, minimum: 1 }
+            budget: { type: string }
+            outcome: { type: string }
+            redacted: { type: boolean }
         metadata: { type: object, additionalProperties: true }
         occurredAt: { type: string }
     WorkflowEventListResponse:
@@ -1114,6 +2173,9 @@ components:
         runId: { type: string }
         workflowType: { type: string }
         blueprintId: { type: string }
+        blueprintVersion: { type: string }
+        parentWorkflowId: { type: string }
+        trigger: { type: string }
         namespace: { type: string }
         taskQueue: { type: string }
         status: { type: string }
@@ -1125,21 +2187,34 @@ components:
         createdAt: { type: string }
         updatedAt: { type: string }
     WorkflowSignalRequest:
-      type: object
-      additionalProperties: false
-      required: [contractVersion, signalName, signalId, payload]
-      properties:
-        contractVersion: { const: workflow-signal.v1 }
-        signalName: { const: blueprint-approval }
-        signalId: { type: string, minLength: 1, maxLength: 128 }
-        payload:
-          type: object
+      oneOf:
+        - type: object
           additionalProperties: false
-          required: [stepId, approved]
+          required: [contractVersion, signalName, signalId, payload]
           properties:
-            stepId: { type: string, minLength: 1 }
-            approved: { type: boolean }
-            reason: { type: string, maxLength: 2000 }
+            contractVersion: { const: workflow-signal.v1 }
+            signalName: { const: blueprint-approval }
+            signalId: { type: string, minLength: 1, maxLength: 128 }
+            payload:
+              type: object
+              additionalProperties: false
+              required: [stepId, approved]
+              properties:
+                stepId: { type: string, minLength: 1 }
+                approved: { type: boolean }
+                reason: { type: string, maxLength: 2000 }
+        - type: object
+          additionalProperties: false
+          required: [contractVersion, signalName, signalId, payload]
+          properties:
+            contractVersion: { const: workflow-signal.v1 }
+            signalName: { type: string, enum: [workflow-pause, workflow-resume] }
+            signalId: { type: string, minLength: 1, maxLength: 128 }
+            payload:
+              type: object
+              additionalProperties: false
+              properties:
+                reason: { type: string, maxLength: 2000 }
     WorkflowSignalResponse:
       type: object
       required: [data]
@@ -1235,6 +2310,232 @@ components:
                     type: array
                     minItems: 1
                     items: { type: string, minLength: 1 }
+    WorkflowStep:
+      type: object
+      additionalProperties: false
+      required: [id, kind]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { enum: [tool, agent, transform, condition, wait, approval] }
+        tool: { type: string }
+        agentDefinition: { type: string }
+        dependsOn:
+          type: array
+          items: { type: string }
+        input: { type: object }
+        requiresApproval: { type: boolean }
+    WorkflowBlueprint:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, blueprintId, version, name, workflowType, purpose, enabled, steps]
+      properties:
+        contractVersion: { const: workflow-blueprint.v1 }
+        blueprintId: { type: string, minLength: 1 }
+        version: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        workflowType: { const: encois.user-blueprint.v1 }
+        purpose: { type: string }
+        enabled: { type: boolean }
+        steps:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/WorkflowStep' }
+        allowedTools:
+          type: array
+          items: { type: string }
+        requiredScopes:
+          type: array
+          items: { type: string }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+        inputSchemaRef: { type: string }
+        outputSchemaRef: { type: string }
+        requiresApproval: { type: boolean }
+    WorkflowTemplateStep:
+      type: object
+      additionalProperties: false
+      required: [id, kind]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { enum: [tool, agent, transform, condition, wait, approval] }
+        tool: { type: string }
+        providerSlot: { type: string }
+        agentDefinition: { type: string }
+        dependsOn:
+          type: array
+          items: { type: string }
+        input: { type: object }
+        requiresApproval: { type: boolean }
+    WorkflowTemplate:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, version, workflowType, purpose, inputs, providerSlots, steps, output]
+      properties:
+        schemaVersion: { const: workflow-template.v1 }
+        version: { type: string }
+        workflowType: { const: encois.user-blueprint.v1 }
+        purpose: { type: string }
+        inputs:
+          type: object
+          additionalProperties:
+            type: object
+            required: [type, description]
+            properties:
+              type: { type: string }
+              description: { type: string }
+              required: { type: boolean }
+        providerSlots:
+          type: array
+          items:
+            type: object
+            required: [key, capabilities]
+            properties:
+              key: { type: string }
+              capabilities:
+                type: array
+                items: { type: string }
+              preferredProviders:
+                type: array
+                items: { type: string }
+              required: { type: boolean }
+        steps:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/WorkflowTemplateStep' }
+        output:
+          type: object
+          required: [type, description]
+          properties:
+            type: { type: string }
+            description: { type: string }
+    WorkflowTemplateProjection:
+      type: object
+      required: [id, key, category, title, description, keywords, requiredCapabilities, version, schemaVersion, template]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        category: { type: string }
+        title: { type: string }
+        description: { type: string }
+        keywords:
+          type: array
+          items: { type: string }
+        requiredCapabilities:
+          type: array
+          items: { type: string }
+        version: { type: string }
+        schemaVersion: { type: string }
+        template: { $ref: '#/components/schemas/WorkflowTemplate' }
+    WorkflowTemplateListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowTemplateProjection' }
+    WorkflowBlueprintProjection:
+      type: object
+      required: [blueprintId, version, name, purpose, workflowType, status, isCurrent, steps, createdAt, updatedAt]
+      properties:
+        blueprintId: { type: string }
+        version: { type: string }
+        name: { type: string }
+        purpose: { type: string }
+        workflowType: { const: encois.user-blueprint.v1 }
+        status: { enum: [draft, approved, retired] }
+        isCurrent: { type: boolean }
+        sourcePlanId: { type: string }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowStep' }
+        requiredScopes:
+          type: array
+          items: { type: string }
+        requiresApproval: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        approvedAt: { type: string, format: date-time }
+    WorkflowBlueprintListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowBlueprintProjection' }
+    WorkflowBlueprintLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, action, reason]
+      properties:
+        contractVersion: { const: workflow-blueprint-lifecycle.v1 }
+        action: { enum: [create_revision, duplicate, deprecate, restore, mark_current] }
+        sourceVersion: { type: string, minLength: 1, maxLength: 32 }
+        version: { type: string, pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+$', maxLength: 32 }
+        name: { type: string, minLength: 2, maxLength: 160 }
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+    WorkflowCreationIntent:
+      type: object
+      additionalProperties: false
+      required: [mode, name]
+      properties:
+        mode: { enum: [template, blueprint, manual] }
+        name: { type: string, minLength: 2, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        businessKey: { type: string, maxLength: 128 }
+        templateKey: { type: string, maxLength: 128 }
+        blueprintKey: { type: string, maxLength: 128 }
+        prompt: { type: string, maxLength: 4000 }
+        businessInput: { type: object }
+        scope:
+          type: object
+          additionalProperties: false
+          properties:
+            ids:
+              type: array
+              minItems: 1
+              items: { type: string }
+        start: { type: boolean }
+    WorkflowCreationPreview:
+      type: object
+      required: [intent, plan, blueprint, source, warnings, requiredCapabilities, providerBindings, approvalRequired]
+      properties:
+        intent: { $ref: '#/components/schemas/WorkflowCreationIntent' }
+        plan: { $ref: '#/components/schemas/WorkflowChangePlan' }
+        blueprint: { $ref: '#/components/schemas/WorkflowBlueprint' }
+        source:
+          type: object
+          required: [kind, title]
+          properties:
+            kind: { enum: [template, blueprint, manual] }
+            key: { type: string }
+            title: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        requiredCapabilities:
+          type: array
+          items: { type: string }
+        providerBindings:
+          type: array
+          items:
+            type: object
+            required: [slotKey, required, status, capabilities]
+            properties:
+              slotKey: { type: string }
+              required: { type: boolean }
+              status: { enum: [ready, missing] }
+              provider: { type: string }
+              integrationName: { type: string }
+              capabilities:
+                type: array
+                items: { type: string }
+        approvalRequired: { type: boolean }
+    WorkflowCreationPreviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/WorkflowCreationPreview' }
     WorkflowStartIntent:
       type: object
       additionalProperties: false
@@ -1253,7 +2554,9 @@ components:
         coordinatorId: { type: string }
         organizationId: { type: string }
         projectId: { type: string }
+        scope: { $ref: '#/components/schemas/ExecutionScope' }
         observedAt: { type: string }
+        metadata: { $ref: '#/components/schemas/WorkflowPlanMetadata' }
         evidenceRefs:
           type: array
           items: { type: string }
@@ -1265,7 +2568,7 @@ components:
             additionalProperties: false
             required: [kind, reason, requiresApproval]
             properties:
-              kind: { enum: [create, update, deprecate, cancel] }
+              kind: { enum: [create, update, deprecate, restore, set_current, cancel] }
               targetBlueprintId: { type: string }
               targetBlueprintVersion: { type: string }
               targetWorkflowId: { type: string }
@@ -1276,6 +2579,21 @@ components:
                 type: array
                 items: { type: string }
               requiresApproval: { type: boolean }
+    WorkflowPlanMetadata:
+      type: object
+      additionalProperties: false
+      required: [planner]
+      properties:
+        planner:
+          type: object
+          additionalProperties: false
+          required: [name, version]
+          properties:
+            name: { type: string, minLength: 1, maxLength: 120 }
+            version: { type: string, minLength: 1, maxLength: 80 }
+        sourceSchemaVersion: { type: string, minLength: 1, maxLength: 120 }
+        promptVersion: { type: string, minLength: 1, maxLength: 120 }
+        promptHash: { type: string, pattern: '^[a-f0-9]{64}$' }
     WorkflowChangePlanRequest:
       $ref: '#/components/schemas/WorkflowChangePlan'
     WorkflowPlanValidationResponse:
@@ -1296,20 +2614,28 @@ components:
       type: object
       required: [data]
       properties:
+        data: { $ref: '#/components/schemas/WorkflowPlanRecord' }
+    WorkflowPlanListResponse:
+      type: object
+      required: [data]
+      properties:
         data:
-          type: object
-          required: [planId, organizationId, coordinatorId, status, approvalRequired, plan, createdAt, updatedAt]
-          properties:
-            planId: { type: string }
-            organizationId: { type: string }
-            coordinatorId: { type: string }
-            projectId: { type: string }
-            status: { enum: [proposed, approved, rejected, applied, expired] }
-            approvalRequired: { type: boolean }
-            plan: { $ref: '#/components/schemas/WorkflowChangePlanRequest' }
-            submittedByUserId: { type: string }
-            approvedByUserId: { type: string }
-            createdAt: { type: string }
-            updatedAt: { type: string }
-            approvedAt: { type: string }
-            appliedAt: { type: string }
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowPlanRecord' }
+    WorkflowPlanRecord:
+      type: object
+      required: [planId, organizationId, coordinatorId, status, approvalRequired, plan, createdAt, updatedAt]
+      properties:
+        planId: { type: string }
+        organizationId: { type: string }
+        coordinatorId: { type: string }
+        projectId: { type: string }
+        status: { enum: [proposed, approved, rejected, applied, expired] }
+        approvalRequired: { type: boolean }
+        plan: { $ref: '#/components/schemas/WorkflowChangePlanRequest' }
+        submittedByUserId: { type: string }
+        approvedByUserId: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        approvedAt: { type: string }
+        appliedAt: { type: string }

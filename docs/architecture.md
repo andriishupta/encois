@@ -185,6 +185,17 @@ Temporal call and finalized with the audit event. A crashed API may replay an
 rejected. This complements, rather than replaces, Temporal Update IDs and the
 Go Workflow's Signal deduplication.
 
+The dashboard's product boundary is intentionally higher-level than these
+runtime commands. Workflow creation accepts a Template, approved Blueprint, or
+manual intent and resolves Blueprint, revision, workflow, and run identifiers
+inside the Gateway. Run control uses the versioned `workflow-signal.v1`
+approval/pause/resume contract; cancel, retry, and rerun are separate audited
+commands with persisted parent and revision lineage. Integration authorization
+accepts only a service-side credential reference (for example a Secret Manager
+reference), never a browser credential. Saved investigations and operational
+notifications are organization/user-scoped control-plane records; external
+email, push, and provider OAuth delivery remain deployment adapters.
+
 The Gateway API is not a provider tool proxy and does not hold connector tokens for agent execution. Public API and future public MCP requests are translated into approved application capabilities such as `start_workflow` or `get_workflow_status`; they do not become arbitrary provider calls. If the control plane uses Postgres, the TypeScript API owns its schema and Drizzle migrations. Go workers do not connect to that database.
 
 #### Workflow Template catalog
@@ -283,7 +294,7 @@ Temporal provides:
 - workflow visibility and execution IDs;
 - recovery after worker restarts or deployment changes.
 
-The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, describe, and cancel workflows; cancellation is currently reached through an approved cancel-only `workflow-change-plan.v1`, while a direct public cancel route remains future work. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls the configured Temporal endpoint, local or hosted; Temporal never reaches into the runtime to execute code.
+The Gateway API and the Go Runtime each use a Temporal client for different purposes. The Gateway API uses its client to start, signal, query, describe, and cancel workflows; the dashboard exposes cancellation through a permission-checked, auditable cancel route, while re-run creates a new server-owned run with persisted parent lineage. The Go Runtime uses its client to connect a Worker to a task queue and may use it for child workflows or Signals. A Worker polls the configured Temporal endpoint, local or hosted; Temporal never reaches into the runtime to execute code.
 
 The business workflow is defined in code, but Workflow code must remain deterministic. Gemini calls, database calls, graph writes, Memory Bank calls, and MCP/API calls run as Temporal Activities. Activities are functions registered in a Worker, not independently deployed microservices.
 
@@ -524,12 +535,14 @@ Catalog
 entries include a version, input/output schemas, behavior annotations,
 availability, approval metadata, and required scope fields; invocation checks
 the registered capability and required scope after policy authorization. The
-policy implementation is explicitly limited to a deterministic read-only
-fixture policy, while Jira and GitHub tool responses are synthetic. Connector
-grants, persisted manifests, and live providers are still required before
-production; arbitrary tool execution and unsafe artifact paths are already
-denied by the current boundary. The Cloud Storage adapter itself is
-implemented and selected by the Gateway data mode.
+local mode keeps deterministic Jira and GitHub fixtures, while hosted GCP mode
+uses typed, read-only GitHub and Jira adapters. Those adapters resolve a
+provider capability through the private control-plane boundary, read the
+organization-scoped Secret Manager reference, validate the provider response,
+and return bounded evidence/freshness projections. Connector grants and
+provider token rotation/health scheduling remain deployment policy; arbitrary
+tool execution and unsafe artifact paths are denied by the current boundary.
+The Cloud Storage and Spanner adapters are selected by the Gateway data mode.
 
 In a hosted deployment, Cloud Run IAM authenticates the Runtime with a Google
 ID token targeted at the Gateway service URL. The Runtime sends the Encois
@@ -595,7 +608,7 @@ Use different contract formats for different boundaries instead of trying to sha
 | Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
 | Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
 | Workflow Blueprints | JSON Schema with MCP-shaped tool references | Coordinator, Creator, Gateway API, Go Runtime, UI builder | Company-specific executable configuration for the generic Workflow |
-| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create/update/deprecate; never queried directly by Go Runtime |
+| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads and an explicit current pointer | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create/update/deprecate/restore/set_current; current state is organization-scoped and never queried directly by Go Runtime |
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
 | API Temporal command receipts | Gateway-owned Postgres schema | TypeScript Gateway API | Tenant-scoped Signal/Update idempotency and replay state; never sent to Go or Temporal |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |

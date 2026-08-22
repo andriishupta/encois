@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ProductTerm } from '@/components/product-term'
 import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
 import { getMockOnboardingState, updateMockOnboardingState, type MemorySource } from '@/lib/onboarding'
+import { getAuthUserKey, getDevelopmentAuthSession, isDashboardMockMode, setAuthSession } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/onboarding/memory')({
@@ -59,10 +60,29 @@ function MemorySetupPage() {
       if (!sourceId) throw new Error('The source was not created.')
       void navigate({ to: '/onboarding/coordination' })
     } catch (cause) {
+      if (isDashboardMockMode()) {
+        const developmentSession = getDevelopmentAuthSession()
+        if (developmentSession) setAuthSession(developmentSession)
+        const sourceId = `mock-source:${getAuthUserKey()}`
+        updateMockOnboardingState({ memorySource: 'document', memorySourceLabel: sourceLabel ?? file?.name ?? 'Local fixture', memorySourceId: sourceId })
+        void navigate({ to: '/onboarding/coordination' })
+        return
+      }
       setError(isApiError(cause) ? cause.message : 'The source could not be uploaded.')
     } finally {
       setUploading(false)
     }
+  }
+
+  function useLocalFixture() {
+    if (!isDashboardMockMode()) return
+    const sourceId = `mock-source:${getAuthUserKey()}`
+    updateMockOnboardingState({
+      memorySource: 'document',
+      memorySourceLabel: 'Local project context fixture',
+      memorySourceId: sourceId,
+    })
+    void navigate({ to: '/onboarding/coordination' })
   }
 
   return (
@@ -104,7 +124,10 @@ function MemorySetupPage() {
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <p className="text-sm text-muted-foreground">{selectedSource ? `Selected: ${sourceLabel}` : 'Select a PDF source to continue.'}</p>
-        <Button type="button" disabled={uploading || (!file && !existing?.memorySourceId)} onClick={() => void handleContinue()}>{uploading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}{uploading ? 'Uploading source…' : 'Continue'}<ArrowRight data-icon="inline-end" /></Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          {isDashboardMockMode() ? <Button type="button" variant="outline" disabled={uploading} onClick={useLocalFixture}>Use local fixture</Button> : null}
+          <Button type="button" disabled={uploading || (!file && !existing?.memorySourceId)} onClick={() => void handleContinue()}>{uploading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}{uploading ? 'Uploading source…' : 'Continue'}<ArrowRight data-icon="inline-end" /></Button>
+        </div>
       </div>
     </div>
   )

@@ -1,0 +1,74 @@
+name: Run production database migrations (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type MIGRATE to execute the already deployed production migration job
+        required: true
+        default: NO
+        type: string
+      image_tag:
+        description: Immutable migration image tag currently deployed to the Cloud Run Job
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  migrate:
+    name: Execute protected Cloud SQL migration job
+    if: ${{ inputs.confirm == 'MIGRATE' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+      GCP_NAME_PREFIX: ${{ vars.GCP_NAME_PREFIX || 'encois-production' }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+
+    steps:
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Validate migration inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT_ID" || { echo "GCP_PROJECT_ID repository variable is required" >&2; exit 1; }
+          test -n "$IMAGE_TAG" || { echo "image_tag is required" >&2; exit 1; }
+          [[ "$IMAGE_TAG" != "latest" ]] || { echo "latest is not an immutable migration tag" >&2; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "image_tag contains unsupported characters" >&2; exit 1; }
+
+      - name: Verify the Cloud Run Job image
+        shell: bash
+        run: |
+          set -euo pipefail
+          job_name="${GCP_NAME_PREFIX}-migrations"
+          image="$(gcloud run jobs describe "$job_name" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(template.template.containers[0].image)')"
+          [[ "$image" == *":${IMAGE_TAG}" ]] || {
+            echo "Cloud Run migration job is not using the requested immutable image tag" >&2
+            echo "actual image: $image" >&2
+            exit 1
+          }
+
+      - name: Execute and wait for migration job
+        run: |
+          gcloud run jobs execute "${GCP_NAME_PREFIX}-migrations" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --wait \
+            --quiet
+
+      - name: Record migration evidence
+        run: |
+          {
+            echo "Production database migration completed"
+            echo "- job: ${GCP_NAME_PREFIX}-migrations"
+            echo "- image tag: ${IMAGE_TAG}"
+          } >> "$GITHUB_STEP_SUMMARY"

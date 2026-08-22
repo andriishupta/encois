@@ -32,6 +32,10 @@ RUN pnpm --filter @encois/dashboard... build
 
 FROM nginx:1.29-alpine
 
+ARG ENCOIS_VERSION=1.0.0
+LABEL org.opencontainers.image.title="Encois Dashboard" \
+      org.opencontainers.image.version="${ENCOIS_VERSION}"
+
 COPY apps/dashboard/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/dashboard/dist /usr/share/nginx/html
 EXPOSE 8080

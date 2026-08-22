@@ -48,7 +48,7 @@ the `tool-manifest.v1` catalog schema and `workflow-change-plan.v1` proposal
 schema are also shared and checked at their respective Go boundaries.
 The lifecycle-aware `workflow-change-plan.v1` schema is embedded and
 fixture-validated. The Gateway validates and submits this single contract,
-applies create/update/deprecate changes, and supports cancel-only Temporal
+applies create/update/deprecate/restore/set_current changes, and supports cancel-only Temporal
 plans through its Temporal client. Persistence-backed application and hosted
 verification remain pending. The bootstrap
 Workflow can return a validated plan proposal. The Runtime also contains a
@@ -146,8 +146,9 @@ registry snapshot.
 When Postgres is configured, `POST /v1/workflows/plans` persists the validated
 v1 proposal with an idempotent `planId` and status `proposed`. The approval
 route transitions it to `approved` and writes an audit event, but does not start
-or mutate a Temporal Workflow. Applying an approved create/update/deprecate
-plan persists or retires tenant-scoped Blueprint snapshots; the private
+or mutate a Temporal Workflow. Applying an approved create/update/deprecate/
+restore/set_current plan persists, changes lifecycle state, or changes the
+current pointer for tenant-scoped Blueprint snapshots; the private
 Coordinator start route accepts only a registry reference and the Gateway
 passes the resolved immutable snapshot to the generic Temporal Workflow. The
 The v1 cancel operation is supported only for cancel-only plans. The Gateway

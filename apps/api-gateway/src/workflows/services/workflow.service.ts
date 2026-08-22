@@ -1,14 +1,19 @@
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
-import { createHash } from "node:crypto";
-import { ContractVersion, isJsonObject, parseWorkflowBlueprint, Permission, TemporalWorkflowType } from "@encois/contracts";
+import { createHash, randomUUID } from "node:crypto";
+import { ContractVersion, isJsonObject, parseWorkflowBlueprint, Permission, TemporalWorkflowType, WorkflowExecutionStatus } from "@encois/contracts";
 import type {
+  DataProvenance,
   ExecutionScope,
   JsonObject,
+  SourceFreshness,
   WorkflowBlueprint,
   WorkflowChangePlan,
+  WorkflowEvidenceProjection,
+  WorkflowTraceProjection,
 } from "@encois/contracts";
 import {
   organizationMemberships,
+  auditEvents,
   rolePermissions,
   workflowBlueprints,
   workflowDefinitions,
@@ -41,6 +46,7 @@ export type WorkflowServiceOptions = {
   taskQueue: string;
   capabilitySecret?: string;
   capabilityTtlMs?: number;
+  workflowRunRetentionDays?: number;
 };
 
 export type WorkflowServiceError = Error & {
@@ -100,6 +106,7 @@ function startCommand(
   requestHash: string,
   capabilitySecret: string,
   capabilityTtlMs: number | undefined,
+  lineage: WorkflowStartLineage = {},
 ) {
   const payload = request.input ?? {};
   const blueprint = getBlueprint(request, payload);
@@ -141,13 +148,20 @@ function startCommand(
       capability,
       userId: principal.userId,
       blueprint,
+      blueprintVersion: blueprint?.version ?? request.blueprintVersion,
       businessInput: businessInput as JsonObject,
       payload: payload as JsonObject,
       idempotencyKey: request.idempotencyKey,
+      ...lineage,
     },
     requestHash,
   };
 }
+
+export type WorkflowStartLineage = {
+  parentWorkflowId?: string;
+  trigger?: "manual" | "rerun" | "retry";
+};
 
 export function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
@@ -310,13 +324,88 @@ function parseDate(value: string | undefined): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function metadataString(metadata: JsonObject, key: string): string | undefined {
+  return typeof metadata[key] === "string" && metadata[key] ? metadata[key] as string : undefined;
+}
+
+function metadataNumber(metadata: JsonObject, key: string): number | undefined {
+  return typeof metadata[key] === "number" && Number.isFinite(metadata[key]) ? metadata[key] as number : undefined;
+}
+
+function dataProvenance(value: unknown): DataProvenance | undefined {
+  if (!isJsonObject(value) || typeof value.source !== "string" || typeof value.observedAt !== "string") return undefined;
+  return {
+    source: value.source,
+    observedAt: value.observedAt,
+    ...(typeof value.sourceId === "string" ? { sourceId: value.sourceId } : {}),
+    ...(typeof value.sourceRevisionId === "string" ? { sourceRevisionId: value.sourceRevisionId } : {}),
+    ...(typeof value.sourceRecordId === "string" ? { sourceRecordId: value.sourceRecordId } : {}),
+    ...(typeof value.artifactRef === "string" ? { artifactRef: value.artifactRef } : {}),
+    ...(isJsonObject(value.locator) ? { locator: value.locator } : {}),
+    ...(typeof value.ingestedAt === "string" ? { ingestedAt: value.ingestedAt } : {}),
+    ...(typeof value.transformationVersion === "string" ? { transformationVersion: value.transformationVersion } : {}),
+    ...(Array.isArray(value.visibilityScope) && value.visibilityScope.every((item) => typeof item === "string") ? { visibilityScope: value.visibilityScope as string[] } : {}),
+  };
+}
+
+function sourceFreshness(value: unknown): SourceFreshness | undefined {
+  if (!isJsonObject(value) || typeof value.source !== "string" || typeof value.observedAt !== "string" || !["fresh", "stale", "unknown"].includes(String(value.status))) return undefined;
+  return {
+    source: value.source,
+    observedAt: value.observedAt,
+    status: value.status as SourceFreshness["status"],
+    ...(typeof value.ingestedAt === "string" ? { ingestedAt: value.ingestedAt } : {}),
+    ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}),
+  };
+}
+
+export function workflowEventProjection(row: typeof workflowEvents.$inferSelect): WorkflowEventProjection {
+  const metadata = isJsonObject(row.metadata) ? row.metadata : {};
+  const references = new Set<string>();
+  if (row.evidenceRef) references.add(row.evidenceRef);
+  if (Array.isArray(metadata.evidenceRefs)) {
+    for (const reference of metadata.evidenceRefs) if (typeof reference === "string" && reference) references.add(reference);
+  }
+  const provenance = dataProvenance(metadata.provenance);
+  const freshness = sourceFreshness(metadata.freshness);
+  const confidence = metadataNumber(metadata, "confidence");
+  const evidence: readonly WorkflowEvidenceProjection[] = [...references].map((reference) => ({
+    reference,
+    ...(provenance ? { provenance } : {}),
+    ...(freshness ? { freshness } : {}),
+    ...(confidence !== undefined ? { confidence } : {}),
+  }));
+  const trace: WorkflowTraceProjection = {
+    ...(metadataString(metadata, "provider") ? { provider: metadataString(metadata, "provider") } : {}),
+    ...(metadataString(metadata, "model") ? { model: metadataString(metadata, "model") } : {}),
+    ...(metadataNumber(metadata, "durationMs") !== undefined ? { durationMs: metadataNumber(metadata, "durationMs") } : {}),
+    ...(metadataNumber(metadata, "attempt") !== undefined ? { attempt: metadataNumber(metadata, "attempt") } : {}),
+    ...(metadataString(metadata, "budget") ? { budget: metadataString(metadata, "budget") } : {}),
+    ...(metadataString(metadata, "outcome") ? { outcome: metadataString(metadata, "outcome") } : {}),
+    ...(typeof metadata.redacted === "boolean" ? { redacted: metadata.redacted } : {}),
+  };
+  const hasTrace = Object.keys(trace).length > 0;
+  return {
+    id: row.id,
+    eventType: row.eventType,
+    status: row.status,
+    ...(row.activityName ? { activityName: row.activityName } : {}),
+    ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
+    ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),
+    ...(evidence.length ? { evidence } : {}),
+    ...(hasTrace ? { trace } : {}),
+    metadata,
+    occurredAt: row.occurredAt.toISOString(),
+  };
+}
+
 async function syncWorkflowProjection(
   organizationId: string,
   projection: WorkflowExecutionProjection,
-): Promise<void> {
-  if (!database) return;
+): Promise<WorkflowExecutionProjection> {
+  if (!database) return projection;
 
-  await withOrganizationContext(database, organizationId, async (db) => {
+  const preservePaused = await withOrganizationContext(database, organizationId, async (db) => {
     const [run] = await db
       .select({ id: workflowRuns.id, status: workflowRuns.status })
       .from(workflowRuns)
@@ -327,15 +416,18 @@ async function syncWorkflowProjection(
         ),
       )
       .limit(1);
-    if (!run) return;
+    if (!run) return false;
 
     const updatedAt = parseDate(projection.updatedAt) ?? new Date();
     const startedAt = parseDate(projection.createdAt);
-    const completedAt = ["completed", "failed", "cancelled"].includes(projection.status) ? updatedAt : undefined;
+    const completedStatuses = new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Failed, WorkflowExecutionStatus.Cancelled]);
+    const completedAt = completedStatuses.has(projection.status) ? updatedAt : undefined;
+    const preservePaused = run.status === WorkflowExecutionStatus.Paused && !completedStatuses.has(projection.status);
+    const effectiveStatus = preservePaused ? WorkflowExecutionStatus.Paused : projection.status;
     await db
       .update(workflowRuns)
       .set({
-        status: projection.status,
+        status: effectiveStatus,
         temporalRunId: projection.runId,
         ...(startedAt ? { startedAt } : {}),
         ...(completedAt ? { completedAt } : {}),
@@ -343,12 +435,12 @@ async function syncWorkflowProjection(
       })
       .where(eq(workflowRuns.id, run.id));
 
-    if (run.status !== projection.status) {
+    if (run.status !== effectiveStatus) {
       await db.insert(workflowEvents).values({
         organizationId,
         workflowRunId: run.id,
         eventType: "workflow_status_updated",
-        status: projection.status,
+        status: effectiveStatus,
         metadata: {
           source: "temporal_visibility",
           previousStatus: run.status,
@@ -357,7 +449,9 @@ async function syncWorkflowProjection(
         occurredAt: updatedAt,
       });
     }
+    return preservePaused;
   });
+  return preservePaused ? { ...projection, status: WorkflowExecutionStatus.Paused, statusMessage: "Paused by an authorized operator." } : projection;
 }
 
 export async function startWorkflow(
@@ -366,6 +460,7 @@ export async function startWorkflow(
   requestId: string,
   traceId: string,
   options: WorkflowServiceOptions,
+  lineage: WorkflowStartLineage = {},
 ): Promise<WorkflowExecutionProjection> {
   const workflowId = buildWorkflowId({
     organizationId: principal.organizationId,
@@ -399,6 +494,7 @@ export async function startWorkflow(
           fingerprint,
           capabilitySecret,
           options.capabilityTtlMs,
+          lineage,
         ),
         options.namespace,
       );
@@ -492,8 +588,10 @@ export async function startWorkflow(
       fingerprint,
       capabilitySecret,
       options.capabilityTtlMs,
+      lineage,
     );
     const projection = await options.workflowClient.start(command, options.namespace);
+    const retentionUntil = new Date(Date.now() + (options.workflowRunRetentionDays ?? 30) * 24 * 60 * 60 * 1000);
 
     const [workflowRun] = await db
       .insert(workflowRuns)
@@ -505,8 +603,14 @@ export async function startWorkflow(
         temporalTaskQueue: projection.taskQueue,
         temporalWorkflowId: projection.workflowId,
         temporalRunId: projection.runId,
+        blueprintId: command.input.blueprint?.blueprintId,
+        blueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion,
+        parentWorkflowId: command.input.parentWorkflowId,
+        trigger: command.input.trigger ?? "manual",
         status: projection.status,
         scope: command.input.scope,
+        businessInput: command.input.businessInput ?? {},
+        retentionUntil,
       })
       .returning({ id: workflowRuns.id });
 
@@ -549,7 +653,7 @@ export async function startWorkflow(
         .onConflictDoNothing();
     }
 
-    return projection;
+    return { ...projection, retentionUntil: retentionUntil.toISOString() };
   });
 }
 
@@ -601,7 +705,7 @@ export async function getWorkflow(
 
   if (!authorized) return null;
   const projection = await options.workflowClient.get(workflowId, principal.organizationId, options.namespace);
-  if (projection) await syncWorkflowProjection(principal.organizationId, projection);
+  if (projection) return syncWorkflowProjection(principal.organizationId, projection);
   return projection;
 }
 
@@ -660,16 +764,7 @@ export async function getWorkflowEvents(
       .from(workflowEvents)
       .where(and(eq(workflowEvents.organizationId, principal.organizationId), eq(workflowEvents.workflowRunId, run.runId)))
       .orderBy(workflowEvents.occurredAt);
-    return rows.map((row) => ({
-      id: row.id,
-      eventType: row.eventType,
-      status: row.status,
-      ...(row.activityName ? { activityName: row.activityName } : {}),
-      ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
-      ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),
-      metadata: isJsonObject(row.metadata) ? row.metadata : {},
-      occurredAt: row.occurredAt.toISOString(),
-    })) satisfies readonly WorkflowEventProjection[];
+    return rows.map(workflowEventProjection) satisfies readonly WorkflowEventProjection[];
   });
 }
 
@@ -708,16 +803,9 @@ export async function listWorkflowActivity(
       const workflowId = workflowByRunId.get(row.workflowRunId) ?? "";
       const workflow = workflowById.get(workflowId);
       return {
-        id: row.id,
+        ...workflowEventProjection(row),
         workflowId,
         workflowLabel: workflow?.blueprintId ?? workflow?.workflowType ?? "Workflow",
-        eventType: row.eventType,
-        status: row.status,
-        ...(row.activityName ? { activityName: row.activityName } : {}),
-        ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
-        ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),
-        metadata: isJsonObject(row.metadata) ? row.metadata : {},
-        occurredAt: row.occurredAt.toISOString(),
       } satisfies WorkflowRecentActivityProjection;
     });
   });
@@ -768,8 +856,7 @@ export async function listWorkflows(
 
   const projections = await options.workflowClient.list(principal.organizationId, options.namespace);
   const visibleProjections = projections.filter((projection) => visible.has(projection.workflowId));
-  await Promise.all(visibleProjections.map((projection) => syncWorkflowProjection(principal.organizationId, projection)));
-  return visibleProjections;
+  return Promise.all(visibleProjections.map((projection) => syncWorkflowProjection(principal.organizationId, projection)));
 }
 
 export async function signalWorkflow(
@@ -789,7 +876,7 @@ export async function signalWorkflow(
 
   const visible = await getWorkflow(principal, workflowId, options);
   if (!visible) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
-  if (visible.status !== "queued" && visible.status !== "running" && visible.status !== "waiting") {
+  if (visible.status !== "queued" && visible.status !== "running" && visible.status !== "waiting" && visible.status !== "paused") {
     throw workflowServiceError(
       "WORKFLOW_NOT_SIGNALABLE",
       `Workflow is ${visible.status} and cannot accept a Signal.`,
@@ -851,10 +938,10 @@ export async function signalWorkflow(
   }
 
   try {
-    await options.workflowClient.signal(workflowId, principal.organizationId, options.namespace, {
-      ...request,
-      payload: { ...request.payload, signalId: request.signalId },
-    });
+    const runtimeRequest: WorkflowSignalRequest = request.signalName === "blueprint-approval"
+      ? { ...request, payload: { ...request.payload, signalId: request.signalId } }
+      : { ...request, payload: { ...request.payload, signalId: request.signalId } };
+    await options.workflowClient.signal(workflowId, principal.organizationId, options.namespace, runtimeRequest);
   } catch (error) {
     if (database && workflowRunId) {
       const message = error instanceof Error ? error.message : "Workflow Signal failed.";
@@ -867,6 +954,14 @@ export async function signalWorkflow(
 
   if (database && workflowRunId) {
     await withOrganizationContext(database, principal.organizationId, async (db) => {
+      const controlStatus = request.signalName === "workflow-pause"
+        ? WorkflowExecutionStatus.Paused
+        : request.signalName === "workflow-resume"
+          ? WorkflowExecutionStatus.Running
+          : undefined;
+      if (controlStatus) {
+        await db.update(workflowRuns).set({ status: controlStatus, updatedAt: new Date() }).where(and(eq(workflowRuns.organizationId, principal.organizationId), eq(workflowRuns.id, workflowRunId)));
+      }
       await markWorkflowCommandAccepted(db, principal.organizationId, workflowId, "signal", request.signalId);
       await db.insert(workflowEvents).values({
         organizationId: principal.organizationId,
@@ -876,12 +971,152 @@ export async function signalWorkflow(
         metadata: {
           signalId: request.signalId,
           signalName: request.signalName,
-          stepId: request.payload.stepId,
-          approved: request.payload.approved,
+          ...(request.signalName === "blueprint-approval" ? { stepId: request.payload.stepId, approved: request.payload.approved } : {}),
+          ...(request.signalName !== "blueprint-approval" && request.payload.reason ? { reason: request.payload.reason } : {}),
           actorId: principal.actorId,
         },
       });
     });
+  }
+}
+
+export async function rerunWorkflow(
+  principal: AosPrincipal,
+  workflowId: string,
+  requestId: string,
+  traceId: string,
+  options: WorkflowServiceOptions,
+  mode: "rerun" | "retry" = "rerun",
+): Promise<WorkflowExecutionProjection> {
+  if (!database) throw workflowServiceError("PERSISTENCE_UNAVAILABLE", "Run again requires persisted workflow history.");
+  const userId = localUserId(principal);
+  if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+  const canRun = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsRun));
+  if (!canRun) throw workflowServiceError("FORBIDDEN", `The user cannot ${mode} workflows.`);
+
+  const previous = await getWorkflow(principal, workflowId, options);
+  if (!previous) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
+  const rerunnableStatuses: readonly WorkflowExecutionStatus[] = mode === "retry"
+    ? [WorkflowExecutionStatus.Partial, WorkflowExecutionStatus.Failed]
+    : [WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Cancelled];
+  if (!rerunnableStatuses.includes(previous.status)) {
+    throw workflowServiceError("WORKFLOW_NOT_RERUNNABLE", `Workflow is ${previous.status} and cannot be ${mode === "retry" ? "retried" : "run again"}.`);
+  }
+
+  const source = await withOrganizationContext(database, principal.organizationId, async (db) => {
+    const [row] = await db
+      .select()
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.organizationId, principal.organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)))
+      .limit(1);
+    if (!row || !workflowScopeIsVisible(row.scope, principal.scope)) return null;
+    const blueprintId = row.blueprintId ?? row.inputRef;
+    if (!blueprintId || !row.blueprintVersion) throw workflowServiceError("WORKFLOW_REVISION_UNAVAILABLE", "The original Blueprint revision is not stored for this run.");
+    const scope = isJsonObject(row.scope) && Array.isArray(row.scope.ids) && row.scope.ids.every((id) => typeof id === "string") ? { ids: row.scope.ids as string[] } : null;
+    if (!scope) throw workflowServiceError("WORKFLOW_SCOPE_UNAVAILABLE", "The original execution scope is not available for this run.");
+    const [blueprintRow] = await db
+      .select({ blueprint: workflowBlueprints.blueprint, status: workflowBlueprints.status })
+      .from(workflowBlueprints)
+      .where(and(eq(workflowBlueprints.organizationId, principal.organizationId), eq(workflowBlueprints.blueprintId, blueprintId), eq(workflowBlueprints.version, row.blueprintVersion)))
+      .limit(1);
+    if (!blueprintRow || blueprintRow.status !== "approved") throw workflowServiceError("WORKFLOW_REVISION_UNAVAILABLE", "The original approved Blueprint revision is no longer available.");
+    const businessInput = isJsonObject(row.businessInput) ? row.businessInput : {};
+    return { blueprintId, blueprintVersion: row.blueprintVersion, scope, businessInput };
+  });
+  if (!source) throw workflowServiceError("FORBIDDEN", `The user cannot ${mode} this workflow in the current scope.`);
+
+  const projection = await startWorkflow(
+    principal,
+    {
+      workflowType: TemporalWorkflowType.UserBlueprint,
+      version: "v1",
+      key: `${mode}-${randomUUID()}`,
+      blueprintId: source.blueprintId,
+      blueprintVersion: source.blueprintVersion,
+      scope: source.scope,
+      input: { businessInput: source.businessInput },
+    },
+    requestId,
+    traceId,
+    options,
+    { parentWorkflowId: workflowId, trigger: mode },
+  );
+
+  await withOrganizationContext(database, principal.organizationId, async (db) => {
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: userId,
+      action: `workflow.${mode}.started`,
+      outcome: "accepted",
+      resourceType: "workflow_run",
+      resourceId: projection.workflowId,
+      scope: source.scope,
+      metadata: { parentWorkflowId: workflowId, blueprintId: source.blueprintId, blueprintVersion: source.blueprintVersion },
+    });
+  });
+  return projection;
+}
+
+export async function cancelWorkflow(
+  principal: AosPrincipal,
+  workflowId: string,
+  options: WorkflowServiceOptions,
+): Promise<void> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRun)) throw workflowServiceError("FORBIDDEN", "The user cannot cancel this workflow.");
+  } else {
+    const canRun = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsRun));
+    if (!canRun) throw workflowServiceError("FORBIDDEN", "The user cannot cancel this workflow.");
+  }
+
+  const visible = await getWorkflow(principal, workflowId, options);
+  if (!visible) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
+  if (!["queued", "running", "waiting", "paused"].includes(visible.status)) {
+    throw workflowServiceError("WORKFLOW_NOT_CANCELLABLE", `Workflow is ${visible.status} and cannot be cancelled.`);
+  }
+
+  let workflowRunId: string | undefined;
+  if (database) {
+    const userId = localUserId(principal);
+    if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+    workflowRunId = await withOrganizationContext(database, principal.organizationId, async (db) => {
+      const [row] = await db
+        .select({ workflowRunId: workflowRuns.id, scope: workflowRuns.scope })
+        .from(workflowRuns)
+        .innerJoin(organizationMemberships, and(
+          eq(organizationMemberships.organizationId, principal.organizationId),
+          eq(organizationMemberships.userId, userId),
+          eq(organizationMemberships.status, "active"),
+        ))
+        .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
+        .where(and(
+          eq(workflowRuns.organizationId, principal.organizationId),
+          eq(workflowRuns.temporalWorkflowId, workflowId),
+          or(eq(workflowRuns.actorUserId, userId), eq(rolePermissions.permission, Permission.WorkflowsRun), eq(rolePermissions.permission, Permission.WorkflowsManage)),
+        ))
+        .limit(1);
+      return row && workflowScopeIsVisible(row.scope, principal.scope) ? row.workflowRunId : undefined;
+    });
+    if (!workflowRunId) throw workflowServiceError("FORBIDDEN", "The user cannot cancel this workflow.");
+  }
+
+  try {
+    await options.workflowClient.cancel(workflowId, principal.organizationId, options.namespace);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Workflow cancellation failed.";
+    if (message.includes("not found")) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
+    if (message.includes("cannot be cancelled")) throw workflowServiceError("WORKFLOW_NOT_CANCELLABLE", message);
+    throw workflowServiceError("WORKFLOW_CANCEL_FAILED", message);
+  }
+
+  if (database && workflowRunId) {
+    await withOrganizationContext(database, principal.organizationId, (db) => db.insert(workflowEvents).values({
+      organizationId: principal.organizationId,
+      workflowRunId,
+      eventType: "workflow_cancel_requested",
+      status: visible.status,
+      metadata: { actorId: principal.actorId, reason: "user_requested" },
+    }));
   }
 }
 
@@ -1028,6 +1263,15 @@ export async function validateWorkflowChangePlan(
     throw workflowServiceError("FORBIDDEN", "The workflow plan belongs to a different organization.");
   }
 
+  if (plan.scope) {
+    if (plan.scope.ids.length === 0 || plan.scope.ids.some((scope) => !scope.trim())) {
+      throw workflowServiceError("WORKFLOW_PLAN_INVALID", "The workflow plan scope must contain at least one organization-unit id.");
+    }
+    if (!principal.scope.includes("*") && plan.scope.ids.some((scope) => !principal.scope.includes(scope))) {
+      throw workflowServiceError("SCOPE_DENIED", "The workflow plan scope exceeds the caller's organization-unit scope.");
+    }
+  }
+
   const requiredScopes = new Set(
     plan.changes.flatMap((change) => (change.blueprint?.requiredScopes ? [...change.blueprint.requiredScopes] : [])),
   );
@@ -1060,12 +1304,15 @@ export async function validateWorkflowChangePlan(
       if (change.blueprint.version === change.targetBlueprintVersion) {
         throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} must publish a new Blueprint version.`);
       }
-    } else if (change.kind === "deprecate") {
+    } else if (change.kind === "deprecate" || change.kind === "restore" || change.kind === "set_current") {
       if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
         throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} requires a Blueprint target.`);
       }
       if (change.targetWorkflowId) {
         throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot target a Temporal execution.`);
+      }
+      if (change.blueprint || change.start) {
+        throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot carry a Blueprint or start intent.`);
       }
     } else if (change.kind === "cancel") {
       if (!change.targetWorkflowId) {

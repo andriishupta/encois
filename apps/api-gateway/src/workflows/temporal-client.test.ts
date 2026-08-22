@@ -17,6 +17,7 @@ const config: AppConfig = {
 	workflowMode: "memory",
 	temporalNamespace: "default",
 	temporalTaskQueue: "test",
+	workflowRunRetentionDays: 30,
 };
 
 const command: WorkflowStartCommand = {

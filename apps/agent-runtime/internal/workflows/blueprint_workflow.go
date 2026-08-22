@@ -66,6 +66,12 @@ type BlueprintApprovalSignal struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+type BlueprintControlSignal struct {
+	SignalID string `json:"signalId"`
+	Action   string `json:"action"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 type BlueprintContextUpdate struct {
 	UpdateID      string         `json:"updateId"`
 	BusinessInput map[string]any `json:"businessInput"`
@@ -134,11 +140,15 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 		return BlueprintWorkflowResult{}, fmt.Errorf("register blueprint context update: %w", err)
 	}
 	approvalChannel := workflow.GetSignalChannel(ctx, string(contracts.SignalBlueprintApproval))
+	controlChannel := workflow.GetSignalChannel(ctx, string(contracts.SignalWorkflowControl))
 	pendingApprovals := make(map[string]BlueprintApprovalSignal)
 	processedSignalIDs := make(map[string]bool)
+	paused := false
 	runID := workflow.GetInfo(ctx).WorkflowExecution.RunID
 
 	for len(results) < len(blueprint.Steps) {
+		drainBlueprintControlSignals(controlChannel, &paused, processedSignalIDs)
+		waitForBlueprintResume(ctx, controlChannel, &paused, processedSignalIDs)
 		ready := make([]coordinator.WorkflowStep, 0)
 		for _, step := range blueprint.Steps {
 			if completed[step.ID] || !dependenciesCompleted(step, completed) {
@@ -196,8 +206,23 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			case "approval":
 				approval, ok := pendingApprovals[step.ID]
 				for !ok {
+					waitForBlueprintResume(ctx, controlChannel, &paused, processedSignalIDs)
 					var received BlueprintApprovalSignal
-					approvalChannel.Receive(ctx, &received)
+					var control BlueprintControlSignal
+					controlReceived := false
+					selector := workflow.NewSelector(ctx)
+					selector.AddReceive(approvalChannel, func(channel workflow.ReceiveChannel, _ bool) {
+						channel.Receive(ctx, &received)
+					})
+					selector.AddReceive(controlChannel, func(channel workflow.ReceiveChannel, _ bool) {
+						channel.Receive(ctx, &control)
+						controlReceived = true
+					})
+					selector.Select(ctx)
+					if controlReceived {
+						applyBlueprintControlSignal(control, &paused, processedSignalIDs)
+						continue
+					}
 					if received.SignalID == "" || received.StepID == "" || processedSignalIDs[received.SignalID] {
 						continue
 					}
@@ -253,6 +278,37 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 		return BlueprintWorkflowResult{}, err
 	}
 	return result, nil
+}
+
+func applyBlueprintControlSignal(signal BlueprintControlSignal, paused *bool, processed map[string]bool) {
+	if signal.SignalID == "" || processed[signal.SignalID] {
+		return
+	}
+	processed[signal.SignalID] = true
+	switch signal.Action {
+	case string(contracts.SignalWorkflowPause):
+		*paused = true
+	case string(contracts.SignalWorkflowResume):
+		*paused = false
+	}
+}
+
+func drainBlueprintControlSignals(channel workflow.ReceiveChannel, paused *bool, processed map[string]bool) {
+	for {
+		var signal BlueprintControlSignal
+		if !channel.ReceiveAsync(&signal) {
+			return
+		}
+		applyBlueprintControlSignal(signal, paused, processed)
+	}
+}
+
+func waitForBlueprintResume(ctx workflow.Context, channel workflow.ReceiveChannel, paused *bool, processed map[string]bool) {
+	for *paused {
+		var signal BlueprintControlSignal
+		channel.Receive(ctx, &signal)
+		applyBlueprintControlSignal(signal, paused, processed)
+	}
 }
 
 func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {

@@ -17,9 +17,13 @@ RUN cp -R apps/api-gateway/dist /out/dist
 FROM node:22-bookworm-slim
 
 WORKDIR /app
+ARG ENCOIS_VERSION=1.0.0
+LABEL org.opencontainers.image.title="Encois API Gateway" \
+      org.opencontainers.image.version="${ENCOIS_VERSION}"
 COPY --from=build /out ./
 ENV HOST=0.0.0.0
 ENV PORT=8080
+ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 USER node
 EXPOSE 8080
 CMD ["node", "dist/server.js"]

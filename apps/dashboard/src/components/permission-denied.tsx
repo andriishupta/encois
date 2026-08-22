@@ -2,7 +2,7 @@ import { ShieldAlert } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent } from '@/components/ui/card'
 
-export function PermissionDenied({ title = 'Access restricted', description = 'You do not have permission to view this area.' }: { title?: string; description?: string }) {
+export function PermissionDenied({ title = 'Permission required', description = 'Your account is signed in, but this area requires a separate permission. Ask an organization administrator to grant access.' }: { title?: string; description?: string }) {
   return (
     <Card className="max-w-2xl">
       <CardContent className="pt-6">

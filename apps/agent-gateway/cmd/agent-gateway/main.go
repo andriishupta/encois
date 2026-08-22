@@ -32,7 +32,13 @@ func main() {
 	var err error
 	switch cfg.DataMode {
 	case "gcp":
-		routerOptions, closeAdapters, err = gatewayserver.NewGCPAdapters(context.Background(), cfg.StorageBucket, cfg.SpannerDatabase)
+		routerOptions, closeAdapters, err = gatewayserver.NewGCPAdapters(context.Background(), cfg.StorageBucket, cfg.SpannerDatabase, gatewayserver.GCPProviderToolOptions{
+			ControlPlaneURL:      cfg.ControlPlaneURL,
+			ControlPlaneToken:    cfg.ControlPlaneToken,
+			ControlPlaneAudience: cfg.ControlPlaneAudience,
+			ProjectID:            cfg.GoogleCloudProject,
+			OAuthConfigJSON:      cfg.OAuthConfigJSON,
+		})
 		if err != nil {
 			logger.Error("failed to initialize GCP data adapters", "error", err)
 			os.Exit(1)

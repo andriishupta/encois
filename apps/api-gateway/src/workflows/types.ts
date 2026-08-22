@@ -27,8 +27,10 @@ export type WorkflowStartCommand = {
     capability: string;
     userId?: string;
     blueprint?: WorkflowBlueprint;
+    blueprintVersion?: string;
     businessInput?: JsonObject;
     payload?: JsonObject;
+    parentWorkflowId?: string;
     idempotencyKey?: string;
     sourceId?: string;
     sourceRevisionId?: string;

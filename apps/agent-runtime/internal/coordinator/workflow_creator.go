@@ -73,6 +73,13 @@ func (c WorkflowCreator) ValidatePlan(plan WorkflowChangePlan) error {
 			if change.Start != nil {
 				return fmt.Errorf("change %d cannot start a deprecation", index)
 			}
+		case ChangeRestore, ChangeSetCurrent:
+			if change.TargetBlueprintID == "" || change.TargetBlueprintVersion == "" {
+				return fmt.Errorf("change %d requires a target Blueprint id and version", index)
+			}
+			if change.TargetWorkflowID != "" || change.Blueprint != nil || change.Start != nil {
+				return fmt.Errorf("change %d cannot target a Temporal execution or carry a Blueprint/start intent", index)
+			}
 		case ChangeCancel:
 			if change.TargetWorkflowID == "" {
 				return fmt.Errorf("change %d requires a target workflow id", index)

@@ -16,7 +16,7 @@ The default local server listens on `http://127.0.0.1:8787`.
 Public endpoints:
 
 - `GET /health/live` — liveness check.
-- `GET /health/ready` — readiness check for the current scaffold.
+- `GET /health/ready` — readiness check; in production it verifies the runtime database, Identity Platform, Temporal, execution capability, OAuth, artifact storage, private services, and HTTPS CORS configuration before returning `200`.
 - `GET /` — service metadata.
 
 Application routes are mounted under `/api/v1`. Protected routes use the AOS middleware. When `IDENTITY_PLATFORM_PROJECT_ID` and the runtime database are configured, `createApp` wires the Firebase Admin Identity Platform verifier and resolves local membership/scope. Tests and local scaffolds can still inject an authenticator.
@@ -47,12 +47,16 @@ Current blueprint routes:
 
 - `GET /api/v1/integrations` — list integrations visible to the authenticated user's organization scope.
 - `POST /api/v1/integrations/:integrationId` — update an integration after object-level authorization.
+- `GET /api/v1/integrations/:integrationId/webhook` — read the scoped webhook endpoint projection without returning a secret.
+- `POST /api/v1/integrations/:integrationId/webhook` — provision or repair a signed endpoint; the generated secret is returned once and stored in Secret Manager (or the local fixture adapter).
+- `POST /api/v1/integrations/:integrationId/webhook/rotate`, `/enable`, and `/disable` — rotate the signing secret or control delivery state with Integration manage permission and audit events.
 - `GET /api/v1/sources` — list scoped Knowledge Sources.
 - `POST /api/v1/sources` — register an integration, uploaded-document, manual, or media Source.
 - `POST /api/v1/sources/uploads` — upload a validated PDF (up to 10 MiB) as a new source and immutable revision; production requires `SOURCE_ARTIFACT_BUCKET`.
 - `GET /api/v1/sources/:sourceId` — read a Source and its immutable revisions.
 - `POST /api/v1/sources/:sourceId/revisions` — register a revision by artifact/provider reference; raw bytes are not stored in Postgres or Temporal.
 - `POST /api/v1/sources/:sourceId/revisions/:revisionId/ingest` — start the platform-owned `encois.source-ingestion.v1` Workflow.
+- `POST /api/v1/webhooks/:organizationId/:endpointKey` — public signed provider ingress (`X-Encois-Event-Id` and `X-Encois-Signature`), retained outside Postgres, idempotently mapped to integration Sources, and handed to the existing ingestion workflow. Payloads are limited to 1 MiB; production requires `SOURCE_ARTIFACT_BUCKET` and Secret Manager-backed endpoint secrets.
 - `GET /api/v1/organization` — return the caller-visible organization, units, members, and direct membership permissions.
 - `GET /api/v1/organization/units` — list organization units visible to the caller.
 - `POST /api/v1/organization/units` — create a child unit inside an administrator or manager scope.
@@ -68,8 +72,11 @@ Current blueprint routes:
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
 - `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` lifecycle proposal without applying it.
 - `POST /api/v1/workflows/plans` — persist an idempotent v1 proposal as `proposed` when Postgres is configured.
+- `GET /api/v1/workflows/plans` — list persisted proposals visible to the caller's organization and execution scope.
 - `POST /api/v1/workflows/plans/:planId/approve` — approve a persisted proposal; application is still a separate step.
-- `POST /api/v1/workflows/plans/:planId/apply` — apply an approved v1 `create`, Blueprint `update`/`deprecate`, or cancel-only proposal and enqueue its Coordinator event; only an explicit `start` intent launches the approved Blueprint snapshot.
+- `POST /api/v1/workflows/plans/:planId/apply` — apply an approved v1 `create`, Blueprint `update`/`deprecate`/`restore`/`set_current`, or cancel-only proposal and enqueue its Coordinator event; only an explicit `start` intent launches the approved Blueprint snapshot.
+- `POST /api/v1/workflows/:workflowId/cancel` — request cancellation for an active, tenant-visible Run when the caller has `workflows:run`; the Gateway records an audit event and delegates cancellation to the configured workflow client.
+- `POST /api/v1/workflows/:workflowId/rerun` — create a new server-keyed Run from the persisted Blueprint revision, business input, and scope of a terminal parent Run; the parent relationship is retained for history and audit.
 - `POST /api/v1/internal/coordinator/plans/validate` — private Runtime/Coordinator plan preview; requires `X-Encois-Service-Token` and `X-Organization-ID`.
 - `POST /api/v1/internal/coordinator/plans` — private Runtime/Coordinator plan submission; the human approval boundary remains in the Gateway.
 - `POST /api/v1/internal/coordinator/workflows` — private start path for an approved tenant Blueprint reference; it reuses the generic workflow service and does not expose the database.
@@ -77,6 +84,8 @@ Current blueprint routes:
 - `GET /api/v1/workflows/:workflowId/events` — read tenant- and hierarchy-authorized activity, evidence, and lifecycle events.
 - `POST /api/v1/workflows/:workflowId/signals` — send an authorized approval Signal.
 - `POST /api/v1/workflows/:workflowId/updates` — apply an authorized context Update to an active workflow.
+- `POST /api/v1/context/graph/query` — super-admin-only, allowlisted, read-only Spanner Graph inspection through the private Agent Gateway.
+- `POST /api/v1/context/memory/query` — super-admin-only, scoped, read-only Agent Memory inspection through the private Agent Runtime.
 
 Workflow Templates are stored in the Gateway control plane as searchable
 metadata plus immutable JSONB versions. They use logical capabilities and
@@ -85,6 +94,13 @@ and Slack or Teams. Workflow Creator later maps a selected template to a
 validated tenant Blueprint; the Go Runtime does not read this catalog.
 Knowledge Sources are a separate control-plane model. Templates do not create
 Sources, revisions, or ingestion runs.
+
+During preview, the Gateway resolves each Template provider slot against active
+integrations and the caller's organization scope. The preview returns resolved
+and missing slots so the UI can explain the gap; required gaps block plan
+submission and application, while optional gaps are returned as warnings.
+Integration IDs remain server-side and are not accepted from the browser as
+workflow-creation input.
 
 The in-memory workflow adapter is available only in development/test or when
 `ENCOIS_WORKFLOW_MODE=memory` is explicitly selected. Local Compose uses
@@ -100,6 +116,19 @@ workers that poll the task queue.
 `AGENT_GATEWAY_POLICY_VERSION` must match the policy version configured in the
 private Agent Gateway; it is propagated through the generic workflow input and
 checked again for every tool invocation.
+
+`AGENT_GATEWAY_URL` and `AGENT_GATEWAY_SERVICE_TOKEN` configure the private
+data-plane proxy used by `POST /api/v1/context/graph/query`. The route is
+restricted to `organization:manage`, accepts only allowlisted logical queries,
+and mints the scoped execution capability server-side. It returns `503` when
+the graph data plane is intentionally unavailable; it never falls back to
+browser-side mock graph data.
+
+`AGENT_RUNTIME_URL` and `AGENT_RUNTIME_SERVICE_TOKEN` configure the private
+read-only proxy used by `POST /api/v1/context/memory/query`. It uses the same
+tenant scope and admin permission boundary as graph inspection; Vertex AI
+Memory Bank remains owned by the Go Agent Runtime and is never called from the
+browser.
 
 The private Coordinator routes use `CONTROL_PLANE_SERVICE_TOKEN` for the local
 service boundary. In a database-backed deployment they also require

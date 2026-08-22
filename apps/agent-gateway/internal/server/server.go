@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,6 +28,7 @@ type Server struct {
 	workflowRecords       map[string]domain.WorkflowDefinitionResponse
 	artifactStore         ArtifactStore
 	graphStore            GraphStore
+	providerTools         ProviderToolRegistry
 }
 
 // RouterOptions contains replaceable data-plane adapters. The default router
@@ -35,6 +37,7 @@ type Server struct {
 type RouterOptions struct {
 	ArtifactStore     ArtifactStore
 	GraphStore        GraphStore
+	ProviderTools     ProviderToolRegistry
 	CapabilitySecret  string
 	RequireCapability bool
 }
@@ -56,6 +59,10 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 	if graphStore == nil {
 		graphStore = newMemoryGraphStore()
 	}
+	providerTools := options.ProviderTools
+	if providerTools == nil {
+		providerTools = mockProviderToolRegistry{}
+	}
 	server := &Server{
 		policy:                policyService,
 		logger:                logger,
@@ -65,6 +72,7 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 		workflowRecords:       make(map[string]domain.WorkflowDefinitionResponse),
 		artifactStore:         artifactStore,
 		graphStore:            graphStore,
+		providerTools:         providerTools,
 	}
 	router := gin.New()
 	router.Use(gin.Recovery(), requestID(), traceID(), requestLogging(logger), contentTypeJSON())
@@ -78,6 +86,7 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 	v1.POST("/permissions/check", server.authorize)
 	v1.GET("/tools", server.tools)
 	v1.POST("/tools/invoke", server.invokeTool)
+	v1.POST("/provider-health/check", server.providerHealthCheck)
 	v1.POST("/graph/query", server.graphQuery)
 	v1.POST("/graph/upsert", server.upsertGraph)
 	v1.POST("/artifacts", server.writeArtifact)
@@ -105,13 +114,17 @@ func (s *Server) ready(c *gin.Context) {
 		status = http.StatusServiceUnavailable
 		state = "execution_capability_not_configured"
 	}
+	if err := s.providerTools.Ready(); err != nil {
+		status = http.StatusServiceUnavailable
+		state = "provider_tools_not_ready"
+	}
 	c.JSON(status, gin.H{
 		"status":  state,
 		"service": "agent-gateway",
 		"dependencies": gin.H{
 			"policy":       "read-only-fixture-policy",
 			"serviceAuth":  s.serviceAuthConfigured,
-			"providers":    "mock-in-memory",
+			"providers":    s.providerTools.Status(),
 			"cloudStorage": s.artifactStoreStatus(),
 			"spanner":      s.graphStoreStatus(),
 		},
@@ -198,20 +211,107 @@ func (s *Server) invokeTool(c *gin.Context) {
 		return
 	}
 
-	data, evidenceRefs, freshness, ok := mockTool(request.Tool, request.OrganizationID)
-	if !ok {
-		errorResponse(c, http.StatusNotImplemented, "tool_not_implemented", "provider adapter is not configured", false)
+	result, err := s.providerTools.Invoke(c.Request.Context(), request)
+	if err != nil {
+		status := http.StatusBadGateway
+		code := "provider_tool_failed"
+		retryable := true
+		if errors.Is(err, ErrProviderReauthorization) {
+			status = http.StatusFailedDependency
+			code = "provider_reauthorization_required"
+			retryable = false
+		} else if errors.Is(err, ErrProviderCredential) {
+			status = http.StatusServiceUnavailable
+			code = "provider_credential_unavailable"
+			retryable = false
+		} else if errors.Is(err, ErrProviderToolUnavailable) {
+			status = http.StatusNotImplemented
+			code = "tool_not_implemented"
+			retryable = false
+		}
+		errorResponse(c, status, code, safeProviderToolError(err), retryable)
 		return
 	}
 	c.JSON(http.StatusOK, domain.ToolInvocationResponse{
 		ContractVersion: domain.ToolResultContractVersion,
 		RequestID:       request.RequestID,
 		Tool:            request.Tool,
-		Status:          "mocked",
-		Data:            data,
-		EvidenceRefs:    evidenceRefs,
-		Freshness:       freshness,
+		Status:          providerToolStatus(s.providerTools),
+		Data:            result.Data,
+		EvidenceRefs:    result.EvidenceRefs,
+		Freshness:       result.Freshness,
 	})
+}
+
+func (s *Server) providerHealthCheck(c *gin.Context) {
+	var request struct {
+		IntegrationID string `json:"integrationId"`
+		Provider      string `json:"provider"`
+	}
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		errorResponse(c, http.StatusBadRequest, "invalid_json", err.Error(), false)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		errorResponse(c, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object", false)
+		return
+	}
+	organizationID := strings.TrimSpace(c.GetHeader("X-Organization-ID"))
+	if organizationID == "" || strings.TrimSpace(request.IntegrationID) == "" || strings.TrimSpace(request.Provider) == "" {
+		errorResponse(c, http.StatusBadRequest, "invalid_request", "X-Organization-ID, integrationId, and provider are required", false)
+		return
+	}
+	if err := s.providerTools.Check(c.Request.Context(), ProviderHealthCheckRequest{
+		OrganizationID: organizationID,
+		IntegrationID:  strings.TrimSpace(request.IntegrationID),
+		Provider:       strings.TrimSpace(request.Provider),
+	}); err != nil {
+		status := http.StatusBadGateway
+		code := "provider_health_check_failed"
+		retryable := true
+		if errors.Is(err, ErrProviderReauthorization) {
+			status = http.StatusFailedDependency
+			code = "provider_reauthorization_required"
+			retryable = false
+		} else if errors.Is(err, ErrProviderCredential) {
+			status = http.StatusServiceUnavailable
+			code = "provider_credential_unavailable"
+			retryable = false
+		} else if errors.Is(err, ErrProviderToolUnavailable) {
+			status = http.StatusNotImplemented
+			code = "provider_health_check_unavailable"
+			retryable = false
+		}
+		errorResponse(c, status, code, safeProviderToolError(err), retryable)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"integrationId": strings.TrimSpace(request.IntegrationID),
+		"provider":      strings.TrimSpace(request.Provider),
+		"status":        "active",
+	}})
+}
+
+func providerToolStatus(registry ProviderToolRegistry) string {
+	if registry.Status() == "mock-in-memory" {
+		return "mocked"
+	}
+	return "completed"
+}
+
+func safeProviderToolError(err error) string {
+	if errors.Is(err, ErrProviderReauthorization) {
+		return "The provider rejected the credential and requires authorization again."
+	}
+	if errors.Is(err, ErrProviderCredential) {
+		return "The scoped provider credential is unavailable or invalid."
+	}
+	if errors.Is(err, ErrProviderToolUnavailable) {
+		return "The provider tool is not configured for this deployment."
+	}
+	return "The provider tool request failed."
 }
 
 func (s *Server) graphQuery(c *gin.Context) {

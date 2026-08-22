@@ -14,6 +14,11 @@ export type ProductTermKey =
   | 'ingestion'
   | 'revision'
   | 'signal'
+  | 'template'
+  | 'run'
+  | 'plan'
+  | 'graph'
+  | 'memory'
 
 const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string; description: string }> = {
   coordinator: {
@@ -70,6 +75,31 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     label: 'Signal',
     pluralLabel: 'Signals',
     description: 'An event or change that may need investigation, such as a blocker, deployment issue, or stale work.',
+  },
+  template: {
+    label: 'Template',
+    pluralLabel: 'Templates',
+    description: 'A reusable starting point for a workflow. Templates are not execution records and do not contain tenant-specific state.',
+  },
+  run: {
+    label: 'Run',
+    pluralLabel: 'Runs',
+    description: 'One execution of a workflow with its own status, events, evidence, and audit trail.',
+  },
+  plan: {
+    label: 'Change plan',
+    pluralLabel: 'Change plans',
+    description: 'A reviewable proposal that describes a Blueprint change before it is approved and applied.',
+  },
+  graph: {
+    label: 'Project context',
+    pluralLabel: 'Project contexts',
+    description: 'A relationship view of organizations, projects, systems, people, and evidence used to explain an investigation.',
+  },
+  memory: {
+    label: 'Memory',
+    pluralLabel: 'Memory',
+    description: 'Scoped distilled context available to authorized workflows. It is inspectable product state, not hidden model reasoning.',
   },
 }
 

@@ -10,9 +10,11 @@ import {
   validateContract,
 } from "./dist/src/index.js";
 
-assert.equal(allPermissions.length, 12);
+assert.equal(allPermissions.length, 14);
 assert.equal(permissionIncludes([Permission.WorkflowsManage], Permission.WorkflowsRead), true);
 assert.equal(permissionIncludes([Permission.IntegrationsRead], Permission.IntegrationsManage), false);
+assert.equal(permissionIncludes([Permission.ContextRead], Permission.ContextRead), true);
+assert.equal(permissionIncludes([Permission.OrganizationManage], Permission.ContextRead), false);
 
 const effectiveScope = resolveEffectiveScope({
   units: [
@@ -142,6 +144,24 @@ assert.equal(
   true,
 );
 assert.equal(
+  validateContract("workflowSignal", {
+    contractVersion: "workflow-signal.v1",
+    signalName: "workflow-pause",
+    signalId: "signal-2",
+    payload: { reason: "Operator review" },
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowSignal", {
+    contractVersion: "workflow-signal.v1",
+    signalName: "workflow-resume",
+    signalId: "signal-3",
+    payload: {},
+  }).valid,
+  true,
+);
+assert.equal(
   validateContract("coordinatorEvent", {
     contractVersion: "coordinator-event.v1",
     eventId: "event-1",
@@ -178,6 +198,54 @@ assert.equal(
       kind: "create",
       blueprint,
       start: { key: "project-checkout", businessInput: { projectKey: "checkout" } },
+      reason: "Create the approved project context workflow.",
+      requiresApproval: true,
+    }],
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowBlueprintLifecycle", {
+    contractVersion: "workflow-blueprint-lifecycle.v1",
+    action: "create_revision",
+    sourceVersion: "1.0.0",
+    version: "1.0.1",
+    reason: "Publish the reviewed workflow revision.",
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowBlueprintLifecycle", {
+    contractVersion: "workflow-blueprint-lifecycle.v1",
+    action: "mark_current",
+    sourceVersion: "1.0.0",
+    reason: "Make the reviewed revision the default for new workflows.",
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowBlueprintLifecycle", {
+    action: "deprecate",
+    reason: "Missing contract version.",
+  }).valid,
+  false,
+);
+assert.equal(
+  validateContract("workflowChangePlan", {
+    contractVersion: "workflow-change-plan.v1",
+    planId: "plan-with-metadata",
+    coordinatorId: "coord-1",
+    organizationId: "org-1",
+    observedAt: "2026-08-20T16:00:00.000Z",
+    metadata: {
+      planner: { name: "manual-workflow-planner", version: "1.0.0" },
+      sourceSchemaVersion: "workflow-template.v1",
+      promptVersion: "workflow-creation-input.v1",
+      promptHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    },
+    changes: [{
+      kind: "create",
+      blueprint,
       reason: "Create the approved project context workflow.",
       requiresApproval: true,
     }],

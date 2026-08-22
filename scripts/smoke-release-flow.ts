@@ -22,6 +22,7 @@ const app = createApp({
       actorId: "smoke-user",
       organizationId: "smoke-org",
       scope: ["team-smoke"],
+      permissions: ["workflows:read", "workflows:run"],
     },
   }),
 });

@@ -152,7 +152,9 @@ control-plane Postgres.
 
 The runtime must not connect directly to the TypeScript control-plane database
 or expose a public HTTP API. `GET /health/live` and `GET /health/ready` exist
-only for service health checks.
+for service health checks; the internal `POST /v1/memory/query` endpoint is
+service-token authenticated, retrieve-only, and used by the Gateway's admin
+inspection proxy.
 
 ## Dependencies
 

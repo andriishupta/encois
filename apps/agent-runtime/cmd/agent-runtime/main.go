@@ -71,6 +71,8 @@ func main() {
 	}
 	defer func() { _ = closeMemory() }()
 	memoryActivities := workflows.NewMemoryActivities(memoryStore)
+	healthServer.MemoryStore = memoryStore
+	healthServer.RuntimeServiceToken = cfg.RuntimeServiceToken
 	var agentGateway *gatewayclient.Client
 	if cfg.AgentGatewayURL != "" {
 		agentGateway = gatewayclient.NewWithAudience(cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)

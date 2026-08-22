@@ -2,15 +2,20 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
+  Bell,
   Building2,
   ChevronDown,
   ChevronRight,
   CircleGauge,
+  Network,
+  Bookmark,
+  BrainCircuit,
   GitBranch,
   LayoutDashboard,
   LogOut,
   Menu,
   Plus,
+  PlugZap,
   Settings,
   UserRound,
   Waypoints,
@@ -27,18 +32,28 @@ import { Permission, type PermissionKey } from '@encois/contracts'
 
 type NavigationItem = {
   label: string
-  to: '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/settings'
+  to: '/' | '/workflows' | '/sources' | '/integrations' | '/review' | '/context' | '/investigations' | '/memory' | '/organization' | '/settings' | '/settings/notifications'
   icon: typeof LayoutDashboard
   permission?: PermissionKey
+  anyPermission?: readonly PermissionKey[]
 }
 
 const primaryNavigation: readonly NavigationItem[] = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Workflows', to: '/workflows', icon: GitBranch, permission: Permission.WorkflowsRead },
+] as const
+
+const connectionNavigation: readonly NavigationItem[] = [
+  { label: 'Integrations', to: '/integrations', icon: PlugZap, permission: Permission.IntegrationsRead },
   { label: 'Knowledge sources', to: '/sources', icon: Waypoints, permission: Permission.KnowledgeRead },
 ] as const
 
 const secondaryNavigation: readonly NavigationItem[] = [
+  { label: 'Review queue', to: '/review', icon: CircleGauge, anyPermission: [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead] },
+  { label: 'Project context', to: '/context', icon: Network, permission: Permission.ContextRead },
+  { label: 'Memory', to: '/memory', icon: BrainCircuit, permission: Permission.MemoryRead },
+  { label: 'Saved investigations', to: '/investigations', icon: Bookmark, anyPermission: [Permission.OrganizationManage, Permission.WorkflowsRead, Permission.KnowledgeRead, Permission.ContextRead, Permission.MemoryRead] },
+  { label: 'Notifications', to: '/settings/notifications', icon: Bell, anyPermission: [Permission.SettingsRead, Permission.WorkflowsRead, Permission.KnowledgeRead] },
   { label: 'Organization', to: '/organization', icon: Building2, permission: Permission.OrganizationRead },
   { label: 'Settings', to: '/settings', icon: Settings, permission: Permission.SettingsRead },
 ] as const
@@ -118,8 +133,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-5" aria-label="Main navigation">
           <div className="flex flex-col gap-6">
-            <NavSection label="Workspace" items={primaryNavigation.filter((item) => !item.permission || can(item.permission))} onNavigate={() => setMobileOpen(false)} />
-            <NavSection label="Manage" items={secondaryNavigation.filter((item) => !item.permission || can(item.permission))} onNavigate={() => setMobileOpen(false)} />
+            <NavSection label="Workspace" items={visibleNavigation(primaryNavigation, can)} onNavigate={() => setMobileOpen(false)} />
+            <NavSection label="Connect" items={visibleNavigation(connectionNavigation, can)} onNavigate={() => setMobileOpen(false)} />
+            <NavSection label="Manage" items={visibleNavigation(secondaryNavigation, can)} onNavigate={() => setMobileOpen(false)} />
           </div>
         </nav>
 
@@ -161,6 +177,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 }
 
+function visibleNavigation(items: readonly NavigationItem[], can: (permission: PermissionKey) => boolean): readonly NavigationItem[] {
+  return items.filter((item) => (!item.permission || can(item.permission)) && (!item.anyPermission || item.anyPermission.some(can)))
+}
+
 function NavSection({
   label,
   items,
@@ -194,19 +214,26 @@ function Breadcrumbs({ pathname, rootLabel }: { pathname: string; rootLabel: str
   return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link to="/" className="max-w-40 truncate text-muted-foreground transition-colors hover:text-foreground">{rootLabel}</Link>{items.map((item) => <span key={item.label} className="flex min-w-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="truncate text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="truncate font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/organization/permissions' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/workflows/templates' | '/workflows/blueprints' | '/sources' | '/integrations' | '/review' | '/context' | '/investigations' | '/memory' | '/organization' | '/organization/permissions' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/access' | '/profile'
 
 function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
   if (pathname === '/workflows') return [{ label: 'Workflows' }]
+  if (pathname === '/workflows/templates') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Templates' }]
+  if (pathname === '/workflows/blueprints') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Blueprints' }]
+  if (pathname.startsWith('/workflows/blueprints/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Blueprints', to: '/workflows/blueprints' }, { label: 'Blueprint revision' }]
   if (pathname === '/workflows/new') return [{ label: 'Workflows', to: '/workflows' }, { label: 'New workflow' }]
-  if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Workflow execution' }]
+  if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Workflow run' }]
   if (pathname === '/sources') return [{ label: 'Knowledge sources' }]
   if (pathname === '/sources/new') return [{ label: 'Knowledge sources', to: '/sources' }, { label: 'Add source' }]
   if (pathname.startsWith('/sources/')) return [{ label: 'Knowledge sources', to: '/sources' }, { label: 'Source details' }]
   if (pathname === '/integrations') return [{ label: 'Integrations' }]
   if (pathname === '/integrations/new') return [{ label: 'Integrations', to: '/integrations' }, { label: 'Add integration' }]
   if (pathname.startsWith('/integrations/')) return [{ label: 'Integrations', to: '/integrations' }, { label: getIntegrationLabel(pathname) }]
+  if (pathname === '/review') return [{ label: 'Review queue' }]
+  if (pathname === '/context') return [{ label: 'Project context' }]
+  if (pathname === '/investigations') return [{ label: 'Saved investigations' }]
+  if (pathname === '/memory') return [{ label: 'Memory' }]
   if (pathname === '/organization') return [{ label: 'Organization' }]
   if (pathname === '/organization/permissions') return [{ label: 'Organization', to: '/organization' }, { label: 'Permissions' }]
   if (pathname === '/settings') return [{ label: 'Settings' }]

@@ -1,91 +1,338 @@
-import { useState } from 'react'
-import { ContractVersion, TemporalWorkflowType, WorkflowStepKind, type WorkflowStartRequest } from '@encois/contracts'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, Sparkles, WandSparkles } from 'lucide-react'
+import type { WorkflowBlueprintProjection, WorkflowCreationIntent, WorkflowPlanRecord, WorkflowTemplateProjection } from '@encois/contracts'
+import { Permission, WorkflowStepKind } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
-import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { startWorkflow } from '@/lib/api'
-import { queryKeys } from '@/lib/query-keys'
+import { EmptyPanel } from '@/components/empty-panel'
+import { applyWorkflowPlan, approveWorkflowPlan, listWorkflowBlueprints, listWorkflowTemplates, previewWorkflowCreation, submitWorkflowCreation } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
-import { Permission } from '@encois/contracts'
+import { queryKeys } from '@/lib/query-keys'
+import { useOrganization } from '@/lib/organization-context'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_app/workflows/new')({
+  validateSearch: (search: Record<string, unknown>): { blueprint?: string; template?: string } => ({
+    blueprint: typeof search.blueprint === 'string' ? search.blueprint : undefined,
+    template: typeof search.template === 'string' ? search.template : undefined,
+  }),
   beforeLoad: () => {
-    if (!hasPermission(getAuthSession(), Permission.WorkflowsRun)) throw redirect({ to: '/forbidden' })
+    if (!hasPermission(getAuthSession(), Permission.WorkflowsManage)) throw redirect({ to: '/forbidden' })
   },
   component: NewWorkflowPage,
 })
 
+type CreationMode = WorkflowCreationIntent['mode']
+type Stage = 1 | 2 | 3
+
+const modeOptions: readonly { mode: CreationMode; title: string; description: string; icon: typeof FilePlus2 }[] = [
+  { mode: 'template', title: 'From a template', description: 'Start with a reviewed, provider-neutral workflow pattern.', icon: FilePlus2 },
+  { mode: 'blueprint', title: 'Use an existing Blueprint', description: 'Create a new workflow from an approved version in this organization.', icon: GitBranch },
+  { mode: 'manual', title: 'Describe it manually', description: 'Explain the outcome in plain language and let the planner propose steps.', icon: WandSparkles },
+]
+
 function NewWorkflowPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [projectKey, setProjectKey] = useState('DEMO')
-  const [workflowKey, setWorkflowKey] = useState('project-context-demo')
-  const mutation = useMutation({
-    mutationFn: () => {
-      const request: WorkflowStartRequest = {
-        workflowType: TemporalWorkflowType.UserBlueprint,
-        key: workflowKey,
-        input: { projectKey },
-        blueprint: {
-          contractVersion: ContractVersion.WorkflowBlueprint,
-          blueprintId: 'project-context',
-          version: '1.0.0',
-          name: 'Project context',
-          workflowType: TemporalWorkflowType.UserBlueprint,
-          purpose: 'Collect project context and produce an evidence-linked summary.',
-          enabled: true,
-          steps: [
-            { id: 'source', kind: WorkflowStepKind.Tool, tool: 'jira.project_tasks' },
-            { id: 'summary', kind: WorkflowStepKind.Agent, agentDefinition: 'context.synthesizer@1', dependsOn: ['source'] },
-          ],
-        },
-      }
-      return startWorkflow(request)
-    },
-    onSuccess: async (response) => {
+  const { currentUnitId, units } = useOrganization()
+  const search = Route.useSearch()
+  const [stage, setStage] = useState<Stage>(1)
+  const [mode, setMode] = useState<CreationMode | null>(() => search.blueprint ? 'blueprint' : search.template ? 'template' : null)
+  const [templateKey, setTemplateKey] = useState<string | undefined>(() => search.template)
+  const [blueprintKey, setBlueprintKey] = useState<string | undefined>(() => search.blueprint)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [runAfterApply, setRunAfterApply] = useState(true)
+  const [submittedPlanId, setSubmittedPlanId] = useState<string>()
+  const [completed, setCompleted] = useState(false)
+
+  const templates = useQuery({
+    queryKey: queryKeys.workflowTemplates(),
+    queryFn: () => listWorkflowTemplates(),
+    enabled: mode === 'template',
+    staleTime: 60_000,
+  })
+  const blueprints = useQuery({
+    queryKey: queryKeys.workflowBlueprints(),
+    queryFn: listWorkflowBlueprints,
+    enabled: mode === 'blueprint',
+    staleTime: 30_000,
+  })
+
+  const selectedTemplate = useMemo(() => templates.data?.find((item) => item.key === templateKey), [templateKey, templates.data])
+  const availableBlueprints = useMemo(() => {
+    const approved = (blueprints.data ?? []).filter((item) => item.status === 'approved')
+    const current = approved.filter((item) => item.isCurrent)
+    return current.length ? current : approved
+  }, [blueprints.data])
+  const selectedBlueprint = useMemo(() => availableBlueprints.find((item) => item.blueprintId === blueprintKey), [availableBlueprints, blueprintKey])
+  const selectedSourceTitle = selectedTemplate?.title ?? selectedBlueprint?.name
+  const currentScope = currentUnitId === 'organization' ? 'All organization units' : units.find((unit) => unit.id === currentUnitId)?.name ?? 'Current organization scope'
+
+  const buildIntent = (start: boolean): WorkflowCreationIntent => ({
+    mode: mode ?? 'manual',
+    name: name.trim(),
+    ...(description.trim() ? { description: description.trim() } : {}),
+    ...(templateKey ? { templateKey } : {}),
+    ...(blueprintKey ? { blueprintKey } : {}),
+    ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+    ...(currentUnitId && currentUnitId !== 'organization' ? { scope: { ids: [currentUnitId] } } : {}),
+    start,
+  })
+
+  const preview = useMutation({ mutationFn: () => previewWorkflowCreation(buildIntent(false)), onSuccess: () => setStage(3) })
+  const submit = useMutation({
+    mutationFn: () => submitWorkflowCreation(buildIntent(runAfterApply)),
+    onSuccess: (plan) => setSubmittedPlanId(plan.planId),
+  })
+  const approve = useMutation({
+    mutationFn: () => approveWorkflowPlan(submittedPlanId ?? ''),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.workflowBlueprints() }),
+  })
+  const apply = useMutation({
+    mutationFn: () => applyWorkflowPlan(submittedPlanId ?? ''),
+    onSuccess: async () => {
+      setCompleted(true)
       await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() })
-      await navigate({ to: '/workflows/$workflowId', params: { workflowId: response.workflowId } })
     },
   })
 
+  const sourceReady = mode === 'template' ? Boolean(templateKey) : mode === 'blueprint' ? Boolean(blueprintKey) : Boolean(prompt.trim())
+  const canContinueToConfigure = Boolean(mode && sourceReady)
+  const canPreview = Boolean(name.trim() && sourceReady && !preview.isPending)
+  const submitted = submit.data
+  const approved = approve.data ?? (submitted?.status === 'approved' ? submitted : undefined)
+
+  function chooseMode(nextMode: CreationMode) {
+    setMode(nextMode)
+    setTemplateKey(undefined)
+    setBlueprintKey(undefined)
+    setStage(1)
+    preview.reset()
+    submit.reset()
+    approve.reset()
+    apply.reset()
+    setSubmittedPlanId(undefined)
+    setCompleted(false)
+  }
+
+  function goToPreview() {
+    preview.reset()
+    preview.mutate()
+  }
+
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="New workflow" description={<>Start a generic <ProductTerm term="blueprint" /> for a project.</>} />
-      <Card className="max-w-3xl">
-        <CardHeader>
-          <CardTitle><ProductTerm term="workflow" /> details</CardTitle>
-          <CardDescription>Creates a generic <ProductTerm term="blueprint" /> execution. The same key reuses the active <ProductTerm term="workflow" />.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="project-key">
-              Project key
-              <input id="project-key" value={projectKey} onChange={(event) => setProjectKey(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-key">
-              Workflow key
-              <input id="workflow-key" value={workflowKey} onChange={(event) => setWorkflowKey(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" />
-            </label>
-          </div>
-          {mutation.isError ? <p className="text-sm text-destructive">Could not start workflow: {mutation.error.message}</p> : null}
-          <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
-            <Button variant="ghost" asChild>
-              <Link to="/workflows">
-                <ArrowLeft data-icon="inline-start" />
-                Cancel
-              </Link>
-            </Button>
-            <Button type="button" disabled={mutation.isPending || !projectKey.trim() || !workflowKey.trim()} onClick={() => mutation.mutate()}>
-              <Save data-icon="inline-start" />
-              {mutation.isPending ? 'Starting…' : 'Start workflow'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <PageHeader
+        title="Create workflow"
+        description="Create a governed workflow from a catalog template or an approved Blueprint. Internal identifiers and execution details are managed by Encois."
+        actions={<Button variant="outline" asChild><Link to="/workflows"><ArrowLeft data-icon="inline-start" />Back to workflows</Link></Button>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3" aria-label="Workflow creation progress">
+        <StepIndicator number="1" label="Choose source" active={stage === 1} complete={stage > 1} />
+        <StepIndicator number="2" label="Configure" active={stage === 2} complete={stage > 2} />
+        <StepIndicator number="3" label="Review & apply" active={stage === 3} complete={completed} />
+      </div>
+
+      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={templates.error ?? blueprints.error} prompt={prompt} onPromptChange={setPrompt} /> : null}
+      {stage === 2 ? <ConfigureStage name={name} description={description} mode={mode} sourceTitle={selectedSourceTitle} currentScope={currentScope} prompt={prompt} onNameChange={setName} onDescriptionChange={setDescription} onBack={() => setStage(1)} onPreview={goToPreview} canPreview={canPreview} error={preview.error} /> : null}
+      {stage === 3 ? <ReviewStage preview={preview.data} isLoading={preview.isPending} error={preview.error ?? submit.error ?? approve.error ?? apply.error} runAfterApply={runAfterApply} onRunChange={setRunAfterApply} submitted={submitted} approved={approved} completed={completed} onSubmit={() => submit.mutate()} submitting={submit.isPending} onApprove={() => approve.mutate()} approving={approve.isPending} onApply={() => apply.mutate()} applying={apply.isPending} onBack={() => { preview.reset(); setStage(2) }} onOpenWorkflows={() => void navigate({ to: '/workflows' })} /> : null}
+      {stage === 1 ? <div className="flex justify-end"><Button type="button" disabled={!canContinueToConfigure} onClick={() => setStage(2)}>Continue <ArrowRight data-icon="inline-end" /></Button></div> : null}
     </div>
   )
+}
+
+function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, prompt, onPromptChange }: {
+  mode: CreationMode | null
+  onModeChange: (mode: CreationMode) => void
+  templates: readonly WorkflowTemplateProjection[]
+  blueprints: readonly WorkflowBlueprintProjection[]
+  selectedTemplateKey?: string
+  selectedBlueprintKey?: string
+  onTemplateChange: (key: string) => void
+  onBlueprintChange: (key: string) => void
+  templatesLoading: boolean
+  blueprintsLoading: boolean
+  error: Error | null
+  prompt: string
+  onPromptChange: (value: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div><h2 className="text-lg font-semibold">Choose a starting point</h2><p className="mt-1 text-sm text-muted-foreground">Encois will resolve the selected source into a validated, versioned Blueprint.</p></div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {modeOptions.map((option) => {
+          const Icon = option.icon
+          return <button key={option.mode} type="button" onClick={() => onModeChange(option.mode)} className={cn('flex min-h-36 flex-col items-start gap-4 rounded-xl border bg-card p-5 text-left transition hover:border-foreground/30 hover:bg-accent/30', mode === option.mode && 'border-foreground bg-accent/50 ring-2 ring-foreground/10')} aria-pressed={mode === option.mode}><span className="flex size-10 items-center justify-center rounded-lg bg-muted"><Icon className="size-5" aria-hidden="true" /></span><span><span className="block font-medium">{option.title}</span><span className="mt-1 block text-sm text-muted-foreground">{option.description}</span></span></button>
+        })}
+      </div>
+      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
+      {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
+      {mode === 'manual' ? <Card className="border-dashed"><CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="size-4" />Describe the outcome</CardTitle><CardDescription>Use plain language. Encois proposes a provider-aware Blueprint for review; nothing is persisted before approval and apply.</CardDescription></CardHeader><CardContent><textarea value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="Example: Check GitHub release readiness for Checkout and highlight blockers, missing evidence, and required approvals." className="min-h-32 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="Workflow description" /><p className="mt-2 text-xs text-muted-foreground">Mention GitHub or Jira when the investigation needs a scoped integration. Other providers can be used through a published Template or approved Blueprint once provider support is enabled.</p></CardContent></Card> : null}
+    </div>
+  )
+}
+
+function ConfigureStage({ name, description, mode, sourceTitle, currentScope, prompt, onNameChange, onDescriptionChange, onBack, onPreview, canPreview, error }: {
+  name: string
+  description: string
+  mode: CreationMode | null
+  sourceTitle?: string
+  currentScope: string
+  prompt: string
+  onNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onBack: () => void
+  onPreview: () => void
+  canPreview: boolean
+  error: Error | null
+}) {
+  return <Card><CardHeader><CardTitle>Configure workflow</CardTitle><CardDescription>Give this workflow a human name and confirm the organization scope. Technical identifiers are generated by Encois.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2"><InfoItem label="Starting point" value={sourceTitle ?? (mode === 'manual' ? 'Manual description' : 'Not selected')} /><InfoItem label="Execution scope" value={currentScope} /></div>{mode === 'manual' ? <div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Requested outcome</p><p className="mt-1 text-muted-foreground">{prompt || 'No description entered.'}</p></div> : null}<div className="grid gap-5 sm:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-name">Workflow name<input id="workflow-name" value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Release readiness — Checkout" className="h-10 rounded-lg border border-input bg-background px-3 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-description">Purpose <span className="font-normal text-muted-foreground">Optional</span><input id="workflow-description" value={description} onChange={(event) => onDescriptionChange(event.target.value)} placeholder="Explain what this workflow should investigate." className="h-10 rounded-lg border border-input bg-background px-3 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label></div>{error ? <ErrorCallout message={error.message} /> : null}<div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={onBack}><ArrowLeft data-icon="inline-start" />Back</Button><Button disabled={!canPreview} onClick={onPreview}>{canPreview ? 'Preview plan' : 'Add a name to continue'}<ArrowRight data-icon="inline-end" /></Button></div></CardContent></Card>
+}
+
+function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, submitted, approved, completed, onSubmit, submitting, onApprove, approving, onApply, applying, onBack, onOpenWorkflows }: {
+  preview?: import('@encois/contracts').WorkflowCreationPreview
+  isLoading: boolean
+  error: Error | null
+  runAfterApply: boolean
+  onRunChange: (value: boolean) => void
+  submitted?: WorkflowPlanRecord
+  approved?: WorkflowPlanRecord
+  completed: boolean
+  onSubmit: () => void
+  submitting: boolean
+  onApprove: () => void
+  approving: boolean
+  onApply: () => void
+  applying: boolean
+  onBack: () => void
+  onOpenWorkflows: () => void
+}) {
+  if (isLoading) {
+    return <Card><CardContent className="flex min-h-72 items-center justify-center gap-3 text-sm text-muted-foreground"><LoaderCircle className="size-5 animate-spin" />Validating the plan against scope and capabilities…</CardContent></Card>
+  }
+
+  if (error && !preview) {
+    return <Card><CardContent className="flex flex-col gap-5 pt-6"><ErrorCallout message={error.message} /><Button variant="outline" onClick={onBack}><ArrowLeft data-icon="inline-start" />Change configuration</Button></CardContent></Card>
+  }
+
+  if (!preview) return null
+
+  const finalPlan = approved ?? submitted
+  const planStatus = approved?.status ?? submitted?.status
+  const missingRequiredProvider = preview.providerBindings.some((binding) => binding.required && binding.status === 'missing')
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Review the generated plan</CardTitle>
+        <CardDescription>Submitting stores a reviewable plan. Approval and apply are separate steps; only apply writes the Blueprint registry or starts a run.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        {error ? <ErrorCallout message={error.message} /> : null}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <InfoItem label="Source" value={preview.source.title} />
+          <InfoItem label="Steps" value={String(preview.blueprint.steps.length)} />
+          <InfoItem label="Approval" value={preview.approvalRequired ? 'Required' : 'Not required'} />
+        </div>
+
+        <ProviderBindingList bindings={preview.providerBindings} />
+
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Execution topology</h3>
+          {preview.blueprint.steps.map((step, index) => (
+            <div key={step.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">{index + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{stepLabel(step.kind, index)}</span>
+                <span className="block text-xs text-muted-foreground">{step.dependsOn?.length ? `After ${step.dependsOn.length} prerequisite${step.dependsOn.length === 1 ? '' : 's'}` : 'Can start from the resolved scope'}</span>
+              </span>
+              <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">{step.kind}</span>
+            </div>
+          ))}
+        </div>
+
+        <details className="rounded-lg border bg-muted/20 p-4 text-sm">
+          <summary className="cursor-pointer font-medium">Technical details</summary>
+          <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+            <p>Blueprint version: {preview.blueprint.version}</p>
+            <p>Purpose: {preview.blueprint.purpose}</p>
+            <p>Capabilities: {preview.requiredCapabilities.length ? preview.requiredCapabilities.join(', ') : 'None declared'}</p>
+          </div>
+        </details>
+
+        {preview.warnings.length ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="font-medium">Before you apply</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
+        {missingRequiredProvider ? <div role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">A required integration is missing</p><p className="mt-1 text-destructive/80">Connect the required provider in the current scope before submitting this plan.</p></div><Button variant="outline" asChild><Link to="/integrations"><PlugZap data-icon="inline-start" />Manage integrations</Link></Button></div> : null}
+
+        {!finalPlan ? <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
+          <p className="text-sm font-medium">After approval</p>
+          <label className="flex cursor-pointer items-start gap-3 text-sm"><input type="radio" checked={!runAfterApply} onChange={() => onRunChange(false)} className="mt-0.5" /><span><span className="block font-medium">Save as an approved workflow</span><span className="block text-muted-foreground">Create the Blueprint now and start it later.</span></span></label>
+          <label className="flex cursor-pointer items-start gap-3 text-sm"><input type="radio" checked={runAfterApply} onChange={() => onRunChange(true)} className="mt-0.5" /><span><span className="block font-medium">Run after apply</span><span className="block text-muted-foreground">Start the first investigation after the registry snapshot is applied.</span></span></label>
+        </div> : null}
+
+        {completed ? <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"><CheckCircle2 className="mt-0.5 size-5 text-emerald-600" /><div><p className="font-medium">Workflow plan applied</p><p className="mt-1 text-muted-foreground">The immutable Blueprint is now available to the Coordinator. Open Workflows to follow the run.</p></div></div> : null}
+
+        <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
+          <Button variant="ghost" onClick={onBack} disabled={Boolean(finalPlan)}><ArrowLeft data-icon="inline-start" />Back</Button>
+          {completed ? <Button onClick={onOpenWorkflows}>Open workflows <ArrowRight data-icon="inline-end" /></Button> : !submitted ? <Button onClick={onSubmit} disabled={submitting || missingRequiredProvider}>{submitting ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{submitting ? 'Submitting…' : missingRequiredProvider ? 'Connect integration first' : 'Submit for approval'}</Button> : planStatus === 'proposed' ? <Button onClick={onApprove} disabled={approving}>{approving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{approving ? 'Approving…' : 'Approve plan'}</Button> : <Button onClick={onApply} disabled={applying || planStatus !== 'approved'}>{applying ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Play data-icon="inline-start" />}{applying ? 'Applying…' : 'Apply plan'}</Button>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProviderBindingList({ bindings }: { bindings: readonly import('@encois/contracts').WorkflowProviderBindingProjection[] }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
+      <div>
+        <h3 className="text-sm font-semibold">Provider bindings</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Encois resolved these requirements against active integrations in the selected scope. The browser never supplies integration IDs.</p>
+      </div>
+      {bindings.length ? <div className="grid gap-2 sm:grid-cols-2">{bindings.map((binding) => {
+        const ready = binding.status === 'ready'
+        return <div key={binding.slotKey} className={cn('rounded-md border p-3', ready ? 'border-emerald-500/30' : 'border-amber-500/30')}>
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-sm font-medium">{binding.slotKey}</p><p className="mt-1 text-xs text-muted-foreground">{binding.required ? 'Required' : 'Optional'} · {binding.capabilities.join(', ') || 'No capability constraint'}</p></div>
+            <span className={cn('rounded-full px-2 py-1 text-[11px] font-medium', ready ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700')}>{ready ? 'Resolved' : 'Missing'}</span>
+          </div>
+          {ready ? <p className="mt-2 text-xs text-muted-foreground">{binding.integrationName ?? binding.provider ?? 'Active integration'}</p> : <p className="mt-2 text-xs text-amber-700">Connect a matching active integration before applying this plan.</p>}
+        </div>
+      })}</div> : <p className="text-sm text-muted-foreground">No external provider bindings are required by this source.</p>}
+    </div>
+  )
+}
+
+function SelectionList<T>({ title, description, loading, error, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <ErrorCallout message={error.message} /> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
+}
+
+function TemplateOption({ item, selected }: { item: WorkflowTemplateProjection; selected: boolean }) {
+  return <div className={cn('flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30', selected && 'border-foreground bg-accent/40')}><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{item.title}</p><p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{item.category}</p></div>{selected ? <CheckCircle2 className="size-5" /> : null}</div><p className="text-sm text-muted-foreground">{item.description}</p><div className="mt-auto flex flex-wrap gap-1.5">{item.requiredCapabilities.slice(0, 4).map((capability) => <span key={capability} className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{capability}</span>)}</div></div>
+}
+
+function BlueprintOption({ item, selected }: { item: WorkflowBlueprintProjection; selected: boolean }) {
+  return <div className={cn('flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30', selected && 'border-foreground bg-accent/40')}><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{item.name}</p><p className="mt-1 text-xs text-muted-foreground">Version {item.version} · {item.status}</p></div>{selected ? <CheckCircle2 className="size-5" /> : null}</div><p className="text-sm text-muted-foreground">{item.purpose}</p><p className="mt-auto text-xs text-muted-foreground">{item.steps.length} steps · {item.requiresApproval ? 'Approval required' : 'Read-only plan'}</p></div>
+}
+
+function StepIndicator({ number, label, active, complete }: { number: string; label: string; active: boolean; complete: boolean }) {
+  return <div className={cn('flex items-center gap-3 rounded-lg border px-4 py-3 text-sm', active && 'border-foreground bg-accent/50', complete && 'border-emerald-500/40')}><span className={cn('flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium', complete && 'bg-emerald-500 text-white')}>{complete ? <Check className="size-4" /> : number}</span><span className={cn(active ? 'font-medium' : 'text-muted-foreground')}>{label}</span></div>
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 truncate text-sm font-medium">{value}</p></div>
+}
+
+function ErrorCallout({ message }: { message: string }) {
+  return <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{message}</div>
+}
+
+function stepLabel(kind: string, index: number): string {
+  if (kind === WorkflowStepKind.Tool) return `Evidence collection ${index + 1}`
+  if (kind === WorkflowStepKind.Agent) return `Specialist synthesis ${index + 1}`
+  if (kind === WorkflowStepKind.Approval) return `Human approval ${index + 1}`
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} step ${index + 1}`
 }

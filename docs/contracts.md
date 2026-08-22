@@ -379,14 +379,17 @@ Gemini/ADK may propose the plan. Deterministic registry, permission, policy,
 and compatibility checks decide whether it can be persisted or started.
 
 `workflow-change-plan.v1` is the single lifecycle contract. `create` carries a
-Blueprint, `update` and `deprecate` carry `targetBlueprintId` plus
+Blueprint, `update` carries a replacement plus its target, `deprecate`,
+`restore`, and `set_current` carry `targetBlueprintId` plus
 `targetBlueprintVersion`, and `cancel` carries `targetWorkflowId`; these target
 families cannot be mixed. The Gateway validates and persists the plan, applies
 Blueprint lifecycle changes, and supports Temporal cancellation only for
-cancel-only plans through its Temporal client. Repeated cancellation is
-idempotent; persistence-backed and hosted cancellation verification remain
-deployment work. A future incompatible shape will receive a new contract
-version; there is no pre-production v2 compatibility layer.
+cancel-only plans through its Temporal client. Current revision state is
+organization-scoped and database-constrained; restoring a revision does not
+silently make it current. Repeated cancellation is idempotent; persistence-backed
+and hosted cancellation verification remain deployment work. A future
+incompatible shape will receive a new contract version; there is no
+pre-production v2 compatibility layer.
 
 An executable `create` or `update` change may include an explicit start intent:
 

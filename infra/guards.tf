@@ -26,6 +26,46 @@ resource "terraform_data" "application_requirements" {
       error_message = "enable_api requires temporal_namespace for the hosted Temporal Cloud namespace."
     }
     precondition {
+      condition     = !var.enable_api || var.environment != "production" || var.enable_cloud_sql
+      error_message = "A production API requires enable_cloud_sql because the control plane cannot run without its runtime database."
+    }
+    precondition {
+      condition     = !var.enable_cloud_sql || var.migration_image != ""
+      error_message = "enable_cloud_sql requires migration_image so schema changes run through the protected Cloud Run migration job."
+    }
+    precondition {
+      condition     = !var.enable_cloud_sql || var.retention_image != ""
+      error_message = "enable_cloud_sql requires retention_image so expired workflow data is removed by a protected cleanup job."
+    }
+    precondition {
+      condition     = !var.enable_cloud_sql || contains(var.secret_names, var.retention_secret_name)
+      error_message = "retention_secret_name must name one of the secret_names when Cloud SQL is enabled."
+    }
+    precondition {
+      condition     = var.environment != "production" || length(var.retention_organization_ids) > 0
+      error_message = "Production requires an explicit retention cleanup schedule target for every organization."
+    }
+    precondition {
+      condition     = var.environment != "production" || !var.enable_api || !var.enable_agent_gateway || length(var.integration_health_organization_ids) > 0
+      error_message = "Production requires an explicit integration health schedule target for every organization when the API and Agent Gateway are enabled."
+    }
+    precondition {
+      condition     = !var.enable_api || var.environment != "production" || var.enable_agent_gateway
+      error_message = "A production API requires enable_agent_gateway for provider, graph, and tool execution boundaries."
+    }
+    precondition {
+      condition     = !var.enable_api || var.environment != "production" || var.enable_agent_runtime
+      error_message = "A production API requires enable_agent_runtime for durable agent execution and Memory inspection."
+    }
+    precondition {
+      condition     = !var.enable_api || var.environment != "production" || var.artifact_bucket_name != ""
+      error_message = "A production API requires artifact_bucket_name for source revisions and evidence artifacts."
+    }
+    precondition {
+      condition     = !var.enable_api || var.environment != "production" || var.enable_spanner
+      error_message = "A production API requires enable_spanner for the Context Graph admin surface."
+    }
+    precondition {
       condition     = !var.enable_agent_runtime || var.temporal_namespace != ""
       error_message = "enable_agent_runtime requires temporal_namespace for the hosted Temporal Cloud namespace."
     }

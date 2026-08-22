@@ -55,6 +55,7 @@ function statusForSourceError(code: string): 400 | 403 | 404 | 409 | 422 | 500 |
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "SOURCE_CREATE_FAILED") return 500;
   if (code.endsWith("_NOT_FOUND")) return 404;
+  if (["INTEGRATION_CREDENTIAL_REQUIRED", "INTEGRATION_NOT_ACTIVE", "INTEGRATION_SCOPE_UNAVAILABLE"].includes(code)) return 409;
   if (code.includes("MISMATCH") || code.includes("CONFLICT")) return 409;
   return 422;
 }

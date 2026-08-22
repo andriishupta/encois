@@ -132,7 +132,7 @@ the release and approval smokes, and cleans up the child processes.
 For the full containerized local stack, run:
 
 ```bash
-pnpm dev:local:watch
+pnpm run dev:local
 ```
 
 This starts Postgres, the Temporal development server, migrations, API Gateway,
@@ -154,7 +154,7 @@ verification flow. Follow service logs with
 
 This local mock mode includes live reload: the Dashboard uses Vite HMR, the
 API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
-and Agent Runtime. Stop it with `pnpm dev:local:watch:down`.
+and Agent Runtime. Stop it with `pnpm run dev:local:down`.
 
 To reset only the known fixture organizations and Auth Emulator accounts, use
 the scoped reset command documented in [`docs/local.md`](docs/local.md). It

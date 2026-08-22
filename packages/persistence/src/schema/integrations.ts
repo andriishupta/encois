@@ -11,7 +11,7 @@ import {
 import { organizationUnits, organizations } from "./organizations.js";
 import { users } from "./identity.js";
 
-export const integrationStatus = pgEnum("integration_status", ["pending", "active", "disabled", "error"]);
+export const integrationStatus = pgEnum("integration_status", ["pending", "authorized", "active", "degraded", "needs_reauth", "disabled", "error"]);
 export type IntegrationStatus = (typeof integrationStatus.enumValues)[number];
 
 export const integrationBindingStatus = pgEnum("integration_binding_status", ["active", "revoked"]);
@@ -28,6 +28,9 @@ export const integrations = pgTable(
     displayName: text("display_name").notNull(),
     status: integrationStatus("status").notNull().default("pending"),
     credentialRef: text("credential_ref"),
+    authorizedAt: timestamp("authorized_at", { withTimezone: true }),
+    lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
+    lastError: text("last_error"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -74,12 +77,20 @@ export const webhookEndpoints = pgTable(
       .references(() => organizations.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
     endpointKey: text("endpoint_key").notNull(),
+    integrationId: uuid("integration_id"),
     secretRef: text("secret_ref"),
     status: integrationStatus("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("webhook_endpoints_organization_key_idx").on(table.organizationId, table.endpointKey)],
+  (table) => [
+    uniqueIndex("webhook_endpoints_organization_key_idx").on(table.organizationId, table.endpointKey),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [integrations.id, integrations.organizationId],
+      name: "webhook_endpoints_integration_scope_fk",
+    }),
+  ],
 );
 
 export const webhookDeliveries = pgTable(
@@ -95,6 +106,7 @@ export const webhookDeliveries = pgTable(
     providerEventId: text("provider_event_id").notNull(),
     status: text("status").notNull().default("received"),
     payloadRef: text("payload_ref"),
+    payloadChecksum: text("payload_checksum"),
     receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
     processedAt: timestamp("processed_at", { withTimezone: true }),
   },

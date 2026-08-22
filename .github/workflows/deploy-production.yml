@@ -1,0 +1,121 @@
+name: Deploy production (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DEPLOY to run the production Terraform plan and apply
+        required: true
+        default: NO
+        type: string
+      image_tag:
+        description: Immutable Artifact Registry tag previously published for this release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Apply reviewed production infrastructure
+    if: ${{ inputs.confirm == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+      GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY || 'containers' }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Materialize protected production variables
+        env:
+          PRODUCTION_TFVARS: ${{ secrets.PRODUCTION_TFVARS }}
+        run: |
+          umask 077
+          printf '%s' "$PRODUCTION_TFVARS" > "$RUNNER_TEMP/production.tfvars"
+
+      - name: Validate release inputs and published images
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$TF_STATE_BUCKET" || { echo "TF_STATE_BUCKET repository variable is required" >&2; exit 1; }
+          test -n "$GCP_PROJECT_ID" || { echo "GCP_PROJECT_ID repository variable is required" >&2; exit 1; }
+          test -n "$PRODUCTION_BASE_URL" || { echo "PRODUCTION_BASE_URL environment variable is required" >&2; exit 1; }
+          test -n "$IMAGE_TAG" || { echo "image_tag is required" >&2; exit 1; }
+          [[ "$IMAGE_TAG" != "latest" ]] || { echo "latest is not an immutable production tag" >&2; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "image_tag contains unsupported characters" >&2; exit 1; }
+          grep -Eq '^[[:space:]]*environment[[:space:]]*=[[:space:]]*"production"[[:space:]]*$' "$RUNNER_TEMP/production.tfvars" || { echo "production.tfvars must target environment=production" >&2; exit 1; }
+          grep -Eq '^[[:space:]]*enable_dashboard[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$RUNNER_TEMP/production.tfvars" || { echo "production.tfvars must enable the dashboard" >&2; exit 1; }
+          grep -Eq '^[[:space:]]*enable_api[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$RUNNER_TEMP/production.tfvars" || { echo "production.tfvars must enable the API" >&2; exit 1; }
+          grep -Eq '^[[:space:]]*enable_edge[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$RUNNER_TEMP/production.tfvars" || { echo "production.tfvars must enable the public edge" >&2; exit 1; }
+          if grep -Eq '^[[:space:]]*(dashboard|api|agent_runtime|agent_gateway)_image[[:space:]]*=.*:latest([[:space:]]|"|$)' "$RUNNER_TEMP/production.tfvars"; then
+            echo "production.tfvars contains a mutable latest image tag" >&2
+            exit 1
+          fi
+
+          image_root="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}"
+          for service in dashboard api agent-runtime agent-gateway migrations retention; do
+            gcloud artifacts docker images describe "${image_root}/${service}:${IMAGE_TAG}" --quiet >/dev/null
+          done
+
+      - name: Initialize remote Terraform state
+        run: terraform -chdir=infra init -reconfigure -input=false -backend-config="bucket=$TF_STATE_BUCKET"
+
+      - name: Validate production configuration
+        run: terraform -chdir=infra validate
+
+      - name: Create reviewed production plan
+        shell: bash
+        run: |
+          image_root="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}"
+          terraform -chdir=infra plan -input=false \
+            -var-file="$RUNNER_TEMP/production.tfvars" \
+            -var="dashboard_image=${image_root}/dashboard:${IMAGE_TAG}" \
+            -var="api_image=${image_root}/api:${IMAGE_TAG}" \
+            -var="agent_runtime_image=${image_root}/agent-runtime:${IMAGE_TAG}" \
+            -var="agent_gateway_image=${image_root}/agent-gateway:${IMAGE_TAG}" \
+            -var="migration_image=${image_root}/migrations:${IMAGE_TAG}" \
+            -var="retention_image=${image_root}/retention:${IMAGE_TAG}" \
+            -out="$RUNNER_TEMP/production.tfplan"
+
+      - name: Apply production plan
+        run: terraform -chdir=infra apply -input=false "$RUNNER_TEMP/production.tfplan"
+
+      - name: Smoke test the public production edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${PRODUCTION_BASE_URL%/}"
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused "$base_url/healthz" >/dev/null
+          curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused "$base_url/dashboard/" >/dev/null
+          auth_status="$(curl --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused --output /dev/null --write-out '%{http_code}' "$base_url/api/v1/auth/me")"
+          [[ "$auth_status" == "401" ]] || {
+            echo "Unauthenticated auth boundary returned unexpected status: $auth_status" >&2
+            exit 1
+          }
+
+      - name: Record deployed release
+        run: |
+          {
+            echo "Production deployment completed"
+            echo "- image tag: ${IMAGE_TAG}"
+            echo "- migration job image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}/migrations:${IMAGE_TAG}"
+            echo "- retention job image: ${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}/retention:${IMAGE_TAG}"
+            echo "- public edge: ${PRODUCTION_BASE_URL}"
+            echo "- readiness: ${PRODUCTION_BASE_URL%/}/healthz"
+          } >> "$GITHUB_STEP_SUMMARY"

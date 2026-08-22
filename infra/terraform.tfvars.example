@@ -27,10 +27,14 @@ control_plane_service_user_id  = ""
 
 secret_names = [
   "cloud-sql-runtime-url",
+  "cloud-sql-migration-url",
+  "cloud-sql-retention-url",
   "temporal-client-credentials",
   "agent-gateway-service-token",
   "execution-capability-secret",
   "control-plane-service-token",
+  "integration-oauth-config",
+  "integration-oauth-state-secret",
 ]
 
 # Leave empty until the Cloud Storage data plane is enabled. If set, the name
@@ -42,3 +46,15 @@ dashboard_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/c
 api_image           = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
 agent_runtime_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
 agent_gateway_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"
+migration_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/migrations:replace-with-immutable-tag"
+retention_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/retention:replace-with-immutable-tag"
+retention_organization_ids = []
+integration_health_organization_ids = []
+
+# These stable URLs are intentionally explicit to avoid a Terraform dependency
+# cycle between mutually private Cloud Run services. Populate them with the
+# deployed service URLs (or the internal load-balancer URL) before wiring the
+# next revision.
+api_service_url           = "https://encois-demo-api-REPLACE.run.app"
+agent_runtime_service_url = "https://encois-demo-runtime-REPLACE.run.app"
+agent_gateway_service_url = "https://encois-demo-gateway-REPLACE.run.app"

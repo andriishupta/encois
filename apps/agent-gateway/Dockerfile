@@ -11,7 +11,12 @@ RUN cd apps/agent-gateway && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflag
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
+ARG ENCOIS_VERSION=1.0.0
+LABEL org.opencontainers.image.title="Encois Agent Gateway" \
+      org.opencontainers.image.version="${ENCOIS_VERSION}"
+
 COPY --from=build /out/agent-gateway /agent-gateway
 ENV PORT=8080
+ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 USER nonroot:nonroot
 ENTRYPOINT ["/agent-gateway"]

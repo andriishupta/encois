@@ -9,6 +9,8 @@
     { "key": "integrations:manage", "implies": ["integrations:read"] },
     { "key": "knowledge:read", "implies": [] },
     { "key": "knowledge:manage", "implies": ["knowledge:read"] },
+    { "key": "context:read", "implies": [] },
+    { "key": "memory:read", "implies": [] },
     { "key": "organization:read", "implies": [] },
     { "key": "organization:manage", "implies": ["organization:read"] },
     { "key": "settings:read", "implies": [] },

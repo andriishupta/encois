@@ -3,11 +3,23 @@ export type AppConfig = {
   corsCredentials: boolean;
   corsOrigins: readonly string[];
   host: string;
+  publicBaseUrl?: string;
   identityPlatformProjectId?: string;
   sourceArtifactBucket?: string;
   identityPlatformAllowedSignInProviders?: readonly string[];
   controlPlaneServiceToken?: string;
   controlPlaneServiceUserId?: string;
+  agentGatewayUrl?: string;
+  agentGatewayServiceToken?: string;
+  agentGatewayAudience?: string;
+  agentGatewayServiceAccountEmail?: string;
+  agentRuntimeUrl?: string;
+  agentRuntimeServiceToken?: string;
+  agentRuntimeAudience?: string;
+  integrationOAuthConfigJson?: string;
+  integrationOAuthCallbackUrl?: string;
+  integrationOAuthStateSecret?: string;
+  integrationOAuthSuccessUrl?: string;
   nodeEnv: string;
   port: number;
   requestTimeoutMs: number;
@@ -21,6 +33,7 @@ export type AppConfig = {
   temporalTlsClientKeyPath?: string;
   temporalNamespace: string;
   temporalTaskQueue: string;
+  workflowRunRetentionDays: number;
 };
 
 const DEFAULTS = {
@@ -60,11 +73,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsCredentials: env.CORS_CREDENTIALS === "true",
     corsOrigins,
     host: env.HOST?.trim() || DEFAULTS.host,
+    publicBaseUrl: env.ENCOIS_PUBLIC_BASE_URL?.trim() || undefined,
     identityPlatformProjectId: env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || undefined,
     sourceArtifactBucket: env.SOURCE_ARTIFACT_BUCKET?.trim() || undefined,
     identityPlatformAllowedSignInProviders,
     controlPlaneServiceToken: env.CONTROL_PLANE_SERVICE_TOKEN?.trim() || undefined,
     controlPlaneServiceUserId: env.CONTROL_PLANE_SERVICE_USER_ID?.trim() || undefined,
+    agentGatewayUrl: env.AGENT_GATEWAY_URL?.trim() || undefined,
+    agentGatewayServiceToken: env.AGENT_GATEWAY_SERVICE_TOKEN?.trim() || undefined,
+    agentGatewayAudience: env.AGENT_GATEWAY_AUDIENCE?.trim() || undefined,
+    agentGatewayServiceAccountEmail: env.AGENT_GATEWAY_SERVICE_ACCOUNT_EMAIL?.trim() || undefined,
+    agentRuntimeUrl: env.AGENT_RUNTIME_URL?.trim() || undefined,
+    agentRuntimeServiceToken: env.AGENT_RUNTIME_SERVICE_TOKEN?.trim() || undefined,
+    agentRuntimeAudience: env.AGENT_RUNTIME_AUDIENCE?.trim() || undefined,
+    integrationOAuthConfigJson: env.ENCOIS_INTEGRATION_OAUTH_CONFIG_JSON?.trim() || undefined,
+    integrationOAuthCallbackUrl: env.ENCOIS_INTEGRATION_OAUTH_CALLBACK_URL?.trim() || undefined,
+    integrationOAuthStateSecret: env.ENCOIS_INTEGRATION_OAUTH_STATE_SECRET?.trim() || undefined,
+    integrationOAuthSuccessUrl: env.ENCOIS_INTEGRATION_OAUTH_SUCCESS_URL?.trim() || undefined,
     nodeEnv,
     port: positiveInteger(env.PORT, DEFAULTS.port),
     requestTimeoutMs: positiveInteger(env.REQUEST_TIMEOUT_MS, DEFAULTS.requestTimeoutMs),
@@ -80,5 +105,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     temporalTlsClientKeyPath: env.TEMPORAL_TLS_CLIENT_KEY_PATH?.trim() || undefined,
     temporalNamespace: env.TEMPORAL_NAMESPACE?.trim() || "default",
     temporalTaskQueue: env.TEMPORAL_TASK_QUEUE?.trim() || "encois-agent-runtime",
+    workflowRunRetentionDays: positiveInteger(env.WORKFLOW_RUN_RETENTION_DAYS, 30),
   };
 }

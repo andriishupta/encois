@@ -41,7 +41,10 @@ export const createSourceRevisionRoute: Handler<GatewayEnv> = async (context) =>
     const revision = await createSourceRevision(context.get("principal"), sourceId, request);
     return revision ? context.json({ data: revision }, 201) : context.json({ error: { code: "SOURCE_NOT_FOUND", message: "Knowledge Source not found." } }, 404);
   } catch (error) {
-    if (isSourceServiceError(error)) return context.json({ error: { code: error.code, message: error.message } }, error.code === "PERSISTENCE_UNAVAILABLE" ? 503 : error.code === "FORBIDDEN" ? 403 : 422);
+    if (isSourceServiceError(error)) {
+      const status = error.code === "PERSISTENCE_UNAVAILABLE" ? 503 : error.code === "FORBIDDEN" ? 403 : error.code.includes("CONFLICT") ? 409 : 422;
+      return context.json({ error: { code: error.code, message: error.message } }, status);
+    }
     throw error;
   }
 };

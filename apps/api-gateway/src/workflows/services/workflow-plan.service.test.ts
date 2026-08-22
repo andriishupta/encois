@@ -97,6 +97,36 @@ describe("workflow plan coordinator events", () => {
     expect(event.workflowStarts).toBeUndefined();
     expect(validateContract("coordinatorEvent", event).valid).toBe(true);
   });
+
+  it("accepts restore and current-marker registry changes without execution targets", () => {
+    const lifecyclePlan: WorkflowChangePlan = {
+      contractVersion: "workflow-change-plan.v1",
+      planId: "plan-blueprint-lifecycle-1",
+      coordinatorId: "coord-1",
+      organizationId: "org-1",
+      observedAt: "2026-08-20T16:00:00.000Z",
+      changes: [
+        {
+          kind: "restore",
+          targetBlueprintId: "release-readiness",
+          targetBlueprintVersion: "0.9.0",
+          reason: "Restore the reviewed archived revision.",
+          requiresApproval: true,
+        },
+        {
+          kind: "set_current",
+          targetBlueprintId: "release-readiness",
+          targetBlueprintVersion: "1.0.0",
+          reason: "Make the reviewed revision the default for new workflows.",
+          requiresApproval: true,
+        },
+      ],
+    };
+
+    expect(validateContract("workflowChangePlan", lifecyclePlan).valid).toBe(true);
+    const event = createPlanCoordinatorEvent(principal, planRecord(lifecyclePlan), "workflow-plan-applied");
+    expect(event.workflowStarts).toBeUndefined();
+  });
 });
 
 function planRecord(value: WorkflowChangePlan) {

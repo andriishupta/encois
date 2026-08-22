@@ -26,6 +26,12 @@ Cloud namespace/API key, populated Secret Manager versions, a GCP project, and
 a smoke test against the deployed services. The local multi-process synthetic
 smoke path has already passed.
 
+The API `/health/ready` endpoint is a real production gate: it returns `503`
+until Cloud SQL is reachable and the required Identity Platform, Temporal,
+execution-capability, OAuth, artifact, private-service, and HTTPS CORS settings
+are present. Local and test profiles retain the non-blocking readiness behavior
+needed for the memory-mode development scaffold.
+
 The broader release options are documented in [`docs/CI-CD.md`](CI-CD.md). This file stays focused on the infrastructure resources and their manual bootstrap.
 
 ## Target shape
@@ -118,7 +124,7 @@ Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/he
 
 The canonical full local stack is:
 
-- `pnpm dev:local:watch` runs `compose.local.yaml` with Postgres, the official
+- `pnpm run dev:local` runs `compose.local.yaml` with Postgres, the official
   Temporal development image, migrations, Firebase Auth Emulator, the local
   auth seed, all four application services, and the dashboard. The local
   Runtime uses `AGENT_AI_MODE=mock`, the data plane uses local adapters, and
@@ -165,7 +171,22 @@ There are three distinct permission planes:
 2. **Runtime identities:** dashboard, API, Agent Runtime, and Agent Gateway each have a separate Google service account. The runtime identities do not share provider credentials.
 3. **Infrastructure identity:** `infra/bootstrap` creates a dedicated Terraform deployer service account. It is not used by any Cloud Run container.
 
-The Agent Gateway gets access to connector secret containers; the Go runtime gets Vertex AI access and can receive only scoped data references. Secret values are added separately with `gcloud secrets versions add` or a secret-management pipeline. Terraform manages the secret resource and IAM binding, not the secret payload. The Google OAuth client secret is supplied through a protected `TF_VAR_google_oauth_client_secret` input and is retained in protected Terraform state.
+The Agent Gateway gets access only to connector Secret Manager containers that the
+Gateway API creates for a connected integration. The API uses a small custom
+Secret Manager broker role to create the container, add a token version, and
+grant the private Gateway service account access to that one container. The Go
+runtime gets Vertex AI access and receives only scoped data references. Secret
+values are added through the OAuth callback or a protected secret-management
+pipeline; Terraform manages platform IAM and static service secrets, not
+provider token payloads. The Google OAuth client secret is supplied through a
+protected `TF_VAR_google_oauth_client_secret` input and is retained in protected
+Terraform state.
+
+Cloud Run services call one another through explicit `api_service_url`,
+`agent_runtime_service_url`, and `agent_gateway_service_url` variables. This is
+intentional: using computed service URIs in both directions creates a Terraform
+dependency cycle. Populate the URLs from the first deployed revision (or the
+internal load-balancer URL) before applying the private service wiring.
 
 The bootstrap deployer role list is intentionally explicit, but it includes the powerful `roles/resourcemanager.projectIamAdmin` because the root stack creates service-account IAM bindings. Treat that identity as infrastructure-admin, use short-lived impersonation or Workload Identity Federation, and do not create a JSON key. Once the resource set stabilizes, replace broad predefined roles with a reviewed custom role or split IAM changes into a separately protected bootstrap stack.
 
@@ -215,6 +236,36 @@ scaffold does not create the Job or scheduler because their cadence, tenant
 inventory, and deployment IAM are environment-specific; the job must use the
 API/runtime service identity and only the required invocation permissions.
 
+Integration health probes use the protected
+`POST /api/v1/internal/integrations/health-check` dispatcher. It accepts an
+optional `integrationId`; without one it checks up to 50 active GitHub/Jira
+integrations in the supplied organization. The API keeps the tenant inventory
+and calls the private Agent Gateway, which reads the scoped Secret Manager
+credential, performs a bounded provider probe, and reports the lifecycle state
+back to the API. Configure one Cloud Scheduler/Cloud Run Job invocation per
+organization with `X-Encois-Service-Token` and `X-Organization-ID`; do not put
+the service token in Terraform state or a browser request. The repository
+provides a protected API-image dispatcher and Terraform creates one Cloud Run
+Job/Scheduler target per UUID in `integration_health_organization_ids`. The
+tenant inventory remains explicit deployment configuration and the cadence is
+controlled by `integration_health_schedule`.
+
+If a provider returns a refresh token, put its HTTPS token endpoint and client
+configuration in the server-only `integration-oauth-config` secret. The Agent
+Gateway refreshes on expiry or one provider authorization failure, writes a
+new Secret Manager version, and retries once. Providers without a compatible
+refresh policy transition to `needs_reauth`; no raw token reaches the browser,
+API response, or log.
+
+Workflow retention cleanup is a separate protected Cloud Run Job using the
+`retention:<tag>` persistence image and `cloud-sql-retention-url`. Terraform
+creates one Cloud Scheduler target per UUID in `retention_organization_ids`.
+Each execution sets `RETENTION_ORGANIZATION_ID`, applies the PostgreSQL RLS
+tenant context, removes only terminal Runs whose `retention_until` has elapsed
+(including their command receipts/events), and records a redacted audit event.
+Temporal history and large artifacts remain governed by their own retention
+policies; they are not silently assumed to be removed by this SQL job.
+
 This is deliberately not Kubernetes. Cloud Run provides revisioned deployments, request-driven scaling, health checks, and rollback without operating a cluster. Temporal Cloud remains the durable workflow engine; Cloud Run is only the execution host for the API and workers.
 
 ## Deliberately deferred
@@ -224,8 +275,9 @@ This is deliberately not Kubernetes. Cloud Run provides revisioned deployments, 
 - Google OAuth client creation and rotation; Terraform consumes the protected client inputs but does not create Google Cloud OAuth credentials.
 - Cloud Armor, IAP, VPC Service Controls, private egress, and customer-specific data residency.
 - Hosted Spanner schema/IAM verification, Memory Bank reasoning-engine setup,
-  and retention/deletion workflows. The application adapters and Terraform DDL
-  are present; these items require a real GCP project.
+  and provider-specific erasure policy. The application adapters and Terraform
+  DDL are present; these items require a real GCP project and a data-retention
+  decision for Temporal history, artifacts, and external provider data.
 - Cloud SQL private-IP/HA topology, IAM database authentication, and the first migration execution in the target project.
 - GitHub Actions/Cloud Build workflow files, vulnerability scanning, SBOM, image signing, and production approval policy.
 - Landing-page Cloud Run service. Until it exists, `/` falls back to the dashboard backend.

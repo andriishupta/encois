@@ -1,6 +1,6 @@
 # Encois CI/CD blueprint
 
-**Status:** repository CI baseline, local synthetic smoke, and local Compose scaffold implemented; cloud delivery and hosted smoke remain proposed.
+**Status:** parallel repository CI, local synthetic smoke, immutable production image publishing, and a manual Terraform deployment with public-edge smoke are implemented; hosted delivery still requires configured GitHub/GCP credentials and a real environment.
 
 This document describes how the current repository can move from local development to a repeatable Google Cloud deployment without turning Terraform into an application runner or putting long-lived GCP keys in GitHub.
 
@@ -15,7 +15,13 @@ This document describes how the current repository can move from local developme
 | `apps/agent-gateway` | Go private tool/policy broker scaffold | Go service container | Internal Cloud Run service, hosted smoke pending |
 | `infra/` | Terraform GCP blueprint | Infrastructure plan/apply | GCP project and shared services |
 
-The first useful pipeline can validate and deploy the dashboard/API. Worker and Agent Gateway jobs can use the repository Dockerfiles now; hosted rollout should wait for a hosted Temporal smoke check and populated secrets.
+The repository CI now validates the Node services, Go workers, persistence layer, Terraform, Compose configuration, and all container builds. Hosted rollout remains manual until Temporal, secrets, image promotion, and GitHub/GCP identity are configured.
+
+## Release version source
+
+The root [`package.json`](../package.json) is the release-version source of truth. The current version is `1.0.0`; `pnpm version:check` verifies that every workspace package uses the same value. Go modules keep their normal module metadata and do not define a separate service release version. Go and Node images receive the shared version through the `ENCOIS_VERSION` build argument, the OCI image label, and the `ENCOIS_VERSION` runtime environment variable.
+
+CI tags images as `encois/<service>:<package-version>`. Local Compose uses the same version by default and allows an explicit override with `ENCOIS_VERSION=...`; watch and local-prod use different image prefixes so their development and production-style images do not collide. Reusing and overwriting `1.0.0` is accepted for the current stage. Once rollback and compatibility guarantees matter, protect version tags and publish immutable commit/digest tags instead.
 
 ## Recommended approach
 
@@ -23,8 +29,9 @@ Use a hybrid model:
 
 1. **Local bootstrap:** an authorized operator creates the GCP project/billing setup, Terraform state bucket, deployer identity, and first demo environment.
 2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service to verify RLS and command-receipt grants. It does not require GCP credentials or provider APIs.
-3. **GitHub Actions delivery:** merges to the protected deployment branch build immutable images, push them to Artifact Registry, run Terraform plan, and wait for an environment approval before apply.
-4. **Runtime migrations:** Cloud SQL migrations run as a separate protected step using the migration connection; they are not hidden inside Terraform or the API startup.
+3. **Manual image publishing:** `.github/workflows/publish-production-images.yml` builds the dashboard, API, Agent Gateway, Agent Runtime, and migration-job images, injects only public Firebase browser configuration into the dashboard build, and pushes an operator-selected immutable tag to Artifact Registry.
+4. **Manual production delivery:** `.github/workflows/deploy-production.yml` runs only from `workflow_dispatch`, verifies that the selected images exist and are not tagged `latest`, uses GitHub Environment approval and Workload Identity Federation, applies a reviewed Terraform plan, and smoke-tests the public edge.
+5. **Runtime migrations:** Terraform creates a dedicated Cloud Run migration Job with its own service account and Secret Manager reference. `.github/workflows/migrate-production.yml` executes that already deployed immutable job only after a protected Environment approval; migrations are not hidden inside Terraform or the API startup.
 
 GitHub Actions should authenticate to Google Cloud with Workload Identity Federation and GitHub OIDC, not a service-account JSON key. Google documents this as a way for workflows to receive short-lived credentials tied to the repository/workflow identity ([Google WIF deployment pipelines](https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines), [GitHub auth action](https://github.com/google-github-actions/auth)).
 
@@ -37,10 +44,12 @@ This stage must not deploy or mutate GCP:
 ```text
 checkout
   -> pnpm install --frozen-lockfile
-  -> TypeScript lint/typecheck/test/build
-  -> Go fmt/vet/test when Go apps are present
-  -> Terraform fmt -check and validate
-  -> contract/schema checks
+  -> parallel Node package lint/type/test jobs
+  -> parallel Go fmt/vet/test jobs
+  -> parallel Drizzle/PostgreSQL, Terraform, and Compose checks
+  -> local Temporal execution smoke
+  -> TypeScript workspace build
+  -> parallel Docker image builds without pushing
 ```
 
 The root scripts already cover the TypeScript workspace:
@@ -80,16 +89,24 @@ Because Terraform validation may need provider plugins, CI can run it with a cac
 
 ### 2. Image build
 
-Build only after CI passes. Each deployable app gets its own image and immutable identifier:
+Build only after all CI checks pass. Each deployable app gets its own image tagged with the workspace release version:
 
 ```text
- dashboard:<git-sha>
- api-gateway:<git-sha>
- agent-runtime:<git-sha>
- agent-gateway:<git-sha>
+ dashboard:<package-version>
+ api-gateway:<package-version>
+ agent-runtime:<package-version>
+ agent-gateway:<package-version>
 ```
 
-Images are pushed to the Artifact Registry repository created by `infra/`. The deploy input should use the commit SHA or image digest, never `latest`. Dockerfiles and repeatable container entrypoints exist for all four deployable services; the Go runtime and Agent Gateway expose internal health endpoints, while the dashboard/API use their platform server ports.
+The current CI build validates images without pushing them. The manual
+`publish-production-images.yml` workflow is the controlled promotion step: it
+publishes all four deployable images under an operator-selected immutable tag.
+The deployment workflow verifies those tags in Artifact Registry and overrides
+the image variables in the reviewed Terraform plan, so stale image references
+in the protected tfvars secret cannot silently deploy. Dockerfiles and
+repeatable container entrypoints exist for all four deployable services; the Go
+runtime and Agent Gateway expose internal health endpoints, while the
+dashboard/API use their platform server ports.
 
 Build the dashboard image with `VITE_BASE_PATH=/dashboard/` for the hosted
 load-balancer path; the local image can keep the default `/` base path. For
@@ -112,16 +129,19 @@ The Docker build context is the repository root because the API and dashboard
 images consume workspace packages:
 
 ```bash
+ENCOIS_VERSION="$(node scripts/project-version.mjs)"
+
 docker build -f apps/dashboard/Dockerfile \
+  --build-arg ENCOIS_VERSION="$ENCOIS_VERSION" \
   --build-arg VITE_BASE_PATH=/dashboard/ \
   --build-arg VITE_FIREBASE_API_KEY="$VITE_FIREBASE_API_KEY" \
   --build-arg VITE_FIREBASE_AUTH_DOMAIN="$VITE_FIREBASE_AUTH_DOMAIN" \
   --build-arg VITE_FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID" \
   --build-arg VITE_FIREBASE_APP_ID="$VITE_FIREBASE_APP_ID" \
-  -t encois-dashboard:dev .
-docker build -f apps/api-gateway/Dockerfile -t encois-api:dev .
-docker build -f apps/agent-gateway/Dockerfile -t encois-agent-gateway:dev .
-docker build -f apps/agent-runtime/Dockerfile -t encois-agent-runtime:dev .
+  -t "encois-dashboard:$ENCOIS_VERSION" .
+docker build -f apps/api-gateway/Dockerfile --build-arg ENCOIS_VERSION="$ENCOIS_VERSION" -t "encois-api:$ENCOIS_VERSION" .
+docker build -f apps/agent-gateway/Dockerfile --build-arg ENCOIS_VERSION="$ENCOIS_VERSION" -t "encois-agent-gateway:$ENCOIS_VERSION" .
+docker build -f apps/agent-runtime/Dockerfile --build-arg ENCOIS_VERSION="$ENCOIS_VERSION" -t "encois-agent-runtime:$ENCOIS_VERSION" .
 ```
 
 ### 3. Infrastructure plan
@@ -161,6 +181,22 @@ DATABASE_MIGRATION_URL="$DATABASE_MIGRATION_URL" \
 
 The migration connection is operator/CI-only. The API uses `DATABASE_RUNTIME_URL` and the restricted runtime role described in [`docs/GCP.md`](GCP.md). Never put either value in Terraform variables, image layers, logs, or GitHub repository files.
 
+For hosted production, Terraform also creates `${name_prefix}-migrations` as a
+Cloud Run Job. Set `migration_image` to the immutable `migrations:<tag>` image
+and populate the `cloud-sql-migration-url` Secret Manager secret with a URL
+that uses the Cloud SQL Unix socket mounted at `/cloudsql`; the migration URL
+must use a separate DDL-capable operator role. The API service account is not
+used by this job and keeps its restricted runtime role. Run the protected
+`migrate-production.yml` workflow with the same image tag after the
+infrastructure rollout and before exposing the new API behavior.
+
+The release also publishes a separate `retention:<tag>` image for the
+tenant-scoped cleanup Job. Terraform creates the Job and one Cloud Scheduler
+target per UUID in `retention_organization_ids`; it uses the separate
+`cloud-sql-retention-url` secret and the `api_gateway_retention` capability
+role. The cleanup job is deliberately separate from migrations and the API
+runtime, and removes only terminal Runs past their `retention_until` deadline.
+
 For the first release, use additive migrations first, deploy the compatible API, then remove old schema elements in a later change. Database rollback is normally a forward migration, not `terraform destroy` or an automatic down migration.
 
 ## Deployment sequence
@@ -169,12 +205,14 @@ For the first release, use additive migrations first, deploy the compatible API,
 PR checks
   -> merge to protected branch
   -> build/test dashboard and API images
-  -> push immutable images to Artifact Registry
+  -> publish immutable images to Artifact Registry
+  -> manual production workflow
   -> Terraform plan with image references
-  -> human approval
+  -> GitHub Environment approval
   -> Terraform apply / Cloud Run revision rollout
-  -> run Cloud SQL migration if required
-  -> smoke test /health/live, /health/ready, dashboard, and API
+  -> protected `migrate-production.yml` executes the matching Cloud SQL Job image
+  -> Cloud Scheduler invokes tenant-scoped retention cleanup on its configured cadence
+  -> smoke test public /healthz, dashboard, and API
   -> record revision, image digest, migration, and run evidence
 ```
 
@@ -206,7 +244,7 @@ Do not reuse demo credentials or production data. The hackathon environment shou
 The canonical full local stack is now:
 
 ```bash
-pnpm dev:local:watch
+pnpm run dev:local
 ```
 
 It runs `compose.local.yaml` with Postgres, the Temporal development server,
@@ -258,9 +296,9 @@ Every deployment should record the commit SHA, image digests, Terraform plan/app
 
 ## Decisions still pending
 
-- Add GitHub Actions workflow files only after the repository owner creates the GitHub repository and selects the demo project. Environment tfvars should remain outside Git and be provided by protected CI configuration.
-- Choose GitHub Actions versus Cloud Build as the canonical image builder.
-- Build and scan the four Dockerfiles, then add a deployment smoke test for health/readiness and the synthetic workflow.
+- Configure the `production` GitHub Environment and its protected WIF, deployer, state-bucket, and Terraform variable inputs.
+- Provision the Artifact Registry repository before the first image-publishing run; Terraform owns the repository, while the publishing workflow assumes the repository already exists.
+- The production deploy now gates traffic on `/health/live` and `/health/ready`; the API readiness endpoint fails closed when required production dependencies are missing or the runtime database cannot be reached. The deploy workflow also smoke-tests the public `/healthz`, dashboard, and API edge after rollout. A hosted authenticated workflow smoke remains required after Temporal Cloud and provider credentials are configured.
 - Choose local PostgreSQL and Temporal development tooling.
 - Configure Workload Identity Federation with repository/branch/environment conditions.
 - Reduce the initial Terraform deployer roles and decide whether WIF resources belong in bootstrap or are created manually once.

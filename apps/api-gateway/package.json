@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "dispatch:coordinator": "node dist/coordinator-dispatcher.js",
+    "dispatch:integration-health": "node dist/integration-health-dispatcher.js",
     "auth:bootstrap-organization": "tsx scripts/bootstrap-organization.ts",
     "auth:invite-user": "tsx scripts/invite-user.ts",
     "auth:seed-local": "tsx src/local-seed.ts",

@@ -50,6 +50,36 @@ try {
     throw new Error(`workflow command receipt privileges are unsafe: ${JSON.stringify(privileges)}`);
   }
 
+  const [retentionRole] = await sql`
+    SELECT 1
+    FROM pg_roles
+    WHERE rolname = 'api_gateway_retention'
+      AND rolcanlogin = false
+      AND rolbypassrls = false
+  `;
+  if (!retentionRole) throw new Error("tenant-scoped retention capability role is missing or unsafe");
+
+  const [retentionColumn] = await sql`
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'workflow_runs'
+      AND column_name = 'retention_until'
+  `;
+  if (!retentionColumn) throw new Error("workflow run retention deadline column is missing");
+
+  const [retentionPrivileges] = await sql`
+    SELECT
+      has_table_privilege('api_gateway_retention', 'public.workflow_runs', 'SELECT') AS can_select_runs,
+      has_table_privilege('api_gateway_retention', 'public.workflow_runs', 'DELETE') AS can_delete_runs,
+      has_table_privilege('api_gateway_retention', 'public.workflow_events', 'DELETE') AS can_delete_events,
+      has_table_privilege('api_gateway_retention', 'public.workflow_command_receipts', 'DELETE') AS can_delete_receipts,
+      has_table_privilege('api_gateway_retention', 'public.audit_events', 'INSERT') AS can_insert_audit
+  `;
+  if (!retentionPrivileges?.can_select_runs || !retentionPrivileges?.can_delete_runs || !retentionPrivileges?.can_delete_events || !retentionPrivileges?.can_delete_receipts || !retentionPrivileges?.can_insert_audit) {
+    throw new Error(`retention capability privileges are incomplete: ${JSON.stringify(retentionPrivileges)}`);
+  }
+
   const organizationId = randomUUID();
   const definitionId = randomUUID();
   const workflowRunId = randomUUID();

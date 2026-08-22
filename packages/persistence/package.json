@@ -15,6 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "db:generate": "node scripts/generate-migration.mjs",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "retention:cleanup": "node scripts/retention-cleanup.mjs",
     "db:verify": "node scripts/verify-schema.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",

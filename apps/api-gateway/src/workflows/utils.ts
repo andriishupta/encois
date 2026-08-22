@@ -43,7 +43,7 @@ export function workflowErrorStatus(code: string): WorkflowHttpStatus {
 
 export function workflowPlanErrorStatus(code: string, fallback: 409 | 422 = 409): WorkflowPlanHttpStatus {
   if (code === "PERSISTENCE_UNAVAILABLE") return 503;
-  if (code === "WORKFLOW_PLAN_NOT_FOUND") return 404;
+  if (code === "WORKFLOW_PLAN_NOT_FOUND" || code === "WORKFLOW_BLUEPRINT_NOT_FOUND" || code === "WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND") return 404;
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED" || code === "IDENTITY_NOT_RESOLVED") return 403;
   return fallback;
 }
@@ -56,8 +56,8 @@ export function workflowValidationErrorStatus(code: string): 401 | 403 | 422 {
 
 export function workflowCommandErrorStatus(code: string): WorkflowCommandHttpStatus {
   if (code === "WORKFLOW_NOT_FOUND") return 404;
-  if (code === "FORBIDDEN") return 403;
-  if (code === "WORKFLOW_NOT_SIGNALABLE" || code === "WORKFLOW_SIGNAL_CONFLICT") return 409;
+  if (code === "FORBIDDEN" || code === "SCOPE_DENIED" || code === "IDENTITY_NOT_RESOLVED") return 403;
+  if (code === "WORKFLOW_NOT_SIGNALABLE" || code === "WORKFLOW_SIGNAL_CONFLICT" || code === "WORKFLOW_NOT_CANCELLABLE" || code === "WORKFLOW_NOT_RERUNNABLE" || code === "WORKFLOW_REVISION_UNAVAILABLE") return 409;
   if (code === "WORKFLOW_NOT_UPDATABLE" || code === "WORKFLOW_UPDATE_CONFLICT") return 409;
   return 503;
 }
@@ -70,6 +70,7 @@ export function workflowStartResponseStatus(reused: boolean | undefined): 200 | 
   return reused ? 200 : 202;
 }
 
-export function authorizationErrorStatus(code: string): 401 | 403 {
+export function authorizationErrorStatus(code: string): 401 | 403 | 503 {
+  if (code === "PERSISTENCE_UNAVAILABLE" || code === "BLUEPRINT_REGISTRY_UNAVAILABLE" || code === "CAPABILITY_NOT_CONFIGURED") return 503;
   return code === "FORBIDDEN" ? 403 : 401;
 }

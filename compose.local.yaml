@@ -33,9 +33,12 @@ services:
       retries: 30
 
   firebase-auth:
+    image: encois-watch/firebase-auth:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/firebase/Dockerfile
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     ports:
       - "4000:4000"
       - "9099:9099"
@@ -46,9 +49,12 @@ services:
       retries: 30
 
   migrations:
+    image: encois-watch/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: packages/persistence/Dockerfile
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     environment:
       DATABASE_MIGRATION_URL: postgresql://postgres:postgres@postgres:5432/encois
     depends_on:
@@ -57,9 +63,12 @@ services:
     restart: "no"
 
   local-auth-seed:
+    image: encois-watch/api-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     command: ["node", "dist/local-seed.js"]
     environment:
       DATABASE_MIGRATION_URL: postgresql://postgres:postgres@postgres:5432/encois
@@ -75,9 +84,12 @@ services:
     restart: "no"
 
   agent-gateway:
+    image: encois-watch/agent-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-gateway/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     working_dir: /workspace/apps/agent-gateway
     environment:
       AGENT_GATEWAY_HTTP_ADDR: ":8080"
@@ -93,9 +105,12 @@ services:
       - encois-local-dev-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
 
   api-gateway:
+    image: encois-watch/api-gateway-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     working_dir: /workspace
     command: ["pnpm", "--filter", "@encois/api-gateway", "dev"]
     environment:
@@ -106,6 +121,10 @@ services:
       CORS_CREDENTIALS: "false"
       AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
       AGENT_GATEWAY_CAPABILITY_SECRET: local-execution-capability-secret
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
+      AGENT_RUNTIME_URL: http://agent-runtime:8090
+      AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
       IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: google.com,password
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
@@ -129,9 +148,12 @@ services:
       - encois-local-dev-persistence-node-modules:/workspace/packages/persistence/node_modules
 
   agent-runtime:
+    image: encois-watch/agent-runtime:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-runtime/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     working_dir: /workspace/apps/agent-runtime
     environment:
       AGENT_RUNTIME_HTTP_ADDR: ":8090"
@@ -141,6 +163,7 @@ services:
       AGENT_AI_MODE: mock
       AGENT_MEMORY_MODE: mock
       AGENT_MEMORY_FIXTURE: local
+      AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
     ports:
@@ -157,9 +180,12 @@ services:
       - encois-local-dev-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
 
   dashboard:
+    image: encois-watch/dashboard-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     working_dir: /workspace
     command: ["pnpm", "--filter", "@encois/dashboard", "exec", "vite", "--host", "0.0.0.0"]
     environment:

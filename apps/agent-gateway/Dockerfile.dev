@@ -1,5 +1,9 @@
 FROM golang:1.26
 
+ARG ENCOIS_VERSION=1.0.0
+LABEL org.opencontainers.image.title="Encois Agent Gateway (development)" \
+      org.opencontainers.image.version="${ENCOIS_VERSION}"
+
 WORKDIR /workspace
 RUN go install github.com/air-verse/air@v1.61.7
 
@@ -8,5 +12,6 @@ COPY packages/contracts/go.mod packages/contracts/go.sum ./packages/contracts/
 RUN cd apps/agent-gateway && go mod download
 
 WORKDIR /workspace/apps/agent-gateway
+ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]

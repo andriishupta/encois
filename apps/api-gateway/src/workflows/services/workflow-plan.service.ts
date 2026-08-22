@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { ContractVersion, CoordinatorEventType, Permission, type CoordinatorEvent } from "@encois/contracts";
 import {
@@ -51,6 +51,23 @@ function planHash(plan: WorkflowChangePlanInput): string {
 
 function dateString(value: Date | null | undefined): string | undefined {
   return value?.toISOString();
+}
+
+function planMetadata(plan: WorkflowChangePlanInput): {
+  plannerName?: string;
+  plannerVersion?: string;
+  sourceSchemaVersion?: string;
+  promptVersion?: string;
+  promptHash?: string;
+} {
+  const metadata = plan.metadata;
+  return {
+    ...(metadata?.planner?.name ? { plannerName: metadata.planner.name } : {}),
+    ...(metadata?.planner?.version ? { plannerVersion: metadata.planner.version } : {}),
+    ...(metadata?.sourceSchemaVersion ? { sourceSchemaVersion: metadata.sourceSchemaVersion } : {}),
+    ...(metadata?.promptVersion ? { promptVersion: metadata.promptVersion } : {}),
+    ...(metadata?.promptHash ? { promptHash: metadata.promptHash } : {}),
+  };
 }
 
 function recordFromRow(row: typeof workflowChangePlans.$inferSelect): WorkflowPlanRecord {
@@ -158,6 +175,7 @@ export async function submitWorkflowPlan(
         projectId: plan.projectId,
         planHash: hash,
         plan: plan as unknown as Record<string, unknown>,
+        ...planMetadata(plan),
         status: "proposed",
         approvalRequired: validation.approvalRequired,
         submittedByUserId: userId,
@@ -206,6 +224,40 @@ export async function getWorkflowPlan(principal: AosPrincipal, planId: string): 
   if (!row) return null;
   await validateWorkflowChangePlan(principal, row.plan as unknown as WorkflowChangePlanInput);
   return recordFromRow(row);
+}
+
+function planScopeVisible(plan: WorkflowChangePlanInput, principal: AosPrincipal): boolean {
+  if (principal.scope.includes("*")) return true;
+  if (!plan.scope?.ids?.length) return false;
+  return plan.scope.ids.every((scope) => principal.scope.includes(scope));
+}
+
+export async function listWorkflowPlans(
+  principal: AosPrincipal,
+  limit = 100,
+): Promise<readonly WorkflowPlanRecord[]> {
+  if (!database) return persistenceUnavailable();
+  await requirePlanManager(principal);
+  const rows = await withOrganizationContext(database, principal.organizationId, (db) => db
+    .select()
+    .from(workflowChangePlans)
+    .where(eq(workflowChangePlans.organizationId, principal.organizationId))
+    .orderBy(desc(workflowChangePlans.updatedAt))
+    .limit(Math.max(1, Math.min(limit, 100))));
+
+  const visible: WorkflowPlanRecord[] = [];
+  for (const row of rows) {
+    const plan = row.plan as unknown as WorkflowChangePlanInput;
+    if (!planScopeVisible(plan, principal)) continue;
+    try {
+      await validateWorkflowChangePlan(principal, plan);
+      visible.push(recordFromRow(row));
+    } catch {
+      // A plan that no longer validates against the caller's current scope is
+      // intentionally omitted instead of leaking a stale or unauthorized proposal.
+    }
+  }
+  return visible;
 }
 
 export async function approveWorkflowPlan(principal: AosPrincipal, planId: string): Promise<WorkflowPlanRecord> {
@@ -348,11 +400,69 @@ export async function applyWorkflowPlan(
             `Approved Blueprint ${change.targetBlueprintId}@${change.targetBlueprintVersion} was not found.`,
           );
         }
+        if (target.isCurrent) {
+          throw workflowServiceError(
+            "WORKFLOW_BLUEPRINT_CURRENT_REQUIRED",
+            "Mark another approved revision current before deprecating the current Blueprint revision.",
+          );
+        }
         await db
           .update(workflowBlueprints)
           .set({ status: "retired", updatedAt: now })
           .where(eq(workflowBlueprints.id, target.id));
         actions.push(`deprecate:${change.targetBlueprintId}@${change.targetBlueprintVersion}`);
+        continue;
+      }
+
+      if (change.kind === "restore" || change.kind === "set_current") {
+        if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
+          throw workflowServiceError("WORKFLOW_PLAN_INVALID", `${change.kind} change is missing its Blueprint target.`);
+        }
+        const [target] = await db
+          .select()
+          .from(workflowBlueprints)
+          .where(
+            and(
+              eq(workflowBlueprints.organizationId, principal.organizationId),
+              eq(workflowBlueprints.blueprintId, change.targetBlueprintId),
+              eq(workflowBlueprints.version, change.targetBlueprintVersion),
+            ),
+          )
+          .limit(1);
+        if (!target) {
+          throw workflowServiceError(
+            "WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND",
+            `Blueprint ${change.targetBlueprintId}@${change.targetBlueprintVersion} was not found.`,
+          );
+        }
+        if (change.kind === "restore") {
+          if (target.status !== "retired") {
+            throw workflowServiceError("WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND", "Only an archived Blueprint revision can be restored.");
+          }
+          await db
+            .update(workflowBlueprints)
+            .set({ status: "approved", isCurrent: false, approvedAt: now, updatedAt: now })
+            .where(eq(workflowBlueprints.id, target.id));
+        } else {
+          if (target.status !== "approved") {
+            throw workflowServiceError("WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND", "Only an approved Blueprint revision can be marked current.");
+          }
+          await db
+            .update(workflowBlueprints)
+            .set({ isCurrent: false, updatedAt: now })
+            .where(
+              and(
+                eq(workflowBlueprints.organizationId, principal.organizationId),
+                eq(workflowBlueprints.blueprintId, target.blueprintId),
+                eq(workflowBlueprints.isCurrent, true),
+              ),
+            );
+          await db
+            .update(workflowBlueprints)
+            .set({ isCurrent: true, updatedAt: now })
+            .where(eq(workflowBlueprints.id, target.id));
+        }
+        actions.push(`${change.kind}:${change.targetBlueprintId}@${change.targetBlueprintVersion}`);
         continue;
       }
 
@@ -432,6 +542,7 @@ export async function applyWorkflowPlan(
         name: blueprint.name,
         blueprint: blueprint as unknown as Record<string, unknown>,
         status: "approved",
+        isCurrent: change.kind === "create",
         sourcePlanId: planId,
         approvedAt: now,
       });

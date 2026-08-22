@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  typescript:
-    name: TypeScript workspace
+  prepare:
+    name: Install and bootstrap workspace
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,26 +24,76 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - name: Build workspace packages before runtime tests
-        run: |
-          pnpm --filter @encois/contracts build
-          pnpm --filter @encois/persistence build
-      - run: pnpm test
-      - run: pnpm build
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
 
-  go:
-    name: Go ${{ matrix.module }}
+      - name: Verify generated permission contracts
+        run: |
+          pnpm --filter @encois/contracts generate:permissions
+          git diff --exit-code -- \
+            packages/contracts/permissions.json \
+            packages/contracts/permissions_generated.go \
+            packages/contracts/src/permissions.generated.ts
+
+      - name: Verify workspace release version
+        run: pnpm version:check
+
+  node-quality:
+    name: Node ${{ matrix.name }} checks
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module:
-          - packages/contracts
-          - apps/agent-gateway
-          - apps/agent-runtime
+        include:
+          - name: API Gateway
+            package: '@encois/api-gateway'
+          - name: Dashboard
+            package: '@encois/dashboard'
+          - name: Contracts
+            package: '@encois/contracts'
+          - name: Persistence
+            package: '@encois/persistence'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared workspace packages
+        run: |
+          pnpm --filter @encois/contracts build
+          pnpm --filter @encois/persistence build
+
+      - name: Lint and type review
+        run: pnpm --filter "${{ matrix.package }}" lint
+
+      - name: Unit tests
+        run: pnpm --filter "${{ matrix.package }}" test
+
+  go-quality:
+    name: Go ${{ matrix.name }} checks
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Contracts
+            module: packages/contracts
+          - name: Agent Gateway
+            module: apps/agent-gateway
+          - name: Agent Runtime
+            module: apps/agent-runtime
     steps:
       - uses: actions/checkout@v4
 
@@ -59,19 +109,18 @@ jobs:
           files="$(gofmt -l .)"
           test -z "$files"
 
-      - name: Test
+      - name: Unit tests
         working-directory: ${{ matrix.module }}
         run: go test ./...
 
-      - name: Vet
+      - name: Static analysis
         working-directory: ${{ matrix.module }}
         run: go vet ./...
 
-  local-smoke:
-    name: Local Temporal execution smoke
+  node-build:
+    name: Build TypeScript workspace
+    needs: node-quality
     runs-on: ubuntu-latest
-    needs: [typescript, go]
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -84,26 +133,15 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: apps/agent-runtime/go.mod
-          cache: true
-
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Temporal CLI
-        uses: temporalio/setup-temporal@v0
-        with:
-          version: v1.8.2
+      - name: Build all TypeScript workspace packages
+        run: pnpm build
 
-      - name: Run local release and approval smoke
-        env:
-          CI: true
-        run: pnpm smoke:release:local
-
-  persistence:
-    name: PostgreSQL migrations and RLS verification
+  drizzle-integration:
+    name: Drizzle migrations and PostgreSQL integration
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -155,8 +193,85 @@ jobs:
           DATABASE_RUNTIME_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
         run: pnpm --filter @encois/api-gateway verify:command-receipts
 
+  terraform:
+    name: Terraform configuration
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra
+
+      - name: Initialize root providers without backend
+        working-directory: infra
+        run: terraform init -backend=false -input=false
+
+      - name: Validate root configuration
+        working-directory: infra
+        run: terraform validate
+
+      - name: Check bootstrap formatting
+        run: terraform fmt -check -recursive infra/bootstrap
+
+      - name: Initialize bootstrap providers without backend
+        working-directory: infra/bootstrap
+        run: terraform init -backend=false -input=false
+
+      - name: Validate bootstrap configuration
+        working-directory: infra/bootstrap
+        run: terraform validate
+
+  compose-config:
+    name: Local Compose configuration
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate local Compose file
+        run: docker compose -f compose.local.yaml config --quiet
+
+  local-smoke:
+    name: Local Temporal execution smoke
+    needs: [node-quality, go-quality]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/agent-runtime/go.mod
+          cache: true
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Temporal CLI
+        uses: temporalio/setup-temporal@v0
+        with:
+          version: v1.8.2
+
+      - name: Run local release and approval smoke
+        env:
+          CI: true
+        run: pnpm smoke:release:local
+
   containers:
-    name: Container ${{ matrix.name }}
+    name: Build ${{ matrix.name }} image
+    needs: [node-quality, node-build, go-quality, drizzle-integration, terraform, compose-config, local-smoke]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -177,33 +292,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read workspace release version
+        id: version
+        run: echo "version=$(node scripts/project-version.mjs)" >> "$GITHUB_OUTPUT"
+
       - name: Build image without pushing
-        run: docker build --file "${{ matrix.file }}" --tag "encois/${{ matrix.name }}:ci" .
-
-  compose-config:
-    name: Local Compose configuration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate Compose file
-        run: docker compose -f compose.local.yaml config --quiet
-
-  terraform:
-    name: Terraform configuration
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-
-      - name: Check formatting
-        run: terraform fmt -check -recursive infra
-
-      - name: Initialize providers without backend
-        working-directory: infra
-        run: terraform init -backend=false -input=false
-
-      - name: Validate configuration
-        working-directory: infra
-        run: terraform validate
+        shell: bash
+        run: |
+          args=()
+          if [ "${{ matrix.name }}" = "dashboard" ]; then
+            args+=(--build-arg VITE_BASE_PATH=/dashboard/)
+          fi
+          docker build "${args[@]}" \
+            --build-arg ENCOIS_VERSION="${{ steps.version.outputs.version }}" \
+            --file "${{ matrix.file }}" \
+            --tag "encois/${{ matrix.name }}:${{ steps.version.outputs.version }}" \
+            .

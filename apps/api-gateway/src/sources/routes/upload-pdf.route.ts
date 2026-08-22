@@ -2,6 +2,7 @@ import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   isSourceServiceError,
+  parseSourceScope,
   uploadPdfKnowledgeSource,
   type SourceArtifactStore,
 } from "../services/source.service.js";
@@ -26,6 +27,16 @@ function isPdfFile(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
 }
 
+function parseFormScope(value: unknown) {
+  if (value === null) return undefined;
+  if (typeof value !== "string") return null;
+  try {
+    return parseSourceScope(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
 export function uploadPdfKnowledgeSourceRoute(artifactStore: SourceArtifactStore | undefined): Handler<GatewayEnv> {
   return async (context) => {
     const form = await context.req.raw.formData().catch(() => null);
@@ -44,12 +55,19 @@ export function uploadPdfKnowledgeSourceRoute(artifactStore: SourceArtifactStore
     const name = typeof nameValue === "string" && nameValue.trim().length > 0
       ? nameValue.trim()
       : sourceNameFromFile(file.name);
+    const readScope = parseFormScope(form?.get("readScope") ?? null);
+    const visibilityScope = parseFormScope(form?.get("visibilityScope") ?? null);
+    if (readScope === null || visibilityScope === null) {
+      return context.json({ error: { code: "INVALID_SOURCE_SCOPE", message: "readScope and visibilityScope must contain at least one organization unit." } }, 400);
+    }
 
     try {
       const data = await uploadPdfKnowledgeSource(context.get("principal"), {
         name,
         fileName: file.name,
         bytes: new Uint8Array(await file.arrayBuffer()),
+        ...(readScope ? { readScope } : {}),
+        ...(visibilityScope ? { visibilityScope } : {}),
       }, artifactStore);
       return context.json({ data }, 201);
     } catch (error) {

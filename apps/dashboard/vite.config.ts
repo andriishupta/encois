@@ -26,5 +26,16 @@ export default defineConfig(({ mode }) => {
         '@': '/src',
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+        manualChunks: {
+          'xyflow-canvas': ['@xyflow/react'],
+          'firebase-auth': ['firebase/app', 'firebase/auth'],
+          vendor: ['react', 'react-dom', '@tanstack/react-query', '@tanstack/react-router'],
+        },
+        },
+      },
+    },
   }
 })

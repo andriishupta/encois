@@ -66,6 +66,7 @@ function searchCondition(terms: readonly string[]) {
     ...terms.flatMap((term) => {
       const pattern = escapedSearchPattern(term);
       return [
+        eq(workflowTemplates.key, term),
         ilike(workflowTemplates.title, pattern),
         ilike(workflowTemplates.description, pattern),
         sql<boolean>`array_to_string(${workflowTemplates.keywords}, ' ') ILIKE ${pattern} ESCAPE '\\'`,

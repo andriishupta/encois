@@ -112,5 +112,5 @@ func (s *gcpStore) distill(ctx context.Context, request Request, scope map[strin
 }
 
 func recordFromMemory(value *aiplatform.GoogleCloudAiplatformV1beta1Memory) Record {
-	return Record{ID: value.Name, Summary: value.Fact, AgentDefinition: value.Scope["agent_definition"], ObservedAt: value.UpdateTime, EvidenceRefs: []string{}}
+	return Record{ID: value.Name, Summary: value.Fact, AgentDefinition: value.Scope["agent_definition"], ObservedAt: value.UpdateTime, EvidenceRefs: []string{}, WorkflowID: value.Scope["workflow_id"], RunID: value.Scope["run_id"]}
 }

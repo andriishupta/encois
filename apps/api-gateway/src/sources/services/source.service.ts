@@ -1,7 +1,8 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
+  FreshnessStatus,
   KnowledgeSourceKind,
   KnowledgeSourceStatus,
   Permission,
@@ -17,9 +18,11 @@ import {
   type SourceIngestionRequest,
   type SourceRevision,
   type SourceRevisionCreateRequest,
+  type SourceFreshness,
 } from "@encois/contracts";
 import {
   integrations,
+  integrationBindings,
   knowledgeSources,
   sourceIngestionRuns,
   sourceRevisions,
@@ -48,6 +51,8 @@ export type UploadedPdfSourceInput = {
   name: string;
   fileName: string;
   bytes: Uint8Array;
+  readScope?: ExecutionScope;
+  visibilityScope?: ExecutionScope;
 };
 
 export type SourceArtifactStore = {
@@ -84,6 +89,13 @@ export type SourceServiceOptions = {
   policyVersion: string;
   capabilitySecret?: string;
   capabilityTtlMs?: number;
+  /** Internal ingestion triggers use a system actor, never a browser principal. */
+  system?: boolean;
+};
+
+export type SourceMutationOptions = {
+  /** Only trusted server-side callers may set this. User routes never pass it. */
+  system?: boolean;
 };
 
 function isSourceIngestionResult(value: unknown): value is SourceIngestionResult {
@@ -141,6 +153,10 @@ export function isSourceServiceError(error: unknown): error is SourceServiceErro
   return error instanceof Error && typeof (error as Partial<SourceServiceError>).code === "string";
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "23505";
+}
+
 function localUserId(principal: AosPrincipal): string | null {
   const candidate = principal.userId ?? principal.actorId;
   return /^[0-9a-f-]{36}$/i.test(candidate) ? candidate : null;
@@ -192,7 +208,29 @@ function assertSafeArtifactReference(value: string | undefined): void {
   }
 }
 
-function toKnowledgeSource(row: typeof knowledgeSources.$inferSelect): KnowledgeSource {
+const sourceFreshnessMaxAgeMs = {
+  integration: 24 * 60 * 60 * 1000,
+  default: 30 * 24 * 60 * 60 * 1000,
+} as const;
+
+function toSourceFreshness(
+  source: typeof knowledgeSources.$inferSelect,
+  revision: typeof sourceRevisions.$inferSelect | undefined,
+  now = Date.now(),
+): SourceFreshness | undefined {
+  if (!revision?.observedAt || !revision.ingestedAt) return undefined;
+  const maxAge = source.kind === KnowledgeSourceKind.Integration ? sourceFreshnessMaxAgeMs.integration : sourceFreshnessMaxAgeMs.default;
+  const expiresAt = new Date(revision.ingestedAt.getTime() + maxAge);
+  return {
+    source: source.provider ?? source.kind,
+    observedAt: revision.observedAt.toISOString(),
+    ingestedAt: revision.ingestedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    status: now <= expiresAt.getTime() ? FreshnessStatus.Fresh : FreshnessStatus.Stale,
+  };
+}
+
+function toKnowledgeSource(row: typeof knowledgeSources.$inferSelect, freshness?: SourceFreshness): KnowledgeSource {
   return {
     contractVersion: ContractVersion.KnowledgeSource,
     id: row.id,
@@ -206,6 +244,7 @@ function toKnowledgeSource(row: typeof knowledgeSources.$inferSelect): Knowledge
     visibilityScope: { ids: row.visibilityScope.ids },
     ...(row.contentType ? { contentType: row.contentType } : {}),
     ...(row.currentRevisionId ? { currentRevisionId: row.currentRevisionId } : {}),
+    ...(freshness ? { freshness } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -304,12 +343,25 @@ export async function createKnowledgeSource(
     await assertPermission(db, principal, Permission.KnowledgeManage);
     if (request.kind === KnowledgeSourceKind.Integration) {
       const [integration] = await db
-        .select({ provider: integrations.provider })
+        .select({ provider: integrations.provider, status: integrations.status, credentialRef: integrations.credentialRef })
         .from(integrations)
         .where(and(eq(integrations.id, request.integrationId!), eq(integrations.organizationId, principal.organizationId)))
         .limit(1);
       if (!integration) throw sourceServiceError("INTEGRATION_NOT_FOUND", "The referenced integration was not found.");
       if (integration.provider !== request.provider) throw sourceServiceError("INTEGRATION_PROVIDER_MISMATCH", "The source provider does not match the integration.");
+      if (integration.status !== "active") throw sourceServiceError("INTEGRATION_NOT_ACTIVE", "The referenced integration is not active.");
+      if (!integration.credentialRef) throw sourceServiceError("INTEGRATION_CREDENTIAL_REQUIRED", "The referenced integration has no configured provider credential.");
+      const [binding] = await db
+        .select({ id: integrationBindings.id })
+        .from(integrationBindings)
+        .where(and(
+          eq(integrationBindings.integrationId, request.integrationId!),
+          eq(integrationBindings.organizationId, principal.organizationId),
+          eq(integrationBindings.status, "active"),
+          inArray(integrationBindings.organizationUnitId, readScope.ids),
+        ))
+        .limit(1);
+      if (!binding) throw sourceServiceError("INTEGRATION_SCOPE_UNAVAILABLE", "The Integration has no active binding in the requested read scope.");
     }
 
     const [row] = await db
@@ -339,9 +391,16 @@ export async function listKnowledgeSources(principal: AosPrincipal): Promise<rea
       .select()
       .from(knowledgeSources)
       .where(eq(knowledgeSources.organizationId, principal.organizationId));
-    return rows
-      .filter((row) => scopeOverlapsPrincipal(row.readScope, principal.scope) && scopeOverlapsPrincipal(row.visibilityScope, principal.scope))
-      .map(toKnowledgeSource);
+    const visibleRows = rows.filter((row) => scopeOverlapsPrincipal(row.readScope, principal.scope) && scopeOverlapsPrincipal(row.visibilityScope, principal.scope));
+    if (visibleRows.length === 0) return [];
+    const revisions = await db
+      .select()
+      .from(sourceRevisions)
+      .where(inArray(sourceRevisions.sourceId, visibleRows.map((row) => row.id)))
+      .orderBy(asc(sourceRevisions.createdAt));
+    const latestBySource = new Map<string, typeof revisions[number]>();
+    for (const revision of revisions) latestBySource.set(revision.sourceId, revision);
+    return visibleRows.map((row) => toKnowledgeSource(row, toSourceFreshness(row, latestBySource.get(row.id))));
   });
 }
 
@@ -385,7 +444,9 @@ export async function getKnowledgeSource(
     const freshRevisions = options
       ? await db.select().from(sourceRevisions).where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId))).orderBy(asc(sourceRevisions.createdAt))
       : revisions;
-    return { source: toKnowledgeSource(freshSource ?? row), revisions: freshRevisions.map(toSourceRevision), ingestionRuns: ingestionRuns.map(toSourceIngestionRun) };
+    const effectiveSource = freshSource ?? row;
+    const latestRevision = freshRevisions[freshRevisions.length - 1];
+    return { source: toKnowledgeSource(effectiveSource, toSourceFreshness(effectiveSource, latestRevision)), revisions: freshRevisions.map(toSourceRevision), ingestionRuns: ingestionRuns.map(toSourceIngestionRun) };
   });
 }
 
@@ -393,33 +454,64 @@ export async function createSourceRevision(
   principal: AosPrincipal,
   sourceId: string,
   request: SourceRevisionCreateRequest,
+  options: SourceMutationOptions = {},
 ): Promise<SourceRevision | null> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   if (!request.revision || request.revision.length > 128) throw sourceServiceError("INVALID_SOURCE_REVISION", "A revision identifier is required and must be at most 128 characters.");
   assertSafeArtifactReference(request.artifactRef);
   const metadata = safeConfiguration(request.metadata);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, Permission.KnowledgeManage);
+    if (!options.system) await assertPermission(db, principal, Permission.KnowledgeManage);
     const [source] = await db
       .select()
       .from(knowledgeSources)
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)))
       .limit(1);
     if (!source || !scopeIsWithinPrincipal(source.readScope, principal.scope) || !scopeIsWithinPrincipal(source.visibilityScope, principal.scope)) return null;
-    const [row] = await db
-      .insert(sourceRevisions)
-      .values({
-        organizationId: principal.organizationId,
-        sourceId,
-        revision: request.revision,
-        artifactRef: request.artifactRef,
-        sourceObjectId: request.sourceObjectId,
-        contentType: request.contentType ?? source.contentType,
-        checksum: request.checksum,
-        observedAt: request.observedAt ? new Date(request.observedAt) : undefined,
-        metadata,
-      })
-      .returning();
+    const [existing] = await db
+      .select({ id: sourceRevisions.id })
+      .from(sourceRevisions)
+      .where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId), eq(sourceRevisions.revision, request.revision)))
+      .limit(1);
+    if (existing) {
+      if (!options.system) throw sourceServiceError("SOURCE_REVISION_CONFLICT", "This source revision already exists.");
+      const [existingRow] = await db
+        .select()
+        .from(sourceRevisions)
+        .where(and(eq(sourceRevisions.id, existing.id), eq(sourceRevisions.organizationId, principal.organizationId)))
+        .limit(1);
+      return existingRow ? toSourceRevision(existingRow) : null;
+    }
+    let row: typeof sourceRevisions.$inferSelect | undefined;
+    try {
+      [row] = await db
+        .insert(sourceRevisions)
+        .values({
+          organizationId: principal.organizationId,
+          sourceId,
+          revision: request.revision,
+          artifactRef: request.artifactRef,
+          sourceObjectId: request.sourceObjectId,
+          contentType: request.contentType ?? source.contentType,
+          checksum: request.checksum,
+          observedAt: request.observedAt ? new Date(request.observedAt) : undefined,
+          metadata,
+        })
+        .returning();
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        if (options.system) {
+          const [existingRow] = await db
+            .select()
+            .from(sourceRevisions)
+            .where(and(eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId), eq(sourceRevisions.revision, request.revision)))
+            .limit(1);
+          return existingRow ? toSourceRevision(existingRow) : null;
+        }
+        throw sourceServiceError("SOURCE_REVISION_CONFLICT", "This source revision already exists.");
+      }
+      throw error;
+    }
     if (!row) throw sourceServiceError("SOURCE_REVISION_CREATE_FAILED", "The source revision could not be created.");
     await db
       .update(knowledgeSources)
@@ -455,8 +547,8 @@ export async function uploadPdfKnowledgeSource(
   const source = await createKnowledgeSource(principal, {
     name: input.name.trim(),
     kind: KnowledgeSourceKind.UploadedDocument,
-    readScope: { ids: principal.scope },
-    visibilityScope: { ids: principal.scope },
+    readScope: input.readScope ?? { ids: principal.scope },
+    visibilityScope: input.visibilityScope ?? { ids: principal.scope },
     contentType: "application/pdf",
   });
   const reference = artifactStore.reference({ organizationId: principal.organizationId, sourceId: source.id, revision });
@@ -545,8 +637,10 @@ export async function startSourceIngestion(
   options: SourceServiceOptions,
 ): Promise<SourceIngestionLaunch> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
-  const userId = localUserId(principal);
-  if (!userId) throw sourceServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+  if (!options.system) {
+    const userId = localUserId(principal);
+    if (!userId) throw sourceServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+  }
   const workflowId = buildWorkflowId({
     organizationId: principal.organizationId,
     workflowType: "encois.source-ingestion.v1",
@@ -555,7 +649,7 @@ export async function startSourceIngestion(
 
   const requestHash = createHash("sha256").update(JSON.stringify({ sourceId, revisionId, trigger })).digest("hex");
   const prepared = await withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, Permission.KnowledgeManage);
+    if (!options.system) await assertPermission(db, principal, Permission.KnowledgeManage);
     const [sourceRow] = await db
       .select()
       .from(knowledgeSources)

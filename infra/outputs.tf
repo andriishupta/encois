@@ -47,3 +47,13 @@ output "cloud_sql_database" {
   description = "Control-plane database name. Credentials are managed outside Terraform."
   value       = var.enable_cloud_sql ? google_sql_database.control_plane[0].name : null
 }
+
+output "migration_job" {
+  description = "Protected Cloud Run Job used for forward database migrations."
+  value       = var.enable_cloud_sql ? google_cloud_run_v2_job.migrations[0].name : null
+}
+
+output "retention_job" {
+  description = "Protected Cloud Run Job used for tenant-scoped workflow retention cleanup."
+  value       = var.enable_cloud_sql ? google_cloud_run_v2_job.retention[0].name : null
+}

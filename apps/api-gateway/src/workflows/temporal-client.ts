@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Client, Connection, WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from "@temporalio/client";
 import { and, eq } from "drizzle-orm";
-import { CoordinatorSignalName, WorkflowExecutionStatus, type CoordinatorEvent } from "@encois/contracts";
+import { CoordinatorSignalName, WorkflowExecutionStatus, WorkflowSignalName, type CoordinatorEvent } from "@encois/contracts";
 import { workflowRuns, withOrganizationContext } from "@encois/persistence";
 import type { AppConfig } from "../config.js";
 import { database } from "../database.js";
@@ -82,6 +82,9 @@ function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
         status: WorkflowExecutionStatus.Queued,
         organizationId: command.input.organizationId,
         blueprintId: command.input.blueprint?.blueprintId,
+        ...(command.input.blueprint?.version || command.input.blueprintVersion ? { blueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion } : {}),
+        ...(command.input.parentWorkflowId ? { parentWorkflowId: command.input.parentWorkflowId } : {}),
+        ...(command.input.trigger ? { trigger: command.input.trigger } : {}),
         reused: false,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -108,11 +111,12 @@ function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
     async signal(workflowId, organizationId, _namespace, request) {
       const execution = executions.get(workflowId);
       if (!execution || execution.organizationId !== organizationId) throw new Error("workflow not found");
-      if (!["queued", "running", "waiting"].includes(execution.status)) {
+      if (!["queued", "running", "waiting", "paused"].includes(execution.status)) {
         throw new Error(`workflow is ${execution.status} and cannot accept a Signal`);
       }
       let status: WorkflowRunStatus = WorkflowExecutionStatus.Running;
-      if (request.payload.approved === false) status = WorkflowExecutionStatus.Failed;
+      if (request.signalName === WorkflowSignalName.WorkflowPause) status = WorkflowExecutionStatus.Paused;
+      if (request.signalName === WorkflowSignalName.BlueprintApproval && request.payload.approved === false) status = WorkflowExecutionStatus.Failed;
       executions.set(workflowId, { ...execution, status, updatedAt: now() });
     },
 
@@ -163,8 +167,13 @@ function projectionFromDatabaseRow(
     | "temporalNamespace"
     | "temporalTaskQueue"
     | "inputRef"
+    | "blueprintId"
+    | "blueprintVersion"
+    | "parentWorkflowId"
+    | "trigger"
     | "status"
     | "organizationId"
+    | "retentionUntil"
     | "createdAt"
     | "updatedAt"
   >,
@@ -178,6 +187,11 @@ function projectionFromDatabaseRow(
     status: row.status,
     organizationId: row.organizationId,
     ...(row.inputRef ? { blueprintId: row.inputRef } : {}),
+    ...(row.blueprintId ? { blueprintId: row.blueprintId } : {}),
+    ...(row.blueprintVersion ? { blueprintVersion: row.blueprintVersion } : {}),
+    ...(row.parentWorkflowId ? { parentWorkflowId: row.parentWorkflowId } : {}),
+    ...(row.trigger ? { trigger: row.trigger } : {}),
+    ...(row.retentionUntil ? { retentionUntil: row.retentionUntil.toISOString() } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -218,6 +232,9 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
         status: WorkflowExecutionStatus.Queued,
         organizationId: command.input.organizationId,
         ...(command.input.blueprint?.blueprintId ? { blueprintId: command.input.blueprint.blueprintId } : {}),
+        ...(command.input.blueprint?.version || command.input.blueprintVersion ? { blueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion } : {}),
+        ...(command.input.parentWorkflowId ? { parentWorkflowId: command.input.parentWorkflowId } : {}),
+        ...(command.input.trigger ? { trigger: command.input.trigger } : {}),
         reused: false,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -247,7 +264,11 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
     async signal(workflowId, organizationId, _namespace, request) {
       if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       await withOrganizationContext(database!, organizationId, async (db) => {
-        const status = request.payload.approved === false ? WorkflowExecutionStatus.Failed : WorkflowExecutionStatus.Running;
+        const status = request.signalName === WorkflowSignalName.WorkflowPause
+          ? WorkflowExecutionStatus.Paused
+          : request.signalName === WorkflowSignalName.BlueprintApproval && request.payload.approved === false
+            ? WorkflowExecutionStatus.Failed
+            : WorkflowExecutionStatus.Running;
         await db
           .update(workflowRuns)
           .set({ status, updatedAt: new Date(), ...(status === WorkflowExecutionStatus.Failed ? { completedAt: new Date() } : {}) })
@@ -360,7 +381,10 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
           taskQueue: description.taskQueue,
           status: temporalStatus(description.status.name),
           organizationId: command.input.organizationId,
-          blueprintId: command.input.blueprint?.blueprintId,
+          blueprintId: typeof description.memo?.encoisBlueprintId === "string" ? description.memo.encoisBlueprintId : command.input.blueprint?.blueprintId,
+          blueprintVersion: typeof description.memo?.encoisBlueprintVersion === "string" ? description.memo.encoisBlueprintVersion : command.input.blueprint?.version ?? command.input.blueprintVersion,
+          ...(typeof description.memo?.encoisParentWorkflowId === "string" ? { parentWorkflowId: description.memo.encoisParentWorkflowId } : {}),
+          ...(typeof description.memo?.encoisTrigger === "string" ? { trigger: description.memo.encoisTrigger } : {}),
           reused: true,
           createdAt: description.startTime?.toISOString() ?? now(),
           updatedAt: now(),
@@ -370,7 +394,13 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         args: [command.input],
         taskQueue: command.taskQueue,
         workflowId: command.workflowId,
-        memo: { encoisRequestHash: command.requestHash },
+        memo: {
+          encoisRequestHash: command.requestHash,
+          ...(command.input.blueprint?.blueprintId ? { encoisBlueprintId: command.input.blueprint.blueprintId } : {}),
+          ...(command.input.blueprint?.version || command.input.blueprintVersion ? { encoisBlueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion } : {}),
+          ...(command.input.parentWorkflowId ? { encoisParentWorkflowId: command.input.parentWorkflowId } : {}),
+          ...(command.input.trigger ? { encoisTrigger: command.input.trigger } : {}),
+        },
         workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
         workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
       });
@@ -385,6 +415,9 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         status: WorkflowExecutionStatus.Queued,
         organizationId: command.input.organizationId,
         blueprintId: command.input.blueprint?.blueprintId,
+        blueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion,
+        ...(command.input.parentWorkflowId ? { parentWorkflowId: command.input.parentWorkflowId } : {}),
+        ...(command.input.trigger ? { trigger: command.input.trigger } : {}),
         reused: false,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -407,6 +440,10 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         taskQueue: description.taskQueue,
         status: temporalStatus(description.status.name),
         organizationId,
+        blueprintId: typeof description.memo?.encoisBlueprintId === "string" ? description.memo.encoisBlueprintId : undefined,
+        blueprintVersion: typeof description.memo?.encoisBlueprintVersion === "string" ? description.memo.encoisBlueprintVersion : undefined,
+        ...(typeof description.memo?.encoisParentWorkflowId === "string" ? { parentWorkflowId: description.memo.encoisParentWorkflowId } : {}),
+        ...(typeof description.memo?.encoisTrigger === "string" ? { trigger: description.memo.encoisTrigger } : {}),
         createdAt: description.startTime?.toISOString() ?? timestamp,
         updatedAt: timestamp,
       };
@@ -432,6 +469,10 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
           taskQueue: info.taskQueue,
           status: temporalStatus(info.status.name),
           organizationId,
+          blueprintId: typeof info.memo?.encoisBlueprintId === "string" ? info.memo.encoisBlueprintId : undefined,
+          blueprintVersion: typeof info.memo?.encoisBlueprintVersion === "string" ? info.memo.encoisBlueprintVersion : undefined,
+          ...(typeof info.memo?.encoisParentWorkflowId === "string" ? { parentWorkflowId: info.memo.encoisParentWorkflowId } : {}),
+          ...(typeof info.memo?.encoisTrigger === "string" ? { trigger: info.memo.encoisTrigger } : {}),
           createdAt: info.startTime.toISOString(),
           updatedAt: (info.closeTime ?? info.startTime).toISOString(),
         });
@@ -442,7 +483,11 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
     async signal(workflowId, organizationId, _namespace, request) {
       if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
       const temporalClient = await getClient();
-      await temporalClient.workflow.getHandle(workflowId).signal(request.signalName, request.payload);
+      const isControlSignal = request.signalName === WorkflowSignalName.WorkflowPause || request.signalName === WorkflowSignalName.WorkflowResume;
+      await temporalClient.workflow.getHandle(workflowId).signal(
+        isControlSignal ? "workflow-control" : request.signalName,
+        isControlSignal ? { ...request.payload, action: request.signalName } : request.payload,
+      );
     },
 
     async signalCoordinator(coordinatorId, organizationId, _namespace, event) {
@@ -469,7 +514,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
       const description = await handle.describe();
       const status = temporalStatus(description.status.name);
       if (status === WorkflowExecutionStatus.Cancelled) return;
-      if (!["queued", "running", "waiting"].includes(status)) {
+      if (!["queued", "running", "waiting", "paused"].includes(status)) {
         throw new Error(`workflow is ${status} and cannot be cancelled`);
       }
       await handle.cancel();

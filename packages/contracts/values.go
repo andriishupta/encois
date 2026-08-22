@@ -15,7 +15,7 @@ const (
 	ContractArtifactRead          ContractVersion = "artifact-read.v1"
 	ContractArtifactWriteResult   ContractVersion = "artifact-write-result.v1"
 	ContractGraphQuery            ContractVersion = "graph-query.v1"
-	ContractGraphUpsert            ContractVersion = "graph-upsert.v1"
+	ContractGraphUpsert           ContractVersion = "graph-upsert.v1"
 	ContractGraphQueryResult      ContractVersion = "graph-query-result.v1"
 	ContractAgentMemory           ContractVersion = "agent-memory.v1"
 	ContractAgentMemoryResult     ContractVersion = "agent-memory-result.v1"
@@ -56,6 +56,9 @@ const (
 type WorkflowSignalName string
 
 const SignalBlueprintApproval WorkflowSignalName = "blueprint-approval"
+const SignalWorkflowControl WorkflowSignalName = "workflow-control"
+const SignalWorkflowPause WorkflowSignalName = "workflow-pause"
+const SignalWorkflowResume WorkflowSignalName = "workflow-resume"
 
 type WorkflowUpdateName string
 
@@ -135,10 +138,12 @@ const (
 type WorkflowChangeKind string
 
 const (
-	ChangeCreate    WorkflowChangeKind = "create"
-	ChangeUpdate    WorkflowChangeKind = "update"
-	ChangeDeprecate WorkflowChangeKind = "deprecate"
-	ChangeCancel    WorkflowChangeKind = "cancel"
+	ChangeCreate     WorkflowChangeKind = "create"
+	ChangeUpdate     WorkflowChangeKind = "update"
+	ChangeDeprecate  WorkflowChangeKind = "deprecate"
+	ChangeRestore    WorkflowChangeKind = "restore"
+	ChangeSetCurrent WorkflowChangeKind = "set_current"
+	ChangeCancel     WorkflowChangeKind = "cancel"
 )
 
 type OrganizationUnitType string

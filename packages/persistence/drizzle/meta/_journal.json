@@ -22,6 +22,90 @@
       "when": 1787400120000,
       "tag": "0002_seed_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787400180000,
+      "tag": "0003_workflow_run_lineage",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787400240000,
+      "tag": "0004_integration_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787400300000,
+      "tag": "0005_workflow_paused_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787400360000,
+      "tag": "0006_investigations_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787400420000,
+      "tag": "0007_integration_authorization_states",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787400480000,
+      "tag": "0008_planner_and_run_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787400540000,
+      "tag": "0009_retention_cleanup_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787400600000,
+      "tag": "0010_seed_context_memory_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787422702307,
+      "tag": "0011_add-webhook-integration-binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787423219891,
+      "tag": "0012_webhook-payload-checksum",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787424731097,
+      "tag": "0013_mark-current-workflow-blueprint",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787424768350,
+      "tag": "0014_enforce-current-workflow-blueprint",
+      "breakpoints": true
     }
   ]
 }

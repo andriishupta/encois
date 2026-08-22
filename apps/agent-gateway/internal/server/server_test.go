@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
@@ -35,6 +36,18 @@ func (s *recordingArtifactStore) Read(_ context.Context, request domain.Artifact
 type recordingGraphStore struct {
 	queries int
 }
+
+type fixedProviderToolRegistry struct {
+	err error
+}
+
+func (r fixedProviderToolRegistry) Invoke(context.Context, domain.ToolInvocationRequest) (ProviderToolResult, error) {
+	return ProviderToolResult{}, r.err
+}
+
+func (fixedProviderToolRegistry) Status() string                                          { return "gcp-provider-adapters" }
+func (fixedProviderToolRegistry) Ready() error                                            { return nil }
+func (fixedProviderToolRegistry) Check(context.Context, ProviderHealthCheckRequest) error { return nil }
 
 func (s *recordingGraphStore) Query(_ context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
 	s.queries++
@@ -92,6 +105,42 @@ func TestMockToolInvocation(t *testing.T) {
 	}
 }
 
+func TestProviderToolFailureExposesReauthorizationState(t *testing.T) {
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
+		ProviderTools: fixedProviderToolRegistry{err: ErrProviderReauthorization},
+	})
+	requestBody := domain.ToolInvocationRequest{
+		ExecutionContext: domain.ExecutionContext{
+			ContractVersion: domain.ToolRequestContractVersion,
+			RequestID:       "req-reauth",
+			WorkflowID:      "workflow:org-test:project:one",
+			OrganizationID:  "org-test",
+			ActorID:         "actor-test",
+			PolicyVersion:   "policy-test",
+			Capability:      "test-capability",
+			Scope:           domain.Scope{IDs: []string{"team-test"}},
+		},
+		Tool:      "jira.project_tasks",
+		Arguments: map[string]any{},
+	}
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusFailedDependency {
+		t.Fatalf("expected 424 for provider reauthorization, got %d: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "provider_reauthorization_required") {
+		t.Fatalf("expected stable reauthorization code, got %s", response.Body.String())
+	}
+}
+
 func TestMemoryGraphStoreKeepsOrganizationsIsolated(t *testing.T) {
 	store := newMemoryGraphStore()
 	for _, fixture := range []struct {
@@ -143,6 +192,24 @@ func TestMemoryGraphStoreCreatesTenantScopedLocalFixtures(t *testing.T) {
 		if result.Nodes[0].Properties["organizationId"] != organizationID {
 			t.Fatalf("local graph fixture crossed organization boundary: organization=%s result=%+v", organizationID, result.Nodes)
 		}
+	}
+}
+
+func TestMemoryGraphStoreAppliesAdministrativeFilters(t *testing.T) {
+	store := newMemoryGraphStore()
+	result, err := store.Query(context.Background(), domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Query:            "all_context",
+		Params:           map[string]any{"nodeType": "blocker", "relationship": "has_blocker", "limit": float64(1)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Nodes) != 1 || result.Nodes[0].Type != "blocker" {
+		t.Fatalf("expected one filtered blocker node, got %+v", result.Nodes)
+	}
+	if len(result.Edges) != 1 || result.Edges[0].Relationship != "has_blocker" {
+		t.Fatalf("expected one filtered relationship edge, got %+v", result.Edges)
 	}
 }
 

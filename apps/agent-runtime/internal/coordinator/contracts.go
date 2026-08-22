@@ -211,10 +211,12 @@ type WorkflowStep struct {
 type WorkflowChangeKind = contracts.WorkflowChangeKind
 
 const (
-	ChangeCreate    = contracts.ChangeCreate
-	ChangeUpdate    = contracts.ChangeUpdate
-	ChangeDeprecate = contracts.ChangeDeprecate
-	ChangeCancel    = contracts.ChangeCancel
+	ChangeCreate     = contracts.ChangeCreate
+	ChangeUpdate     = contracts.ChangeUpdate
+	ChangeDeprecate  = contracts.ChangeDeprecate
+	ChangeRestore    = contracts.ChangeRestore
+	ChangeSetCurrent = contracts.ChangeSetCurrent
+	ChangeCancel     = contracts.ChangeCancel
 )
 
 type WorkflowChange struct {
@@ -230,12 +232,17 @@ type WorkflowChange struct {
 }
 
 type WorkflowChangePlan struct {
-	ContractVersion string           `json:"contractVersion"`
-	PlanID          string           `json:"planId"`
-	CoordinatorID   string           `json:"coordinatorId"`
-	OrganizationID  string           `json:"organizationId"`
-	ProjectID       string           `json:"projectId,omitempty"`
-	ObservedAt      string           `json:"observedAt"`
-	EvidenceRefs    []string         `json:"evidenceRefs,omitempty"`
-	Changes         []WorkflowChange `json:"changes"`
+	ContractVersion string             `json:"contractVersion"`
+	PlanID          string             `json:"planId"`
+	CoordinatorID   string             `json:"coordinatorId"`
+	OrganizationID  string             `json:"organizationId"`
+	ProjectID       string             `json:"projectId,omitempty"`
+	Scope           *WorkflowPlanScope `json:"scope,omitempty"`
+	ObservedAt      string             `json:"observedAt"`
+	EvidenceRefs    []string           `json:"evidenceRefs,omitempty"`
+	Changes         []WorkflowChange   `json:"changes"`
+}
+
+type WorkflowPlanScope struct {
+	IDs []string `json:"ids"`
 }

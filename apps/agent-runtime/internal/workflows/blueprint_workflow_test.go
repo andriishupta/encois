@@ -105,6 +105,53 @@ func TestDynamicBlueprintWorkflowDeduplicatesApprovalSignals(t *testing.T) {
 	}
 }
 
+func TestDynamicBlueprintWorkflowPausesAndResumesAtAControlBoundary(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterDynamicWorkflow(DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
+	registerContractActivities(env)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow("workflow-control", BlueprintControlSignal{SignalID: "pause-1", Action: "workflow-pause", Reason: "operator review"})
+	}, 500*time.Millisecond)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow("workflow-control", BlueprintControlSignal{SignalID: "resume-1", Action: "workflow-resume"})
+	}, 1500*time.Millisecond)
+
+	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+		ContractVersion: "workflow-blueprint.v1",
+		WorkflowID:      "workflow:org-1:pause-1",
+		OrganizationID:  "org-1",
+		ActorID:         "user-1",
+		RequestID:       "request-pause-1",
+		PolicyVersion:   "policy-read-only-fixture-v1",
+		Capability:      "test-capability",
+		Scope:           map[string]any{"ids": []any{"team-a"}},
+		Blueprint: coordinator.WorkflowBlueprint{
+			ContractVersion: "workflow-blueprint.v1",
+			BlueprintID:     "pause-check",
+			Version:         "1.0.0",
+			Name:            "Pause check",
+			WorkflowType:    UserBlueprintWorkflowType,
+			Purpose:         "Pause between durable steps",
+			Steps: []coordinator.WorkflowStep{
+				{ID: "delay", Kind: "wait", Input: map[string]any{"duration": "1s"}},
+				{ID: "finish", Kind: "transform", DependsOn: []string{"delay"}, Input: map[string]any{"ready": true}},
+			},
+		},
+	})
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatal(err)
+	}
+	var result BlueprintWorkflowResult
+	if err := env.GetWorkflowResult(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "completed" || len(result.Steps) != 2 {
+		t.Fatalf("unexpected paused workflow result: %+v", result)
+	}
+}
+
 func TestDynamicBlueprintWorkflowRejectsInvalidContract(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()

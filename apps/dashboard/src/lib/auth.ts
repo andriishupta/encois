@@ -274,7 +274,8 @@ export function hasPermission(session: AuthSession | null, permission: Permissio
  * transient API failures into fabricated organization or workspace state.
  */
 export function isDashboardMockMode(): boolean {
-  return environment().VITE_ENCOIS_UI_MODE?.trim().toLowerCase() === 'mock'
+  const env = environment()
+  return env.MODE === 'development' && env.VITE_ENCOIS_UI_MODE?.trim().toLowerCase() === 'mock'
 }
 
 export function authSessionEventName(): string {

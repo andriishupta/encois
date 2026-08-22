@@ -114,6 +114,7 @@ export type KnowledgeSource = {
   visibilityScope: KnowledgeSourceScope;
   contentType?: string;
   currentRevisionId?: string;
+  freshness?: SourceFreshness;
   createdAt: string;
   updatedAt: string;
 };
@@ -190,6 +191,49 @@ export type KnowledgeSourceCreateRequest = {
   configuration?: JsonObject;
 };
 
+export type SavedInvestigationKind = "graph" | "memory" | "workflow";
+
+export type SavedInvestigation = {
+  id: string;
+  organizationId: string;
+  name: string;
+  kind: SavedInvestigationKind;
+  query: string;
+  params: JsonObject;
+  scope: ExecutionScope;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavedInvestigationCreateRequest = {
+  name: string;
+  kind: SavedInvestigationKind;
+  query: string;
+  params?: JsonObject;
+  scope: ExecutionScope;
+};
+
+export type NotificationProjection = {
+  id: string;
+  type: string;
+  severity: "info" | "warning" | "error";
+  title: string;
+  message: string;
+  resourceType?: string;
+  resourceId?: string;
+  readAt?: string;
+  createdAt: string;
+};
+
+export type NotificationPreferences = {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  workflowUpdates: boolean;
+  evidenceReady: boolean;
+  weeklyDigest: boolean;
+  updatedAt?: string;
+};
+
 export type SourceRevisionCreateRequest = {
   revision: string;
   artifactRef?: string;
@@ -256,11 +300,149 @@ export type WorkflowStartRequest = {
   idempotencyKey?: string;
 };
 
+export type WorkflowTemplateStep = {
+  id: string;
+  kind: WorkflowStepKind;
+  tool?: string;
+  providerSlot?: string;
+  agentDefinition?: string;
+  dependsOn?: readonly string[];
+  input?: JsonObject;
+  requiresApproval?: boolean;
+};
+
+export type WorkflowTemplate = {
+  schemaVersion: "workflow-template.v1";
+  version: string;
+  workflowType: typeof TemporalWorkflowType.UserBlueprint;
+  purpose: string;
+  inputs: Readonly<Record<string, { type: string; description: string; required?: boolean }> >;
+  providerSlots: readonly {
+    key: string;
+    capabilities: readonly string[];
+    preferredProviders?: readonly string[];
+    required?: boolean;
+  }[];
+  steps: readonly WorkflowTemplateStep[];
+  output: {
+    type: string;
+    description: string;
+  };
+};
+
+export type WorkflowTemplateProjection = {
+  id: string;
+  key: string;
+  category: string;
+  title: string;
+  description: string;
+  keywords: readonly string[];
+  requiredCapabilities: readonly string[];
+  version: string;
+  schemaVersion: string;
+  template: WorkflowTemplate;
+};
+
+export type WorkflowBlueprintStatus = "draft" | "approved" | "retired";
+
+export type WorkflowBlueprintProjection = {
+  blueprintId: string;
+  version: string;
+  name: string;
+  purpose: string;
+  workflowType: typeof TemporalWorkflowType.UserBlueprint;
+  status: WorkflowBlueprintStatus;
+  isCurrent: boolean;
+  sourcePlanId?: string;
+  steps: readonly WorkflowStep[];
+  requiredScopes?: readonly string[];
+  requiresApproval?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+};
+
+/** A product-level request for a governed Blueprint registry change. */
+export type WorkflowBlueprintLifecycleRequest = {
+  contractVersion: typeof ContractVersion.WorkflowBlueprintLifecycle;
+  action: "create_revision" | "duplicate" | "deprecate" | "restore" | "mark_current";
+  sourceVersion?: string;
+  version?: string;
+  name?: string;
+  reason: string;
+};
+
+export type WorkflowCreationIntent = {
+  mode: "template" | "blueprint" | "manual";
+  name: string;
+  description?: string;
+  businessKey?: string;
+  templateKey?: string;
+  blueprintKey?: string;
+  prompt?: string;
+  businessInput?: JsonObject;
+  scope?: Partial<ExecutionScope>;
+  start?: boolean;
+};
+
+export type WorkflowCreationPreview = {
+  intent: WorkflowCreationIntent;
+  plan: WorkflowChangePlan;
+  blueprint: WorkflowBlueprint;
+  source: {
+    kind: "template" | "blueprint" | "manual";
+    key?: string;
+    title: string;
+  };
+  warnings: readonly string[];
+  requiredCapabilities: readonly string[];
+  providerBindings: readonly WorkflowProviderBindingProjection[];
+  approvalRequired: boolean;
+};
+
+export type WorkflowProviderBindingProjection = {
+  slotKey: string;
+  required: boolean;
+  status: "ready" | "missing";
+  provider?: string;
+  integrationName?: string;
+  capabilities: readonly string[];
+};
+
+export type WorkflowPlanRecord = {
+  planId: string;
+  organizationId: string;
+  coordinatorId: string;
+  projectId?: string;
+  status: "proposed" | "approved" | "rejected" | "applied" | "expired";
+  approvalRequired: boolean;
+  plan: WorkflowChangePlan;
+  submittedByUserId?: string;
+  approvedByUserId?: string;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  appliedAt?: string;
+};
+
+export type WorkflowPlanMetadata = {
+  planner: {
+    name: string;
+    version: string;
+  };
+  sourceSchemaVersion?: string;
+  promptVersion?: string;
+  promptHash?: string;
+};
+
 export type WorkflowExecutionProjection = {
   workflowId: string;
   runId?: string;
   workflowType: string;
   blueprintId?: string;
+  blueprintVersion?: string;
+  parentWorkflowId?: string;
+  trigger?: string;
   namespace: string;
   taskQueue: string;
   status: WorkflowExecutionStatus;
@@ -269,6 +451,7 @@ export type WorkflowExecutionProjection = {
   retryAt?: string;
   organizationId: string;
   reused?: boolean;
+  retentionUntil?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -280,8 +463,27 @@ export type WorkflowEventProjection = {
   activityName?: string;
   agentRunId?: string;
   evidenceRef?: string;
+  evidence?: readonly WorkflowEvidenceProjection[];
+  trace?: WorkflowTraceProjection;
   metadata: JsonObject;
   occurredAt: string;
+};
+
+export type WorkflowEvidenceProjection = {
+  reference: string;
+  provenance?: DataProvenance;
+  freshness?: SourceFreshness;
+  confidence?: number;
+};
+
+export type WorkflowTraceProjection = {
+  provider?: string;
+  model?: string;
+  durationMs?: number;
+  attempt?: number;
+  budget?: string;
+  outcome?: string;
+  redacted?: boolean;
 };
 
 export type WorkflowRecentActivityProjection = WorkflowEventProjection & {
@@ -294,6 +496,45 @@ export type IntegrationProjection = {
   name: string;
   provider: string;
   status: IntegrationStatus;
+  scopeIds?: readonly string[];
+  grantedScopes?: readonly string[];
+  credentialConfigured?: boolean;
+  authorizedAt?: string;
+  lastHealthCheckAt?: string;
+  lastError?: string;
+  updatedAt?: string;
+};
+
+export type WebhookEndpointProjection = {
+  integrationId: string;
+  organizationId: string;
+  endpointKey: string;
+  provider: string;
+  status: IntegrationStatus;
+  secretConfigured: boolean;
+  url?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookEndpointSecretResponse = {
+  endpoint: WebhookEndpointProjection;
+  secret: string;
+};
+
+export type IntegrationAuthorizationStart = {
+  integrationId: string;
+  provider: string;
+  status: "redirect" | "pending";
+  authorizationUrl?: string;
+  expiresAt?: string;
+};
+
+export type IntegrationCreateRequest = {
+  displayName: string;
+  provider: string;
+  organizationUnitId: string;
+  grantedScopes?: readonly string[];
 };
 
 export type IntegrationUpdateRequest = {
@@ -397,12 +638,19 @@ export type BlueprintWorkflowResult = {
   steps: readonly JsonObject[];
 };
 
-export type WorkflowSignalRequest = {
-  contractVersion: typeof ContractVersion.WorkflowSignal;
-  signalName: typeof WorkflowSignalName.BlueprintApproval;
-  signalId: string;
-  payload: JsonObject;
-};
+export type WorkflowSignalRequest =
+  | {
+      contractVersion: typeof ContractVersion.WorkflowSignal;
+      signalName: typeof WorkflowSignalName.BlueprintApproval;
+      signalId: string;
+      payload: { stepId: string; approved: boolean; reason?: string; signalId?: string };
+    }
+  | {
+      contractVersion: typeof ContractVersion.WorkflowSignal;
+      signalName: typeof WorkflowSignalName.WorkflowPause | typeof WorkflowSignalName.WorkflowResume;
+      signalId: string;
+      payload: { reason?: string; signalId?: string };
+    };
 
 /** Events delivered to the long-lived per-organization/project Coordinator. */
 export type CoordinatorEvent = {
@@ -452,7 +700,9 @@ export type WorkflowChangePlan = {
   coordinatorId: string;
   organizationId: string;
   projectId?: string;
+  scope?: ExecutionScope;
   observedAt: string;
+  metadata?: WorkflowPlanMetadata;
   evidenceRefs?: readonly string[];
   changes: readonly {
     kind: WorkflowChangeKind;
@@ -547,6 +797,37 @@ export type GraphQueryResult = {
   freshness?: readonly SourceFreshness[];
 };
 
+export type GraphInspectorQueryName =
+  | "all"
+  | "all_context"
+  | "source.facts"
+  | "project.related_entities"
+  | "release.blockers";
+
+export type GraphInspectionParams = {
+  projectId?: string;
+  nodeType?: string;
+  relationship?: string;
+  limit?: number;
+};
+
+/** Browser-facing, allowlisted graph inspection request. It never accepts provider SQL. */
+export type GraphInspectionQueryRequest = {
+  query: GraphInspectorQueryName;
+  params?: GraphInspectionParams;
+  scope?: ExecutionScope;
+};
+
+export type GraphInspectionProjection = {
+  query: GraphInspectorQueryName;
+  status: GraphQueryStatus;
+  nodes: readonly GraphNode[];
+  edges: readonly GraphEdge[];
+  evidenceRefs?: readonly string[];
+  freshness?: readonly SourceFreshness[];
+  generatedAt: string;
+};
+
 export type AgentMemoryRequest = ExecutionEnvelope & {
   contractVersion: typeof ContractVersion.AgentMemory;
   agentDefinition: string;
@@ -574,6 +855,10 @@ export type AgentMemoryRecord = {
   evidenceRefs: readonly string[];
   observedAt: string;
   freshness?: SourceFreshness;
+  workflowId?: string;
+  runId?: string;
+  retentionClass?: ArtifactRetentionClass;
+  retentionUntil?: string;
 };
 
 export type AgentMemoryResult = {
@@ -581,6 +866,22 @@ export type AgentMemoryResult = {
   requestId: string;
   status: AgentMemoryStatus;
   memories: readonly AgentMemoryRecord[];
+};
+
+export type MemoryInspectionQueryRequest = {
+  agentDefinition: string;
+  query: string;
+  projectId?: string;
+  scope?: ExecutionScope;
+  maxResults?: number;
+};
+
+export type MemoryInspectionProjection = {
+  agentDefinition: string;
+  query: string;
+  status: AgentMemoryStatus;
+  memories: readonly AgentMemoryRecord[];
+  generatedAt: string;
 };
 
 export type ToolAnnotations = {

@@ -3,20 +3,37 @@
   "$id": "https://encois.dev/schemas/workflow-signal.v1.json",
   "type": "object",
   "required": ["contractVersion", "signalName", "signalId", "payload"],
-  "properties": {
-    "contractVersion": { "const": "workflow-signal.v1" },
-    "signalName": { "const": "blueprint-approval" },
-    "signalId": { "type": "string", "minLength": 1 },
-    "payload": {
-      "type": "object",
-      "required": ["stepId", "approved"],
+  "oneOf": [
+    {
       "properties": {
-        "stepId": { "type": "string", "minLength": 1 },
-        "approved": { "type": "boolean" },
-        "reason": { "type": "string" }
+        "contractVersion": { "const": "workflow-signal.v1" },
+        "signalName": { "const": "blueprint-approval" },
+        "signalId": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "required": ["stepId", "approved"],
+          "properties": {
+            "stepId": { "type": "string", "minLength": 1 },
+            "approved": { "type": "boolean" },
+            "reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
       },
-      "additionalProperties": false
+      "required": ["contractVersion", "signalName", "signalId", "payload"]
+    },
+    {
+      "properties": {
+        "contractVersion": { "const": "workflow-signal.v1" },
+        "signalName": { "enum": ["workflow-pause", "workflow-resume"] },
+        "signalId": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "properties": { "reason": { "type": "string" } },
+          "additionalProperties": false
+        }
+      },
+      "required": ["contractVersion", "signalName", "signalId", "payload"]
     }
-  },
-  "additionalProperties": false
+  ]
 }

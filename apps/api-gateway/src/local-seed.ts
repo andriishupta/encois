@@ -264,10 +264,11 @@ async function ensureIntegration(
   if (!unit) throw new Error(`Integration scope unit ${unitSlug} is missing in ${organization.slug}.`);
   const [existing] = await tx.select({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }).from(integrations).where(and(eq(integrations.organizationId, organization.id), eq(integrations.displayName, displayName))).limit(1);
   const integration = existing
-    ? (await tx.update(integrations).set({ provider, status, createdByUserId, updatedAt: new Date() }).where(eq(integrations.id, existing.id)).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0]
-    : (await tx.insert(integrations).values({ organizationId: organization.id, provider, displayName, status, createdByUserId }).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0];
+    ? (await tx.update(integrations).set({ provider, status, credentialRef: status === "active" ? `local://mock/${provider}` : null, createdByUserId, updatedAt: new Date() }).where(eq(integrations.id, existing.id)).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0]
+    : (await tx.insert(integrations).values({ organizationId: organization.id, provider, displayName, status, credentialRef: status === "active" ? `local://mock/${provider}` : null, createdByUserId }).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0];
   if (!integration) throw new Error(`Local integration ${displayName} was not created.`);
-  await tx.insert(integrationBindings).values({ organizationId: organization.id, integrationId: integration.id, organizationUnitId: unit.id, status: "active", grantedScopes: ["read"], grantedByUserId: createdByUserId }).onConflictDoUpdate({ target: [integrationBindings.integrationId, integrationBindings.organizationUnitId], set: { status: "active", grantedScopes: ["read"], grantedByUserId: createdByUserId, revokedAt: null } });
+  const grantedScopes = provider === "github" ? ["code.read", "pull-requests.read", "activity.read"] : provider === "jira" ? ["issues.read", "activity.read"] : provider === "slack" ? ["messages.read", "activity.read"] : ["read"];
+  await tx.insert(integrationBindings).values({ organizationId: organization.id, integrationId: integration.id, organizationUnitId: unit.id, status: "active", grantedScopes, grantedByUserId: createdByUserId }).onConflictDoUpdate({ target: [integrationBindings.integrationId, integrationBindings.organizationUnitId], set: { status: "active", grantedScopes, grantedByUserId: createdByUserId, revokedAt: null } });
   return integration;
 }
 
@@ -321,11 +322,11 @@ async function ensureSourceIngestion(tx: PersistenceTransaction, organization: F
   else await tx.insert(sourceIngestionRuns).values(values);
 }
 
-async function ensureWebhookFixture(tx: PersistenceTransaction, organization: FixtureOrganization, provider: string, endpointKey: string): Promise<void> {
+async function ensureWebhookFixture(tx: PersistenceTransaction, organization: FixtureOrganization, provider: string, endpointKey: string, integrationId?: string): Promise<void> {
   const [existing] = await tx.select({ id: webhookEndpoints.id }).from(webhookEndpoints).where(and(eq(webhookEndpoints.organizationId, organization.id), eq(webhookEndpoints.endpointKey, endpointKey))).limit(1);
   const endpoint = existing
-    ? (await tx.update(webhookEndpoints).set({ provider, status: "active", updatedAt: new Date() }).where(eq(webhookEndpoints.id, existing.id)).returning({ id: webhookEndpoints.id }))[0]
-    : (await tx.insert(webhookEndpoints).values({ organizationId: organization.id, provider, endpointKey, status: "active" }).returning({ id: webhookEndpoints.id }))[0];
+    ? (await tx.update(webhookEndpoints).set({ provider, integrationId, secretRef: `local://mock/${endpointKey}`, status: "active", updatedAt: new Date() }).where(eq(webhookEndpoints.id, existing.id)).returning({ id: webhookEndpoints.id }))[0]
+    : (await tx.insert(webhookEndpoints).values({ organizationId: organization.id, provider, endpointKey, integrationId, secretRef: `local://mock/${endpointKey}`, status: "active" }).returning({ id: webhookEndpoints.id }))[0];
   if (!endpoint) throw new Error(`Webhook endpoint ${endpointKey} was not created.`);
   const [delivery] = await tx.select({ id: webhookDeliveries.id }).from(webhookDeliveries).where(and(eq(webhookDeliveries.organizationId, organization.id), eq(webhookDeliveries.endpointId, endpoint.id), eq(webhookDeliveries.providerEventId, `${endpointKey}-event-1`))).limit(1);
   if (!delivery) await tx.insert(webhookDeliveries).values({ organizationId: organization.id, endpointId: endpoint.id, providerEventId: `${endpointKey}-event-1`, status: "processed", payloadRef: `artifact://local/${organization.id}/webhooks/${endpointKey}/event-1`, receivedAt: new Date(Date.now() - 15 * 60 * 1000), processedAt: new Date(Date.now() - 14 * 60 * 1000) });
@@ -361,7 +362,7 @@ function workflowBlueprint(fixture: WorkflowFixture, organizationId: string, uni
     purpose: `Local fixture for ${fixture.name}.`,
     enabled: true,
     requiredScopes: [unitId],
-    allowedTools: ["github.repository_activity", "jira.project_tasks", "linear.issue_status", "google.drive.search"],
+    allowedTools: ["github.repository_activity", "jira.project_tasks"],
     parameters: { organizationId, fixtureKey: fixture.key },
     steps: [
       { id: "collect", kind: WorkflowStepKind.Tool, tool: "github.repository_activity" },
@@ -379,15 +380,15 @@ async function ensureWorkflowFixture(tx: PersistenceTransaction, organization: F
   const definitionRow = definition ?? (await tx.insert(workflowDefinitions).values({ organizationId: organization.id, key: TemporalWorkflowType.UserBlueprint, version: "v1", status: "approved", inputSchemaRef: "fixture://workflow/input", outputSchemaRef: "fixture://workflow/output" }).returning({ id: workflowDefinitions.id }))[0];
   if (!definitionRow) throw new Error(`Workflow definition for ${organization.slug} was not created.`);
   const [existingBlueprint] = await tx.select({ id: workflowBlueprints.id }).from(workflowBlueprints).where(and(eq(workflowBlueprints.organizationId, organization.id), eq(workflowBlueprints.blueprintId, fixture.blueprintId), eq(workflowBlueprints.version, blueprint.version))).limit(1);
-  if (existingBlueprint) await tx.update(workflowBlueprints).set({ name: blueprint.name, workflowType: blueprint.workflowType, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", approvedAt: new Date(), updatedAt: new Date() }).where(eq(workflowBlueprints.id, existingBlueprint.id));
-  else await tx.insert(workflowBlueprints).values({ organizationId: organization.id, blueprintId: blueprint.blueprintId, version: blueprint.version, workflowType: blueprint.workflowType, name: blueprint.name, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", approvedAt: new Date() });
+  if (existingBlueprint) await tx.update(workflowBlueprints).set({ name: blueprint.name, workflowType: blueprint.workflowType, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", isCurrent: true, approvedAt: new Date(), updatedAt: new Date() }).where(eq(workflowBlueprints.id, existingBlueprint.id));
+  else await tx.insert(workflowBlueprints).values({ organizationId: organization.id, blueprintId: blueprint.blueprintId, version: blueprint.version, workflowType: blueprint.workflowType, name: blueprint.name, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", isCurrent: true, approvedAt: new Date() });
 
   const temporalWorkflowId = `workflow:${organization.id}:${TemporalWorkflowType.UserBlueprint}:${fixture.key}`;
   const [existingRun] = await tx.select({ id: workflowRuns.id }).from(workflowRuns).where(and(eq(workflowRuns.organizationId, organization.id), eq(workflowRuns.temporalWorkflowId, temporalWorkflowId))).limit(1);
   const now = new Date();
   const startedAt = new Date(now.getTime() - 30 * 60 * 1000);
   const terminal = fixture.status === "completed" || fixture.status === "failed" || fixture.status === "cancelled";
-  const values = { organizationId: organization.id, definitionId: definitionRow.id, actorUserId: actor.id, temporalNamespace: "default", temporalTaskQueue: "encois-agent-runtime", temporalWorkflowId, temporalRunId: `mock-run:${organization.slug}:${fixture.key}:1`, status: fixture.status, scope: { ids: [unit.id] }, inputRef: fixture.blueprintId, startedAt: fixture.status === "queued" ? undefined : startedAt, completedAt: terminal ? new Date(now.getTime() - 5 * 60 * 1000) : undefined, updatedAt: now };
+  const values = { organizationId: organization.id, definitionId: definitionRow.id, actorUserId: actor.id, temporalNamespace: "default", temporalTaskQueue: "encois-agent-runtime", temporalWorkflowId, temporalRunId: `mock-run:${organization.slug}:${fixture.key}:1`, blueprintId: fixture.blueprintId, blueprintVersion: blueprint.version, trigger: "manual", status: fixture.status, scope: { ids: [unit.id] }, inputRef: fixture.blueprintId, businessInput: { fixtureKey: fixture.key }, startedAt: fixture.status === "queued" ? undefined : startedAt, completedAt: terminal ? new Date(now.getTime() - 5 * 60 * 1000) : undefined, retentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), updatedAt: now };
   const run = existingRun
     ? (await tx.update(workflowRuns).set(values).where(eq(workflowRuns.id, existingRun.id)).returning({ id: workflowRuns.id }))[0]
     : (await tx.insert(workflowRuns).values(values).returning({ id: workflowRuns.id }))[0];
@@ -446,8 +447,8 @@ async function seedFixtures(): Promise<unknown> {
       await ensureSourceIngestion(tx, organization, sources[1]!, "running", "normalized", 17);
       await ensureSourceIngestion(tx, organization, sources[2]!, "completed", "graph_projected", 12);
       await ensureSourceIngestion(tx, organization, sources[3]!, "failed", "acquired", 0);
-      await ensureWebhookFixture(tx, organization, "github", "github-events");
-      await ensureWebhookFixture(tx, organization, "jira", "jira-events");
+      await ensureWebhookFixture(tx, organization, "github", "github-events", firstIntegration.id);
+      await ensureWebhookFixture(tx, organization, "jira", "jira-events", secondIntegration.id);
       for (const workflow of workflowFixtures) {
         const actorKey = organization.slug === "organization-test" ? workflow.actorKey : workflow.actorKey === "test-owner" ? "avengers-owner" : "avengers-manager";
         const actor = usersByKey.get(actorKey)!;

@@ -49,12 +49,16 @@ type Request struct {
 }
 
 type Record struct {
-	ID              string                     `json:"id"`
-	AgentDefinition string                     `json:"agentDefinition"`
-	Summary         string                     `json:"summary"`
-	EvidenceRefs    []string                   `json:"evidenceRefs"`
-	ObservedAt      string                     `json:"observedAt"`
-	Freshness       *contracts.SourceFreshness `json:"freshness,omitempty"`
+	ID              string                           `json:"id"`
+	AgentDefinition string                           `json:"agentDefinition"`
+	Summary         string                           `json:"summary"`
+	EvidenceRefs    []string                         `json:"evidenceRefs"`
+	ObservedAt      string                           `json:"observedAt"`
+	Freshness       *contracts.SourceFreshness       `json:"freshness,omitempty"`
+	WorkflowID      string                           `json:"workflowId,omitempty"`
+	RunID           string                           `json:"runId,omitempty"`
+	RetentionClass  contracts.ArtifactRetentionClass `json:"retentionClass,omitempty"`
+	RetentionUntil  string                           `json:"retentionUntil,omitempty"`
 }
 
 type Result struct {
@@ -90,13 +94,15 @@ func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.fixture && request.Operation != "distill" && len(s.records[key]) == 0 {
-		s.records[key] = []Record{{
-			ID:              fmt.Sprintf("fixture-memory-%s", safeMemoryID(request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID)),
-			AgentDefinition: request.MemoryScope.AgentDefinition,
-			Summary:         fmt.Sprintf("Local memory fixture for organization %s, scoped to %s.", request.OrganizationID, strings.Join(request.Scope.IDs, ", ")),
-			EvidenceRefs:    []string{fmt.Sprintf("memory://local/%s/%s", request.OrganizationID, request.MemoryScope.AgentDefinition)},
-			ObservedAt:      time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339),
-		}}
+			s.records[key] = []Record{{
+				ID:              fmt.Sprintf("fixture-memory-%s", safeMemoryID(request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID)),
+				AgentDefinition: request.MemoryScope.AgentDefinition,
+				Summary:         fmt.Sprintf("Local memory fixture for organization %s, scoped to %s. Release context is available for review.", request.OrganizationID, strings.Join(request.Scope.IDs, ", ")),
+				EvidenceRefs:    []string{fmt.Sprintf("memory://local/%s/%s", request.OrganizationID, request.MemoryScope.AgentDefinition)},
+				ObservedAt:      time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339),
+				WorkflowID:      request.WorkflowID,
+				RunID:           request.RunID,
+			}}
 	}
 	if request.Operation == "distill" && request.Distillation != nil {
 		record := Record{
@@ -105,6 +111,8 @@ func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) 
 			Summary:         request.Distillation.Summary,
 			EvidenceRefs:    append([]string(nil), request.Distillation.EvidenceRefs...),
 			ObservedAt:      request.Distillation.ObservedAt,
+			WorkflowID:      request.WorkflowID,
+			RunID:           request.RunID,
 		}
 		s.records[key] = append(s.records[key], record)
 		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{record}}, nil

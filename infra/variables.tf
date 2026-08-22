@@ -87,6 +87,81 @@ variable "cloud_sql_database_name" {
   default     = "encois"
 }
 
+variable "migration_image" {
+  description = "Immutable Artifact Registry image for the protected Cloud SQL migration job."
+  type        = string
+  default     = ""
+}
+
+variable "migration_secret_name" {
+  description = "Secret containing the operator-only DATABASE_MIGRATION_URL used by the Cloud Run migration job."
+  type        = string
+  default     = "cloud-sql-migration-url"
+}
+
+variable "retention_image" {
+  description = "Immutable Artifact Registry image for the protected workflow retention cleanup job."
+  type        = string
+  default     = ""
+}
+
+variable "retention_secret_name" {
+  description = "Secret containing the operator-only DATABASE_RETENTION_URL used by the retention cleanup job."
+  type        = string
+  default     = "cloud-sql-retention-url"
+}
+
+variable "retention_cleanup_batch_size" {
+  description = "Maximum number of expired terminal Runs removed by one tenant-scoped retention execution."
+  type        = number
+  default     = 500
+
+  validation {
+    condition     = var.retention_cleanup_batch_size >= 1 && var.retention_cleanup_batch_size <= 5000 && floor(var.retention_cleanup_batch_size) == var.retention_cleanup_batch_size
+    error_message = "retention_cleanup_batch_size must be an integer between 1 and 5000."
+  }
+}
+
+variable "retention_organization_ids" {
+  description = "Organization UUIDs receiving a protected daily retention cleanup execution. Configure every tenant explicitly."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for value in var.retention_organization_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", value))])
+    error_message = "retention_organization_ids must contain valid organization UUIDs."
+  }
+}
+
+variable "retention_schedule" {
+  description = "Cloud Scheduler cron expression for tenant-scoped retention cleanup."
+  type        = string
+  default     = "0 3 * * *"
+}
+
+variable "retention_schedule_timezone" {
+  description = "IANA timezone used by the retention cleanup Scheduler."
+  type        = string
+  default     = "UTC"
+}
+
+variable "integration_health_organization_ids" {
+  description = "Organization UUIDs receiving a protected periodic GitHub/Jira integration health check."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for value in var.integration_health_organization_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$", value))])
+    error_message = "integration_health_organization_ids must contain valid organization UUIDs."
+  }
+}
+
+variable "integration_health_schedule" {
+  description = "Cloud Scheduler cron expression for periodic provider health checks."
+  type        = string
+  default     = "*/15 * * * *"
+}
+
 variable "enable_dashboard" {
   description = "Create the dashboard Cloud Run service."
   type        = bool
@@ -165,6 +240,24 @@ variable "agent_gateway_secret_name" {
   default     = "agent-gateway-service-token"
 }
 
+variable "agent_runtime_secret_name" {
+  description = "Secret containing the private Agent Runtime service token used by the API memory-inspection boundary."
+  type        = string
+  default     = "agent-runtime-service-token"
+}
+
+variable "integration_oauth_config_secret_name" {
+  description = "Secret containing the server-only JSON OAuth provider configuration for supported integrations."
+  type        = string
+  default     = "integration-oauth-config"
+}
+
+variable "integration_oauth_state_secret_name" {
+  description = "Secret used to sign one-time integration OAuth state values."
+  type        = string
+  default     = "integration-oauth-state-secret"
+}
+
 variable "execution_capability_secret_name" {
   description = "Secret shared by the Gateway API and Agent Gateway for per-execution capability signing."
   type        = string
@@ -209,6 +302,24 @@ variable "enable_agent_gateway" {
 
 variable "agent_gateway_image" {
   description = "Immutable Artifact Registry image for the private Agent Gateway container."
+  type        = string
+  default     = ""
+}
+
+variable "api_service_url" {
+  description = "Stable Cloud Run or internal load-balancer URL used by private services to call the Gateway API."
+  type        = string
+  default     = ""
+}
+
+variable "agent_runtime_service_url" {
+  description = "Stable Cloud Run or internal load-balancer URL used by the Gateway API to call the Agent Runtime."
+  type        = string
+  default     = ""
+}
+
+variable "agent_gateway_service_url" {
+  description = "Stable Cloud Run or internal load-balancer URL used by the Gateway API and Agent Runtime to call the Agent Gateway."
   type        = string
   default     = ""
 }
@@ -258,7 +369,7 @@ variable "artifact_retention_days" {
 variable "secret_names" {
   description = "Secret containers to create. Terraform never stores secret values."
   type        = set(string)
-  default     = ["cloud-sql-runtime-url", "temporal-client-credentials"]
+  default     = ["cloud-sql-runtime-url", "cloud-sql-migration-url", "cloud-sql-retention-url", "temporal-client-credentials", "agent-gateway-service-token", "agent-runtime-service-token", "execution-capability-secret", "control-plane-service-token", "integration-oauth-config", "integration-oauth-state-secret"]
 }
 
 variable "enable_spanner" {

@@ -17,6 +17,7 @@ export const ContractVersion = {
   ToolManifest: "tool-manifest.v1",
   WorkflowUpdate: "workflow-update.v1",
   WorkflowChangePlan: "workflow-change-plan.v1",
+  WorkflowBlueprintLifecycle: "workflow-blueprint-lifecycle.v1",
   CoordinatorEvent: "coordinator-event.v1",
   KnowledgeSource: "knowledge-source.v1",
   SourceRevision: "source-revision.v1",
@@ -97,6 +98,7 @@ export const WorkflowExecutionStatus = {
   Queued: "queued",
   Running: "running",
   Waiting: "waiting",
+  Paused: "paused",
   Partial: "partial",
   Failed: "failed",
   Completed: "completed",
@@ -147,6 +149,8 @@ export type ToolSideEffects = (typeof ToolSideEffects)[keyof typeof ToolSideEffe
 
 export const WorkflowSignalName = {
   BlueprintApproval: "blueprint-approval",
+  WorkflowPause: "workflow-pause",
+  WorkflowResume: "workflow-resume",
 } as const;
 export type WorkflowSignalName = (typeof WorkflowSignalName)[keyof typeof WorkflowSignalName];
 
@@ -170,6 +174,8 @@ export const WorkflowChangeKind = {
   Create: "create",
   Update: "update",
   Deprecate: "deprecate",
+  Restore: "restore",
+  SetCurrent: "set_current",
   Cancel: "cancel",
 } as const;
 export type WorkflowChangeKind = (typeof WorkflowChangeKind)[keyof typeof WorkflowChangeKind];
@@ -245,7 +251,10 @@ export type MemoryRedactionStatus = (typeof MemoryRedactionStatus)[keyof typeof 
 
 export const IntegrationStatus = {
   Pending: "pending",
+  Authorized: "authorized",
   Active: "active",
+  Degraded: "degraded",
+  NeedsReauth: "needs_reauth",
   Disabled: "disabled",
   Error: "error",
 } as const;

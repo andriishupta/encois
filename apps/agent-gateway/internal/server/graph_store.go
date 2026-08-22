@@ -69,12 +69,12 @@ func (s *memoryGraphStore) Query(_ context.Context, request domain.GraphQueryReq
 	nodes := make([]domain.GraphNode, 0, len(s.nodes))
 	edges := make([]domain.GraphEdge, 0, len(s.edges))
 	for _, candidate := range s.nodes {
-		if candidate.organizationID == request.OrganizationID && graphNodeMatchesQuery(candidate.node, request) && visible(candidate.node.Provenance, request.Scope) {
+		if candidate.organizationID == request.OrganizationID && graphNodeMatchesQuery(candidate.node, request) && visible(candidate.node.Provenance, request.Scope) && len(nodes) < graphResultLimit(request) {
 			nodes = append(nodes, candidate.node)
 		}
 	}
 	for _, candidate := range s.edges {
-		if candidate.organizationID == request.OrganizationID && graphEdgeMatchesQuery(candidate.edge, request) && visible(candidate.edge.Provenance, request.Scope) {
+		if candidate.organizationID == request.OrganizationID && graphEdgeMatchesQuery(candidate.edge, request) && visible(candidate.edge.Provenance, request.Scope) && len(edges) < graphResultLimit(request) {
 			edges = append(edges, candidate.edge)
 		}
 	}
@@ -146,6 +146,9 @@ func graphResponse(request domain.GraphQueryRequest, nodes []domain.GraphNode, e
 }
 
 func graphNodeMatchesQuery(node domain.GraphNode, request domain.GraphQueryRequest) bool {
+	if nodeType := graphParamString(request, "nodeType"); nodeType != "" && node.Type != nodeType {
+		return false
+	}
 	switch strings.TrimSpace(request.Query) {
 	case "all", "all_context", "source.facts":
 		return true
@@ -160,11 +163,30 @@ func graphNodeMatchesQuery(node domain.GraphNode, request domain.GraphQueryReque
 }
 
 func graphEdgeMatchesQuery(edge domain.GraphEdge, request domain.GraphQueryRequest) bool {
+	if relationship := graphParamString(request, "relationship"); relationship != "" && edge.Relationship != relationship {
+		return false
+	}
 	if request.Query == "all" || request.Query == "all_context" || request.Query == "source.facts" {
 		return true
 	}
 	projectID, _ := request.Params["projectId"].(string)
 	return request.Query == "project.related_entities" && projectID != "" && (edge.SourceID == projectID || edge.TargetID == projectID)
+}
+
+func graphParamString(request domain.GraphQueryRequest, key string) string {
+	value, _ := request.Params[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func graphResultLimit(request domain.GraphQueryRequest) int {
+	limit, ok := request.Params["limit"].(float64)
+	if !ok || limit < 1 {
+		return 500
+	}
+	if limit > 500 {
+		return 500
+	}
+	return int(limit)
 }
 
 func stringProperty(properties map[string]any, key string) string {
@@ -279,7 +301,7 @@ func (s *spannerGraphStore) Query(ctx context.Context, request domain.GraphQuery
 				}
 			}
 			node := domain.GraphNode{ID: id, Type: typ, Properties: properties, Provenance: provenance}
-			if graphNodeMatchesQuery(node, request) && visible(provenance, request.Scope) {
+			if graphNodeMatchesQuery(node, request) && visible(provenance, request.Scope) && len(nodes) < graphResultLimit(request) {
 				nodes = append(nodes, node)
 			}
 		}
@@ -314,7 +336,7 @@ func (s *spannerGraphStore) Query(ctx context.Context, request domain.GraphQuery
 			}
 		}
 		edge := domain.GraphEdge{ID: id, SourceID: sourceID, TargetID: targetID, Relationship: relationship, Properties: properties, Provenance: provenance}
-		if graphEdgeMatchesQuery(edge, request) && visible(provenance, request.Scope) {
+		if graphEdgeMatchesQuery(edge, request) && visible(provenance, request.Scope) && len(edges) < graphResultLimit(request) {
 			edges = append(edges, edge)
 		}
 	}

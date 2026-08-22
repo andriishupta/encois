@@ -1,0 +1,79 @@
+name: Run production retention cleanup (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type CLEANUP to execute tenant-scoped retention cleanup
+        required: true
+        default: NO
+        type: string
+      organization_id:
+        description: Organization UUID to clean
+        required: true
+        type: string
+      image_tag:
+        description: Immutable retention image tag currently deployed to the Cloud Run Job
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    name: Execute protected retention cleanup job
+    if: ${{ inputs.confirm == 'CLEANUP' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_NAME_PREFIX: ${{ vars.GCP_NAME_PREFIX || 'encois-production' }}
+      GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+      GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY || 'containers' }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      ORGANIZATION_ID: ${{ inputs.organization_id }}
+
+    steps:
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Validate cleanup target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT_ID" || { echo "GCP_PROJECT_ID repository variable is required" >&2; exit 1; }
+          test -n "$IMAGE_TAG" || { echo "image_tag is required" >&2; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "image_tag contains unsupported characters" >&2; exit 1; }
+          [[ "$IMAGE_TAG" != "latest" ]] || { echo "latest is not an immutable production tag" >&2; exit 1; }
+          [[ "$ORGANIZATION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]] || { echo "organization_id must be a UUID" >&2; exit 1; }
+          image_root="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}"
+          gcloud artifacts docker images describe "${image_root}/retention:${IMAGE_TAG}" --quiet >/dev/null
+
+      - name: Verify deployed immutable cleanup image
+        shell: bash
+        run: |
+          set -euo pipefail
+          job_name="${GCP_NAME_PREFIX}-retention"
+          image="$(gcloud run jobs describe "$job_name" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(template.template.containers[0].image)')"
+          [[ "$image" == *"/retention:${IMAGE_TAG}" ]] || { echo "Retention job image does not match requested immutable tag" >&2; exit 1; }
+
+      - name: Execute and wait for retention cleanup
+        run: |
+          gcloud run jobs execute "${GCP_NAME_PREFIX}-retention" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --update-env-vars "RETENTION_ORGANIZATION_ID=$ORGANIZATION_ID" \
+            --wait
+
+      - name: Record cleanup execution
+        run: |
+          {
+            echo "Production retention cleanup completed"
+            echo "- organization: ${ORGANIZATION_ID}"
+            echo "- image tag: ${IMAGE_TAG}"
+          } >> "$GITHUB_STEP_SUMMARY"

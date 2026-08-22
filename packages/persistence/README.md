@@ -6,12 +6,20 @@ This package owns the Gateway API's PostgreSQL schema, Drizzle migrations, runti
 
 - `DATABASE_MIGRATION_URL` — privileged migration connection, used only by CI/deployment or an operator.
 - `DATABASE_RUNTIME_URL` — `api_gateway_runtime` connection, used by the API. It must not be the Cloud SQL admin or migration user.
+- `DATABASE_RETENTION_URL` — tenant-scoped cleanup connection, used only by the protected retention Cloud Run Job.
 
 The Go Agent Runtime and private Agent Gateway do not receive a PostgreSQL role:
 they use Temporal payloads, Spanner Graph, Cloud Storage, and the Gateway API
 boundary instead of connecting to the control-plane database.
 
 The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables. It has no general `DELETE`, `TRUNCATE`, schema, role-management, or table-management privileges. The Gateway has a tenant-scoped permission-removal exception for `membership_scopes`; authorization is enforced before the delete and RLS remains the database defense in depth. `withOrganizationContext` sets `app.organization_id` with `SET LOCAL` inside a transaction so RLS policies can provide defense in depth.
+
+The `api_gateway_retention` capability role is separate from the runtime role.
+`pnpm --filter @encois/persistence retention:cleanup` requires
+`RETENTION_ORGANIZATION_ID`, sets that tenant in PostgreSQL RLS context, deletes
+only terminal workflow Runs after `retention_until`, removes dependent command
+receipts/events first, and records a redacted audit event. It does not delete
+Temporal history or Cloud Storage objects.
 
 ## Commands
 

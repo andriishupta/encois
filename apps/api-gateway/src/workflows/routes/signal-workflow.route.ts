@@ -9,18 +9,31 @@ function parseSignal(value: unknown): WorkflowSignalRequest | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   if (!validateContract("workflowSignal", value).valid) return null;
   const record = value as Record<string, unknown>;
-  if (record.contractVersion !== ContractVersion.WorkflowSignal || record.signalName !== WorkflowSignalName.BlueprintApproval) return null;
+  if (record.contractVersion !== ContractVersion.WorkflowSignal) return null;
   if (typeof record.signalId !== "string" || record.signalId.trim().length === 0 || record.signalId.length > 128) return null;
   if (!record.payload || typeof record.payload !== "object" || Array.isArray(record.payload)) return null;
   const payload = record.payload as Record<string, unknown>;
-  if (typeof payload.stepId !== "string" || payload.stepId.trim().length === 0 || typeof payload.approved !== "boolean") return null;
-  if (payload.reason !== undefined && typeof payload.reason !== "string") return null;
-  return {
-    contractVersion: ContractVersion.WorkflowSignal,
-    signalName: WorkflowSignalName.BlueprintApproval,
-    signalId: record.signalId.trim(),
-    payload,
-  };
+  if (record.signalName === WorkflowSignalName.BlueprintApproval) {
+    if (typeof payload.stepId !== "string" || payload.stepId.trim().length === 0 || typeof payload.approved !== "boolean") return null;
+    if (payload.reason !== undefined && (typeof payload.reason !== "string" || payload.reason.length > 2000)) return null;
+    return {
+      contractVersion: ContractVersion.WorkflowSignal,
+      signalName: WorkflowSignalName.BlueprintApproval,
+      signalId: record.signalId.trim(),
+      payload: { stepId: payload.stepId.trim(), approved: payload.approved, ...(typeof payload.reason === "string" ? { reason: payload.reason } : {}) },
+    };
+  }
+  if (record.signalName === WorkflowSignalName.WorkflowPause || record.signalName === WorkflowSignalName.WorkflowResume) {
+    if (Object.keys(payload).some((key) => key !== "reason")) return null;
+    if (payload.reason !== undefined && (typeof payload.reason !== "string" || payload.reason.length > 2000)) return null;
+    return {
+      contractVersion: ContractVersion.WorkflowSignal,
+      signalName: record.signalName,
+      signalId: record.signalId.trim(),
+      payload: typeof payload.reason === "string" ? { reason: payload.reason } : {},
+    };
+  }
+  return null;
 }
 
 export function signalWorkflowRoute(options: WorkflowServiceOptions): Handler<GatewayEnv> {

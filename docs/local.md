@@ -9,7 +9,7 @@ Google Cloud Identity Platform deployment.
 From the repository root:
 
 ```bash
-pnpm dev:local:watch
+pnpm run dev:local
 ```
 
 The stack starts:
@@ -82,7 +82,7 @@ This local mock mode uses development containers with live reload:
 Stop it with:
 
 ```bash
-pnpm dev:local:watch:down
+pnpm run dev:local:down
 ```
 
 ## Onboarding test
@@ -130,8 +130,8 @@ docker compose -f compose.local.yaml run --rm \
 The same checks are available from the repository root:
 
 ```bash
-pnpm dev:local:watch:verify
-pnpm dev:local:watch:verify:api
+pnpm run verify:local
+pnpm run verify:local:api
 ```
 
 The second command signs in through the Firebase Auth Emulator and verifies
@@ -160,6 +160,11 @@ organization-scoped fixtures on first access; source ingestion can later add
 realistic projections to the same tenant-scoped stores. External Jira/GitHub
 calls remain deterministic fixtures; live provider credentials and adapters
 are hosted follow-up work.
+
+In this explicit dashboard mock mode, onboarding also exposes a `Use local
+fixture` action so the complete first-run flow can be reviewed without a PDF
+file or a running API. It is available only in mock mode and is not rendered
+in hosted builds.
 
 ## Production-like local mode
 
@@ -197,7 +202,7 @@ pnpm dev:local:prod:down
 To stop the stack:
 
 ```bash
-pnpm dev:local:watch:down
+pnpm run dev:local:down
 ```
 
 To reset only the known local fixture organizations and accounts (without
@@ -216,13 +221,13 @@ manual reset to clear their in-memory state as well. The same operation is
 available as:
 
 ```bash
-pnpm dev:local:watch:reset
+pnpm run local:reset
 ```
 
 The seed is safe to run repeatedly and will not create duplicate memberships,
 integrations, revisions, or workflow projections.
 To run only the idempotent seed without resetting fixtures, use
-`pnpm dev:local:watch:seed`.
+`pnpm run local:seed`.
 
 ## Verification scope
 

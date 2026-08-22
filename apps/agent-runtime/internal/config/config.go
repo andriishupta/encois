@@ -4,6 +4,7 @@ import "os"
 
 type Config struct {
 	HTTPAddr              string
+	RuntimeServiceToken   string
 	TemporalHostPort      string
 	TemporalNamespace     string
 	TemporalAPIKey        string
@@ -33,6 +34,7 @@ func FromEnv() Config {
 	}
 	return Config{
 		HTTPAddr:              runtimeHTTPAddr(),
+		RuntimeServiceToken:   os.Getenv("AGENT_RUNTIME_SERVICE_TOKEN"),
 		TemporalHostPort:      envOrDefault("TEMPORAL_HOST_PORT", "127.0.0.1:7233"),
 		TemporalNamespace:     envOrDefault("TEMPORAL_NAMESPACE", "default"),
 		TemporalAPIKey:        os.Getenv("TEMPORAL_API_KEY"),

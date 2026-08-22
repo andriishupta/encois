@@ -51,6 +51,18 @@ export const updateIntegrationRoute: Handler<GatewayEnv> = async (context) => {
         ? context.json({ data: integration })
         : context.json({ error: { code: "INTEGRATION_NOT_FOUND", message: "Integration not found." } }, 404);
     } catch (error) {
+      if (error instanceof Error && error.message === "INTEGRATION_CREDENTIAL_REQUIRED") {
+        return context.json(
+          { error: { code: error.message, message: "The Integration cannot become authorized or active until provider credentials are configured." } },
+          409,
+        );
+      }
+      if (error instanceof Error && error.message === "INTEGRATION_HEALTH_CHECK_REQUIRED") {
+        return context.json(
+          { error: { code: error.message, message: "The Integration becomes active only after a server-side provider authorization or health check succeeds." } },
+          409,
+        );
+      }
       if (error instanceof Error && error.message === "PERSISTENCE_UNAVAILABLE") {
         return context.json(
           { error: { code: "PERSISTENCE_UNAVAILABLE", message: "Database access is not configured." } },

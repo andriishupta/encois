@@ -14,6 +14,8 @@ const (
 	PermissionIntegrationsManage Permission = "integrations:manage"
 	PermissionKnowledgeRead Permission = "knowledge:read"
 	PermissionKnowledgeManage Permission = "knowledge:manage"
+	PermissionContextRead Permission = "context:read"
+	PermissionMemoryRead Permission = "memory:read"
 	PermissionOrganizationRead Permission = "organization:read"
 	PermissionOrganizationManage Permission = "organization:manage"
 	PermissionSettingsRead Permission = "settings:read"
@@ -29,6 +31,8 @@ var AllPermissions = []Permission{
 	PermissionIntegrationsManage,
 	PermissionKnowledgeRead,
 	PermissionKnowledgeManage,
+	PermissionContextRead,
+	PermissionMemoryRead,
 	PermissionOrganizationRead,
 	PermissionOrganizationManage,
 	PermissionSettingsRead,

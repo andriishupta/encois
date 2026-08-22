@@ -4,9 +4,9 @@ import { parseWorkflowTemplateQuery } from "./workflow-template.service.js";
 describe("workflow template query parsing", () => {
   it("normalizes keyword searches and clamps the default result limit", () => {
     expect(
-      parseWorkflowTemplateQuery({ query: " GitHub, Jira  release ", category: " Engineering " }),
+      parseWorkflowTemplateQuery({ query: " GitHub, Jira, release-readiness ", category: " Engineering " }),
     ).toEqual({
-      terms: ["github", "jira", "release"],
+      terms: ["github", "jira", "release-readiness"],
       category: "engineering",
       limit: 10,
     });
