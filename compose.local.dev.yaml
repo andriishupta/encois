@@ -1,4 +1,4 @@
-name: encois-local
+name: encois-watch
 
 # Development overlay for compose.local.yaml. Infrastructure remains shared;
 # application services use source-mounted development watchers.

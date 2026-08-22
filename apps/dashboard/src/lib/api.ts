@@ -197,7 +197,7 @@ function isOrganizationProjection(value: unknown): value is OrganizationProjecti
 }
 
 function parseList<T>(value: unknown, guard: (item: unknown) => item is T, name: string): readonly T[] {
-  if (!Array.isArray(value) || !value.every(guard)) throw createApiError(200, `API returned an invalid ${name} response.`, 'INVALID_RESPONSE')
+  if (!Array.isArray(value) || !value.every(guard)) throw createApiError(200, `The service returned an invalid ${name} response.`, 'INVALID_RESPONSE')
   return value
 }
 
@@ -225,7 +225,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   try {
     response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
   } catch {
-    throw createApiError(0, 'The Gateway API could not be reached.', 'API_UNAVAILABLE')
+    throw createApiError(0, 'Encois could not be reached.', 'API_UNAVAILABLE')
   }
 
   const body: unknown = await response.json().catch(() => null)
@@ -240,7 +240,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   }
 
   if (typeof body !== 'object' || body === null || Array.isArray(body) || !('data' in body)) {
-    throw createApiError(response.status, 'API returned an invalid response.', 'INVALID_RESPONSE')
+    throw createApiError(response.status, 'The service returned an invalid response.', 'INVALID_RESPONSE')
   }
   return (body as ApiEnvelope<T>).data
 }
@@ -252,11 +252,11 @@ export function listWorkflows(): Promise<readonly WorkflowExecutionProjection[]>
 export async function getAuthStatus(): Promise<AuthStatusResponse> {
   const value = await request<unknown>('/auth/me')
   if (!isJsonObject(value) || (value.status !== 'active' && value.status !== 'pending')) {
-    throw createApiError(200, 'API returned an invalid authentication status.', 'INVALID_RESPONSE')
+    throw createApiError(200, 'The service returned an invalid authentication status.', 'INVALID_RESPONSE')
   }
   if (value.status === 'pending') return { status: 'pending' }
   if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string' || typeof value.canOnboard !== 'boolean' || typeof value.canManageKnowledgeSources !== 'boolean') {
-    throw createApiError(200, 'API returned an invalid active authentication status.', 'INVALID_RESPONSE')
+    throw createApiError(200, 'The service returned an invalid active authentication status.', 'INVALID_RESPONSE')
   }
   setAuthOrganizationId(value.organizationId, {
     canOnboard: value.canOnboard,
@@ -282,14 +282,14 @@ export function submitWaitlist(input: WaitlistRequest): Promise<WaitlistSubmissi
     method: 'POST',
     body: JSON.stringify(validation.value),
   }, false).then((value) => {
-    if (!isJsonObject(value) || value.accepted !== true) throw createApiError(200, 'API returned an invalid waitlist response.', 'INVALID_RESPONSE')
+    if (!isJsonObject(value) || value.accepted !== true) throw createApiError(200, 'The service returned an invalid waitlist response.', 'INVALID_RESPONSE')
     return { accepted: true }
   })
 }
 
 export async function getWorkflow(workflowId: string): Promise<WorkflowExecutionProjection> {
   const value = await request<unknown>(`/workflows/${encodeURIComponent(workflowId)}`)
-  if (!isWorkflowProjection(value)) throw createApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
+  if (!isWorkflowProjection(value)) throw createApiError(200, 'The service returned an invalid workflow response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -298,7 +298,7 @@ export async function startWorkflow(input: WorkflowStartRequest): Promise<Workfl
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isWorkflowProjection(value)) throw createApiError(200, 'API returned an invalid workflow response.', 'INVALID_RESPONSE')
+  if (!isWorkflowProjection(value)) throw createApiError(200, 'The service returned an invalid workflow response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -307,7 +307,7 @@ export async function signalWorkflow(workflowId: string, input: WorkflowSignalRe
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isAcceptedResponse(value)) throw createApiError(200, 'API returned an invalid Signal response.', 'INVALID_RESPONSE')
+  if (!isAcceptedResponse(value)) throw createApiError(200, 'The service returned an invalid Signal response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -316,7 +316,7 @@ export async function updateWorkflow(workflowId: string, input: WorkflowUpdateRe
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isUpdateResponse(value)) throw createApiError(200, 'API returned an invalid Update response.', 'INVALID_RESPONSE')
+  if (!isUpdateResponse(value)) throw createApiError(200, 'The service returned an invalid Update response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -330,7 +330,7 @@ export function listKnowledgeSources(): Promise<readonly KnowledgeSource[]> {
 
 export async function getKnowledgeSource(sourceId: string): Promise<KnowledgeSourceDetail> {
   const value = await request<unknown>(`/sources/${encodeURIComponent(sourceId)}`)
-  if (!isKnowledgeSourceDetail(value)) throw createApiError(200, 'API returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceDetail(value)) throw createApiError(200, 'The service returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -339,7 +339,7 @@ export async function uploadKnowledgeSourcePdf(file: File, name?: string): Promi
   form.append('file', file)
   if (name?.trim()) form.append('name', name.trim())
   const value = await request<unknown>('/sources/uploads', { method: 'POST', body: form })
-  if (!isKnowledgeSourceUpload(value)) throw createApiError(200, 'API returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceUpload(value)) throw createApiError(200, 'The service returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -348,7 +348,7 @@ export async function startSourceIngestion(sourceId: string, revisionId: string,
     method: 'POST',
     body: JSON.stringify({ trigger }),
   })
-  if (!isSourceIngestionLaunch(value)) throw createApiError(200, 'API returned an invalid source ingestion response.', 'INVALID_RESPONSE')
+  if (!isSourceIngestionLaunch(value)) throw createApiError(200, 'The service returned an invalid source ingestion response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -357,13 +357,13 @@ export async function updateIntegration(integrationId: string, input: Integratio
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isIntegrationProjection(value)) throw createApiError(200, 'API returned an invalid integration response.', 'INVALID_RESPONSE')
+  if (!isIntegrationProjection(value)) throw createApiError(200, 'The service returned an invalid integration response.', 'INVALID_RESPONSE')
   return value
 }
 
 export async function getOrganization(): Promise<OrganizationProjection> {
   const value = await request<unknown>('/organization')
-  if (!isOrganizationProjection(value)) throw createApiError(200, 'API returned an invalid organization response.', 'INVALID_RESPONSE')
+  if (!isOrganizationProjection(value)) throw createApiError(200, 'The service returned an invalid organization response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -372,7 +372,7 @@ export async function createOrganizationUnit(input: OrganizationUnitCreateReques
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationUnitProjection(value)) throw createApiError(200, 'API returned an invalid organization unit response.', 'INVALID_RESPONSE')
+  if (!isOrganizationUnitProjection(value)) throw createApiError(200, 'The service returned an invalid organization unit response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -381,7 +381,7 @@ export async function createOrganizationPermission(input: OrganizationPermission
     method: 'POST',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'The service returned an invalid organization permission response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -390,11 +390,11 @@ export async function updateOrganizationPermission(permissionId: string, input: 
     method: 'PATCH',
     body: JSON.stringify(input),
   })
-  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isOrganizationPermissionProjection(value)) throw createApiError(200, 'The service returned an invalid organization permission response.', 'INVALID_RESPONSE')
   return value
 }
 
 export async function deleteOrganizationPermission(permissionId: string): Promise<void> {
   const value = await request<unknown>(`/organization/permissions/${encodeURIComponent(permissionId)}`, { method: 'DELETE' })
-  if (!isJsonObject(value) || value.deleted !== true) throw createApiError(200, 'API returned an invalid organization permission response.', 'INVALID_RESPONSE')
+  if (!isJsonObject(value) || value.deleted !== true) throw createApiError(200, 'The service returned an invalid organization permission response.', 'INVALID_RESPONSE')
 }

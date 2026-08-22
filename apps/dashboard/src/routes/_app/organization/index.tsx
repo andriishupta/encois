@@ -67,7 +67,7 @@ function OrganizationPage() {
 
       <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <p className="text-muted-foreground"><span className="font-medium text-foreground">Organization administrator surface.</span> Units and direct membership permissions are stored by the Gateway and inherited through child units.</p>
+        <p className="text-muted-foreground"><span className="font-medium text-foreground">Organization administrator surface.</span> Units and direct membership permissions are inherited through child units.</p>
       </div>
       {isLoading ? <p className="text-sm text-muted-foreground">Loading organization scope…</p> : null}
       {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}
@@ -101,7 +101,7 @@ function OrganizationPage() {
                 <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button>
               </div>
             </CardContent>
-          </Card> : <Card><CardHeader><CardTitle>Organization scope</CardTitle><CardDescription>The Gateway has not returned an organization projection.</CardDescription></CardHeader></Card>}
+          </Card> : <Card><CardHeader><CardTitle>Organization scope</CardTitle><CardDescription>Organization structure is not available yet.</CardDescription></CardHeader></Card>}
 
           {selectedUnit ? <Card>
             <CardHeader>

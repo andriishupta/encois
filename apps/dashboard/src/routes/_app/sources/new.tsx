@@ -57,7 +57,7 @@ function NewSourcePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Add knowledge source" description={<>Upload a PDF as an immutable source <ProductTerm term="revision" />. The Gateway stores the raw file outside Postgres and starts the shared <ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.</>} />
+      <PageHeader title="Add knowledge source" description={<>Upload a PDF as an immutable source <ProductTerm term="revision" />. Encois will process it and prepare the content for your workspace.</>} />
       <form className="max-w-3xl" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>

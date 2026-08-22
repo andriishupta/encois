@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { IntegrationStatus, WorkflowExecutionStatus } from '@encois/contracts'
-import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, HeartPulse, PlugZap, Server, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
+import { WorkflowExecutionStatus } from '@encois/contracts'
+import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, PlugZap, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,6 @@ function DashboardPage() {
   const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
   const runningWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
   const waitingWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
-  const connectedIntegrations = integrations.data?.filter((integration) => integration.status === IntegrationStatus.Active).length ?? 0
   const attentionWorkflows = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
 
   function startInitialization() {
@@ -58,7 +57,7 @@ function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <OverviewCard icon={Activity} label="Active workflows" value={workflows.isLoading ? '…' : String(activeWorkflows.length)} detail={`${runningWorkflows} running · ${waitingWorkflows} waiting`} />
         <OverviewCard icon={PlugZap} label="Knowledge sources" value={sources.isLoading ? '…' : String(sources.data?.length ?? 0)} detail={`${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope`} />
-        <OverviewCard icon={GitBranch} label={<ProductTerm term="signal" plural />} value="—" detail="Events endpoint is not exposed yet" />
+        <OverviewCard icon={GitBranch} label={<ProductTerm term="signal" plural />} value="—" detail="No recent signals" />
         <OverviewCard icon={TriangleAlert} label="Needs attention" value={workflows.isLoading ? '…' : String(attentionWorkflows)} detail="Failed or partial workflows" />
       </div>
 
@@ -86,24 +85,12 @@ function DashboardPage() {
             <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <EmptyPanel icon={CircleDashed} title="Activity projection is not available" description="Workflow events and evidence history are not exposed by the current Gateway API." />
+            <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace health</CardTitle>
-            <CardDescription>Current status of the Encois runtime surface.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <HealthRow icon={Server} label="Gateway API" detail={workflows.isError || integrations.isError || sources.isError ? 'Request failed' : workflows.isLoading || integrations.isLoading || sources.isLoading ? 'Checking…' : 'Connected'} />
-            <HealthRow icon={Activity} label="Agent runtime" detail="Health endpoint is not exposed to the Dashboard" />
-            <HealthRow icon={HeartPulse} label="External systems" detail={connectedIntegrations ? `${connectedIntegrations} active integration${connectedIntegrations === 1 ? '' : 's'}` : 'No active integrations'} />
-          </CardContent>
-        </Card>
-
+      <div>
         <Card>
           <CardHeader>
             <CardTitle>Workflow runs</CardTitle>
@@ -111,7 +98,7 @@ function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {workflows.data?.slice(0, 5).map((workflow) => <RunRow key={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} time={formatDate(workflow.updatedAt)} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}
-            {!workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs returned by the Gateway.</p> : null}
+            {!workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs yet.</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -196,26 +183,5 @@ function OverviewCard({
         <p className="text-xs text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
-  )
-}
-
-function HealthRow({
-  icon: Icon,
-  label,
-  detail,
-}: {
-  icon: typeof Activity
-  label: string
-  detail: string
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border px-3 py-3">
-      <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{detail}</p>
-      </div>
-      <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">Not connected</span>
-    </div>
   )
 }

@@ -49,7 +49,7 @@ function NewWorkflowPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="New workflow" description={<>Start a generic <ProductTerm term="blueprint" /> execution through the Gateway API.</>} />
+      <PageHeader title="New workflow" description={<>Start a generic <ProductTerm term="blueprint" /> for a project.</>} />
       <Card className="max-w-3xl">
         <CardHeader>
           <CardTitle><ProductTerm term="workflow" /> details</CardTitle>

@@ -29,7 +29,7 @@ function IntegrationsPage() {
       {integrations.data?.length ? <div className="grid gap-4 md:grid-cols-2">{integrations.data.map((integration) => <IntegrationPreviewCard key={integration.id} integration={integration} />)}</div> : null}
       {!integrations.isLoading && !integrations.isError && !integrations.data?.length ? <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={PlugZap} title={<>No <ProductTerm term="integration" plural /> in <ProductTerm term="scope" /></>} description={<>The Gateway returned no integrations visible to this organization <ProductTerm term="scope" />.</>} />
+          <EmptyPanel icon={PlugZap} title={<>No <ProductTerm term="integration" plural /> in <ProductTerm term="scope" /></>} description={<>No connected integrations are available in your current <ProductTerm term="scope" />.</>} />
         </CardContent>
       </Card> : null}
     </div>

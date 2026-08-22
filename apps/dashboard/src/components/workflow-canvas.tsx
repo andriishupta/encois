@@ -3,7 +3,6 @@ import {
   Controls,
   Handle,
   MarkerType,
-  MiniMap,
   Panel,
   Position,
   ReactFlow,
@@ -14,6 +13,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { CircleDashed, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { InteractiveMiniMap } from '@/components/interactive-minimap'
 
 type WorkflowNodeData = {
   label: string
@@ -181,9 +181,7 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt }: { refreshCount: n
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
+        <InteractiveMiniMap
           nodeColor={(node) => {
             const status = (node.data as WorkflowNodeData).status
             return status === 'running' ? 'var(--primary)' : 'var(--muted-foreground)'

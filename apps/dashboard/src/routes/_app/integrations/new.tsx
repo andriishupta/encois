@@ -19,7 +19,7 @@ function NewIntegrationPage() {
             <PlugZap className="size-5 text-muted-foreground" aria-hidden="true" />
           </div>
           <CardTitle><ProductTerm term="integration" /> details</CardTitle>
-          <CardDescription>Provider credentials and authorization will be added through the control plane later.</CardDescription>
+          <CardDescription>Connection and authorization will be available here when setup is enabled.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="grid gap-5 sm:grid-cols-2">

@@ -39,7 +39,7 @@ function WorkspaceSettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden="true" />Workspace</CardTitle>
-            <CardDescription>{mockMode ? 'These preferences apply to the current organization scope.' : 'Workspace preference persistence is not exposed by the current API.'}</CardDescription>
+            <CardDescription>{mockMode ? 'These preferences apply to the current organization scope.' : 'Workspace preferences are managed by your organization.'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="settings-workspace-name">Workspace name<input id="settings-workspace-name" value={name} onChange={(event) => setName(event.target.value)} className={inputClassName} /></label>

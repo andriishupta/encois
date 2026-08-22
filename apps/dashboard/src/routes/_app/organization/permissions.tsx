@@ -65,7 +65,7 @@ function OrganizationPermissionsPage() {
 
       <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <p className="text-muted-foreground"><span className="font-medium text-foreground">Gateway-backed permission board.</span> Direct membership scopes are stored in the control plane and inherited through descendant units.</p>
+        <p className="text-muted-foreground"><span className="font-medium text-foreground">Permission board.</span> Direct membership scopes are inherited through descendant units.</p>
       </div>
       {isLoading ? <p className="text-sm text-muted-foreground">Loading organization permissions…</p> : null}
       {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}

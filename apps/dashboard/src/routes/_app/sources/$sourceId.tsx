@@ -44,9 +44,9 @@ function SourceDetailPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle><ProductTerm term="ingestion" /> activity</CardTitle><CardDescription>The API projection of the <ProductTerm term="temporal" /> source-<ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.</CardDescription></CardHeader>
+          <CardHeader><CardTitle><ProductTerm term="ingestion" /> activity</CardTitle><CardDescription>Processing activity for this source.</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {source.data.ingestionRuns.length ? source.data.ingestionRuns.map((run) => <div key={run.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">{run.status}</span><span className="text-xs text-muted-foreground">{run.trigger}</span></div><p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{run.temporalWorkflowId}</p><p className="mt-2 text-xs text-muted-foreground">{run.currentStage ?? 'Queued for acquisition'} · {run.factsCount} facts</p>{run.error ? <p className="mt-2 text-xs text-destructive">{run.error}</p> : null}</div>) : <EmptyPanel icon={RefreshCw} title="No ingestion runs" description={latestRevision ? 'Start ingestion for the latest revision.' : 'Upload a revision first.'} />}
+            {source.data.ingestionRuns.length ? source.data.ingestionRuns.map((run) => <div key={run.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">{run.status}</span><span className="text-xs text-muted-foreground">{run.trigger}</span></div><p className="mt-2 text-xs text-muted-foreground">{run.currentStage ?? 'Queued for acquisition'} · {run.factsCount} facts</p>{run.error ? <p className="mt-2 text-xs text-destructive">{run.error}</p> : null}</div>) : <EmptyPanel icon={RefreshCw} title="No ingestion runs" description={latestRevision ? 'Start ingestion for the latest revision.' : 'Upload a revision first.'} />}
           </CardContent>
         </Card>
       </div>

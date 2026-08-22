@@ -14,9 +14,6 @@ export type ProductTermKey =
   | 'ingestion'
   | 'revision'
   | 'signal'
-  | 'temporal'
-  | 'agentGateway'
-  | 'controlPlane'
 
 const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string; description: string }> = {
   coordinator: {
@@ -73,21 +70,6 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     label: 'Signal',
     pluralLabel: 'Signals',
     description: 'An event or change that may need investigation, such as a blocker, deployment issue, or stale work.',
-  },
-  temporal: {
-    label: 'Temporal',
-    pluralLabel: 'Temporal',
-    description: 'The durable workflow runtime that tracks long-running executions, retries, and state behind Encois.',
-  },
-  agentGateway: {
-    label: 'Agent Gateway',
-    pluralLabel: 'Agent Gateway',
-    description: 'The private policy boundary through which runtime agents use approved provider tools.',
-  },
-  controlPlane: {
-    label: 'Control plane',
-    pluralLabel: 'Control plane',
-    description: 'The API-owned layer for organization settings, permissions, integrations, and workflow metadata.',
   },
 }
 

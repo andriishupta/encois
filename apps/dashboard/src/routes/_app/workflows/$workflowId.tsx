@@ -34,7 +34,7 @@ function WorkflowDetailPage() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1.5">
             <CardTitle><ProductTerm term="workflow" /> canvas</CardTitle>
-            <CardDescription>Topology preview for the generic <ProductTerm term="blueprint" />. Step-level state is not exposed by the current projection.</CardDescription>
+            <CardDescription>Topology preview for the selected <ProductTerm term="workflow" />. Step-level details will appear as they become available.</CardDescription>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -49,10 +49,10 @@ function WorkflowDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Execution steps</CardTitle>
-          <CardDescription><ProductTerm term="temporal" /> activities and specialist work will appear after the Gateway exposes workflow events.</CardDescription>
+          <CardDescription>Step activity and specialist work for this <ProductTerm term="workflow" />.</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyPanel icon={CircleDashed} title="Step projection is not available" description="The current API returns workflow identity and status, but not Temporal activity or evidence events." />
+          <EmptyPanel icon={CircleDashed} title="No step activity yet" description="Detailed step activity will appear here when available." />
         </CardContent>
       </Card>
 
@@ -62,7 +62,7 @@ function WorkflowDetailPage() {
           <CardDescription>Source references, timestamps, retries, and state transitions will appear here.</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyPanel icon={CircleDashed} title="Event history is not available" description={<><ProductTerm term="evidence" /> references, retries, and state transitions need a dedicated Gateway projection endpoint.</>} />
+          <EmptyPanel icon={CircleDashed} title="No event history yet" description={<><ProductTerm term="evidence" /> references, retries, and state transitions will appear here when available.</>} />
         </CardContent>
       </Card>
     </div>

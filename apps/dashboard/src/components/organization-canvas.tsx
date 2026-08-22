@@ -4,7 +4,6 @@ import {
   Controls,
   Handle,
   MarkerType,
-  MiniMap,
   Panel,
   Position,
   ReactFlow,
@@ -15,6 +14,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Building2, FolderKanban, Layers3, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { InteractiveMiniMap } from '@/components/interactive-minimap'
 import { humanizeUnitType, type OrganizationUnit, type OrganizationUnitType } from '@/lib/organization'
 
 type OrganizationNodeData = {
@@ -149,9 +149,7 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
+        <InteractiveMiniMap
           nodeColor={(node) => node.id === selectedUnitId ? 'var(--primary)' : 'var(--muted-foreground)'}
         />
         <Panel position="top-left">

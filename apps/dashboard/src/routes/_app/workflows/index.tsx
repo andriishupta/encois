@@ -34,7 +34,7 @@ function WorkflowsPage() {
       />
       {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflows…</p> : null}
       {workflows.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load workflows: {workflows.error.message}</CardContent></Card> : null}
-      {hasWorkflows ? <div className="grid gap-4">{workflows.data?.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} statusReason={workflow.statusReason} description="Typed workflow projection from the Gateway API." icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}</div> : null}
+      {hasWorkflows ? <div className="grid gap-4">{workflows.data?.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} statusReason={workflow.statusReason} description="Current workflow status and progress." icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}</div> : null}
       {!workflows.isLoading && !workflows.isError && !hasWorkflows ? <Card>
         <CardContent className="pt-6">
           <EmptyPanel icon={CircleDashed} title="No workflows yet" description={<>Start a <ProductTerm term="blueprint" /> execution to create the first durable <ProductTerm term="workflow" />.</>} />

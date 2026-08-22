@@ -52,14 +52,14 @@ function IntegrationDetailPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard icon={Icon} label="Provider" value={providerName} />
         <SummaryCard icon={integration.status === IntegrationStatus.Active ? CheckCircle2 : PlugZap} label="Status" value={integration.status} />
-        <SummaryCard icon={Clock3} label="Last sync" value="Not exposed by current API" />
+        <SummaryCard icon={Clock3} label="Last sync" value="Not available yet" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
         <Card>
           <CardHeader>
             <CardTitle>Connection settings</CardTitle>
-            <CardDescription>Only <ProductTerm term="controlPlane" /> metadata is editable here. Credentials remain private to the <ProductTerm term="agentGateway" />.</CardDescription>
+            <CardDescription>Connection details are managed securely. Provider credentials are never shown here.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-5" onSubmit={saveChanges}>
@@ -84,7 +84,7 @@ function IntegrationDetailPage() {
                 <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">Enforced</span>
               </div>
               {mutation.isError ? <p className="text-sm text-destructive">Could not save changes: {mutation.error.message}</p> : null}
-              {mutation.isSuccess ? <p className="text-sm text-muted-foreground">Changes saved through the Gateway API.</p> : null}
+              {mutation.isSuccess ? <p className="text-sm text-muted-foreground">Changes saved.</p> : null}
               <div className="flex justify-end border-t pt-5">
                 <Button type="submit" disabled={mutation.isPending}>
                   <Save data-icon="inline-start" />
@@ -103,9 +103,9 @@ function IntegrationDetailPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="rounded-lg border bg-muted/20 p-4">
               <p className="text-sm font-medium">Organization <ProductTerm term="scope" /></p>
-              <p className="mt-1 font-mono text-xs text-muted-foreground">Resolved by Gateway</p>
+              <p className="mt-1 font-mono text-xs text-muted-foreground">Resolved securely</p>
             </div>
-            <p className="text-sm text-muted-foreground">Credentials are intentionally not shown in the browser. The <ProductTerm term="agentGateway" /> resolves them at execution time.</p>
+            <p className="text-sm text-muted-foreground">Credentials are intentionally not shown in the browser and are handled securely.</p>
           </CardContent>
         </Card>
       </div>
