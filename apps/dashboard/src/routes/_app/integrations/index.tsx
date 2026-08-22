@@ -4,6 +4,7 @@ import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap } from 'lucide-react'
 import { IntegrationStatus, type IntegrationProjection } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listIntegrations } from '@/lib/api'
@@ -19,8 +20,8 @@ function IntegrationsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Integrations"
-        description="Manage the systems Encois can read from and normalize into evidence."
+        title={<ProductTerm term="integration" plural />}
+        description={<>Manage the systems Encois can read from and normalize into <ProductTerm term="evidence" />.</>}
         actions={<Button asChild><Link to="/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
@@ -28,7 +29,7 @@ function IntegrationsPage() {
       {integrations.data?.length ? <div className="grid gap-4 md:grid-cols-2">{integrations.data.map((integration) => <IntegrationPreviewCard key={integration.id} integration={integration} />)}</div> : null}
       {!integrations.isLoading && !integrations.isError && !integrations.data?.length ? <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={PlugZap} title="No integrations in scope" description="The Gateway returned no integrations visible to this organization scope." />
+          <EmptyPanel icon={PlugZap} title={<>No <ProductTerm term="integration" plural /> in <ProductTerm term="scope" /></>} description={<>The Gateway returned no integrations visible to this organization <ProductTerm term="scope" />.</>} />
         </CardContent>
       </Card> : null}
     </div>

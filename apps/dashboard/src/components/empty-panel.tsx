@@ -8,8 +8,8 @@ export function EmptyPanel({
   action,
 }: {
   icon: LucideIcon
-  title: string
-  description: string
+  title: ReactNode
+  description: ReactNode
   action?: ReactNode
 }) {
   return (

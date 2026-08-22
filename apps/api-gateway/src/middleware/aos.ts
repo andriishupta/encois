@@ -6,6 +6,9 @@ export type AosPrincipal = {
   userId?: string;
   organizationId: string;
   scope: readonly string[];
+  /** Server-derived capabilities used for route guidance; protected routes still re-authorize. */
+  canOnboard?: boolean;
+  canManageKnowledgeSources?: boolean;
 };
 
 export type AosAuthenticationResult =

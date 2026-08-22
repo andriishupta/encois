@@ -1,0 +1,12 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/agent-gateway ./cmd/agent-gateway"
+  bin = "./tmp/agent-gateway"
+  delay = 500
+  exclude_dir = ["tmp", "vendor"]
+  include_ext = ["go"]
+  kill_delay = 500
+  send_interrupt = true
+  stop_on_error = true

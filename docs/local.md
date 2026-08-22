@@ -25,10 +25,11 @@ The stack starts:
 | Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
-`local-auth-seed` runs after migrations. It creates a verified Firebase
-emulator account and a pending Encois organization invite. It deliberately does
-not create the Encois `users` row; the normal `/api/v1/auth/me` onboarding path
-creates that row and the active membership after the first successful login.
+`local-auth-seed` runs after migrations. It creates a complete deterministic
+fixture company: one owner waiting for first-login onboarding, three active
+users with different roles/scopes, organization units, two integrations, and
+three Knowledge Sources. It is idempotent and only creates or updates these
+local fixture records.
 
 Local credentials:
 
@@ -37,8 +38,49 @@ email:    dev@local.test
 password: local-password-1234
 ```
 
+Existing-workspace users:
+
+| Email | Password | Role | Scope | Expected access |
+| --- | --- | --- | --- | --- |
+| `manager@local.test` | `local-manager-1234` | manager | Engineering | Can manage Knowledge Sources in assigned scope |
+| `member@local.test` | `local-member-1234` | member | Checkout | Can manage Knowledge Sources in assigned scope |
+| `dev@localtest` | `local-viewer-1234` | viewer | Customer Success | Read-only; cannot manage Knowledge Sources |
+
+`dev@local.test` is the organization owner. On a clean local database, this
+user accepts the pending invite through `/api/v1/auth/me` and can complete
+onboarding. The other three users already have active memberships and should
+go directly to the existing workspace. If a non-owner opens an onboarding URL
+directly, the dashboard shows an access message and does not render the setup
+form. The API remains the final authorization boundary.
+
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
+
+## Development watch mode
+
+For active development with live reload, use:
+
+```bash
+pnpm dev:local:watch
+```
+
+This uses the same local infrastructure but separate development containers:
+
+- Dashboard runs Vite with HMR on `http://localhost:5173`.
+- API Gateway runs `tsx watch` and restarts on TypeScript changes.
+- Agent Gateway and Agent Runtime run Go `air` watchers and rebuild only their
+  local binaries on Go changes.
+- Postgres, Temporal, Firebase Auth Emulator, migrations, and the local auth
+  seed are not rebuilt on application source changes.
+
+Stop it with:
+
+```bash
+pnpm dev:local:watch:down
+```
+
+The existing `pnpm dev:local` remains the packaged local mode: it builds the
+production-style application images and serves the Dashboard through Nginx.
 
 ## Onboarding test
 
@@ -64,6 +106,11 @@ docker compose -f compose.local.yaml exec postgres \
 The same flow is intentionally invite-based. A Firebase user without a
 matching pending invite must remain `pending` and can only use the waitlist;
 the waitlist never creates an Encois membership.
+
+The existing organization permissions screen is available at
+`/organization/permissions`. Operator invite scripts support adding a single
+user (`auth:invite-user`) or revoking an invite. A bulk invite editor is not
+part of this local MVP fixture and remains a separate product-surface task.
 
 ## Useful checks
 
@@ -129,6 +176,10 @@ pnpm dev:local
 ```
 
 The `-v` option removes only the Compose-local Postgres and Temporal volumes.
+If this workspace was started before the deterministic fixture seed was added,
+run this reset once: older Firebase Emulator UIDs could leave duplicate local
+membership rows. The current seed is safe to run repeatedly and will not create
+new duplicates.
 
 ## Verification scope
 

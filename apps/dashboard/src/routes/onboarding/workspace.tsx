@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Building2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ProductTerm } from '@/components/product-term'
 import { getMockOnboardingState, updateMockOnboardingState } from '@/lib/onboarding'
 
 export const Route = createFileRoute('/onboarding/workspace')({
@@ -28,7 +29,7 @@ function WorkspaceSetupPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Tell us about your workspace</CardTitle>
-          <CardDescription>This gives the Coordinator a first scope for the context it will collect.</CardDescription>
+          <CardDescription>This gives the <ProductTerm term="coordinator" /> a first <ProductTerm term="scope" /> for the context it will collect.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
@@ -68,13 +69,13 @@ function WorkspaceSetupPage() {
         <CardHeader>
           <Building2 className="mb-2 size-5 text-primary-foreground/70" aria-hidden="true" />
           <CardTitle>Why this is required</CardTitle>
-          <CardDescription className="text-primary-foreground/70">Every Encois workspace has its own scope, memory, and Coordinator.</CardDescription>
+          <CardDescription className="text-primary-foreground/70">Every Encois workspace has its own <ProductTerm term="scope" />, memory, and <ProductTerm term="coordinator" />.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm text-primary-foreground/80">
           <p>We use this information to keep insights tied to the right organization and projects.</p>
           <div className="flex items-start gap-3 rounded-lg border border-primary-foreground/15 bg-primary-foreground/10 p-3">
             <Users className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>The setup cannot be skipped because an unscoped Coordinator would not have trustworthy context.</span>
+            <span>The setup cannot be skipped because an unscoped <ProductTerm term="coordinator" /> would not have trustworthy context.</span>
           </div>
         </CardContent>
       </Card>
@@ -83,4 +84,3 @@ function WorkspaceSetupPage() {
 }
 
 const inputClassName = 'h-10 rounded-md border border-input bg-background px-3 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
-

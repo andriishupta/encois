@@ -5,6 +5,7 @@ import { ArrowLeft, FileText, LoaderCircle, Play, RefreshCw, Waypoints } from 'l
 import { SourceRevisionStatus, KnowledgeSourceKind, type SourceRevision } from '@encois/contracts'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getKnowledgeSource, isApiError, startSourceIngestion } from '@/lib/api'
@@ -36,14 +37,14 @@ function SourceDetailPage() {
       <PageHeader title={source.data.source.name} description={`${source.data.source.provider ?? source.data.source.contentType ?? source.data.source.kind} · ${source.data.source.status.replace('_', ' ')}`} actions={<Button variant="outline" asChild><Link to="/sources"><ArrowLeft data-icon="inline-start" />All sources</Link></Button>} />
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <Card>
-          <CardHeader><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-md border bg-muted/30"><Icon className="size-5 text-muted-foreground" aria-hidden="true" /></span><div><CardTitle>Source revisions</CardTitle><CardDescription>Immutable snapshots retained with provenance metadata.</CardDescription></div></div></CardHeader>
+          <CardHeader><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-md border bg-muted/30"><Icon className="size-5 text-muted-foreground" aria-hidden="true" /></span><div><CardTitle><ProductTerm term="revision" plural /></CardTitle><CardDescription>Immutable snapshots retained with provenance metadata.</CardDescription></div></div></CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {source.data.revisions.length ? source.data.revisions.map((revision) => <RevisionRow key={revision.id} revision={revision} onIngest={() => ingest.mutate(revision.id)} busy={ingest.isPending} />) : <EmptyPanel icon={FileText} title="No revisions" description="This source has not produced a revision yet." />}
+            {source.data.revisions.length ? source.data.revisions.map((revision) => <RevisionRow key={revision.id} revision={revision} onIngest={() => ingest.mutate(revision.id)} busy={ingest.isPending} />) : <EmptyPanel icon={FileText} title={<>No <ProductTerm term="revision" plural /></>} description={<>This source has not produced a <ProductTerm term="revision" /> yet.</>} />}
             {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Ingestion activity</CardTitle><CardDescription>The API projection of the Temporal source-ingestion workflow.</CardDescription></CardHeader>
+          <CardHeader><CardTitle><ProductTerm term="ingestion" /> activity</CardTitle><CardDescription>The API projection of the <ProductTerm term="temporal" /> source-<ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-3">
             {source.data.ingestionRuns.length ? source.data.ingestionRuns.map((run) => <div key={run.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">{run.status}</span><span className="text-xs text-muted-foreground">{run.trigger}</span></div><p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{run.temporalWorkflowId}</p><p className="mt-2 text-xs text-muted-foreground">{run.currentStage ?? 'Queued for acquisition'} · {run.factsCount} facts</p>{run.error ? <p className="mt-2 text-xs text-destructive">{run.error}</p> : null}</div>) : <EmptyPanel icon={RefreshCw} title="No ingestion runs" description={latestRevision ? 'Start ingestion for the latest revision.' : 'Upload a revision first.'} />}
           </CardContent>

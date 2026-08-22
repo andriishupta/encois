@@ -27,6 +27,7 @@ Do not invent product requirements that conflict with those documents. If implem
 5. Make read-only behavior the default. Never add autonomous write actions without an approval, authorization, audit, and rollback story.
 6. Use TODOs for deliberately deferred production work. Every TODO should state the missing behavior or decision, not merely say “improve this”.
 7. Optimize for the hackathon demo without creating avoidable security or operational debt.
+8. Run tests only after full implementation - unit or tools like tsx/go are fine for harder things and multi-step implementations, but e2e should be definetly run only once; e2e is not mandatory on every run, only when we see it is required.
 
 ## Iterative collaboration and approval boundary
 

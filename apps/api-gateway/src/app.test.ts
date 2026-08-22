@@ -106,7 +106,14 @@ describe("API Gateway", () => {
         status: "authenticated" as const,
       }),
       resolveAccess: async () => ({
-        principal: { actorId: "identity-1", userId: "user-1", organizationId: "org-1", scope: ["root"] },
+        principal: {
+          actorId: "identity-1",
+          userId: "user-1",
+          organizationId: "org-1",
+          scope: ["root"],
+          canOnboard: true,
+          canManageKnowledgeSources: false,
+        },
         status: "active" as const,
       }),
     });
@@ -116,7 +123,13 @@ describe("API Gateway", () => {
     });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      data: { status: "active", userId: "user-1", organizationId: "org-1" },
+      data: {
+        status: "active",
+        userId: "user-1",
+        organizationId: "org-1",
+        canOnboard: true,
+        canManageKnowledgeSources: false,
+      },
     });
   });
 

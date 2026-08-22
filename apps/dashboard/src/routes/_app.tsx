@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_app')({
     if (!getAuthSession()) {
       throw redirect({ to: '/login' })
     }
-    if (isDashboardMockMode() && !getMockOnboardingState()?.onboardingComplete) {
+    if (isDashboardMockMode() && getAuthSession()?.canOnboard === true && !getMockOnboardingState()?.onboardingComplete) {
       throw redirect({ to: '/onboarding/workspace' })
     }
   },

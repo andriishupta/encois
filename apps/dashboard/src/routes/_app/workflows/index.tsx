@@ -4,6 +4,7 @@ import { WorkflowExecutionStatus, type WorkflowStatusReason } from '@encois/cont
 import { Activity, ArrowUpRight, CircleDashed, Clock3, GitBranch, Plus } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listWorkflows } from '@/lib/api'
@@ -20,8 +21,8 @@ function WorkflowsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Workflows"
-        description="Track Blueprint executions, delegated agents, and workflow progress."
+        title={<ProductTerm term="workflow" plural />}
+        description={<>Track <ProductTerm term="blueprint" plural /> executions, delegated agents, and <ProductTerm term="workflow" /> progress.</>}
         actions={
           <Button asChild>
             <Link to="/workflows/new">
@@ -36,7 +37,7 @@ function WorkflowsPage() {
       {hasWorkflows ? <div className="grid gap-4">{workflows.data?.map((workflow) => <WorkflowPreviewCard key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} statusReason={workflow.statusReason} description="Typed workflow projection from the Gateway API." icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}</div> : null}
       {!workflows.isLoading && !workflows.isError && !hasWorkflows ? <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={CircleDashed} title="No workflows yet" description="Start a Blueprint execution to create the first durable workflow." />
+          <EmptyPanel icon={CircleDashed} title="No workflows yet" description={<>Start a <ProductTerm term="blueprint" /> execution to create the first durable <ProductTerm term="workflow" />.</>} />
         </CardContent>
       </Card> : null}
     </div>

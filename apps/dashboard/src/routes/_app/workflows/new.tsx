@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { startWorkflow } from '@/lib/api'
@@ -48,11 +49,11 @@ function NewWorkflowPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="New workflow" description="Start a generic Blueprint execution through the Gateway API." />
+      <PageHeader title="New workflow" description={<>Start a generic <ProductTerm term="blueprint" /> execution through the Gateway API.</>} />
       <Card className="max-w-3xl">
         <CardHeader>
-          <CardTitle>Workflow details</CardTitle>
-          <CardDescription>Creates a generic Blueprint execution. The same key reuses the active workflow.</CardDescription>
+          <CardTitle><ProductTerm term="workflow" /> details</CardTitle>
+          <CardDescription>Creates a generic <ProductTerm term="blueprint" /> execution. The same key reuses the active <ProductTerm term="workflow" />.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="grid gap-5 sm:grid-cols-2">

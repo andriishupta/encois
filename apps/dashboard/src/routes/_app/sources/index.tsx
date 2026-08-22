@@ -4,9 +4,11 @@ import { ArrowUpRight, FileText, Plus, RefreshCw, Waypoints } from 'lucide-react
 import { KnowledgeSourceKind, KnowledgeSourceStatus, type KnowledgeSource } from '@encois/contracts'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listKnowledgeSources } from '@/lib/api'
+import { getAuthSession } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/sources/')({
@@ -15,20 +17,21 @@ export const Route = createFileRoute('/_app/sources/')({
 
 function SourcesPage() {
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
+  const canManageKnowledgeSources = getAuthSession()?.canManageKnowledgeSources === true
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Knowledge sources"
-        description="The scoped inputs Encois can ingest into project context. Integrations are one source type; documents and manual inputs use the same pipeline."
-        actions={<Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button>}
+        title={<ProductTerm term="knowledgeSource" plural />}
+        description={<>The scoped inputs Encois can ingest into project context. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
+        actions={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading sources…</p> : null}
-      {sources.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load Knowledge Sources: {sources.error.message}</CardContent></Card> : null}
+      {sources.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load <ProductTerm term="knowledgeSource" plural />: {sources.error.message}</CardContent></Card> : null}
       {sources.data?.length ? <div className="grid gap-4 md:grid-cols-2">{sources.data.map((source) => <SourceCard key={source.id} source={source} />)}</div> : null}
       {!sources.isLoading && !sources.isError && !sources.data?.length ? <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={Waypoints} title="No Knowledge Sources yet" description="Upload a project PDF or connect a provider. Encois needs at least one scoped source before the Coordinator can build useful context." action={<Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button>} />
+        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload a project PDF or connect a provider. Encois needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
         </CardContent>
       </Card> : null}
     </div>

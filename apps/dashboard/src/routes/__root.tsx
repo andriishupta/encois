@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { isDashboardMockMode } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
 
@@ -11,7 +12,9 @@ function RootLayout() {
   return (
     <>
       <DocumentTitle />
-      <Outlet />
+      <TooltipProvider>
+        <Outlet />
+      </TooltipProvider>
     </>
   )
 }

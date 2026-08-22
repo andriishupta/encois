@@ -1,0 +1,12 @@
+FROM golang:1.26
+
+WORKDIR /workspace
+RUN go install github.com/air-verse/air@v1.61.7
+
+COPY apps/agent-runtime/go.mod apps/agent-runtime/go.sum ./apps/agent-runtime/
+COPY packages/contracts/go.mod packages/contracts/go.sum ./packages/contracts/
+RUN cd apps/agent-runtime && go mod download
+
+WORKDIR /workspace/apps/agent-runtime
+EXPOSE 8090
+CMD ["air", "-c", ".air.toml"]

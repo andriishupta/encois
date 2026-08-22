@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Building2, ChevronRight, Plus, ShieldCheck, Users } from 'lucide-react'
 import { OrganizationCanvas } from '@/components/organization-canvas'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -55,7 +56,7 @@ function OrganizationPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Organization"
-        description="Explore the organization-owned visibility tree and manage units within your scope."
+        description={<>Explore the organization-owned visibility tree and manage <ProductTerm term="organizationUnit" plural /> within your <ProductTerm term="scope" />.</>}
         actions={(
           <Button type="button" onClick={() => openAddUnit()}>
             <Plus data-icon="inline-start" />
@@ -74,8 +75,8 @@ function OrganizationPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>Organization units</CardTitle>
-            <CardDescription>Parent and child relationships are shown from top to bottom. Select a unit to inspect its scope.</CardDescription>
+            <CardTitle><ProductTerm term="organizationUnit" plural /></CardTitle>
+            <CardDescription>Parent and child relationships are shown from top to bottom. Select a unit to inspect its <ProductTerm term="scope" />.</CardDescription>
           </CardHeader>
           <CardContent>
             <OrganizationCanvas units={units} selectedUnitId={currentUnitId} onSelectUnit={setCurrentUnitId} />
@@ -104,7 +105,7 @@ function OrganizationPage() {
 
           {selectedUnit ? <Card>
             <CardHeader>
-              <CardTitle>Scope inheritance</CardTitle>
+            <CardTitle><ProductTerm term="scope" /> inheritance</CardTitle>
               <CardDescription>Membership roots can include descendants; explicit restrictions will narrow the effective scope.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2 text-sm">
@@ -119,7 +120,7 @@ function OrganizationPage() {
       {addUnitOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>Add organizational unit</CardTitle>
+            <CardTitle>Add <ProductTerm term="organizationUnit" /></CardTitle>
             <CardDescription>Choose whether the new unit sits alongside the selected unit or below it as a child.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">

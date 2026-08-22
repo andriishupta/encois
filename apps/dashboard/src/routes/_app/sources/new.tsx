@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, FileText, LoaderCircle, Save, Upload } from 'lucide-react'
+import { ArrowLeft, FileText, LoaderCircle, Save, ShieldAlert, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
+import { getAuthSession } from '@/lib/auth'
 
 export const Route = createFileRoute('/_app/sources/new')({
   component: NewSourcePage,
@@ -12,10 +14,27 @@ export const Route = createFileRoute('/_app/sources/new')({
 
 function NewSourcePage() {
   const navigate = useNavigate()
+  const canManageKnowledgeSources = getAuthSession()?.canManageKnowledgeSources === true
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | undefined>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  if (!canManageKnowledgeSources) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PageHeader title="Add knowledge source" description={<><ProductTerm term="knowledgeSource" plural /> are managed by users with the appropriate organization permission.</>} />
+        <Card className="max-w-3xl">
+          <CardContent className="pt-6">
+            <ShieldAlert className="size-8 text-muted-foreground" aria-hidden="true" />
+            <h2 className="mt-5 text-xl font-semibold">You cannot manage <ProductTerm term="knowledgeSource" plural /></h2>
+            <p className="mt-2 text-sm text-muted-foreground">Please reach out to your company administrator to request permission. Your current organization scope remains read-only for this area.</p>
+            <Button asChild className="mt-6"><Link to="/sources">Back to Knowledge Sources</Link></Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,7 +57,7 @@ function NewSourcePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Add knowledge source" description="Upload a PDF as an immutable source revision. The Gateway stores the raw file outside Postgres and starts the shared ingestion workflow." />
+      <PageHeader title="Add knowledge source" description={<>Upload a PDF as an immutable source <ProductTerm term="revision" />. The Gateway stores the raw file outside Postgres and starts the shared <ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.</>} />
       <form className="max-w-3xl" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>

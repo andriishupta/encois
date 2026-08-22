@@ -255,14 +255,19 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
     throw createApiError(200, 'API returned an invalid authentication status.', 'INVALID_RESPONSE')
   }
   if (value.status === 'pending') return { status: 'pending' }
-  if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string') {
+  if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string' || typeof value.canOnboard !== 'boolean' || typeof value.canManageKnowledgeSources !== 'boolean') {
     throw createApiError(200, 'API returned an invalid active authentication status.', 'INVALID_RESPONSE')
   }
-  setAuthOrganizationId(value.organizationId)
+  setAuthOrganizationId(value.organizationId, {
+    canOnboard: value.canOnboard,
+    canManageKnowledgeSources: value.canManageKnowledgeSources,
+  })
   return {
     status: 'active',
     userId: value.userId,
     organizationId: value.organizationId,
+    canOnboard: value.canOnboard,
+    canManageKnowledgeSources: value.canManageKnowledgeSources,
     ...(typeof value.displayName === 'string' ? { displayName: value.displayName } : {}),
   }
 }

@@ -149,6 +149,12 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 for the onboarding and database verification flow. Follow service logs with
 `docker compose -f compose.local.yaml logs -f`.
 
+For active development with live reload, use `pnpm dev:local:watch`. It runs
+the Dashboard through Vite HMR, restarts the API on TypeScript changes, and
+uses Go watchers for the Agent Gateway and Agent Runtime. Stop it with
+`pnpm dev:local:watch:down`. The existing `pnpm dev:local` remains the
+packaged local production-like check.
+
 Stop the stack with `pnpm dev:local:down`. To reset local Postgres and Temporal
 state, remove the named volumes explicitly with
 `docker compose -f compose.local.yaml down -v`.

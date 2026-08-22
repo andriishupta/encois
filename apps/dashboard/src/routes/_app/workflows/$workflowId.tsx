@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CircleDashed, GitBranch, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { WorkflowCanvas } from '@/components/workflow-canvas'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +21,7 @@ function WorkflowDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Blueprint execution" description="Workflow execution detail and the evidence collection lifecycle." actions={<Button disabled>Run workflow</Button>} />
+      <PageHeader title={<><ProductTerm term="blueprint" /> execution</>} description={<><ProductTerm term="workflow" /> execution detail and the <ProductTerm term="evidence" /> collection lifecycle.</>} actions={<Button disabled>Run workflow</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Status" value={status} icon={CircleDashed} />
@@ -32,8 +33,8 @@ function WorkflowDetailPage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-1.5">
-            <CardTitle>Workflow canvas</CardTitle>
-            <CardDescription>Topology preview for the generic Blueprint. Step-level state is not exposed by the current projection.</CardDescription>
+            <CardTitle><ProductTerm term="workflow" /> canvas</CardTitle>
+            <CardDescription>Topology preview for the generic <ProductTerm term="blueprint" />. Step-level state is not exposed by the current projection.</CardDescription>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -48,7 +49,7 @@ function WorkflowDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Execution steps</CardTitle>
-          <CardDescription>Temporal activities and specialist work will appear after the Gateway exposes workflow events.</CardDescription>
+          <CardDescription><ProductTerm term="temporal" /> activities and specialist work will appear after the Gateway exposes workflow events.</CardDescription>
         </CardHeader>
         <CardContent>
           <EmptyPanel icon={CircleDashed} title="Step projection is not available" description="The current API returns workflow identity and status, but not Temporal activity or evidence events." />
@@ -57,11 +58,11 @@ function WorkflowDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Evidence and event history</CardTitle>
+          <CardTitle><ProductTerm term="evidence" /> and event history</CardTitle>
           <CardDescription>Source references, timestamps, retries, and state transitions will appear here.</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyPanel icon={CircleDashed} title="Event history is not available" description="Evidence references, retries, and state transitions need a dedicated Gateway projection endpoint." />
+          <EmptyPanel icon={CircleDashed} title="Event history is not available" description={<><ProductTerm term="evidence" /> references, retries, and state transitions need a dedicated Gateway projection endpoint.</>} />
         </CardContent>
       </Card>
     </div>

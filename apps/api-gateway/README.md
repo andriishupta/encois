@@ -37,10 +37,11 @@ creates the local user, membership, and organization-unit scope. There is no
 email/password signup or self-service organization creation.
 
 The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
-`password` provider, and uses `src/local-seed.ts` to create a verified local
-Firebase account plus a pending organization invite. It does not create the
-Encois `users` row ahead of time; the normal `/api/v1/auth/me` provisioning path
-does that after local login.
+`password` provider, and uses `src/local-seed.ts` to create a verified owner,
+three active fixture users, scoped organization units, integrations, and
+Knowledge Sources. The owner receives a pending organization invite on a clean
+database; the other users are already provisioned so they can test an existing
+workspace immediately. The seed is idempotent and local-only.
 
 Current blueprint routes:
 

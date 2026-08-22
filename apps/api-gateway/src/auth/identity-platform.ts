@@ -7,6 +7,7 @@ import {
   organizationInvites,
   organizationMemberships,
   organizationUnits,
+  rolePermissions,
   roles,
   users,
   withOrganizationContext,
@@ -17,6 +18,7 @@ import type { AosAuthenticationResult, AosAuthenticator, AosPrincipal, GatewayEn
 import { database } from "../database.js";
 
 export type IdentityPlatformIdentity = {
+  displayName?: string;
   email?: string;
   emailVerified: boolean;
   /** Stable Encois provider namespace, not the provider used for this sign-in. */
@@ -70,6 +72,7 @@ function identityFromToken(token: DecodedIdToken): IdentityPlatformIdentity {
   const signInProvider = firebase?.sign_in_provider ?? "identity-platform";
 
   return {
+    displayName: typeof token.name === "string" ? token.name : undefined,
     email: typeof token.email === "string" ? token.email : undefined,
     emailVerified: token.email_verified === true,
     identityProvider: "identity-platform",
@@ -162,6 +165,21 @@ async function resolveOrganizationScope(
   });
   const resolved = new Set(effective.resolvedUnitIds);
   return units.filter((unit) => resolved.has(unit.id)).flatMap((unit) => [unit.id, unit.slug]);
+}
+
+async function resolveRoleCapabilities(
+  db: PersistenceTransaction,
+  roleId: string,
+  roleKey: string,
+): Promise<Pick<AosPrincipal, "canOnboard" | "canManageKnowledgeSources">> {
+  const permissions = await db
+    .select({ permission: rolePermissions.permission })
+    .from(rolePermissions)
+    .where(eq(rolePermissions.roleId, roleId));
+  return {
+    canOnboard: roleKey === "organization_admin" || roleKey === "admin",
+    canManageKnowledgeSources: permissions.some(({ permission }) => permission === "knowledge:manage"),
+  };
 }
 
 /**
@@ -279,11 +297,13 @@ async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, orga
         identityProvider: identity.identityProvider,
         identitySubject: identity.subject,
         email: identity.email,
+        displayName: identity.displayName,
       })
       .onConflictDoUpdate({
         target: [users.identityProvider, users.identitySubject],
         set: {
           email: identity.email,
+          displayName: identity.displayName,
           updatedAt: new Date(),
         },
       })
@@ -338,10 +358,13 @@ async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, orga
     if (!organizationUnitId) return null;
 
     const [role] = await db
-      .select({ key: roles.key })
+      .select({ id: roles.id, key: roles.key })
       .from(roles)
       .where(eq(roles.id, invite.roleId))
       .limit(1);
+    const capabilities = role
+      ? await resolveRoleCapabilities(db, role.id, role.key)
+      : { canOnboard: false, canManageKnowledgeSources: false };
 
     await db
       .insert(membershipScopes)
@@ -368,6 +391,7 @@ async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, orga
       userId: user.id,
       organizationId: invite.organizationId,
       scope: await resolveOrganizationScope(db, invite.organizationId, membershipId),
+      ...capabilities,
     } satisfies AosPrincipal;
   });
 }
@@ -404,7 +428,7 @@ async function resolvePrincipalForOrganization(
 
   return withOrganizationContext(database, organizationId, async (db) => {
     const [membership] = await db
-      .select({ userId: users.id, membershipId: organizationMemberships.id })
+      .select({ userId: users.id, membershipId: organizationMemberships.id, roleId: roles.id, roleKey: roles.key })
       .from(users)
       .innerJoin(
         organizationMemberships,
@@ -414,6 +438,7 @@ async function resolvePrincipalForOrganization(
           eq(organizationMemberships.status, "active"),
         ),
       )
+      .innerJoin(roles, eq(roles.id, organizationMemberships.roleId))
       .where(
         and(
           eq(users.identityProvider, identity.identityProvider),
@@ -428,6 +453,7 @@ async function resolvePrincipalForOrganization(
       userId: membership.userId,
       organizationId,
       scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
+      ...(await resolveRoleCapabilities(db, membership.roleId, membership.roleKey)),
     } satisfies AosPrincipal;
   });
 }

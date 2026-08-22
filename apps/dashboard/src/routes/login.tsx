@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 function postAuthPath(): '/' | '/onboarding/workspace' {
-  return isDashboardMockMode() && !getMockOnboardingState()?.onboardingComplete ? '/onboarding/workspace' : '/'
+  const session = getAuthSession()
+  return isDashboardMockMode() && session?.canOnboard === true && !getMockOnboardingState()?.onboardingComplete
+    ? '/onboarding/workspace'
+    : '/'
 }
 
 export const Route = createFileRoute('/login')({

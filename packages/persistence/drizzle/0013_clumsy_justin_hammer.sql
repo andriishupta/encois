@@ -54,6 +54,12 @@ CREATE TABLE "source_revisions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "knowledge_sources_id_organization_idx" ON "knowledge_sources" USING btree ("id","organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "knowledge_sources_name_organization_idx" ON "knowledge_sources" USING btree ("organization_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "source_ingestion_runs_id_organization_idx" ON "source_ingestion_runs" USING btree ("id","organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "source_ingestion_runs_temporal_id_idx" ON "source_ingestion_runs" USING btree ("organization_id","temporal_workflow_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "source_revisions_source_revision_idx" ON "source_revisions" USING btree ("source_id","revision");--> statement-breakpoint
+CREATE UNIQUE INDEX "source_revisions_id_organization_idx" ON "source_revisions" USING btree ("id","organization_id");--> statement-breakpoint
 ALTER TABLE "knowledge_sources" ADD CONSTRAINT "knowledge_sources_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "knowledge_sources" ADD CONSTRAINT "knowledge_sources_integration_scope_fk" FOREIGN KEY ("integration_id","organization_id") REFERENCES "public"."integrations"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "source_ingestion_runs" ADD CONSTRAINT "source_ingestion_runs_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -61,12 +67,6 @@ ALTER TABLE "source_ingestion_runs" ADD CONSTRAINT "source_ingestion_runs_source
 ALTER TABLE "source_ingestion_runs" ADD CONSTRAINT "source_ingestion_runs_revision_scope_fk" FOREIGN KEY ("source_revision_id","organization_id") REFERENCES "public"."source_revisions"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "source_revisions" ADD CONSTRAINT "source_revisions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "source_revisions" ADD CONSTRAINT "source_revisions_source_scope_fk" FOREIGN KEY ("source_id","organization_id") REFERENCES "public"."knowledge_sources"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "knowledge_sources_id_organization_idx" ON "knowledge_sources" USING btree ("id","organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "knowledge_sources_name_organization_idx" ON "knowledge_sources" USING btree ("organization_id","name");--> statement-breakpoint
-CREATE UNIQUE INDEX "source_ingestion_runs_id_organization_idx" ON "source_ingestion_runs" USING btree ("id","organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "source_ingestion_runs_temporal_id_idx" ON "source_ingestion_runs" USING btree ("organization_id","temporal_workflow_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "source_revisions_source_revision_idx" ON "source_revisions" USING btree ("source_id","revision");--> statement-breakpoint
-CREATE UNIQUE INDEX "source_revisions_id_organization_idx" ON "source_revisions" USING btree ("id","organization_id");--> statement-breakpoint
 ALTER TABLE "knowledge_sources" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY knowledge_sources_tenant_isolation ON "knowledge_sources"
   USING (organization_id = public.current_organization_id())

@@ -1,6 +1,8 @@
-import { Outlet, createFileRoute, Link, redirect, useRouterState } from '@tanstack/react-router'
-import { Activity, Check, Circle } from 'lucide-react'
-import { getAuthSession, isDashboardMockMode } from '@/lib/auth'
+import { useState } from 'react'
+import { Outlet, createFileRoute, Link, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
+import { Activity, Check, Circle, LogOut, ShieldAlert } from 'lucide-react'
+import { getAuthIdentity, getAuthSession, isDashboardMockMode, signOutFromIdentityPlatform } from '@/lib/auth'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: () => {
@@ -20,6 +22,11 @@ const steps = [
 function OnboardingLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const currentStep = Math.max(0, steps.findIndex((step) => pathname === step.to))
+  const canOnboard = getAuthSession()?.canOnboard === true
+
+  if (!canOnboard) {
+    return <OnboardingAccessDenied />
+  }
 
   return (
     <div className="min-h-svh bg-muted/30">
@@ -31,9 +38,12 @@ function OnboardingLayout() {
             </span>
             Encois
           </Link>
-          <div className="text-right text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">Workspace setup</p>
-            <p>Step {currentStep + 1} of {steps.length}</p>
+          <div className="flex items-center gap-3">
+            <div className="text-right text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Workspace setup</p>
+              <p>Step {currentStep + 1} of {steps.length}</p>
+            </div>
+            <OnboardingAccountActions />
           </div>
         </div>
       </header>
@@ -59,6 +69,63 @@ function OnboardingLayout() {
           </div>
         </div>
         <Outlet />
+      </main>
+    </div>
+  )
+}
+
+function OnboardingAccountActions() {
+  const navigate = useNavigate()
+  const identity = getAuthIdentity()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+
+  async function handleSignOut() {
+    setIsSigningOut(true)
+    try {
+      await signOutFromIdentityPlatform()
+    } catch {
+      // The local session is cleared in signOutFromIdentityPlatform's finally block.
+    } finally {
+      await navigate({ to: '/login' })
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="hidden min-w-0 text-right text-xs text-muted-foreground sm:block">
+        <p className="max-w-44 truncate font-medium text-foreground">{identity.displayName ?? 'Signed in account'}</p>
+        <p className="max-w-44 truncate">{identity.email ?? 'Development session'}</p>
+      </div>
+      <Button type="button" variant="outline" size="sm" disabled={isSigningOut} onClick={() => void handleSignOut()}>
+        <LogOut data-icon="inline-start" />
+        <span className="hidden sm:inline">{isSigningOut ? 'Signing out…' : 'Sign out'}</span>
+        <span className="sr-only sm:hidden">{isSigningOut ? 'Signing out' : 'Sign out'}</span>
+      </Button>
+    </div>
+  )
+}
+
+function OnboardingAccessDenied() {
+  return (
+    <div className="min-h-svh bg-muted/30">
+      <header className="border-b bg-background">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-center gap-2 font-semibold">
+            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Activity className="size-4" aria-hidden="true" />
+            </span>
+            Encois
+          </Link>
+          <OnboardingAccountActions />
+        </div>
+      </header>
+      <main className="mx-auto flex w-full max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="w-full rounded-xl border bg-background p-6 shadow-sm sm:p-8">
+          <ShieldAlert className="size-8 text-muted-foreground" aria-hidden="true" />
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight">Onboarding is reserved for the workspace owner</h1>
+          <p className="mt-3 text-muted-foreground">Please reach out to your company administrator to complete Encois onboarding. You can continue using the workspace once access has been configured.</p>
+          <Button asChild className="mt-6"><Link to="/">Go to workspace</Link></Button>
+        </div>
       </main>
     </div>
   )

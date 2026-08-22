@@ -621,11 +621,13 @@ components:
             data:
               type: object
               additionalProperties: false
-              required: [status, userId, organizationId]
+              required: [status, userId, organizationId, canOnboard, canManageKnowledgeSources]
               properties:
                 status: { const: active }
                 userId: { type: string }
                 organizationId: { type: string }
+                canOnboard: { type: boolean }
+                canManageKnowledgeSources: { type: boolean }
                 displayName: { type: string }
         - type: object
           required: [data]

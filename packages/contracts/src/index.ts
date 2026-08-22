@@ -349,6 +349,8 @@ export type AuthStatusResponse =
       status: typeof AuthAccessStatus.Active;
       userId: string;
       organizationId: string;
+      canOnboard: boolean;
+      canManageKnowledgeSources: boolean;
       displayName?: string;
     }
   | {

@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { CheckCircle2, Clock3, Github, PlugZap, Save, ShieldCheck } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
+import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listIntegrations, updateIntegration } from '@/lib/api'
@@ -46,7 +47,7 @@ function IntegrationDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title={`${providerName} integration`} description="Provider connection, scope, and read permissions." />
+      <PageHeader title={`${providerName} integration`} description={<>Provider connection, <ProductTerm term="scope" />, and read permissions.</>} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard icon={Icon} label="Provider" value={providerName} />
@@ -58,7 +59,7 @@ function IntegrationDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle>Connection settings</CardTitle>
-            <CardDescription>Only control-plane metadata is editable here. Credentials remain private to the Agent Gateway.</CardDescription>
+            <CardDescription>Only <ProductTerm term="controlPlane" /> metadata is editable here. Credentials remain private to the <ProductTerm term="agentGateway" />.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-5" onSubmit={saveChanges}>
@@ -96,15 +97,15 @@ function IntegrationDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Permission scope</CardTitle>
-            <CardDescription>Effective organization scope for provider reads.</CardDescription>
+            <CardTitle>Permission <ProductTerm term="scope" /></CardTitle>
+            <CardDescription>Effective organization <ProductTerm term="scope" /> for provider reads.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="rounded-lg border bg-muted/20 p-4">
-              <p className="text-sm font-medium">Organization scope</p>
+              <p className="text-sm font-medium">Organization <ProductTerm term="scope" /></p>
               <p className="mt-1 font-mono text-xs text-muted-foreground">Resolved by Gateway</p>
             </div>
-            <p className="text-sm text-muted-foreground">Credentials are intentionally not shown in the browser. The Agent Gateway resolves them at execution time.</p>
+            <p className="text-sm text-muted-foreground">Credentials are intentionally not shown in the browser. The <ProductTerm term="agentGateway" /> resolves them at execution time.</p>
           </CardContent>
         </Card>
       </div>

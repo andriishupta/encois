@@ -1,0 +1,66 @@
+name: encois-local
+
+# Development overlay for compose.local.yaml. Infrastructure remains shared;
+# application services use source-mounted development watchers.
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/api-gateway", "dev"]
+    volumes:
+      - .:/workspace
+      - encois-local-dev-node-modules:/workspace/node_modules
+      - encois-local-dev-api-node-modules:/workspace/apps/api-gateway/node_modules
+      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - encois-local-dev-persistence-node-modules:/workspace/packages/persistence/node_modules
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/dashboard", "exec", "vite", "--host", "0.0.0.0"]
+    environment:
+      VITE_API_BASE_URL: http://localhost:8787/api/v1
+      VITE_FIREBASE_API_KEY: local
+      VITE_FIREBASE_AUTH_DOMAIN: localhost
+      VITE_FIREBASE_PROJECT_ID: demo-encois
+      VITE_FIREBASE_APP_ID: local
+      VITE_FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
+      VITE_ENCOIS_UI_MODE: mock
+    ports: !override
+      - "5173:5173"
+    volumes:
+      - .:/workspace
+      - encois-local-dev-node-modules:/workspace/node_modules
+      - encois-local-dev-dashboard-node-modules:/workspace/apps/dashboard/node_modules
+      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
+
+  agent-gateway:
+    build:
+      context: .
+      dockerfile: apps/agent-gateway/Dockerfile.dev
+    working_dir: /workspace/apps/agent-gateway
+    volumes:
+      - .:/workspace
+      - encois-local-dev-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
+
+  agent-runtime:
+    build:
+      context: .
+      dockerfile: apps/agent-runtime/Dockerfile.dev
+    working_dir: /workspace/apps/agent-runtime
+    volumes:
+      - .:/workspace
+      - encois-local-dev-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
+
+volumes:
+  encois-local-dev-node-modules:
+  encois-local-dev-api-node-modules:
+  encois-local-dev-dashboard-node-modules:
+  encois-local-dev-contracts-node-modules:
+  encois-local-dev-persistence-node-modules:
+  encois-local-dev-agent-gateway-tmp:
+  encois-local-dev-agent-runtime-tmp:
