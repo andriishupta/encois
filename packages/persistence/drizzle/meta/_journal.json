@@ -5,106 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1787211822186,
-      "tag": "0000_charming_gorilla_man",
+      "when": 1787400000000,
+      "tag": "0000_initial_control_plane_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1787245969469,
-      "tag": "0001_red_violations",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1787246868708,
-      "tag": "0002_large_stephen_strange",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1787251371599,
-      "tag": "0003_nice_human_cannonball",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1787251504415,
-      "tag": "0004_broken_franklin_storm",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1787255338297,
-      "tag": "0005_burly_beast",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1787340000000,
-      "tag": "0006_organization_unit_types",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1787343600000,
-      "tag": "0007_invites_waitlist",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1787347200000,
-      "tag": "0008_dapper_mysterio",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1787350800000,
-      "tag": "0009_complete_lockjaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1787354400000,
-      "tag": "0010_oval_expediter",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1787358000000,
-      "tag": "0011_organization_scope_permissions",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1787361600000,
-      "tag": "0012_dry_scorpion",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1787318471070,
-      "tag": "0013_clumsy_justin_hammer",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1787395200000,
-      "tag": "0014_repair_knowledge_sources",
+      "when": 1787400060000,
+      "tag": "0001_seed_workflow_templates",
       "breakpoints": true
     }
   ]

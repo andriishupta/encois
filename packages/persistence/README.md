@@ -7,6 +7,10 @@ This package owns the Gateway API's PostgreSQL schema, Drizzle migrations, runti
 - `DATABASE_MIGRATION_URL` — privileged migration connection, used only by CI/deployment or an operator.
 - `DATABASE_RUNTIME_URL` — `api_gateway_runtime` connection, used by the API. It must not be the Cloud SQL admin or migration user.
 
+The Go Agent Runtime and private Agent Gateway do not receive a PostgreSQL role:
+they use Temporal payloads, Spanner Graph, Cloud Storage, and the Gateway API
+boundary instead of connecting to the control-plane database.
+
 The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables. It has no general `DELETE`, `TRUNCATE`, schema, role-management, or table-management privileges. The Gateway has a tenant-scoped permission-removal exception for `membership_scopes`; authorization is enforced before the delete and RLS remains the database defense in depth. `withOrganizationContext` sets `app.organization_id` with `SET LOCAL` inside a transaction so RLS policies can provide defense in depth.
 
 ## Commands
@@ -14,8 +18,12 @@ The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables
 ```bash
 DATABASE_MIGRATION_URL=... pnpm --filter @encois/persistence db:migrate
 DATABASE_MIGRATION_URL=... pnpm --filter @encois/persistence db:verify
+pnpm --filter @encois/persistence db:generate -- add-logical-change
 pnpm --filter @encois/persistence typecheck
 ```
+
+Migration names are stable kebab-case labels. The repository currently starts
+from `0000_initial_control_plane_schema` and `0001_seed_workflow_templates`.
 
 The initial migration is generated from `src/schema` and then extends the generated DDL with role grants, RLS policies, and system role seeds. It must be reviewed like application code.
 

@@ -111,6 +111,7 @@ Use scoped package names such as `@encois/domain` and `@encois/contracts`. Keep 
 - Use strict TypeScript. Avoid `any`; if an external boundary is unknown, validate it and narrow it to an explicit type.
 - Prefer `unknown` at I/O boundaries, discriminated unions for state, and schema validation for JSON.
 - Keep compiler options consistent through shared base configs. A package may be stricter, but should not silently weaken the root policy.
+- Name Drizzle migrations with stable, descriptive kebab-case names through `pnpm --filter @encois/persistence db:generate -- <name>`; do not keep generated random names. Keep the migration journal and snapshot files sequential with the SQL files.
 - Do not commit generated files, build output, `.env` files, credentials, service-account keys, or local database files unless explicitly required and documented.
 
 Useful commands once the workspace packages exist:

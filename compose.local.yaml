@@ -105,7 +105,7 @@ services:
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
       IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: google.com,password
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
-      DATABASE_RUNTIME_URL: postgresql://api_gateway:api_gateway@postgres:5432/encois
+      DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
       TEMPORAL_ADDRESS: temporal:7233
       ENCOIS_WORKFLOW_MODE: temporal
       TEMPORAL_NAMESPACE: default
