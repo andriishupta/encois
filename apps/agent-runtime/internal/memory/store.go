@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -73,16 +74,30 @@ type Store interface {
 type MockStore struct {
 	mu      sync.RWMutex
 	records map[string][]Record
+	fixture bool
 }
 
 func NewMockStore() *MockStore {
 	return &MockStore{records: make(map[string][]Record)}
 }
 
+func newFixtureMockStore() *MockStore {
+	return &MockStore{records: make(map[string][]Record), fixture: true}
+}
+
 func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) {
 	key := scopeKey(request)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.fixture && request.Operation != "distill" && len(s.records[key]) == 0 {
+		s.records[key] = []Record{{
+			ID:              fmt.Sprintf("fixture-memory-%s", safeMemoryID(request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID)),
+			AgentDefinition: request.MemoryScope.AgentDefinition,
+			Summary:         fmt.Sprintf("Local memory fixture for organization %s, scoped to %s.", request.OrganizationID, strings.Join(request.Scope.IDs, ", ")),
+			EvidenceRefs:    []string{fmt.Sprintf("memory://local/%s/%s", request.OrganizationID, request.MemoryScope.AgentDefinition)},
+			ObservedAt:      time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339),
+		}}
+	}
 	if request.Operation == "distill" && request.Distillation != nil {
 		record := Record{
 			ID:              fmt.Sprintf("mock-memory-%d", time.Now().UnixNano()),
@@ -114,9 +129,21 @@ func scopeKey(request Request) string {
 	return strings.Join([]string{request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID}, "\x00")
 }
 
+func safeMemoryID(parts ...string) string {
+	value := strings.Join(parts, "-")
+	value = strings.NewReplacer("/", "-", ":", "-", " ", "-").Replace(value)
+	if value == "" {
+		return "default"
+	}
+	return value
+}
+
 func NewStore(ctx context.Context, mode, reasoningEngine string) (Store, func() error, error) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "mock":
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_MEMORY_FIXTURE")), "local") {
+			return newFixtureMockStore(), func() error { return nil }, nil
+		}
 		return NewMockStore(), func() error { return nil }, nil
 	case "gcp", "vertex", "memory-bank":
 		store, err := NewGCPStore(ctx, reasoningEngine)

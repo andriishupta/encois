@@ -65,10 +65,8 @@ services:
       DATABASE_MIGRATION_URL: postgresql://postgres:postgres@postgres:5432/encois
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
-      LOCAL_AUTH_EMAIL: dev@local.test
+      LOCAL_AUTH_EMAIL: owner@local.test
       LOCAL_AUTH_PASSWORD: local-password-1234
-      LOCAL_AUTH_ORGANIZATION: Encois Local
-      LOCAL_AUTH_ORGANIZATION_SLUG: encois-local
     depends_on:
       firebase-auth:
         condition: service_healthy
@@ -112,8 +110,8 @@ services:
       IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: google.com,password
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
       DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
-      TEMPORAL_ADDRESS: temporal:7233
-      ENCOIS_WORKFLOW_MODE: temporal
+      # Seeded workflow projections are served by the local database-backed mock.
+      ENCOIS_WORKFLOW_MODE: database
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
     ports:
@@ -142,6 +140,7 @@ services:
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
       AGENT_AI_MODE: mock
       AGENT_MEMORY_MODE: mock
+      AGENT_MEMORY_FIXTURE: local
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
     ports:

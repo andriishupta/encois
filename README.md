@@ -145,17 +145,20 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `http://localhost:5173`; the Firebase Emulator UI is at
 `http://localhost:4000`; and the API health endpoints are at
 `http://localhost:8787/health/live` and `/health/ready`. Local login uses
-`dev@local.test` / `local-password-1234`. See [`docs/local.md`](docs/local.md)
-for the onboarding and database verification flow. Follow service logs with
+`owner@local.test` / `local-password-1234`. Compose uses the durable local
+database-backed workflow mock for seeded dashboard projections; the Temporal
+stack remains available for the Go runtime and explicit workflow smoke tests.
+See [`docs/local.md`](docs/local.md) for the onboarding and database
+verification flow. Follow service logs with
 `docker compose -f compose.local.yaml logs -f`.
 
 This local mock mode includes live reload: the Dashboard uses Vite HMR, the
 API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
 and Agent Runtime. Stop it with `pnpm dev:local:watch:down`.
 
-To reset local Postgres and Temporal state, remove the named volumes explicitly
-with
-`docker compose -f compose.local.yaml down -v`.
+To reset only the known fixture organizations and Auth Emulator accounts, use
+the scoped reset command documented in [`docs/local.md`](docs/local.md). It
+does not remove Docker volumes or unrelated local data.
 
 To run the same four service images against managed production-like
 dependencies, copy `.env.local.prod.example` to `.env.local.prod`, fill in

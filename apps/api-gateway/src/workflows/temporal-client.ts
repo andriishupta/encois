@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { Client, Connection, WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from "@temporalio/client";
+import { and, eq } from "drizzle-orm";
 import { CoordinatorSignalName, WorkflowExecutionStatus, type CoordinatorEvent } from "@encois/contracts";
+import { workflowRuns, withOrganizationContext } from "@encois/persistence";
 import type { AppConfig } from "../config.js";
+import { database } from "../database.js";
 import { buildCoordinatorWorkflowId, type WorkflowExecutionProjection, type WorkflowRunStatus, type WorkflowSignalRequest, type WorkflowStartCommand, type WorkflowUpdateRequest } from "./types.js";
 
 export type WorkflowClient = {
@@ -130,6 +133,137 @@ function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
         throw new Error(`workflow is ${execution.status} and cannot be cancelled`);
       }
       executions.set(workflowId, { ...execution, status: WorkflowExecutionStatus.Cancelled, updatedAt: now() });
+    },
+  };
+}
+
+function projectionFromDatabaseRow(
+  row: Pick<
+    typeof workflowRuns.$inferSelect,
+    | "temporalWorkflowId"
+    | "temporalRunId"
+    | "temporalNamespace"
+    | "temporalTaskQueue"
+    | "inputRef"
+    | "status"
+    | "organizationId"
+    | "createdAt"
+    | "updatedAt"
+  >,
+): WorkflowExecutionProjection {
+  return {
+    workflowId: row.temporalWorkflowId,
+    ...(row.temporalRunId ? { runId: row.temporalRunId } : {}),
+    workflowType: row.temporalWorkflowId.split(":")[2] ?? "encois.user-blueprint.v1",
+    namespace: row.temporalNamespace ?? "default",
+    taskQueue: row.temporalTaskQueue ?? "encois-agent-runtime",
+    status: row.status,
+    organizationId: row.organizationId,
+    ...(row.inputRef ? { blueprintId: row.inputRef } : {}),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Durable local mock. It exposes the same client contract as Temporal while
+ * reading seeded projections from Postgres, so local UI data survives API
+ * restarts and never needs a corresponding Temporal execution.
+ */
+function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
+  if (!database) throw new Error("DATABASE_RUNTIME_URL is required for ENCOIS_WORKFLOW_MODE=database.");
+
+  return {
+    async start(command, namespace) {
+      const existing = await withOrganizationContext(database!, command.input.organizationId, async (db) => {
+        const [row] = await db
+          .select()
+          .from(workflowRuns)
+          .where(
+            and(
+              eq(workflowRuns.organizationId, command.input.organizationId),
+              eq(workflowRuns.temporalWorkflowId, command.workflowId),
+            ),
+          )
+          .limit(1);
+        return row;
+      });
+      if (existing) return { ...projectionFromDatabaseRow(existing), namespace, reused: true };
+
+      const timestamp = now();
+      return {
+        workflowId: command.workflowId,
+        workflowType: command.workflowType,
+        namespace,
+        taskQueue: command.taskQueue,
+        status: WorkflowExecutionStatus.Queued,
+        organizationId: command.input.organizationId,
+        ...(command.input.blueprint?.blueprintId ? { blueprintId: command.input.blueprint.blueprintId } : {}),
+        reused: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    },
+
+    async get(workflowId, organizationId, namespace) {
+      const row = await withOrganizationContext(database!, organizationId, async (db) => {
+        const [found] = await db
+          .select()
+          .from(workflowRuns)
+          .where(and(eq(workflowRuns.organizationId, organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)))
+          .limit(1);
+        return found;
+      });
+      return row ? { ...projectionFromDatabaseRow(row), namespace } : null;
+    },
+
+    async list(organizationId, namespace) {
+      const rows = await withOrganizationContext(database!, organizationId, (db) =>
+        db.select().from(workflowRuns).where(eq(workflowRuns.organizationId, organizationId)),
+      );
+      return rows.map((row) => ({ ...projectionFromDatabaseRow(row), namespace }));
+    },
+
+    async signal(workflowId, organizationId, _namespace, request) {
+      await withOrganizationContext(database!, organizationId, async (db) => {
+        const status = request.payload.approved === false ? WorkflowExecutionStatus.Failed : WorkflowExecutionStatus.Running;
+        await db
+          .update(workflowRuns)
+          .set({ status, updatedAt: new Date(), ...(status === WorkflowExecutionStatus.Failed ? { completedAt: new Date() } : {}) })
+          .where(and(eq(workflowRuns.organizationId, organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)));
+      });
+    },
+
+    async signalCoordinator(coordinatorId, organizationId, _namespace, _event) {
+      const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
+      await withOrganizationContext(database!, organizationId, async (db) => {
+        await db
+          .update(workflowRuns)
+          .set({ status: WorkflowExecutionStatus.Running, updatedAt: new Date() })
+          .where(and(eq(workflowRuns.organizationId, organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)));
+      });
+    },
+
+    async update(workflowId, organizationId) {
+      await withOrganizationContext(database!, organizationId, async (db) => {
+        await db
+          .update(workflowRuns)
+          .set({ updatedAt: new Date() })
+          .where(and(eq(workflowRuns.organizationId, organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)));
+      });
+    },
+
+    async cancel(workflowId, organizationId) {
+      await withOrganizationContext(database!, organizationId, async (db) => {
+        await db
+          .update(workflowRuns)
+          .set({ status: WorkflowExecutionStatus.Cancelled, completedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(workflowRuns.organizationId, organizationId), eq(workflowRuns.temporalWorkflowId, workflowId)));
+      });
+    },
+
+    async GetResult() {
+      return null;
     },
   };
 }
@@ -323,6 +457,7 @@ export function createWorkflowClient(config: AppConfig): WorkflowClient {
     }
     return createInMemoryWorkflowClient();
   }
+  if (config.workflowMode === "database") return createDatabaseWorkflowClient();
   if (!config.temporalAddress) {
     throw new Error("TEMPORAL_ADDRESS is required when ENCOIS_WORKFLOW_MODE=temporal.");
   }

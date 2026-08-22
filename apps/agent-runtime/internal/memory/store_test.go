@@ -54,6 +54,38 @@ func TestMockStoreDistillsAndRetrievesScopedMemory(t *testing.T) {
 	}
 }
 
+func TestFixtureMockStoreKeepsOrganizationsIsolated(t *testing.T) {
+	store := newFixtureMockStore()
+	request := Request{
+		ContractVersion: "agent-memory.v1",
+		RequestID:       "fixture-memory-1",
+		WorkflowID:      "workflow:org-test:release-1",
+		OrganizationID:  "org-test",
+		ActorID:         "actor-1",
+		Scope:           Scope{IDs: []string{"team-test"}},
+		PolicyVersion:   "policy-1",
+		Capability:      "test-capability",
+		AgentDefinition: "release-investigation.synthesizer@1",
+		Operation:       "retrieve",
+		MemoryScope:     MemoryScope{AgentDefinition: "release-investigation.synthesizer@1", ProjectID: "project-1"},
+	}
+	first, err := store.Execute(context.Background(), request)
+	if err != nil || len(first.Memories) != 1 {
+		t.Fatalf("expected one organization-scoped fixture memory, result=%+v err=%v", first, err)
+	}
+
+	request.OrganizationID = "org-avengers"
+	request.WorkflowID = "workflow:org-avengers:release-1"
+	request.Scope = Scope{IDs: []string{"team-avengers"}}
+	second, err := store.Execute(context.Background(), request)
+	if err != nil || len(second.Memories) != 1 {
+		t.Fatalf("expected one second-organization fixture memory, result=%+v err=%v", second, err)
+	}
+	if first.Memories[0].ID == second.Memories[0].ID || strings.Contains(second.Memories[0].Summary, "org-test") {
+		t.Fatalf("fixture memory crossed organization boundary: first=%+v second=%+v", first.Memories[0], second.Memories[0])
+	}
+}
+
 func TestMemoryContractsValidateAtTheRuntimeBoundary(t *testing.T) {
 	request := Request{
 		ContractVersion: "agent-memory.v1",

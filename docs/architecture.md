@@ -170,9 +170,11 @@ The first Node.js blueprint exposes `POST /api/v1/workflows`,
 ID from the authenticated organization, workflow type, and request key, then
 uses the Temporal TypeScript Client to start or describe the execution. A local
 in-memory adapter is used only in development/test or when explicitly selected
-with `ENCOIS_WORKFLOW_MODE=memory`; it is not a
-durable execution substitute. The Go runtime remains the worker and owns the
-actual workflow implementation.
+with `ENCOIS_WORKFLOW_MODE=memory`; it is not a durable execution substitute.
+Local Compose may use `ENCOIS_WORKFLOW_MODE=database`, a Postgres-backed mock
+client for seeded UI projections and permission testing; those rows are not
+claimed to be Temporal executions. The Go runtime remains the worker and owns
+the actual workflow implementation.
 
 The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in [`packages/contracts`](../packages/contracts/), while provider-specific DTOs remain inside their adapters. The API is not the execution-time data-plane owner: Runtime Activities and Agent Gateway/data adapters perform scoped reads and writes, then return references or safe projections to the API. This distinction keeps the Gateway API out of provider/model work and keeps the Go Runtime out of control-plane Postgres.
 

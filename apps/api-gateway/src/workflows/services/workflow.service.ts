@@ -62,6 +62,12 @@ export function localUserId(principal: AosPrincipal): string | null {
   return /^[0-9a-f-]{36}$/i.test(candidate) ? candidate : null;
 }
 
+function workflowScopeIsVisible(scope: unknown, principalScope: readonly string[]): boolean {
+  if (!isJsonObject(scope) || !Array.isArray(scope.ids)) return false;
+  if (principalScope.includes("*")) return true;
+  return scope.ids.some((id) => typeof id === "string" && principalScope.includes(id));
+}
+
 function blueprintFromPayload(payload: JsonObject): WorkflowBlueprint | undefined {
   if (isJsonObject(payload.blueprint)) return parseWorkflowBlueprint(payload.blueprint) ?? undefined;
   if (payload.workflowType === TemporalWorkflowType.UserBlueprint && Array.isArray(payload.steps)) {
@@ -437,7 +443,7 @@ export async function startWorkflow(
     }
 
     const [existingRun] = await db
-      .select({ workflowId: workflowRuns.temporalWorkflowId })
+      .select({ workflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
       .where(
         and(
@@ -565,7 +571,7 @@ export async function getWorkflow(
       throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
     }
     const [row] = await db
-      .select({ workflowId: workflowRuns.temporalWorkflowId })
+      .select({ workflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
       .innerJoin(
         organizationMemberships,
@@ -588,7 +594,7 @@ export async function getWorkflow(
         ),
       )
       .limit(1);
-    return row?.workflowId ?? null;
+    return row && workflowScopeIsVisible(row.scope, principal.scope) ? row.workflowId : null;
   });
 
   if (!authorized) return null;
@@ -616,7 +622,7 @@ export async function listWorkflows(
       throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
     }
     const rows = await db
-      .select({ workflowId: workflowRuns.temporalWorkflowId })
+      .select({ workflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
       .innerJoin(
         organizationMemberships,
@@ -637,7 +643,7 @@ export async function listWorkflows(
           ),
         ),
       );
-    return new Set(rows.map((row) => row.workflowId));
+    return new Set(rows.filter((row) => workflowScopeIsVisible(row.scope, principal.scope)).map((row) => row.workflowId));
   });
 
   const projections = await options.workflowClient.list(principal.organizationId, options.namespace);
@@ -677,7 +683,7 @@ export async function signalWorkflow(
     const canSignal = await withOrganizationContext(database, principal.organizationId, async (db) => {
       if (!(await hasPermission(db, principal, Permission.WorkflowsRun))) return null;
       const [row] = await db
-        .select({ workflowId: workflowRuns.temporalWorkflowId, workflowRunId: workflowRuns.id })
+        .select({ workflowId: workflowRuns.temporalWorkflowId, workflowRunId: workflowRuns.id, scope: workflowRuns.scope })
         .from(workflowRuns)
         .innerJoin(
           organizationMemberships,
@@ -700,7 +706,7 @@ export async function signalWorkflow(
           ),
         )
         .limit(1);
-      return row?.workflowRunId ?? null;
+      return row && workflowScopeIsVisible(row.scope, principal.scope) ? row.workflowRunId : null;
     });
     if (!canSignal) throw workflowServiceError("FORBIDDEN", "The user cannot change this workflow state.");
     workflowRunId = canSignal;

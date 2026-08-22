@@ -25,33 +25,36 @@ The stack starts:
 | Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
-`local-auth-seed` runs after migrations. It creates a complete deterministic
-fixture company: one owner waiting for first-login onboarding, three active
-users with different roles/scopes, organization units, two integrations, and
-three Knowledge Sources. It is idempotent and only creates or updates these
-local fixture records.
+`local-auth-seed` runs after migrations. It creates a deterministic local
+dataset for two isolated organizations: `Organization Test` and `Organization
+Avengers`. Each organization gets its own units, users, integrations,
+Knowledge Sources with revisions and ingestion runs, webhook deliveries, six
+workflow projections, and workflow event timelines. It is idempotent and only
+creates or updates these local fixture records.
 
 Local credentials:
 
 ```text
-email:    dev@local.test
+email:    owner@local.test
 password: local-password-1234
 ```
 
 Existing-workspace users:
 
-| Email | Password | Role | Scope | Expected access |
+| Email | Password | Organization | Role | Scope |
 | --- | --- | --- | --- | --- |
-| `manager@local.test` | `local-manager-1234` | manager | Engineering | Can manage Knowledge Sources in assigned scope |
-| `member@local.test` | `local-member-1234` | member | Checkout | Can manage Knowledge Sources in assigned scope |
-| `dev@localtest` | `local-viewer-1234` | viewer | Customer Success | Read-only; cannot manage Knowledge Sources |
+| `owner@local.test` | `local-password-1234` | Organization Test | organization admin | All units |
+| `dev@local.test` | `local-dev-1234` | Organization Test | manager | All units; full product pages except admin-only actions |
+| `manager@local.test` | `local-manager-1234` | Organization Test | manager | Engineering and descendants |
+| `test@local.test` | `local-test-1234` | Organization Test | viewer | Checkout only; read-only |
+| `avengers-owner@local.test` | `local-avengers-1234` | Organization Avengers | organization admin | All units |
+| `avengers-manager@local.test` | `local-avengers-manager-1234` | Organization Avengers | manager | Product and descendants |
 
-`dev@local.test` is the organization owner. On a clean local database, this
-user accepts the pending invite through `/api/v1/auth/me` and can complete
-onboarding. The other three users already have active memberships and should
-go directly to the existing workspace. If a non-owner opens an onboarding URL
-directly, the dashboard shows an access message and does not render the setup
-form. The API remains the final authorization boundary.
+The five `onboarding1..5@local.test` users are verified Firebase Emulator
+accounts with pending organization invites. They are intentionally separate
+from the active users so onboarding can be tested repeatedly without changing
+the full-access fixture. Their passwords are `local-onboarding-1` through
+`local-onboarding-5`.
 
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
@@ -77,7 +80,7 @@ pnpm dev:local:watch:down
 
 1. Start Compose and wait until `local-auth-seed` exits with code `0`.
 2. Open http://localhost:5173/login.
-3. Use the local credentials above.
+3. Use any active or onboarding credentials above.
 4. The Dashboard calls `GET /api/v1/auth/me` with the emulator ID token.
 5. The API finds the pending invite and transactionally creates:
    - `users`;
@@ -113,7 +116,8 @@ docker compose -f compose.local.yaml logs -f api-gateway local-auth-seed
 ```
 
 The local Agent Runtime uses `AGENT_AI_MODE=mock` and the local data plane uses
-`AGENT_GATEWAY_DATA_MODE=mock` plus `AGENT_MEMORY_MODE=mock`, while the
+`AGENT_GATEWAY_DATA_MODE=mock` plus `AGENT_MEMORY_MODE=mock` and
+`AGENT_MEMORY_FIXTURE=local`, while the
 dashboard explicitly uses `VITE_ENCOIS_UI_MODE=mock`. No Gemini key or GCP
 credentials are required. Temporal, source ingestion, Graph, Memory Bank,
 Cloud Storage, and the synthetic Agent Gateway tools all have local
@@ -159,25 +163,26 @@ To stop the stack:
 pnpm dev:local:watch:down
 ```
 
-To repeat onboarding from a clean database and Auth Emulator:
+To reset only the known local fixture organizations and accounts (without
+touching unrelated database data):
 
 ```bash
-docker compose -f compose.local.yaml down -v
-pnpm dev:local:watch
+docker compose -f compose.local.yaml run --rm local-auth-seed \
+  node dist/reset-local.js
+docker compose -f compose.local.yaml run --rm local-auth-seed
 ```
 
-The `-v` option removes only the Compose-local Postgres and Temporal volumes.
-If this workspace was started before the deterministic fixture seed was added,
-run this reset once: older Firebase Emulator UIDs could leave duplicate local
-membership rows. The current seed is safe to run repeatedly and will not create
-new duplicates.
+The reset is deliberately scoped to the fixture slugs/emails. It does not
+delete Docker volumes. The seed is safe to run repeatedly and will not create
+duplicate memberships, integrations, revisions, or workflow projections.
 
 ## Verification scope
 
 The local auth path is covered by configuration/type/build checks and the
-existing API auth/invite tests. The full browser onboarding and Temporal
-workflow demonstration should be run manually after the stack starts; it is
-not hidden inside the Compose startup command.
+existing API auth/invite tests. Compose uses the Postgres-backed `database`
+workflow mock for seeded UI projections; Temporal remains available for the Go
+runtime and real workflow smoke tests. The full browser onboarding and
+workflow demonstration should be run manually after the stack starts.
 
 ## What this does not emulate
 

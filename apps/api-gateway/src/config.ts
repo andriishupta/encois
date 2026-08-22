@@ -14,7 +14,7 @@ export type AppConfig = {
   agentGatewayPolicyVersion: string;
   agentGatewayCapabilitySecret?: string;
   executionCapabilityTtlMs: number;
-  workflowMode: "memory" | "temporal";
+  workflowMode: "memory" | "database" | "temporal";
   temporalAddress?: string;
   temporalApiKey?: string;
   temporalTlsClientCertPath?: string;
@@ -43,7 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const temporalAddress = env.TEMPORAL_ADDRESS?.trim() || undefined;
   const workflowMode = env.ENCOIS_WORKFLOW_MODE?.trim() ||
     (!temporalAddress && (nodeEnv === "development" || nodeEnv === "test") ? "memory" : "temporal");
-  if (workflowMode !== "memory" && workflowMode !== "temporal") {
+  if (workflowMode !== "memory" && workflowMode !== "database" && workflowMode !== "temporal") {
     throw new Error(`Unsupported ENCOIS_WORKFLOW_MODE ${workflowMode}`);
   }
   const corsOrigins = (env.CORS_ORIGINS ?? "http://localhost:5173")

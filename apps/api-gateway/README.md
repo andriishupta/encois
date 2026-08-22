@@ -37,11 +37,11 @@ creates the local user, membership, and organization-unit scope. There is no
 email/password signup or self-service organization creation.
 
 The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
-`password` provider, and uses `src/local-seed.ts` to create a verified owner,
-three active fixture users, scoped organization units, integrations, and
-Knowledge Sources. The owner receives a pending organization invite on a clean
-database; the other users are already provisioned so they can test an existing
-workspace immediately. The seed is idempotent and local-only.
+`password` provider, and uses `src/local-seed.ts` to create two isolated fixture
+organizations (`Organization Test` and `Organization Avengers`), active users,
+five pending onboarding users, scoped organization units, integrations,
+Knowledge Sources/revisions, ingestion runs, webhooks, and workflow timelines.
+The seed is idempotent and local-only.
 
 Current blueprint routes:
 
@@ -61,7 +61,7 @@ Current blueprint routes:
 - `POST /api/v1/organization/permissions` — create or update a direct membership scope.
 - `PATCH /api/v1/organization/permissions/:permissionId` — change a direct scope's access level.
 - `DELETE /api/v1/organization/permissions/:permissionId` — remove a direct scope; the Gateway writes an audit event.
-- `POST /api/v1/workflows` — start a workflow through Temporal (or the explicitly selected development/test in-memory adapter).
+- `POST /api/v1/workflows` — start a workflow through Temporal, the volatile in-memory adapter, or the durable local database-backed mock.
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
@@ -85,7 +85,10 @@ Knowledge Sources are a separate control-plane model. Templates do not create
 Sources, revisions, or ingestion runs.
 
 The in-memory workflow adapter is available only in development/test or when
-`ENCOIS_WORKFLOW_MODE=memory` is explicitly selected. Production and
+`ENCOIS_WORKFLOW_MODE=memory` is explicitly selected. Local Compose uses
+`ENCOIS_WORKFLOW_MODE=database`: it reads and updates seeded workflow
+projections in Postgres, so UI data survives an API restart without creating
+fake executions in Temporal. Production and
 production-like Compose require `ENCOIS_WORKFLOW_MODE=temporal`,
 `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, and either
 `TEMPORAL_API_KEY` or mTLS settings; the API fails closed instead of silently
