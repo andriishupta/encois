@@ -129,7 +129,8 @@ docker build -f apps/agent-runtime/Dockerfile -t encois-agent-runtime:dev .
 A deployment workflow selects an environment, authenticates with the environment's deployer identity, and runs:
 
 ```bash
-terraform -chdir=infra init
+export TF_STATE_BUCKET="the-bucket-created-by-bootstrap"
+terraform -chdir=infra init -migrate-state -backend-config="bucket=$TF_STATE_BUCKET"
 terraform -chdir=infra plan \
   -var-file=terraform.tfvars \
   -var="dashboard_image=$DASHBOARD_IMAGE" \
@@ -205,12 +206,12 @@ Do not reuse demo credentials or production data. The hackathon environment shou
 The canonical full local stack is now:
 
 ```bash
-pnpm dev:local
+pnpm dev:local:watch
 ```
 
 It runs `compose.local.yaml` with Postgres, the Temporal development server,
-the migration job, API Gateway, Agent Gateway, Agent Runtime, and the Nginx
-dashboard. The Runtime is configured with `AGENT_AI_MODE=mock`, so this path is
+the migration job, API Gateway, Agent Gateway, Agent Runtime, and the Vite
+dashboard with live reload. The Runtime is configured with `AGENT_AI_MODE=mock`, so this path is
 deterministic and does not require GCP or Gemini credentials. The existing
 `pnpm smoke:release:local` remains the smaller backend acceptance smoke used by
 CI; it is not a replacement for the interactive Compose stack.
@@ -220,7 +221,8 @@ CI; it is not a replacement for the interactive Compose stack.
 Use `pnpm dev` and the API dev command locally. When cloud access is available, an authorized developer can run Terraform locally with ADC or service-account impersonation:
 
 ```bash
-terraform -chdir=infra init
+export TF_STATE_BUCKET="the-bucket-created-by-bootstrap"
+terraform -chdir=infra init -migrate-state -backend-config="bucket=$TF_STATE_BUCKET"
 terraform -chdir=infra plan -var-file=terraform.tfvars
 terraform -chdir=infra apply
 ```

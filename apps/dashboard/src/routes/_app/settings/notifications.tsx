@@ -1,11 +1,16 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { Bell, Check, Mail, Smartphone } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/settings/notifications')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: NotificationsSettingsPage,
 })
 
@@ -43,4 +48,3 @@ function NotificationsSettingsPage() {
 function NotificationToggle({ icon: Icon, title, description, enabled, onToggle }: { icon?: typeof Bell; title: string; description: string; enabled: boolean; onToggle: () => void }) {
   return <button type="button" aria-pressed={enabled} onClick={onToggle} className="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">{Icon ? <Icon className="size-4" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}</span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{description}</span></span><span className={enabled ? 'rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground' : 'rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground'}>{enabled ? 'On' : 'Off'}</span></button>
 }
-

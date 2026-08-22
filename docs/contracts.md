@@ -1,6 +1,6 @@
 # Encois Contracts and Cross-Language Boundaries
 
-**Status:** minimal generic protocol implemented; provider and generated-code expansion pending
+**Status:** minimal generic protocol implemented; provider expansion pending
 
 This document defines the data contracts between the TypeScript control plane,
 Go Agent Runtime, private Agent Gateway, React SPA, and integrations. The
@@ -15,6 +15,17 @@ semantic authorization and workflow checks. Go services embed and validate the
 same schema files at the Blueprint, workflow change-plan, tool request, tool
 result, artifact reference, and workflow result boundaries. Generated DTOs remain optional
 follow-up work; validation does not require sharing TypeScript source with Go.
+
+## Permission contract
+
+`packages/contracts/permissions.json` is the single source of truth for
+organization capabilities. `pnpm --filter @encois/contracts generate:permissions`
+generates the TypeScript `Permission` constants used by the dashboard and
+Gateway, plus Go constants used by the Runtime and Agent Gateway. Each
+permission declares its implied read capabilities; the backend remains the
+enforcement boundary, while the dashboard uses the same keys for route guards,
+navigation, and component visibility. UI checks are guidance and never replace
+the API authorization check.
 
 The tool names in examples are protocol examples, not a promise that those
 providers are already connected. The current Agent Gateway fixture catalog is
@@ -82,6 +93,10 @@ packages/contracts/
   src/scope.ts
   src/values.ts
   src/validation.ts
+  src/permissions.generated.ts
+  permissions.json
+  permissions_generated.go
+  scripts/generate-permissions.mjs
   test-contracts.mjs
   openapi.yaml
   schemas/

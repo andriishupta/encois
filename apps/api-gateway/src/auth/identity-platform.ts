@@ -1,7 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
 import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
-import { resolveEffectiveScope, type OrganizationUnitNode } from "@encois/contracts";
+import { isPermission, resolveEffectiveScope, type OrganizationUnitNode, type PermissionKey } from "@encois/contracts";
 import {
   membershipScopes,
   organizationInvites,
@@ -167,19 +167,15 @@ async function resolveOrganizationScope(
   return units.filter((unit) => resolved.has(unit.id)).flatMap((unit) => [unit.id, unit.slug]);
 }
 
-async function resolveRoleCapabilities(
+async function resolveRolePermissions(
   db: PersistenceTransaction,
   roleId: string,
-  roleKey: string,
-): Promise<Pick<AosPrincipal, "canOnboard" | "canManageKnowledgeSources">> {
+): Promise<readonly PermissionKey[]> {
   const permissions = await db
     .select({ permission: rolePermissions.permission })
     .from(rolePermissions)
     .where(eq(rolePermissions.roleId, roleId));
-  return {
-    canOnboard: roleKey === "organization_admin" || roleKey === "admin",
-    canManageKnowledgeSources: permissions.some(({ permission }) => permission === "knowledge:manage"),
-  };
+  return permissions.map(({ permission }) => permission).filter(isPermission);
 }
 
 /**
@@ -206,7 +202,7 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
 
       const principal = await withOrganizationContext(database, organizationId, async (db) => {
         const [membership] = await db
-          .select({ userId: users.id, membershipId: organizationMemberships.id })
+          .select({ userId: users.id, membershipId: organizationMemberships.id, roleId: organizationMemberships.roleId })
           .from(users)
           .innerJoin(
             organizationMemberships,
@@ -225,6 +221,7 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
           userId: membership.userId,
           organizationId,
           scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
+          permissions: await resolveRolePermissions(db, membership.roleId),
         } satisfies AosPrincipal;
       });
 
@@ -247,6 +244,7 @@ export function createInternalServiceAuthenticator(options: InternalServiceAuthe
         ...(options.serviceUserId ? { userId: options.serviceUserId } : {}),
         organizationId,
         scope,
+        permissions: [],
       },
       status: "authenticated",
     };
@@ -362,9 +360,7 @@ async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, orga
       .from(roles)
       .where(eq(roles.id, invite.roleId))
       .limit(1);
-    const capabilities = role
-      ? await resolveRoleCapabilities(db, role.id, role.key)
-      : { canOnboard: false, canManageKnowledgeSources: false };
+    const permissions = role ? await resolveRolePermissions(db, role.id) : [];
 
     await db
       .insert(membershipScopes)
@@ -391,7 +387,7 @@ async function provisionInvitedIdentity(identity: IdentityPlatformIdentity, orga
       userId: user.id,
       organizationId: invite.organizationId,
       scope: await resolveOrganizationScope(db, invite.organizationId, membershipId),
-      ...capabilities,
+      permissions,
     } satisfies AosPrincipal;
   });
 }
@@ -428,7 +424,7 @@ async function resolvePrincipalForOrganization(
 
   return withOrganizationContext(database, organizationId, async (db) => {
     const [membership] = await db
-      .select({ userId: users.id, membershipId: organizationMemberships.id, roleId: roles.id, roleKey: roles.key })
+      .select({ userId: users.id, membershipId: organizationMemberships.id, roleId: roles.id })
       .from(users)
       .innerJoin(
         organizationMemberships,
@@ -453,7 +449,7 @@ async function resolvePrincipalForOrganization(
       userId: membership.userId,
       organizationId,
       scope: await resolveOrganizationScope(db, organizationId, membership.membershipId),
-      ...(await resolveRoleCapabilities(db, membership.roleId, membership.roleKey)),
+      permissions: await resolveRolePermissions(db, membership.roleId),
     } satisfies AosPrincipal;
   });
 }

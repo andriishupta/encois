@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, LoaderCircle, Play, RefreshCw, Waypoints } from 'lucide-react'
 import { SourceRevisionStatus, KnowledgeSourceKind, type SourceRevision } from '@encois/contracts'
@@ -10,8 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getKnowledgeSource, isApiError, startSourceIngestion } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/sources/$sourceId')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.KnowledgeRead)) throw redirect({ to: '/forbidden' })
+  },
   component: SourceDetailPage,
 })
 

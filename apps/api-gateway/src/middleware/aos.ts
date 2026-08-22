@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
+import type { PermissionKey } from "@encois/contracts";
 
 export type AosPrincipal = {
   actorId: string;
@@ -7,8 +8,7 @@ export type AosPrincipal = {
   organizationId: string;
   scope: readonly string[];
   /** Server-derived capabilities used for route guidance; protected routes still re-authorize. */
-  canOnboard?: boolean;
-  canManageKnowledgeSources?: boolean;
+  permissions?: readonly PermissionKey[];
 };
 
 export type AosAuthenticationResult =

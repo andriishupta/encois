@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { ContractVersion, CoordinatorEventType, type CoordinatorEvent } from "@encois/contracts";
+import { ContractVersion, CoordinatorEventType, Permission, type CoordinatorEvent } from "@encois/contracts";
 import {
 	auditEvents,
 	coordinatorEventOutbox,
@@ -13,6 +13,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { hasPermission } from "../../auth/authorization.js";
 import type { WorkflowClient } from "../temporal-client.js";
 import {
   isWorkflowServiceError,
@@ -182,6 +183,8 @@ async function requirePlanManager(principal: AosPrincipal): Promise<string> {
   if (!database) return persistenceUnavailable();
   const userId = localUserId(principal);
   if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+  const canManage = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsManage));
+  if (!canManage) throw workflowServiceError("FORBIDDEN", "The user cannot manage workflow change plans.");
   return userId;
 }
 

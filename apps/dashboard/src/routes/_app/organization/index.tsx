@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { Building2, ChevronRight, Plus, ShieldCheck, Users } from 'lucide-react'
 import { OrganizationCanvas } from '@/components/organization-canvas'
 import { PageHeader } from '@/components/page-header'
@@ -15,8 +15,14 @@ import {
   type OrganizationUnitType,
 } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
+import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/organization/')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.OrganizationRead)) throw redirect({ to: '/forbidden' })
+  },
   component: OrganizationPage,
 })
 
@@ -24,6 +30,7 @@ const unitTypes: OrganizationUnitType[] = ['department', 'team', 'project', 'ser
 
 function OrganizationPage() {
   const { units, createUnit, currentUnitId, setCurrentUnitId, isLoading, error } = useOrganization()
+  const canManage = useCan(Permission.OrganizationManage)
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [newUnitName, setNewUnitName] = useState('')
   const [newUnitType, setNewUnitType] = useState<OrganizationUnitType>('team')
@@ -57,12 +64,12 @@ function OrganizationPage() {
       <PageHeader
         title="Organization"
         description={<>Explore the organization-owned visibility tree and manage <ProductTerm term="organizationUnit" plural /> within your <ProductTerm term="scope" />.</>}
-        actions={(
+        actions={canManage ? (
           <Button type="button" onClick={() => openAddUnit()}>
             <Plus data-icon="inline-start" />
             Add unit
           </Button>
-        )}
+        ) : null}
       />
 
       <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
@@ -97,8 +104,8 @@ function OrganizationPage() {
                 <DetailRow label="Members" value={String(selectedUnit.memberCount)} />
               </div>
               <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
-                <Button type="button" variant="outline" onClick={() => openAddUnit(selectedUnit.id)}><Plus data-icon="inline-start" />Add related unit</Button>
-                <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button>
+                {canManage ? <Button type="button" variant="outline" onClick={() => openAddUnit(selectedUnit.id)}><Plus data-icon="inline-start" />Add related unit</Button> : null}
+                {canManage ? <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button> : null}
               </div>
             </CardContent>
           </Card> : <Card><CardHeader><CardTitle>Organization scope</CardTitle><CardDescription>Organization structure is not available yet.</CardDescription></CardHeader></Card>}

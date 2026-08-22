@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as ForbiddenRouteImport } from './routes/forbidden'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SignUpRouteImport } from './routes/sign-up'
@@ -44,6 +45,11 @@ import { Route as AppWorkflowsNewRouteImport } from './routes/_app/workflows/new
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForbiddenRoute = ForbiddenRouteImport.update({
+  id: '/forbidden',
+  path: '/forbidden',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -207,6 +213,7 @@ const AppWorkflowsNewRoute = AppWorkflowsNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByFullPath {
   '/workflows/': typeof AppWorkflowsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/sign-up': typeof SignUpRoute
   '/waitlist': typeof WaitlistRoute
@@ -268,6 +276,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
@@ -304,6 +313,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forbidden'
     | '/login'
     | '/onboarding'
     | '/sign-up'
@@ -336,6 +346,7 @@ export interface FileRouteTypes {
     | '/workflows/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/forbidden'
     | '/login'
     | '/sign-up'
     | '/waitlist'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/forbidden'
     | '/login'
     | '/onboarding'
     | '/sign-up'
@@ -399,6 +411,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  ForbiddenRoute: typeof ForbiddenRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRouteWithChildren
   SignUpRoute: typeof SignUpRoute
@@ -412,6 +425,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forbidden': {
+      id: '/forbidden'
+      path: '/forbidden'
+      fullPath: '/forbidden'
+      preLoaderRoute: typeof ForbiddenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -758,6 +778,7 @@ const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  ForbiddenRoute: ForbiddenRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRouteWithChildren,
   SignUpRoute: SignUpRoute,

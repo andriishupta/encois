@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { isJsonObject } from '@encois/contracts'
+import { isJsonObject, Permission, isPermission, permissionIncludes, type PermissionKey } from '@encois/contracts'
 import {
   browserSessionPersistence,
   connectAuthEmulator,
@@ -17,8 +17,7 @@ export type AuthSession = {
   /** Only populated for the local development fixture. Production uses Firebase SDK token acquisition. */
   accessToken: string
   organizationId?: string
-  canOnboard?: boolean
-  canManageKnowledgeSources?: boolean
+  permissions: readonly PermissionKey[]
 }
 
 export type AuthIdentity = {
@@ -28,8 +27,7 @@ export type AuthIdentity = {
 
 const AUTH_SESSION_KEY = 'encois.auth.session.v1'
 const AUTH_ORGANIZATION_KEY = 'encois.auth.organization.v1'
-const AUTH_CAN_ONBOARD_KEY = 'encois.auth.can-onboard.v1'
-const AUTH_CAN_MANAGE_KNOWLEDGE_KEY = 'encois.auth.can-manage-knowledge.v1'
+const AUTH_PERMISSIONS_KEY = 'encois.auth.permissions.v1'
 const AUTH_SESSION_EVENT = 'encois:auth-session-changed'
 const FIREBASE_AUTH_SENTINEL = 'identity-platform-sdk'
 
@@ -43,6 +41,8 @@ type DashboardEnv = {
   VITE_FIREBASE_PROJECT_ID?: string
   VITE_FIREBASE_APP_ID?: string
   VITE_FIREBASE_AUTH_EMULATOR_HOST?: string
+  VITE_ENCOIS_PERMISSIONS?: string
+  /** Deprecated local fixture flags; converted to permissions for compatibility. */
   VITE_ENCOIS_CAN_ONBOARD?: string
   VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?: string
 }
@@ -97,10 +97,25 @@ function storedOrganizationId(): string | undefined {
   return organizationId || undefined
 }
 
-function storedCapability(key: string): boolean | undefined {
-  if (typeof window === 'undefined') return undefined
-  const value = window.sessionStorage.getItem(key)
-  return value === null ? undefined : value === 'true'
+function parsePermissions(value: unknown): PermissionKey[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(isPermission)
+}
+
+function storedPermissions(): PermissionKey[] {
+  if (typeof window === 'undefined') return []
+  try {
+    return parsePermissions(JSON.parse(window.sessionStorage.getItem(AUTH_PERMISSIONS_KEY) ?? '[]'))
+  } catch {
+    return []
+  }
+}
+
+function legacyPermissions(value: { canOnboard?: unknown; canManageKnowledgeSources?: unknown }): PermissionKey[] {
+  return [
+    value.canOnboard === true ? Permission.OnboardingManage : undefined,
+    value.canManageKnowledgeSources === true ? Permission.KnowledgeManage : undefined,
+  ].filter((permission): permission is PermissionKey => permission !== undefined)
 }
 
 /** Wait until Firebase has restored the browser session before routing. */
@@ -115,13 +130,13 @@ export function getAuthSession(): AuthSession | null {
   try {
     const value: unknown = JSON.parse(window.sessionStorage.getItem(AUTH_SESSION_KEY) ?? 'null')
     if (isJsonObject(value) && typeof value.accessToken === 'string' && value.accessToken.trim().length > 0) {
+      const permissions = parsePermissions(value.permissions)
       return {
         accessToken: value.accessToken,
         ...(typeof value.organizationId === 'string' && value.organizationId.trim().length > 0
           ? { organizationId: value.organizationId }
           : {}),
-        ...(typeof value.canOnboard === 'boolean' ? { canOnboard: value.canOnboard } : {}),
-        ...(typeof value.canManageKnowledgeSources === 'boolean' ? { canManageKnowledgeSources: value.canManageKnowledgeSources } : {}),
+        permissions: permissions.length > 0 ? permissions : legacyPermissions(value),
       }
     }
   } catch {
@@ -133,8 +148,7 @@ export function getAuthSession(): AuthSession | null {
     ? {
         accessToken: FIREBASE_AUTH_SENTINEL,
         organizationId,
-        ...(storedCapability(AUTH_CAN_ONBOARD_KEY) !== undefined ? { canOnboard: storedCapability(AUTH_CAN_ONBOARD_KEY) } : {}),
-        ...(storedCapability(AUTH_CAN_MANAGE_KNOWLEDGE_KEY) !== undefined ? { canManageKnowledgeSources: storedCapability(AUTH_CAN_MANAGE_KNOWLEDGE_KEY) } : {}),
+        permissions: storedPermissions(),
       }
     : null
 }
@@ -166,19 +180,15 @@ export function setAuthSession(session: AuthSession): void {
 
   window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session))
   if (session.organizationId) window.sessionStorage.setItem(AUTH_ORGANIZATION_KEY, session.organizationId)
-  if (session.canOnboard !== undefined) window.sessionStorage.setItem(AUTH_CAN_ONBOARD_KEY, String(session.canOnboard))
-  if (session.canManageKnowledgeSources !== undefined) window.sessionStorage.setItem(AUTH_CAN_MANAGE_KNOWLEDGE_KEY, String(session.canManageKnowledgeSources))
+  window.sessionStorage.setItem(AUTH_PERMISSIONS_KEY, JSON.stringify(session.permissions))
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
 }
 
-export function setAuthOrganizationId(organizationId: string, capabilities?: { canOnboard: boolean; canManageKnowledgeSources: boolean }): void {
+export function setAuthOrganizationId(organizationId: string, permissions: readonly PermissionKey[] = []): void {
   if (typeof window === 'undefined') return
 
   window.sessionStorage.setItem(AUTH_ORGANIZATION_KEY, organizationId)
-  if (capabilities) {
-    window.sessionStorage.setItem(AUTH_CAN_ONBOARD_KEY, String(capabilities.canOnboard))
-    window.sessionStorage.setItem(AUTH_CAN_MANAGE_KNOWLEDGE_KEY, String(capabilities.canManageKnowledgeSources))
-  }
+  window.sessionStorage.setItem(AUTH_PERMISSIONS_KEY, JSON.stringify(permissions))
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
 }
 
@@ -187,8 +197,7 @@ export function clearAuthSession(): void {
 
   window.sessionStorage.removeItem(AUTH_SESSION_KEY)
   window.sessionStorage.removeItem(AUTH_ORGANIZATION_KEY)
-  window.sessionStorage.removeItem(AUTH_CAN_ONBOARD_KEY)
-  window.sessionStorage.removeItem(AUTH_CAN_MANAGE_KNOWLEDGE_KEY)
+  window.sessionStorage.removeItem(AUTH_PERMISSIONS_KEY)
   if (firebaseAuth?.currentUser) void signOut(firebaseAuth)
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
 }
@@ -232,14 +241,25 @@ export function getDevelopmentAuthSession(): AuthSession | null {
   // production secret or use it outside the local development scaffold.
   if (env.MODE !== 'development' || !accessToken) return null
 
+  const configuredPermissions = (env.VITE_ENCOIS_PERMISSIONS ?? '').split(',').map((value) => value.trim()).filter(isPermission)
+  const permissions = configuredPermissions.length > 0
+    ? configuredPermissions
+    : legacyPermissions({
+        canOnboard: env.VITE_ENCOIS_CAN_ONBOARD?.trim().toLowerCase() === 'true',
+        canManageKnowledgeSources: env.VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?.trim().toLowerCase() === 'true',
+      })
+
   return {
     accessToken,
     ...(env.VITE_ENCOIS_ORGANIZATION_ID?.trim()
       ? { organizationId: env.VITE_ENCOIS_ORGANIZATION_ID.trim() }
       : {}),
-    canOnboard: env.VITE_ENCOIS_CAN_ONBOARD?.trim().toLowerCase() === 'true',
-    canManageKnowledgeSources: env.VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?.trim().toLowerCase() === 'true',
+    permissions,
   }
+}
+
+export function hasPermission(session: AuthSession | null, permission: PermissionKey): boolean {
+  return session ? permissionIncludes(session.permissions, permission) : false
 }
 
 /**

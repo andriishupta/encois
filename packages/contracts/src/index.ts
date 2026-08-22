@@ -36,6 +36,7 @@ import {
 export { resolveEffectiveScope, type EffectiveScope, type OrganizationUnitNode, type ScopeRule } from "./scope.js";
 export { isJsonObject, type JsonObject } from "./json.js";
 export { validateWaitlistRequest, WaitlistLimits, type WaitlistRequest, type WaitlistValidationField, type WaitlistValidationResult } from "./waitlist.js";
+export { allPermissions, Permission, permissionImplications, permissionIncludes, isPermission, type Permission as PermissionKey } from "./permissions.generated.js";
 
 export {
   AgentMemoryOperation,
@@ -349,8 +350,7 @@ export type AuthStatusResponse =
       status: typeof AuthAccessStatus.Active;
       userId: string;
       organizationId: string;
-      canOnboard: boolean;
-      canManageKnowledgeSources: boolean;
+      permissions: readonly import("./permissions.generated.js").Permission[];
       displayName?: string;
     }
   | {

@@ -132,12 +132,12 @@ the release and approval smokes, and cleans up the child processes.
 For the full containerized local stack, run:
 
 ```bash
-pnpm dev:local
+pnpm dev:local:watch
 ```
 
 This starts Postgres, the Temporal development server, migrations, API Gateway,
 Firebase Auth Emulator, local auth seed, Agent Gateway, Agent Runtime, and the
-Nginx-served dashboard through `compose.local.yaml`. The local Runtime uses
+Vite-served dashboard through `compose.local.yaml`. The local Runtime uses
 `AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters; and
 the dashboard uses explicit `VITE_ENCOIS_UI_MODE=mock`, so no Gemini key or
 Google Cloud credentials are required.
@@ -149,14 +149,12 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 for the onboarding and database verification flow. Follow service logs with
 `docker compose -f compose.local.yaml logs -f`.
 
-For active development with live reload, use `pnpm dev:local:watch`. It runs
-the Dashboard through Vite HMR, restarts the API on TypeScript changes, and
-uses Go watchers for the Agent Gateway and Agent Runtime. Stop it with
-`pnpm dev:local:watch:down`. The existing `pnpm dev:local` remains the
-packaged local production-like check.
+This local mock mode includes live reload: the Dashboard uses Vite HMR, the
+API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
+and Agent Runtime. Stop it with `pnpm dev:local:watch:down`.
 
-Stop the stack with `pnpm dev:local:down`. To reset local Postgres and Temporal
-state, remove the named volumes explicitly with
+To reset local Postgres and Temporal state, remove the named volumes explicitly
+with
 `docker compose -f compose.local.yaml down -v`.
 
 To run the same four service images against managed production-like

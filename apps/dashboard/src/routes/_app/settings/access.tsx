@@ -1,11 +1,16 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { Check, LockKeyhole, ShieldCheck, Users } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/settings/access')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: AccessSettingsPage,
 })
 

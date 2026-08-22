@@ -9,14 +9,14 @@ Google Cloud Identity Platform deployment.
 From the repository root:
 
 ```bash
-pnpm dev:local
+pnpm dev:local:watch
 ```
 
 The stack starts:
 
 | Service | URL | Purpose |
 | --- | --- | --- |
-| Dashboard | http://localhost:5173 | React application served by Nginx |
+| Dashboard | http://localhost:5173 | React application served by Vite with HMR |
 | API Gateway | http://localhost:8787 | Auth, authorization, waitlist, and workflows |
 | Firebase Auth Emulator | http://localhost:9099 | Local Firebase-compatible identity service |
 | Emulator UI | http://localhost:4000 | Inspect local Auth users |
@@ -58,13 +58,7 @@ Auth Emulator only. Production remains invite-only Google sign-in.
 
 ## Development watch mode
 
-For active development with live reload, use:
-
-```bash
-pnpm dev:local:watch
-```
-
-This uses the same local infrastructure but separate development containers:
+This local mock mode uses development containers with live reload:
 
 - Dashboard runs Vite with HMR on `http://localhost:5173`.
 - API Gateway runs `tsx watch` and restarts on TypeScript changes.
@@ -78,9 +72,6 @@ Stop it with:
 ```bash
 pnpm dev:local:watch:down
 ```
-
-The existing `pnpm dev:local` remains the packaged local mode: it builds the
-production-style application images and serves the Dashboard through Nginx.
 
 ## Onboarding test
 
@@ -165,14 +156,14 @@ pnpm dev:local:prod:down
 To stop the stack:
 
 ```bash
-pnpm dev:local:down
+pnpm dev:local:watch:down
 ```
 
 To repeat onboarding from a clean database and Auth Emulator:
 
 ```bash
 docker compose -f compose.local.yaml down -v
-pnpm dev:local
+pnpm dev:local:watch
 ```
 
 The `-v` option removes only the Compose-local Postgres and Temporal volumes.

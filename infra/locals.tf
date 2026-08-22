@@ -13,7 +13,7 @@ locals {
   }
 
   authorized_domains = distinct(compact(concat(
-    ["localhost"],
+    var.identity_include_localhost ? ["localhost"] : [],
     var.identity_authorized_domains,
     var.domain_name == "" ? [] : [var.domain_name],
   )))

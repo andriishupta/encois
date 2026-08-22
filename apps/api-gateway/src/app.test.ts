@@ -111,8 +111,7 @@ describe("API Gateway", () => {
           userId: "user-1",
           organizationId: "org-1",
           scope: ["root"],
-          canOnboard: true,
-          canManageKnowledgeSources: false,
+          permissions: ["onboarding:manage", "workflows:read"],
         },
         status: "active" as const,
       }),
@@ -127,8 +126,7 @@ describe("API Gateway", () => {
         status: "active",
         userId: "user-1",
         organizationId: "org-1",
-        canOnboard: true,
-        canManageKnowledgeSources: false,
+        permissions: ["onboarding:manage", "workflows:read"],
       },
     });
   });
@@ -168,6 +166,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -252,6 +251,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -288,6 +288,20 @@ describe("API Gateway", () => {
     });
   });
 
+  it("rejects workflow reads when the principal has no workflow permission", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["engineering"], permissions: [] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const response = await app.request("/api/v1/workflows");
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
   it("protects the private Coordinator control-plane route with a service credential", async () => {
     const app = createApp({
       authenticate: async () => ({
@@ -295,6 +309,7 @@ describe("API Gateway", () => {
           actorId: "agent-runtime",
           organizationId: "org-1",
           scope: ["engineering"],
+          permissions: ["workflows:run"],
         },
         status: "authenticated" as const,
       }),
@@ -361,6 +376,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["team-engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -408,7 +424,7 @@ describe("API Gateway", () => {
   it("validates lifecycle workflow-change-plan.v1 targets without applying them", async () => {
     const app = createApp({
       authenticate: async () => ({
-        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"] },
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"], permissions: ["workflows:manage"] },
         status: "authenticated" as const,
       }),
       config: testConfig,
@@ -466,7 +482,7 @@ describe("API Gateway", () => {
   it("rejects lifecycle plans that mix Blueprint and Temporal targets", async () => {
     const app = createApp({
       authenticate: async () => ({
-        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"] },
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"], permissions: ["workflows:manage"] },
         status: "authenticated" as const,
       }),
       config: testConfig,
@@ -502,6 +518,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["team-engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -536,6 +553,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["team-engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -585,6 +603,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["team-engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -612,6 +631,7 @@ describe("API Gateway", () => {
           actorId: "user-1",
           organizationId: "org-1",
           scope: ["team-engineering"],
+          permissions: ["workflows:manage"],
         },
         status: "authenticated" as const,
       }),
@@ -717,7 +737,7 @@ describe("API Gateway", () => {
     };
     const app = createApp({
       authenticate: async () => ({
-        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"] },
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"], permissions: ["workflows:manage"] },
         status: "authenticated" as const,
       }),
       config: testConfig,
@@ -764,7 +784,7 @@ describe("API Gateway", () => {
     };
     const app = createApp({
       authenticate: async () => ({
-        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"] },
+        principal: { actorId: "user-1", organizationId: "org-1", scope: ["team-engineering"], permissions: ["workflows:manage"] },
         status: "authenticated" as const,
       }),
       config: testConfig,

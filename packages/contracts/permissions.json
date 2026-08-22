@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "permissions": [
+    { "key": "onboarding:manage", "implies": [] },
+    { "key": "workflows:read", "implies": [] },
+    { "key": "workflows:run", "implies": ["workflows:read"] },
+    { "key": "workflows:manage", "implies": ["workflows:read", "workflows:run"] },
+    { "key": "integrations:read", "implies": [] },
+    { "key": "integrations:manage", "implies": ["integrations:read"] },
+    { "key": "knowledge:read", "implies": [] },
+    { "key": "knowledge:manage", "implies": ["knowledge:read"] },
+    { "key": "organization:read", "implies": [] },
+    { "key": "organization:manage", "implies": ["organization:read"] },
+    { "key": "settings:read", "implies": [] },
+    { "key": "settings:manage", "implies": ["settings:read"] }
+  ]
+}

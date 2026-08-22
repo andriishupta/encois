@@ -1,11 +1,16 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { ArrowLeft, PlugZap, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/integrations/new')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.IntegrationsManage)) throw redirect({ to: '/forbidden' })
+  },
   component: NewIntegrationPage,
 })
 

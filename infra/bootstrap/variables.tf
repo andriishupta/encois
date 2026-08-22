@@ -25,6 +25,7 @@ variable "deployer_roles" {
   type        = set(string)
   default = [
     "roles/artifactregistry.admin",
+    "roles/cloudsql.admin",
     "roles/compute.loadBalancerAdmin",
     "roles/compute.securityAdmin",
     "roles/iam.serviceAccountAdmin",
@@ -38,4 +39,3 @@ variable "deployer_roles" {
     "roles/storage.admin",
   ]
 }
-

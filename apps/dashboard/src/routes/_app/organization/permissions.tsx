@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { Check, ChevronRight, LockKeyhole, Plus, ShieldCheck, UserRound, X } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -17,8 +17,13 @@ import {
   type UnitPermission,
 } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/organization/permissions')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.OrganizationManage)) throw redirect({ to: '/forbidden' })
+  },
   component: OrganizationPermissionsPage,
 })
 

@@ -1,16 +1,16 @@
-import { and, eq, inArray, or } from "drizzle-orm";
-import type { IntegrationProjection, IntegrationUpdateRequest } from "@encois/contracts";
+import { and, eq, inArray } from "drizzle-orm";
+import { Permission, type IntegrationProjection, type IntegrationUpdateRequest } from "@encois/contracts";
 import {
   integrationBindings,
   integrations,
   membershipScopes,
   organizationMemberships,
-  rolePermissions,
   type PersistenceTransaction,
   withOrganizationContext,
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { hasPermission } from "../../auth/authorization.js";
 
 export type IntegrationSummary = IntegrationProjection;
 
@@ -32,6 +32,7 @@ export async function listIntegrationsForPrincipal(
   if (!userId) return [];
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
+    if (!(await hasPermission(db, principal, Permission.IntegrationsRead))) return [];
     const rows = await accessibleIntegrations(db, principal.organizationId, userId, "read");
     return rows.map((row) => ({
       id: row.id,
@@ -53,6 +54,7 @@ export async function updateIntegrationForPrincipal(
   if (!userId) return null;
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
+    if (!(await hasPermission(db, principal, Permission.IntegrationsManage))) return null;
     const accessible = await accessibleIntegrations(
       db,
       principal.organizationId,
@@ -90,8 +92,6 @@ async function accessibleIntegrations(
   access: "read" | "manage",
   integrationId?: string,
 ) {
-  const permission = access === "manage" ? "integrations:manage" : "integrations:read";
-
   // TODO: Expand a membership scope through the organization-unit hierarchy;
   // this first slice authorizes an exact integration-binding unit match.
   return db
@@ -127,12 +127,10 @@ async function accessibleIntegrations(
         ...(access === "manage" ? [inArray(membershipScopes.access, ["manager", "admin"] as const)] : []),
       ),
     )
-    .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
     .where(
       and(
         eq(integrations.organizationId, organizationId),
         ...(integrationId ? [eq(integrations.id, integrationId)] : []),
-        or(eq(rolePermissions.permission, permission), eq(rolePermissions.permission, "integrations:manage")),
       ),
     );
 }

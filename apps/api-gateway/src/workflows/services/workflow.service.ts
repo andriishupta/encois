@@ -1,6 +1,6 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { ContractVersion, isJsonObject, parseWorkflowBlueprint, TemporalWorkflowType } from "@encois/contracts";
+import { ContractVersion, isJsonObject, parseWorkflowBlueprint, Permission, TemporalWorkflowType } from "@encois/contracts";
 import type {
   ExecutionScope,
   JsonObject,
@@ -21,6 +21,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { hasPermission, hasPrincipalPermission } from "../../auth/authorization.js";
 import { createExecutionCapability } from "../../security/execution-capability.js";
 import type { WorkflowClient } from "../temporal-client.js";
 import {
@@ -371,6 +372,9 @@ export async function startWorkflow(
   }
 
   if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRun)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot start workflows.");
+    }
     if (request.blueprintId && !request.blueprint) {
       throw workflowServiceError("BLUEPRINT_REGISTRY_UNAVAILABLE", "A stored Blueprint requires configured persistence.");
     }
@@ -402,19 +406,9 @@ export async function startWorkflow(
   if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    const [permission] = await db
-      .select({ membershipId: organizationMemberships.id })
-      .from(organizationMemberships)
-      .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
-      .where(
-        and(
-          eq(organizationMemberships.organizationId, principal.organizationId),
-          eq(organizationMemberships.userId, userId),
-          eq(organizationMemberships.status, "active"),
-          or(eq(rolePermissions.permission, "workflows:run"), eq(rolePermissions.permission, "workflows:manage")),
-        ),
-      );
-    if (!permission) throw workflowServiceError("FORBIDDEN", "The user cannot start workflows.");
+    if (!(await hasPermission(db, principal, Permission.WorkflowsRun))) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot start workflows.");
+    }
 
     const [workflowIdentity] = await db
       .select({ requestHash: idempotencyKeys.requestHash })
@@ -556,12 +550,20 @@ export async function getWorkflow(
   workflowId: string,
   options: WorkflowServiceOptions,
 ): Promise<WorkflowExecutionProjection | null> {
-  if (!database) return options.workflowClient.get(workflowId, principal.organizationId, options.namespace);
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRead)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
+    return options.workflowClient.get(workflowId, principal.organizationId, options.namespace);
+  }
 
   const userId = localUserId(principal);
   if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
 
   const authorized = await withOrganizationContext(database, principal.organizationId, async (db) => {
+    if (!(await hasPermission(db, principal, Permission.WorkflowsRead))) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
     const [row] = await db
       .select({ workflowId: workflowRuns.temporalWorkflowId })
       .from(workflowRuns)
@@ -580,8 +582,8 @@ export async function getWorkflow(
           eq(workflowRuns.temporalWorkflowId, workflowId),
           or(
             eq(workflowRuns.actorUserId, userId),
-            eq(rolePermissions.permission, "workflows:read"),
-            eq(rolePermissions.permission, "workflows:manage"),
+            eq(rolePermissions.permission, Permission.WorkflowsRead),
+            eq(rolePermissions.permission, Permission.WorkflowsManage),
           ),
         ),
       )
@@ -599,12 +601,20 @@ export async function listWorkflows(
   principal: AosPrincipal,
   options: WorkflowServiceOptions,
 ): Promise<readonly WorkflowExecutionProjection[]> {
-  if (!database) return options.workflowClient.list(principal.organizationId, options.namespace);
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRead)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
+    return options.workflowClient.list(principal.organizationId, options.namespace);
+  }
 
   const userId = localUserId(principal);
   if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
 
   const visible = await withOrganizationContext(database, principal.organizationId, async (db) => {
+    if (!(await hasPermission(db, principal, Permission.WorkflowsRead))) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
     const rows = await db
       .select({ workflowId: workflowRuns.temporalWorkflowId })
       .from(workflowRuns)
@@ -622,8 +632,8 @@ export async function listWorkflows(
           eq(workflowRuns.organizationId, principal.organizationId),
           or(
             eq(workflowRuns.actorUserId, userId),
-            eq(rolePermissions.permission, "workflows:read"),
-            eq(rolePermissions.permission, "workflows:manage"),
+            eq(rolePermissions.permission, Permission.WorkflowsRead),
+            eq(rolePermissions.permission, Permission.WorkflowsManage),
           ),
         ),
       );
@@ -642,6 +652,15 @@ export async function signalWorkflow(
   request: WorkflowSignalRequest,
   options: WorkflowServiceOptions,
 ): Promise<void> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRun)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot change this workflow state.");
+    }
+  } else {
+    const canRun = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsRun));
+    if (!canRun) throw workflowServiceError("FORBIDDEN", "The user cannot change this workflow state.");
+  }
+
   const visible = await getWorkflow(principal, workflowId, options);
   if (!visible) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
   if (visible.status !== "queued" && visible.status !== "running" && visible.status !== "waiting") {
@@ -650,13 +669,13 @@ export async function signalWorkflow(
       `Workflow is ${visible.status} and cannot accept a Signal.`,
     );
   }
-
   let workflowRunId: string | undefined;
   if (database) {
     const userId = localUserId(principal);
     if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
 
     const canSignal = await withOrganizationContext(database, principal.organizationId, async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsRun))) return null;
       const [row] = await db
         .select({ workflowId: workflowRuns.temporalWorkflowId, workflowRunId: workflowRuns.id })
         .from(workflowRuns)
@@ -675,8 +694,8 @@ export async function signalWorkflow(
             eq(workflowRuns.temporalWorkflowId, workflowId),
             or(
               eq(workflowRuns.actorUserId, userId),
-              eq(rolePermissions.permission, "workflows:run"),
-              eq(rolePermissions.permission, "workflows:manage"),
+              eq(rolePermissions.permission, Permission.WorkflowsRun),
+              eq(rolePermissions.permission, Permission.WorkflowsManage),
             ),
           ),
         )
@@ -746,6 +765,15 @@ export async function updateWorkflow(
   request: WorkflowUpdateRequest,
   options: WorkflowServiceOptions,
 ): Promise<void> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRun)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot update this workflow.");
+    }
+  } else {
+    const canRun = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsRun));
+    if (!canRun) throw workflowServiceError("FORBIDDEN", "The user cannot update this workflow.");
+  }
+
   const visible = await getWorkflow(principal, workflowId, options);
   if (!visible) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
   if (visible.status !== "queued" && visible.status !== "running" && visible.status !== "waiting") {
@@ -754,13 +782,13 @@ export async function updateWorkflow(
       `Workflow is ${visible.status} and cannot accept an Update.`,
     );
   }
-
   let workflowRunId: string | undefined;
   if (database) {
     const userId = localUserId(principal);
     if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
 
     workflowRunId = await withOrganizationContext(database, principal.organizationId, async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsRun))) return undefined;
       const [row] = await db
         .select({ workflowRunId: workflowRuns.id })
         .from(workflowRuns)
@@ -779,8 +807,8 @@ export async function updateWorkflow(
             eq(workflowRuns.temporalWorkflowId, workflowId),
             or(
               eq(workflowRuns.actorUserId, userId),
-              eq(rolePermissions.permission, "workflows:run"),
-              eq(rolePermissions.permission, "workflows:manage"),
+              eq(rolePermissions.permission, Permission.WorkflowsRun),
+              eq(rolePermissions.permission, Permission.WorkflowsManage),
             ),
           ),
         )
@@ -861,6 +889,15 @@ export async function validateWorkflowChangePlan(
   principal: AosPrincipal,
   plan: WorkflowChangePlanInput,
 ): Promise<WorkflowPlanValidationResult> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsManage)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot validate workflow change plans.");
+    }
+  } else {
+    const canManage = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsManage));
+    if (!canManage) throw workflowServiceError("FORBIDDEN", "The user cannot validate workflow change plans.");
+  }
+
   if (plan.organizationId !== principal.organizationId) {
     throw workflowServiceError("FORBIDDEN", "The workflow plan belongs to a different organization.");
   }
@@ -916,29 +953,6 @@ export async function validateWorkflowChangePlan(
         throw workflowServiceError("WORKFLOW_PLAN_INVALID", `Change ${index} cannot include a lifecycle target.`);
       }
     }
-  }
-
-  if (database) {
-    const userId = localUserId(principal);
-    if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
-
-    const canManage = await withOrganizationContext(database, principal.organizationId, async (db) => {
-      const [permission] = await db
-        .select({ membershipId: organizationMemberships.id })
-        .from(organizationMemberships)
-        .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
-        .where(
-          and(
-            eq(organizationMemberships.organizationId, principal.organizationId),
-            eq(organizationMemberships.userId, userId),
-            eq(organizationMemberships.status, "active"),
-            eq(rolePermissions.permission, "workflows:manage"),
-          ),
-        )
-        .limit(1);
-      return Boolean(permission);
-    });
-    if (!canManage) throw workflowServiceError("FORBIDDEN", "The user cannot validate workflow change plans.");
   }
 
   return {

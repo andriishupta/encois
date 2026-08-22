@@ -1,20 +1,24 @@
 import { useState } from 'react'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, FileText, LoaderCircle, Save, ShieldAlert, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/sources/new')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.KnowledgeManage)) throw redirect({ to: '/forbidden' })
+  },
   component: NewSourcePage,
 })
 
 function NewSourcePage() {
   const navigate = useNavigate()
-  const canManageKnowledgeSources = getAuthSession()?.canManageKnowledgeSources === true
+  const canManageKnowledgeSources = hasPermission(getAuthSession(), Permission.KnowledgeManage)
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | undefined>()
   const [saving, setSaving] = useState(false)

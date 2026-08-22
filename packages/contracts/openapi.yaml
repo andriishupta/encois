@@ -621,13 +621,14 @@ components:
             data:
               type: object
               additionalProperties: false
-              required: [status, userId, organizationId, canOnboard, canManageKnowledgeSources]
+              required: [status, userId, organizationId, permissions]
               properties:
                 status: { const: active }
                 userId: { type: string }
                 organizationId: { type: string }
-                canOnboard: { type: boolean }
-                canManageKnowledgeSources: { type: boolean }
+                permissions:
+                  type: array
+                  items: { $ref: '#/components/schemas/Permission' }
                 displayName: { type: string }
         - type: object
           required: [data]
@@ -644,6 +645,9 @@ components:
     AccessLevel:
       type: string
       enum: [viewer, contributor, manager, admin]
+    Permission:
+      type: string
+      enum: [onboarding:manage, workflows:read, workflows:run, workflows:manage, integrations:read, integrations:manage, knowledge:read, knowledge:manage, organization:read, organization:manage, settings:read, settings:manage]
     OrganizationMembershipStatus:
       type: string
       enum: [invited, active, suspended]

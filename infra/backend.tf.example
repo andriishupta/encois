@@ -1,10 +1,10 @@
-# Copy this file to backend.tf only after infra/bootstrap has created the bucket.
-# Backend blocks cannot use Terraform variables.
+# The root stack includes this partial backend configuration. The state bucket
+# is supplied during init because backend blocks cannot use Terraform variables.
+# Example:
+# terraform -chdir=infra init -backend-config="bucket=$TF_STATE_BUCKET"
 
 terraform {
   backend "gcs" {
-    bucket = "replace-with-terraform-state-bucket"
     prefix = "encois/demo"
   }
 }
-

@@ -118,7 +118,7 @@ Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/he
 
 The canonical full local stack is:
 
-- `pnpm dev:local` runs `compose.local.yaml` with Postgres, the official
+- `pnpm dev:local:watch` runs `compose.local.yaml` with Postgres, the official
   Temporal development image, migrations, Firebase Auth Emulator, the local
   auth seed, all four application services, and the dashboard. The local
   Runtime uses `AGENT_AI_MODE=mock`, the data plane uses local adapters, and
@@ -149,7 +149,7 @@ required Google Cloud deployment proof.
 The safe defaults create only the API/service foundation and secret containers when explicitly applied. Services that require container images, billing, a purchased domain, or billable data stores are opt-in through `terraform.tfvars`:
 
 - Cloud Run service creation is disabled until an immutable image is supplied.
-- Identity Platform is disabled until the project has billing and the auth policy is confirmed.
+- Identity Platform is disabled until the project has billing, a Google OAuth web client, and the auth policy is confirmed.
 - The external load balancer and managed certificate are disabled until DNS is ready.
 - Spanner is disabled because it is billable; enabling the Agent Gateway requires the current Graph schema and database IAM bindings.
 - Cloud SQL is disabled because it is billable; when enabled it is the control-plane database for Drizzle migrations and API runtime state.
@@ -165,7 +165,7 @@ There are three distinct permission planes:
 2. **Runtime identities:** dashboard, API, Agent Runtime, and Agent Gateway each have a separate Google service account. The runtime identities do not share provider credentials.
 3. **Infrastructure identity:** `infra/bootstrap` creates a dedicated Terraform deployer service account. It is not used by any Cloud Run container.
 
-The Agent Gateway gets access to connector secret containers; the Go runtime gets Vertex AI access and can receive only scoped data references. Secret values are added separately with `gcloud secrets versions add` or a secret-management pipeline. Terraform manages the secret resource and IAM binding, not the secret payload.
+The Agent Gateway gets access to connector secret containers; the Go runtime gets Vertex AI access and can receive only scoped data references. Secret values are added separately with `gcloud secrets versions add` or a secret-management pipeline. Terraform manages the secret resource and IAM binding, not the secret payload. The Google OAuth client secret is supplied through a protected `TF_VAR_google_oauth_client_secret` input and is retained in protected Terraform state.
 
 The bootstrap deployer role list is intentionally explicit, but it includes the powerful `roles/resourcemanager.projectIamAdmin` because the root stack creates service-account IAM bindings. Treat that identity as infrastructure-admin, use short-lived impersonation or Workload Identity Federation, and do not create a JSON key. Once the resource set stabilizes, replace broad predefined roles with a reviewed custom role or split IAM changes into a separately protected bootstrap stack.
 
@@ -187,10 +187,10 @@ Then configure the main stack:
 
 ```bash
 cp infra/terraform.tfvars.example infra/terraform.tfvars
-cp infra/backend.tf.example infra/backend.tf
-# Replace project, domain, bucket, image, and backend placeholders.
+# Replace project, domain, image, OAuth, and Temporal inputs.
+export TF_STATE_BUCKET="the-bucket-created-by-bootstrap"
 
-terraform -chdir=infra init -migrate-state
+terraform -chdir=infra init -migrate-state -backend-config="bucket=$TF_STATE_BUCKET"
 terraform -chdir=infra validate
 terraform -chdir=infra plan -out=tfplan
 terraform -chdir=infra apply tfplan
@@ -221,6 +221,7 @@ This is deliberately not Kubernetes. Cloud Run provides revisioned deployments, 
 
 - Cloud project creation, billing attachment, organization/folder policy, and DNS registrar changes.
 - Temporal Cloud namespace/provider automation; credentials are external secret inputs.
+- Google OAuth client creation and rotation; Terraform consumes the protected client inputs but does not create Google Cloud OAuth credentials.
 - Cloud Armor, IAP, VPC Service Controls, private egress, and customer-specific data residency.
 - Hosted Spanner schema/IAM verification, Memory Bank reasoning-engine setup,
   and retention/deletion workflows. The application adapters and Terraform DDL

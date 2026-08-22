@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { Activity, ArrowRight, Chrome } from 'lucide-react'
 import { getAuthStatus, isApiError } from '@/lib/api'
-import { getAuthSession, getDevelopmentAuthSession, isDashboardMockMode, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
+import { getAuthSession, getDevelopmentAuthSession, hasPermission, isDashboardMockMode, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
 import { getMockOnboardingState } from '@/lib/onboarding'
+import { Permission } from '@encois/contracts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 function postAuthPath(): '/' | '/onboarding/workspace' {
   const session = getAuthSession()
-  return isDashboardMockMode() && session?.canOnboard === true && !getMockOnboardingState()?.onboardingComplete
+  return isDashboardMockMode() && hasPermission(session, Permission.OnboardingManage) && !getMockOnboardingState()?.onboardingComplete
     ? '/onboarding/workspace'
     : '/'
 }

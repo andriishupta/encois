@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { Check, Save, SlidersHorizontal } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm, setProductTooltipsEnabled, useProductTooltipsEnabled } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { isDashboardMockMode } from '@/lib/auth'
+import { getAuthSession, hasPermission, isDashboardMockMode } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 import { updateMockOnboardingState } from '@/lib/onboarding'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 
 export const Route = createFileRoute('/_app/settings/workspace')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: WorkspaceSettingsPage,
 })
 

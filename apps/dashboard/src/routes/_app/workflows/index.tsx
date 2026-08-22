@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { WorkflowExecutionStatus, type WorkflowStatusReason } from '@encois/contracts'
 import { Activity, ArrowUpRight, CircleDashed, Clock3, GitBranch, Plus } from 'lucide-react'
@@ -9,28 +9,35 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listWorkflows } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
+import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/workflows/')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.WorkflowsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: WorkflowsPage,
 })
 
 function WorkflowsPage() {
   const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
   const hasWorkflows = Boolean(workflows.data?.length)
+  const canRun = useCan(Permission.WorkflowsRun)
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="workflow" plural />}
         description={<>Track <ProductTerm term="blueprint" plural /> executions, delegated agents, and <ProductTerm term="workflow" /> progress.</>}
-        actions={
+        actions={canRun ? (
           <Button asChild>
             <Link to="/workflows/new">
               <Plus data-icon="inline-start" />
               New workflow
             </Link>
           </Button>
-        }
+        ) : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflows…</p> : null}
       {workflows.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load workflows: {workflows.error.message}</CardContent></Card> : null}

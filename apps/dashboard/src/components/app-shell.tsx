@@ -22,16 +22,18 @@ import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/lib/workspace'
 import { flattenUnitOptions, formatUnitPath, getOrganizationUnit } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
+import { usePermissions } from '@/lib/permissions'
+import { Permission } from '@encois/contracts'
 
 const primaryNavigation = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { label: 'Workflows', to: '/workflows', icon: GitBranch },
-  { label: 'Knowledge sources', to: '/sources', icon: Waypoints },
+  { label: 'Workflows', to: '/workflows', icon: GitBranch, permission: Permission.WorkflowsRead },
+  { label: 'Knowledge sources', to: '/sources', icon: Waypoints, permission: Permission.KnowledgeRead },
 ] as const
 
 const secondaryNavigation = [
-  { label: 'Organization', to: '/organization', icon: Building2 },
-  { label: 'Settings', to: '/settings', icon: Settings },
+  { label: 'Organization', to: '/organization', icon: Building2, permission: Permission.OrganizationRead },
+  { label: 'Settings', to: '/settings', icon: Settings, permission: Permission.SettingsRead },
 ] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -41,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { workspace } = useWorkspace()
   const { units, currentUnitId, setCurrentUnitId } = useOrganization()
+  const { can } = usePermissions()
   const workspaceName = workspace?.workspaceName ?? 'Encois'
   const organizationUnitOptions = flattenUnitOptions(units)
   const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
@@ -108,8 +111,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-5" aria-label="Main navigation">
           <div className="flex flex-col gap-6">
-            <NavSection label="Workspace" items={primaryNavigation} onNavigate={() => setMobileOpen(false)} />
-            <NavSection label="Manage" items={secondaryNavigation} onNavigate={() => setMobileOpen(false)} />
+            <NavSection label="Workspace" items={primaryNavigation.filter((item) => !item.permission || can(item.permission))} onNavigate={() => setMobileOpen(false)} />
+            <NavSection label="Manage" items={secondaryNavigation.filter((item) => !item.permission || can(item.permission))} onNavigate={() => setMobileOpen(false)} />
           </div>
         </nav>
 

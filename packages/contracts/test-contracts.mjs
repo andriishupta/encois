@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import {
   ContractVersion,
+  Permission,
+  allPermissions,
+  permissionIncludes,
   resolveEffectiveScope,
   ScopeRuleMode,
   TemporalWorkflowType,
   validateContract,
 } from "./dist/src/index.js";
+
+assert.equal(allPermissions.length, 12);
+assert.equal(permissionIncludes([Permission.WorkflowsManage], Permission.WorkflowsRead), true);
+assert.equal(permissionIncludes([Permission.IntegrationsRead], Permission.IntegrationsManage), false);
 
 const effectiveScope = resolveEffectiveScope({
   units: [

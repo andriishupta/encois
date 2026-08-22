@@ -34,6 +34,7 @@ Do not invent product requirements that conflict with those documents. If implem
 - Work iteratively with the user: inspect, propose, implement a small safe change, verify it, and report the result before expanding scope.
 - Do not delete, reset, migrate destructively, rotate credentials, or make other critical externally visible changes without explicit user approval.
 - If a change is blocked, risky, or materially ambiguous, stop at the boundary, report the evidence and the risk, and ask for direction instead of silently changing the plan.
+- If a goal reaches a critical blocker that cannot be resolved safely from the available workspace or permissions, stop that goal explicitly, report the blocker and the evidence, and ask the user what access or decision is needed. Do not force completion by weakening security or inventing missing state.
 - Treat the user and the coding agent as partners: challenge assumptions when evidence disagrees, preserve unrelated work, and keep decisions reviewable.
 
 ## Hackathon constraints

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, FileText, Plus, RefreshCw, Waypoints } from 'lucide-react'
 import { KnowledgeSourceKind, KnowledgeSourceStatus, type KnowledgeSource } from '@encois/contracts'
@@ -8,16 +8,20 @@ import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listKnowledgeSources } from '@/lib/api'
-import { getAuthSession } from '@/lib/auth'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/sources/')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.KnowledgeRead)) throw redirect({ to: '/forbidden' })
+  },
   component: SourcesPage,
 })
 
 function SourcesPage() {
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
-  const canManageKnowledgeSources = getAuthSession()?.canManageKnowledgeSources === true
+  const canManageKnowledgeSources = hasPermission(getAuthSession(), Permission.KnowledgeManage)
 
   return (
     <div className="flex flex-col gap-8">

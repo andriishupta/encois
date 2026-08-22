@@ -18,7 +18,7 @@ import type {
   WorkflowStartRequest,
   WorkflowUpdateRequest,
 } from '@encois/contracts'
-import { AccessLevel, IntegrationStatus, isJsonObject, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
+import { AccessLevel, IntegrationStatus, isJsonObject, isPermission, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason } from '@encois/contracts'
 import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
@@ -255,19 +255,15 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
     throw createApiError(200, 'The service returned an invalid authentication status.', 'INVALID_RESPONSE')
   }
   if (value.status === 'pending') return { status: 'pending' }
-  if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string' || typeof value.canOnboard !== 'boolean' || typeof value.canManageKnowledgeSources !== 'boolean') {
+  if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string' || !Array.isArray(value.permissions) || !value.permissions.every(isPermission)) {
     throw createApiError(200, 'The service returned an invalid active authentication status.', 'INVALID_RESPONSE')
   }
-  setAuthOrganizationId(value.organizationId, {
-    canOnboard: value.canOnboard,
-    canManageKnowledgeSources: value.canManageKnowledgeSources,
-  })
+  setAuthOrganizationId(value.organizationId, value.permissions)
   return {
     status: 'active',
     userId: value.userId,
     organizationId: value.organizationId,
-    canOnboard: value.canOnboard,
-    canManageKnowledgeSources: value.canManageKnowledgeSources,
+    permissions: value.permissions,
     ...(typeof value.displayName === 'string' ? { displayName: value.displayName } : {}),
   }
 }

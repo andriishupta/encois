@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ContractVersion, TemporalWorkflowType, WorkflowStepKind, type WorkflowStartRequest } from '@encois/contracts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Save } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
@@ -9,8 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { startWorkflow } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/workflows/new')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.WorkflowsRun)) throw redirect({ to: '/forbidden' })
+  },
   component: NewWorkflowPage,
 })
 

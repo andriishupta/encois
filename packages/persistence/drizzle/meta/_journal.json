@@ -15,6 +15,13 @@
       "when": 1787400060000,
       "tag": "0001_seed_workflow_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787400120000,
+      "tag": "0002_seed_permissions",
+      "breakpoints": true
     }
   ]
 }

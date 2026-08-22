@@ -166,6 +166,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
+        for_each = var.enable_identity_platform ? [true] : []
+
+        content {
+          name  = "IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS"
+          value = "google.com"
+        }
+      }
+
+      dynamic "env" {
         for_each = var.temporal_address == "" ? [] : [true]
 
         content {

@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { resolveEffectiveScope, AccessLevel, OrganizationMembershipStatus, OrganizationUnitType, type OrganizationProjection, type OrganizationPermissionCreateRequest, type OrganizationPermissionUpdateRequest, type OrganizationUnitCreateRequest, type OrganizationUnitProjection, type OrganizationMemberProjection, type OrganizationPermissionProjection } from "@encois/contracts";
+import { permissionIncludes, resolveEffectiveScope, AccessLevel, OrganizationMembershipStatus, OrganizationUnitType, Permission, type OrganizationProjection, type OrganizationPermissionCreateRequest, type OrganizationPermissionUpdateRequest, type OrganizationUnitCreateRequest, type OrganizationUnitProjection, type OrganizationMemberProjection, type OrganizationPermissionProjection, type PermissionKey } from "@encois/contracts";
 import {
   auditEvents,
   membershipScopes,
@@ -13,6 +13,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { getGrantedPermissions } from "../../auth/authorization.js";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -84,6 +85,7 @@ type OrganizationContext = {
   actor: MemberRow;
   actorScopeIds: Set<string>;
   managedUnitIds: Set<string>;
+  actorPermissions: Set<PermissionKey>;
   isAdministrator: boolean;
 };
 
@@ -190,6 +192,7 @@ async function loadContext(
   if (!organizationRow) throw organizationError("ORGANIZATION_NOT_FOUND", "Organization not found.");
   const actor = members.find((member) => member.userId === userId && member.status === OrganizationMembershipStatus.Active);
   if (!actor) throw organizationError("FORBIDDEN", "The current user has no active organization membership.");
+  const actorPermissions = new Set(await getGrantedPermissions(db, principal));
 
   const scopesByMembership = new Map<string, ScopeRow[]>();
   for (const scope of scopes) {
@@ -216,6 +219,7 @@ async function loadContext(
     actor,
     actorScopeIds,
     managedUnitIds,
+    actorPermissions,
     isAdministrator: isAdministrator(actor.roleKey),
   };
 }
@@ -290,20 +294,38 @@ async function withContext<T>(principal: AosPrincipal, callback: (context: Organ
   return withOrganizationContext(database, principal.organizationId, async (db) => callback(await loadContext(db, principal), db));
 }
 
+function requirePermission(context: OrganizationContext, permission: PermissionKey): void {
+  if (!permissionIncludes([...context.actorPermissions], permission)) {
+    throw organizationError("FORBIDDEN", "The current user does not have permission for this organization action.");
+  }
+}
+
 export async function getOrganizationForPrincipal(principal: AosPrincipal): Promise<OrganizationProjection> {
-  return withContext(principal, async (context) => projectContext(context));
+  return withContext(principal, async (context) => {
+    requirePermission(context, Permission.OrganizationRead);
+    return projectContext(context);
+  });
 }
 
 export async function listOrganizationUnitsForPrincipal(principal: AosPrincipal): Promise<readonly OrganizationUnitProjection[]> {
-  return withContext(principal, async (context) => projectContext(context).units);
+  return withContext(principal, async (context) => {
+    requirePermission(context, Permission.OrganizationRead);
+    return projectContext(context).units;
+  });
 }
 
 export async function listOrganizationMembersForPrincipal(principal: AosPrincipal): Promise<readonly OrganizationMemberProjection[]> {
-  return withContext(principal, async (context) => projectContext(context).members);
+  return withContext(principal, async (context) => {
+    requirePermission(context, Permission.OrganizationRead);
+    return projectContext(context).members;
+  });
 }
 
 export async function listOrganizationPermissionsForPrincipal(principal: AosPrincipal): Promise<readonly OrganizationPermissionProjection[]> {
-  return withContext(principal, async (context) => projectContext(context).permissions);
+  return withContext(principal, async (context) => {
+    requirePermission(context, Permission.OrganizationManage);
+    return projectContext(context).permissions;
+  });
 }
 
 function slugify(value: string): string {
@@ -315,6 +337,7 @@ export async function createOrganizationUnitForPrincipal(
   request: OrganizationUnitCreateRequest,
 ): Promise<OrganizationUnitProjection> {
   return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationManage);
     if (!context.isAdministrator && (!request.parentId || !canManageUnit(context, request.parentId))) {
       throw organizationError("FORBIDDEN", "The current user cannot create a unit in this scope.");
     }
@@ -363,6 +386,7 @@ export async function createOrganizationPermissionForPrincipal(
   requireUuid(request.memberId, "memberId");
   requireUuid(request.unitId, "unitId");
   return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationManage);
     if (!canManageUnit(context, request.unitId)) throw organizationError("FORBIDDEN", "The current user cannot manage this organization unit.");
     if (!canAssignAccess(context, request.access)) throw organizationError("FORBIDDEN", "Managers cannot assign administrator access.");
     const member = context.members.find((candidate) => candidate.userId === request.memberId && candidate.status !== OrganizationMembershipStatus.Suspended);
@@ -385,6 +409,7 @@ export async function updateOrganizationPermissionForPrincipal(
 ): Promise<OrganizationPermissionProjection> {
   requireUuid(permissionId, "permissionId");
   return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationManage);
     const existing = context.scopes.find((scope) => scope.id === permissionId);
     if (!existing) throw organizationError("ORGANIZATION_PERMISSION_NOT_FOUND", "Organization permission not found.");
     if (!canManageUnit(context, existing.unitId)) throw organizationError("FORBIDDEN", "The current user cannot manage this organization unit.");
@@ -399,6 +424,7 @@ export async function updateOrganizationPermissionForPrincipal(
 export async function deleteOrganizationPermissionForPrincipal(principal: AosPrincipal, permissionId: string): Promise<void> {
   requireUuid(permissionId, "permissionId");
   return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationManage);
     const existing = context.scopes.find((scope) => scope.id === permissionId);
     if (!existing) throw organizationError("ORGANIZATION_PERMISSION_NOT_FOUND", "Organization permission not found.");
     if (!canManageUnit(context, existing.unitId)) throw organizationError("FORBIDDEN", "The current user cannot manage this organization unit.");

@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { CircleDashed, GitBranch, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
@@ -9,8 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getWorkflow } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/workflows/$workflowId')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.WorkflowsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: WorkflowDetailPage,
 })
 

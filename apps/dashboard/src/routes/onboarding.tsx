@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Outlet, createFileRoute, Link, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Activity, Check, Circle, LogOut, ShieldAlert } from 'lucide-react'
 import { getAuthIdentity, getAuthSession, isDashboardMockMode, signOutFromIdentityPlatform } from '@/lib/auth'
+import { hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/onboarding')({
@@ -22,7 +24,7 @@ const steps = [
 function OnboardingLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const currentStep = Math.max(0, steps.findIndex((step) => pathname === step.to))
-  const canOnboard = getAuthSession()?.canOnboard === true
+  const canOnboard = hasPermission(getAuthSession(), Permission.OnboardingManage)
 
   if (!canOnboard) {
     return <OnboardingAccessDenied />

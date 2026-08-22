@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap } from 'lucide-react'
 import { IntegrationStatus, type IntegrationProjection } from '@encois/contracts'
@@ -9,20 +9,27 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listIntegrations } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from '@encois/contracts'
+import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/integrations/')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.IntegrationsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: IntegrationsPage,
 })
 
 function IntegrationsPage() {
   const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const canManage = useCan(Permission.IntegrationsManage)
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="integration" plural />}
         description={<>Manage the systems Encois can read from and normalize into <ProductTerm term="evidence" />.</>}
-        actions={<Button asChild><Link to="/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button>}
+        actions={canManage ? <Button asChild><Link to="/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
       {integrations.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load integrations: {integrations.error.message}</CardContent></Card> : null}

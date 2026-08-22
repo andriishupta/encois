@@ -38,6 +38,25 @@ variable "identity_authorized_domains" {
   default     = []
 }
 
+variable "identity_include_localhost" {
+  description = "Allow localhost as an Identity Platform authorized domain. Keep false for hosted production."
+  type        = bool
+  default     = false
+}
+
+variable "google_oauth_client_id" {
+  description = "Google OAuth web client ID used by the Identity Platform Google provider."
+  type        = string
+  default     = ""
+}
+
+variable "google_oauth_client_secret" {
+  description = "Google OAuth web client secret used by the Identity Platform Google provider. Supply through TF_VAR_google_oauth_client_secret or a protected pipeline secret."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "enable_identity_platform" {
   description = "Create the project-level Identity Platform configuration. Requires billing and the Identity Toolkit API."
   type        = bool

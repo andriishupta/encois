@@ -63,8 +63,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}): Hono<GatewayE
             status: AuthAccessStatus.Active,
             userId: access.principal.userId ?? access.principal.actorId,
             organizationId: access.principal.organizationId,
-            canOnboard: access.principal.canOnboard === true,
-            canManageKnowledgeSources: access.principal.canManageKnowledgeSources === true,
+            permissions: access.principal.permissions ?? [],
           }
         : { status: AuthAccessStatus.Pending };
 

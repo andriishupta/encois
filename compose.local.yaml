@@ -1,4 +1,4 @@
-name: encois-local
+name: encois-watch
 
 services:
   postgres:
@@ -79,7 +79,8 @@ services:
   agent-gateway:
     build:
       context: .
-      dockerfile: apps/agent-gateway/Dockerfile
+      dockerfile: apps/agent-gateway/Dockerfile.dev
+    working_dir: /workspace/apps/agent-gateway
     environment:
       AGENT_GATEWAY_HTTP_ADDR: ":8080"
       AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
@@ -89,11 +90,16 @@ services:
       GIN_MODE: debug
     ports:
       - "8080:8080"
+    volumes:
+      - .:/workspace
+      - encois-local-dev-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
 
   api-gateway:
     build:
       context: .
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: docker/node/Dockerfile.dev
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/api-gateway", "dev"]
     environment:
       NODE_ENV: development
       HOST: 0.0.0.0
@@ -117,11 +123,18 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
+    volumes:
+      - .:/workspace
+      - encois-local-dev-node-modules:/workspace/node_modules
+      - encois-local-dev-api-node-modules:/workspace/apps/api-gateway/node_modules
+      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - encois-local-dev-persistence-node-modules:/workspace/packages/persistence/node_modules
 
   agent-runtime:
     build:
       context: .
-      dockerfile: apps/agent-runtime/Dockerfile
+      dockerfile: apps/agent-runtime/Dockerfile.dev
+    working_dir: /workspace/apps/agent-runtime
     environment:
       AGENT_RUNTIME_HTTP_ADDR: ":8090"
       TEMPORAL_HOST_PORT: temporal:7233
@@ -140,28 +153,44 @@ services:
         condition: service_started
       api-gateway:
         condition: service_started
+    volumes:
+      - .:/workspace
+      - encois-local-dev-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
 
   dashboard:
     build:
       context: .
-      dockerfile: apps/dashboard/Dockerfile
-      args:
-        VITE_BASE_PATH: /
-        VITE_API_BASE_URL: http://localhost:8787/api/v1
-        VITE_FIREBASE_API_KEY: local
-        VITE_FIREBASE_AUTH_DOMAIN: localhost
-        VITE_FIREBASE_PROJECT_ID: demo-encois
-        VITE_FIREBASE_APP_ID: local
-        VITE_FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
-        VITE_ENCOIS_UI_MODE: mock
+      dockerfile: docker/node/Dockerfile.dev
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/dashboard", "exec", "vite", "--host", "0.0.0.0"]
+    environment:
+      VITE_API_BASE_URL: http://localhost:8787/api/v1
+      VITE_FIREBASE_API_KEY: local
+      VITE_FIREBASE_AUTH_DOMAIN: localhost
+      VITE_FIREBASE_PROJECT_ID: demo-encois
+      VITE_FIREBASE_APP_ID: local
+      VITE_FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
+      VITE_ENCOIS_UI_MODE: mock
     ports:
-      - "5173:8080"
+      - "5173:5173"
     depends_on:
       api-gateway:
         condition: service_started
       local-auth-seed:
         condition: service_completed_successfully
+    volumes:
+      - .:/workspace
+      - encois-local-dev-node-modules:/workspace/node_modules
+      - encois-local-dev-dashboard-node-modules:/workspace/apps/dashboard/node_modules
+      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
 
 volumes:
   encois-postgres-data:
   encois-temporal-data:
+  encois-local-dev-node-modules:
+  encois-local-dev-api-node-modules:
+  encois-local-dev-dashboard-node-modules:
+  encois-local-dev-contracts-node-modules:
+  encois-local-dev-persistence-node-modules:
+  encois-local-dev-agent-gateway-tmp:
+  encois-local-dev-agent-runtime-tmp:

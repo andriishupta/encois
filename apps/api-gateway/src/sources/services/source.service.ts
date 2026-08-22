@@ -1,9 +1,10 @@
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
   KnowledgeSourceKind,
   KnowledgeSourceStatus,
+  Permission,
   SourceIngestionTrigger,
   SourceRevisionStatus,
   isJsonObject,
@@ -20,8 +21,6 @@ import {
 import {
   integrations,
   knowledgeSources,
-  organizationMemberships,
-  rolePermissions,
   sourceIngestionRuns,
   sourceRevisions,
   withOrganizationContext,
@@ -30,6 +29,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { hasPermission } from "../../auth/authorization.js";
 import { createExecutionCapability } from "../../security/execution-capability.js";
 import type { WorkflowClient, WorkflowResultReader } from "../../workflows/temporal-client.js";
 import { buildWorkflowId } from "../../workflows/types.js";
@@ -252,33 +252,18 @@ function toSourceIngestionRun(row: typeof sourceIngestionRuns.$inferSelect): Sou
 async function hasKnowledgePermission(
   db: QueryDatabase,
   principal: AosPrincipal,
-  permission: "knowledge:read" | "knowledge:manage",
+  permission: typeof Permission.KnowledgeRead | typeof Permission.KnowledgeManage,
 ): Promise<boolean> {
-  const userId = localUserId(principal);
-  if (!userId) return false;
-  const [row] = await db
-    .select({ id: organizationMemberships.id })
-    .from(organizationMemberships)
-    .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
-    .where(
-      and(
-        eq(organizationMemberships.organizationId, principal.organizationId),
-        eq(organizationMemberships.userId, userId),
-        eq(organizationMemberships.status, "active"),
-        or(eq(rolePermissions.permission, permission), eq(rolePermissions.permission, "knowledge:manage")),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
+  return hasPermission(db, principal, permission);
 }
 
 async function assertPermission(
   db: QueryDatabase,
   principal: AosPrincipal,
-  permission: "knowledge:read" | "knowledge:manage",
+  permission: typeof Permission.KnowledgeRead | typeof Permission.KnowledgeManage,
 ): Promise<void> {
   if (!(await hasKnowledgePermission(db, principal, permission))) {
-    throw sourceServiceError("FORBIDDEN", permission === "knowledge:read" ? "The user is not allowed to read Knowledge Sources." : "The user is not allowed to manage Knowledge Sources.");
+    throw sourceServiceError("FORBIDDEN", permission === Permission.KnowledgeRead ? "The user is not allowed to read Knowledge Sources." : "The user is not allowed to manage Knowledge Sources.");
   }
 }
 
@@ -316,7 +301,7 @@ export async function createKnowledgeSource(
   const configuration = safeConfiguration(request.configuration);
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, "knowledge:manage");
+    await assertPermission(db, principal, Permission.KnowledgeManage);
     if (request.kind === KnowledgeSourceKind.Integration) {
       const [integration] = await db
         .select({ provider: integrations.provider })
@@ -349,7 +334,7 @@ export async function createKnowledgeSource(
 export async function listKnowledgeSources(principal: AosPrincipal): Promise<readonly KnowledgeSource[]> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, "knowledge:read");
+    await assertPermission(db, principal, Permission.KnowledgeRead);
     const rows = await db
       .select()
       .from(knowledgeSources)
@@ -367,7 +352,7 @@ export async function getKnowledgeSource(
 ): Promise<SourceSummary | null> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, "knowledge:read");
+    await assertPermission(db, principal, Permission.KnowledgeRead);
     const [row] = await db
       .select()
       .from(knowledgeSources)
@@ -414,7 +399,7 @@ export async function createSourceRevision(
   assertSafeArtifactReference(request.artifactRef);
   const metadata = safeConfiguration(request.metadata);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, "knowledge:manage");
+    await assertPermission(db, principal, Permission.KnowledgeManage);
     const [source] = await db
       .select()
       .from(knowledgeSources)
@@ -570,7 +555,7 @@ export async function startSourceIngestion(
 
   const requestHash = createHash("sha256").update(JSON.stringify({ sourceId, revisionId, trigger })).digest("hex");
   const prepared = await withOrganizationContext(database, principal.organizationId, async (db) => {
-    await assertPermission(db, principal, "knowledge:manage");
+    await assertPermission(db, principal, Permission.KnowledgeManage);
     const [sourceRow] = await db
       .select()
       .from(knowledgeSources)

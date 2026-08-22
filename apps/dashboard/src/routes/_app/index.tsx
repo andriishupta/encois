@@ -8,11 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { listIntegrations, listKnowledgeSources, listWorkflows } from '@/lib/api'
+import { listKnowledgeSources, listWorkflows } from '@/lib/api'
 import { isDashboardMockMode } from '@/lib/auth'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
+import { usePermissions } from '@/lib/permissions'
+import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/')({
   component: DashboardPage,
@@ -21,9 +23,11 @@ export const Route = createFileRoute('/_app/')({
 function DashboardPage() {
   const queryClient = useQueryClient()
   const { workspace } = useWorkspace()
-  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
-  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
+  const { can } = usePermissions()
+  const canViewWorkflows = can(Permission.WorkflowsRead)
+  const canViewSources = can(Permission.KnowledgeRead)
+  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows })
+  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
   const [startingInitialization, setStartingInitialization] = useState(false)
   const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
   const runningWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
@@ -55,8 +59,8 @@ function DashboardPage() {
       {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewCard icon={Activity} label="Active workflows" value={workflows.isLoading ? '…' : String(activeWorkflows.length)} detail={`${runningWorkflows} running · ${waitingWorkflows} waiting`} />
-        <OverviewCard icon={PlugZap} label="Knowledge sources" value={sources.isLoading ? '…' : String(sources.data?.length ?? 0)} detail={`${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope`} />
+        <OverviewCard icon={Activity} label="Active workflows" value={!canViewWorkflows ? '—' : workflows.isLoading ? '…' : String(activeWorkflows.length)} detail={canViewWorkflows ? `${runningWorkflows} running · ${waitingWorkflows} waiting` : 'Access restricted'} />
+        <OverviewCard icon={PlugZap} label="Knowledge sources" value={!canViewSources ? '—' : sources.isLoading ? '…' : String(sources.data?.length ?? 0)} detail={canViewSources ? `${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope` : 'Access restricted'} />
         <OverviewCard icon={GitBranch} label={<ProductTerm term="signal" plural />} value="—" detail="No recent signals" />
         <OverviewCard icon={TriangleAlert} label="Needs attention" value={workflows.isLoading ? '…' : String(attentionWorkflows)} detail="Failed or partial workflows" />
       </div>
@@ -73,9 +77,10 @@ function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {workflows.isError ? <p className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
-            {!workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title={<>No <ProductTerm term="workflow" plural /> yet</>} description={<>Start a <ProductTerm term="blueprint" /> execution to create the first durable <ProductTerm term="workflow" />.</>} /> : null}
-            {workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} detail={workflow.statusReason ?? 'No status reason reported'} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}
+            {!canViewWorkflows ? <EmptyPanel icon={CircleDashed} title="Workflows are restricted" description="Ask an organization administrator for workflow access." /> : null}
+            {canViewWorkflows && workflows.isError ? <p className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
+            {canViewWorkflows && !workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title={<>No <ProductTerm term="workflow" plural /> yet</>} description={<>Start a <ProductTerm term="blueprint" /> execution to create the first durable <ProductTerm term="workflow" />.</>} /> : null}
+            {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} detail={workflow.statusReason ?? 'No status reason reported'} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : null}
           </CardContent>
         </Card>
 
@@ -97,8 +102,8 @@ function DashboardPage() {
             <CardDescription>Runs today and over the last seven days.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {workflows.data?.slice(0, 5).map((workflow) => <RunRow key={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} time={formatDate(workflow.updatedAt)} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />)}
-            {!workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs yet.</p> : null}
+            {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <RunRow key={workflow.workflowId} title={workflow.blueprintId ?? workflow.workflowType} status={workflow.status} time={formatDate(workflow.updatedAt)} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : <p className="text-sm text-muted-foreground">Workflow run history is restricted.</p>}
+            {canViewWorkflows && !workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs yet.</p> : null}
           </CardContent>
         </Card>
       </div>

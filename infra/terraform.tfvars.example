@@ -3,6 +3,12 @@ region       = "europe-west1"
 environment  = "demo"
 domain_name  = "encois.com"
 
+# Hosted Identity Platform uses Google-only sign-in. Supply the OAuth client
+# secret through TF_VAR_google_oauth_client_secret or a protected CI secret.
+identity_include_localhost  = false
+google_oauth_client_id      = ""
+google_oauth_client_secret  = ""
+
 # Keep these false until container images and the GCP project are ready.
 enable_identity_platform = false
 enable_cloud_sql         = false
@@ -12,6 +18,12 @@ enable_agent_runtime     = false
 enable_agent_gateway     = false
 enable_edge              = false
 enable_spanner           = false
+
+# Required when the API or worker is enabled.
+temporal_address               = ""
+temporal_namespace             = ""
+vertex_memory_reasoning_engine = ""
+control_plane_service_user_id  = ""
 
 secret_names = [
   "cloud-sql-runtime-url",

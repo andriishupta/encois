@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { CoordinatorEvent } from "@encois/contracts";
+import { Permission, type CoordinatorEvent } from "@encois/contracts";
 import { createDatabase } from "@encois/persistence";
 import type { AosPrincipal } from "../src/middleware/aos.js";
 import type { WorkflowClient } from "../src/workflows/temporal-client.js";
@@ -38,7 +38,7 @@ try {
   `;
   await seedClient`
     INSERT INTO role_permissions (role_id, permission)
-    VALUES (${roleId}, 'workflows:run')
+    VALUES (${roleId}, ${Permission.WorkflowsRun})
   `;
   await seedClient`
     INSERT INTO organization_memberships (id, organization_id, user_id, role_id, status)

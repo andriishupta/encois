@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { IntegrationStatus, type IntegrationUpdateRequest } from '@encois/contracts'
-import { createFileRoute } from '@tanstack/react-router'
+import { IntegrationStatus, Permission, type IntegrationUpdateRequest } from '@encois/contracts'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { CheckCircle2, Clock3, Github, PlugZap, Save, ShieldCheck } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
@@ -9,8 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { listIntegrations, updateIntegration } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
+import { getAuthSession, hasPermission } from '@/lib/auth'
+import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/integrations/$integrationId')({
+  beforeLoad: () => {
+    if (!hasPermission(getAuthSession(), Permission.IntegrationsRead)) throw redirect({ to: '/forbidden' })
+  },
   component: IntegrationDetailPage,
 })
 
@@ -18,6 +23,7 @@ function IntegrationDetailPage() {
   const { integrationId } = Route.useParams()
   const queryClient = useQueryClient()
   const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const canManage = useCan(Permission.IntegrationsManage)
   const integration = integrations.data?.find((item) => item.id === integrationId)
   const mutation = useMutation({
     mutationFn: (input: IntegrationUpdateRequest) => updateIntegration(integrationId, input),
@@ -65,11 +71,11 @@ function IntegrationDetailPage() {
             <form className="flex flex-col gap-5" onSubmit={saveChanges}>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="display-name">
                 Display name
-                <input id="display-name" name="displayName" defaultValue={integration.name} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" />
+                <input id="display-name" name="displayName" defaultValue={integration.name} disabled={!canManage} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60" />
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-status">
                 Status
-                <select id="integration-status" name="status" defaultValue={integration.status} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+                <select id="integration-status" name="status" defaultValue={integration.status} disabled={!canManage} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60">
                   {Object.values(IntegrationStatus).map((status) => <option key={status} value={status}>{status}</option>)}
                 </select>
               </label>
@@ -85,8 +91,9 @@ function IntegrationDetailPage() {
               </div>
               {mutation.isError ? <p className="text-sm text-destructive">Could not save changes: {mutation.error.message}</p> : null}
               {mutation.isSuccess ? <p className="text-sm text-muted-foreground">Changes saved.</p> : null}
-              <div className="flex justify-end border-t pt-5">
-                <Button type="submit" disabled={mutation.isPending}>
+              <div className="flex items-center justify-between gap-4 border-t pt-5">
+                {!canManage ? <span className="text-xs text-muted-foreground">Read-only access</span> : <span />}
+                <Button type="submit" disabled={!canManage || mutation.isPending}>
                   <Save data-icon="inline-start" />
                   {mutation.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
