@@ -46,6 +46,8 @@ Configuration is environment-based:
 - `AGENT_MEMORY_MODE` — `gcp` (default) calls Vertex AI Memory Bank through the
   configured Reasoning Engine; use the explicit `mock` value for local/test
   runs;
+- `AGENT_MEMORY_FIXTURE` — set to `local` with mock memory to enable the
+  deterministic organization-scoped local fixture;
 - `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
   name required by `AGENT_MEMORY_MODE=gcp`;
 - `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.

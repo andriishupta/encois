@@ -39,7 +39,7 @@ email/password signup or self-service organization creation.
 The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
 `password` provider, and uses `src/local-seed.ts` to create two isolated fixture
 organizations (`Organization Test` and `Organization Avengers`), active users,
-five pending onboarding users, scoped organization units, integrations,
+five onboarding invite users, scoped organization units, integrations,
 Knowledge Sources/revisions, ingestion runs, webhooks, and workflow timelines.
 The seed is idempotent and local-only.
 
@@ -63,6 +63,7 @@ Current blueprint routes:
 - `DELETE /api/v1/organization/permissions/:permissionId` — remove a direct scope; the Gateway writes an audit event.
 - `POST /api/v1/workflows` — start a workflow through Temporal, the volatile in-memory adapter, or the durable local database-backed mock.
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
+- `GET /api/v1/workflows/activity` — list recent tenant-visible workflow events for the dashboard feed.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
 - `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` lifecycle proposal without applying it.
@@ -73,6 +74,7 @@ Current blueprint routes:
 - `POST /api/v1/internal/coordinator/plans` — private Runtime/Coordinator plan submission; the human approval boundary remains in the Gateway.
 - `POST /api/v1/internal/coordinator/workflows` — private start path for an approved tenant Blueprint reference; it reuses the generic workflow service and does not expose the database.
 - `GET /api/v1/workflows/:workflowId` — read a tenant-authorized workflow projection.
+- `GET /api/v1/workflows/:workflowId/events` — read tenant- and hierarchy-authorized activity, evidence, and lifecycle events.
 - `POST /api/v1/workflows/:workflowId/signals` — send an authorized approval Signal.
 - `POST /api/v1/workflows/:workflowId/updates` — apply an authorized context Update to an active workflow.
 

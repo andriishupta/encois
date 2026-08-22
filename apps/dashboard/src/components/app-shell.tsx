@@ -23,15 +23,22 @@ import { useWorkspace } from '@/lib/workspace'
 import { flattenUnitOptions, formatUnitPath, getOrganizationUnit } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 import { usePermissions } from '@/lib/permissions'
-import { Permission } from '@encois/contracts'
+import { Permission, type PermissionKey } from '@encois/contracts'
 
-const primaryNavigation = [
+type NavigationItem = {
+  label: string
+  to: '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/settings'
+  icon: typeof LayoutDashboard
+  permission?: PermissionKey
+}
+
+const primaryNavigation: readonly NavigationItem[] = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Workflows', to: '/workflows', icon: GitBranch, permission: Permission.WorkflowsRead },
   { label: 'Knowledge sources', to: '/sources', icon: Waypoints, permission: Permission.KnowledgeRead },
 ] as const
 
-const secondaryNavigation = [
+const secondaryNavigation: readonly NavigationItem[] = [
   { label: 'Organization', to: '/organization', icon: Building2, permission: Permission.OrganizationRead },
   { label: 'Settings', to: '/settings', icon: Settings, permission: Permission.SettingsRead },
 ] as const
@@ -160,7 +167,7 @@ function NavSection({
   onNavigate,
 }: {
   label: string
-  items: readonly { label: string; to: '/' | '/workflows' | '/sources' | '/integrations' | '/organization' | '/settings'; icon: typeof LayoutDashboard }[]
+  items: readonly NavigationItem[]
   onNavigate: () => void
 }) {
   return (

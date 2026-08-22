@@ -11,7 +11,7 @@ func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-1",
-		WorkflowID:       "workflow:org:source:revision",
+		WorkflowID:       "workflow:org-1:source:revision",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -46,7 +46,7 @@ func TestSourceIngestionContractRejectsEmptyScope(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-1",
-		WorkflowID:       "workflow:org:source:revision",
+		WorkflowID:       "workflow:org-1:source:revision",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -61,5 +61,24 @@ func TestSourceIngestionContractRejectsEmptyScope(t *testing.T) {
 
 	if err := ValidateSourceIngestionContract(context.Background(), input); err == nil {
 		t.Fatal("expected empty source scope to be rejected")
+	}
+}
+
+func TestSourceIngestionWorkflowRejectsCrossOrganizationWorkflowID(t *testing.T) {
+	err := validateSourceIngestionWorkflowInput(SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-cross-organization",
+		WorkflowID:       "workflow:org-2:source:revision",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindManual,
+		Trigger:          contracts.IngestionTriggerManual,
+	})
+	if err == nil {
+		t.Fatal("expected workflow id organization mismatch to be rejected")
 	}
 }

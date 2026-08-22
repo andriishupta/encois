@@ -1,4 +1,4 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { ContractVersion, isJsonObject, parseWorkflowBlueprint, Permission, TemporalWorkflowType } from "@encois/contracts";
 import type {
@@ -27,6 +27,8 @@ import type { WorkflowClient } from "../temporal-client.js";
 import {
   buildWorkflowId,
   type WorkflowExecutionProjection,
+  type WorkflowEventProjection,
+  type WorkflowRecentActivityProjection,
   type WorkflowSignalRequest,
   type WorkflowStartRequest,
   type WorkflowUpdateRequest,
@@ -601,6 +603,124 @@ export async function getWorkflow(
   const projection = await options.workflowClient.get(workflowId, principal.organizationId, options.namespace);
   if (projection) await syncWorkflowProjection(principal.organizationId, projection);
   return projection;
+}
+
+export async function getWorkflowEvents(
+  principal: AosPrincipal,
+  workflowId: string,
+  options: WorkflowServiceOptions,
+): Promise<readonly WorkflowEventProjection[] | null> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRead)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
+    const workflow = await options.workflowClient.get(workflowId, principal.organizationId, options.namespace);
+    return workflow ? [] : null;
+  }
+
+  const userId = localUserId(principal);
+  if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
+
+  const run = await withOrganizationContext(database, principal.organizationId, async (db) => {
+    if (!(await hasPermission(db, principal, Permission.WorkflowsRead))) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
+    const [row] = await db
+      .select({ runId: workflowRuns.id, scope: workflowRuns.scope })
+      .from(workflowRuns)
+      .innerJoin(
+        organizationMemberships,
+        and(
+          eq(organizationMemberships.organizationId, principal.organizationId),
+          eq(organizationMemberships.userId, userId),
+          eq(organizationMemberships.status, "active"),
+        ),
+      )
+      .leftJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
+      .where(
+        and(
+          eq(workflowRuns.organizationId, principal.organizationId),
+          eq(workflowRuns.temporalWorkflowId, workflowId),
+          or(
+            eq(workflowRuns.actorUserId, userId),
+            eq(rolePermissions.permission, Permission.WorkflowsRead),
+            eq(rolePermissions.permission, Permission.WorkflowsManage),
+          ),
+        ),
+      )
+      .limit(1);
+    return row && workflowScopeIsVisible(row.scope, principal.scope) ? row : null;
+  });
+
+  if (!run) return null;
+
+  return withOrganizationContext(database, principal.organizationId, async (db) => {
+    const rows = await db
+      .select()
+      .from(workflowEvents)
+      .where(and(eq(workflowEvents.organizationId, principal.organizationId), eq(workflowEvents.workflowRunId, run.runId)))
+      .orderBy(workflowEvents.occurredAt);
+    return rows.map((row) => ({
+      id: row.id,
+      eventType: row.eventType,
+      status: row.status,
+      ...(row.activityName ? { activityName: row.activityName } : {}),
+      ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
+      ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),
+      metadata: isJsonObject(row.metadata) ? row.metadata : {},
+      occurredAt: row.occurredAt.toISOString(),
+    })) satisfies readonly WorkflowEventProjection[];
+  });
+}
+
+export async function listWorkflowActivity(
+  principal: AosPrincipal,
+  options: WorkflowServiceOptions,
+  limit = 10,
+): Promise<readonly WorkflowRecentActivityProjection[]> {
+  if (!database) {
+    if (!hasPrincipalPermission(principal, Permission.WorkflowsRead)) {
+      throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
+    }
+    return [];
+  }
+
+  const workflows = await listWorkflows(principal, options);
+  if (workflows.length === 0) return [];
+  const workflowIds = workflows.map((workflow) => workflow.workflowId);
+  const workflowById = new Map(workflows.map((workflow) => [workflow.workflowId, workflow]));
+
+  return withOrganizationContext(database, principal.organizationId, async (db) => {
+    const runs = await db
+      .select({ id: workflowRuns.id, workflowId: workflowRuns.temporalWorkflowId })
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.organizationId, principal.organizationId), inArray(workflowRuns.temporalWorkflowId, workflowIds)));
+    if (runs.length === 0) return [];
+    const runIds = runs.map((run) => run.id);
+    const workflowByRunId = new Map(runs.map((run) => [run.id, run.workflowId]));
+    const rows = await db
+      .select()
+      .from(workflowEvents)
+      .where(and(eq(workflowEvents.organizationId, principal.organizationId), inArray(workflowEvents.workflowRunId, runIds)))
+      .orderBy(desc(workflowEvents.occurredAt))
+      .limit(Math.max(1, Math.min(limit, 50)));
+    return rows.map((row) => {
+      const workflowId = workflowByRunId.get(row.workflowRunId) ?? "";
+      const workflow = workflowById.get(workflowId);
+      return {
+        id: row.id,
+        workflowId,
+        workflowLabel: workflow?.blueprintId ?? workflow?.workflowType ?? "Workflow",
+        eventType: row.eventType,
+        status: row.status,
+        ...(row.activityName ? { activityName: row.activityName } : {}),
+        ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
+        ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),
+        metadata: isJsonObject(row.metadata) ? row.metadata : {},
+        occurredAt: row.occurredAt.toISOString(),
+      } satisfies WorkflowRecentActivityProjection;
+    });
+  });
 }
 
 export async function listWorkflows(

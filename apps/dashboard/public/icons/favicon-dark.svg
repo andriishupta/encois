@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">AI intelligence observer — dark</title>
+  <desc id="desc">An inverted empty rounded isometric observer box with abstract line-eyes.</desc>
+
+  <defs>
+    <path
+      id="boxShape"
+      d="M27.8 8.8Q30 7.4 32.3 8.6L53.7 19.3Q56.2 20.6 56.2 23.5V40.3Q56.2 43.1 53.8 44.7L37 55.3Q34.6 56.9 32.1 55.6L10.4 44.6Q7.8 43.3 7.8 40.3V23.5Q7.8 20.6 10.3 19.1Z"
+    />
+    <clipPath id="boxClip">
+      <use href="#boxShape"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#boxClip)">
+    <path fill="#000" d="M6 18.5 34.5 33 34.5 59 6 44.5Z"/>
+    <path fill="#fff" d="M34.5 33 58 18.5 58 45 34.5 59Z"/>
+    <path fill="#000" d="M6 20 30 5.8 58 20 34.5 35Z"/>
+  </g>
+
+  <use href="#boxShape" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.3 20.5 34.5 34 55.7 20.7"/>
+    <path d="M34.5 34V55.7"/>
+  </g>
+
+  <g fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round">
+    <path d="M44.2 32.6C40.8 33.1 39.8 37.5 42.6 40"/>
+    <path d="M52.2 27.6C48.8 28.1 47.8 32.5 50.6 35"/>
+  </g>
+</svg>

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { listKnowledgeSources, listWorkflows } from '@/lib/api'
+import { listKnowledgeSources, listWorkflowActivity, listWorkflows } from '@/lib/api'
 import { isDashboardMockMode } from '@/lib/auth'
 import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
@@ -27,6 +27,7 @@ function DashboardPage() {
   const canViewWorkflows = can(Permission.WorkflowsRead)
   const canViewSources = can(Permission.KnowledgeRead)
   const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows })
+  const activity = useQuery({ queryKey: queryKeys.workflowActivity(), queryFn: listWorkflowActivity, enabled: canViewWorkflows })
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
   const [startingInitialization, setStartingInitialization] = useState(false)
   const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
@@ -37,16 +38,16 @@ function DashboardPage() {
   function startInitialization() {
     if (!isDashboardMockMode()) return
     setStartingInitialization(true)
-    queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ status: 'initializing' }))
+    queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ status: 'initializing' }))
     window.setTimeout(() => {
       setStartingInitialization(false)
-      queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ status: 'ready' }))
+      queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ status: 'ready' }))
     }, 1200)
   }
 
   function dismissReadyBanner() {
     if (!isDashboardMockMode()) return
-    queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ initializationBannerDismissed: true }))
+    queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ initializationBannerDismissed: true }))
   }
 
   return (
@@ -90,7 +91,9 @@ function DashboardPage() {
             <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." />
+            {activity.isError ? <p className="text-sm text-destructive">Could not load recent activity: {activity.error.message}</p> : null}
+            {!activity.isLoading && !activity.isError && activity.data?.length === 0 ? <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." /> : null}
+            {activity.data?.map((event) => <ActivityRow key={event.id} event={event} />)}
           </CardContent>
         </Card>
       </div>
@@ -109,6 +112,11 @@ function DashboardPage() {
       </div>
     </div>
   )
+}
+
+function ActivityRow({ event }: { event: import('@encois/contracts').WorkflowRecentActivityProjection }) {
+  const issue = typeof event.metadata.issue === 'string' ? ` · ${event.metadata.issue}` : ''
+  return <Link to="/workflows/$workflowId" params={{ workflowId: event.workflowId }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Activity className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{event.workflowLabel}</span><span className="block truncate text-xs text-muted-foreground">{event.eventType} · {event.status}{issue}</span></span><span className="hidden shrink-0 text-xs text-muted-foreground sm:block">{formatDate(event.occurredAt)}</span></Link>
 }
 
 function isActiveWorkflow(status: WorkflowExecutionStatus): boolean {

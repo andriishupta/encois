@@ -76,6 +76,13 @@ func (s *memoryArtifactStore) Read(_ context.Context, request domain.ArtifactRea
 	object, ok := s.objects[request.ArtifactRef]
 	s.mu.Unlock()
 	if !ok {
+		// The API Gateway's local upload fixtures use this explicit namespace.
+		// Unknown memory references must not silently become readable from every
+		// organization, because the hash reference itself does not carry tenant
+		// information.
+		if !localArtifactReferenceInOrganization(request.ArtifactRef, request.OrganizationID) {
+			return domain.ArtifactReadResponse{}, fmt.Errorf("artifact is not available in the local mock store")
+		}
 		// The API Gateway's local upload store is intentionally process-local. A
 		// deterministic fixture keeps the multi-process local flow useful while
 		// the GCP mode reads the real object from Cloud Storage.
@@ -85,11 +92,19 @@ func (s *memoryArtifactStore) Read(_ context.Context, request domain.ArtifactRea
 			Bytes:       []byte("Encois mock source\nsource=" + request.ArtifactRef),
 		}, nil
 	}
+	if !artifactObjectInOrganization(object.ObjectKey, request.OrganizationID) {
+		return domain.ArtifactReadResponse{}, fmt.Errorf("artifact is outside the organization scope")
+	}
 	return domain.ArtifactReadResponse{
 		ArtifactRef: request.ArtifactRef,
 		ContentType: object.ContentType,
 		Bytes:       []byte(object.DataRef),
 	}, nil
+}
+
+func localArtifactReferenceInOrganization(reference, organizationID string) bool {
+	return strings.HasPrefix(reference, "artifact://local/"+organizationID+"/") ||
+		strings.HasPrefix(reference, "artifact://memory/organizations/"+organizationID+"/")
 }
 
 func defaultRetentionClass(value contracts.ArtifactRetentionClass) contracts.ArtifactRetentionClass {

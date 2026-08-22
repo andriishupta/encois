@@ -87,8 +87,62 @@ func TestMockToolInvocation(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "mocked" || result.Data["completedTasks"] != float64(8) {
+	if result.Status != "mocked" || result.Data["completedTasks"] != float64(8) || len(result.EvidenceRefs) != 1 || result.EvidenceRefs[0] != "mock://organizations/org-test/jira/project-checkout" {
 		t.Fatalf("unexpected mock result: %+v", result)
+	}
+}
+
+func TestMemoryGraphStoreKeepsOrganizationsIsolated(t *testing.T) {
+	store := newMemoryGraphStore()
+	for _, fixture := range []struct {
+		organizationID string
+		label          string
+	}{
+		{organizationID: "organization-test", label: "test"},
+		{organizationID: "organization-avengers", label: "avengers"},
+	} {
+		err := store.Upsert(context.Background(), domain.GraphMutation{
+			ExecutionContext: domain.ExecutionContext{OrganizationID: fixture.organizationID},
+			Nodes:            []domain.GraphNode{{ID: "shared-project-id", Type: "project", Properties: map[string]any{"organization": fixture.label}}},
+		})
+		if err != nil {
+			t.Fatalf("upsert %s graph fixture: %v", fixture.organizationID, err)
+		}
+	}
+
+	for _, fixture := range []struct {
+		organizationID string
+		label          string
+	}{
+		{organizationID: "organization-test", label: "test"},
+		{organizationID: "organization-avengers", label: "avengers"},
+	} {
+		result, err := store.Query(context.Background(), domain.GraphQueryRequest{
+			ExecutionContext: domain.ExecutionContext{OrganizationID: fixture.organizationID},
+			Query:            "all",
+		})
+		if err != nil || len(result.Nodes) != 1 {
+			t.Fatalf("expected one graph node for %s, result=%+v err=%v", fixture.organizationID, result, err)
+		}
+		if result.Nodes[0].Properties["organization"] != fixture.label {
+			t.Fatalf("graph data crossed organization boundary: organization=%s result=%+v", fixture.organizationID, result.Nodes)
+		}
+	}
+}
+
+func TestMemoryGraphStoreCreatesTenantScopedLocalFixtures(t *testing.T) {
+	store := newMemoryGraphStore()
+	for _, organizationID := range []string{"organization-test", "organization-avengers"} {
+		result, err := store.Query(context.Background(), domain.GraphQueryRequest{
+			ExecutionContext: domain.ExecutionContext{OrganizationID: organizationID},
+			Query:            "release.blockers",
+		})
+		if err != nil || len(result.Nodes) != 1 {
+			t.Fatalf("expected one local blocker for %s, result=%+v err=%v", organizationID, result, err)
+		}
+		if result.Nodes[0].Properties["organizationId"] != organizationID {
+			t.Fatalf("local graph fixture crossed organization boundary: organization=%s result=%+v", organizationID, result.Nodes)
+		}
 	}
 }
 
@@ -231,6 +285,40 @@ func TestArtifactWriteReturnsTenantScopedReference(t *testing.T) {
 	}
 	if result.Status != "mocked" || result.ArtifactRef == "" || result.ObjectKey != "org-test/workflow:org-test:project:one/evidence/project.json" {
 		t.Fatalf("unexpected artifact result: %+v", result)
+	}
+}
+
+func TestMemoryArtifactStoreRejectsCrossOrganizationReads(t *testing.T) {
+	store := newMemoryArtifactStore()
+	writeRequest := domain.ArtifactWriteRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test", WorkflowID: "workflow:organization-test:fixture", ActorID: "actor", PolicyVersion: "policy", Scope: domain.Scope{IDs: []string{"root"}}},
+		ObjectKey:        "evidence/project.json",
+		ContentType:      "application/json",
+		DataRef:          "organization-test-data",
+	}
+	written, err := store.Write(context.Background(), writeRequest)
+	if err != nil {
+		t.Fatalf("write local artifact: %v", err)
+	}
+
+	readRequest := domain.ArtifactReadRequest{ExecutionContext: writeRequest.ExecutionContext, ArtifactRef: written.ArtifactRef}
+	if _, err := store.Read(context.Background(), readRequest); err != nil {
+		t.Fatalf("same-organization artifact read failed: %v", err)
+	}
+	readRequest.ArtifactRef = "artifact://local/organization-test/source/r1"
+	if _, err := store.Read(context.Background(), readRequest); err != nil {
+		t.Fatalf("same-organization local fixture artifact read failed: %v", err)
+	}
+	readRequest.ArtifactRef = written.ArtifactRef
+	readRequest.OrganizationID = "organization-avengers"
+	readRequest.WorkflowID = "workflow:organization-avengers:fixture"
+	if _, err := store.Read(context.Background(), readRequest); err == nil {
+		t.Fatal("cross-organization artifact read was accepted")
+	}
+	readRequest.ArtifactRef = "artifact://memory/organizations/organization-test/unknown-reference"
+	readRequest.OrganizationID = "organization-avengers"
+	if _, err := store.Read(context.Background(), readRequest); err == nil {
+		t.Fatal("unknown memory artifact reference was accepted as a fixture")
 	}
 }
 

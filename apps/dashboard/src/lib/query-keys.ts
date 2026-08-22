@@ -7,6 +7,8 @@ export function currentOrganizationId(): string | undefined {
 export const queryKeys = {
   workflows: () => ['workflows', currentOrganizationId()] as const,
   workflow: (workflowId: string) => ['workflow', currentOrganizationId(), workflowId] as const,
+  workflowEvents: (workflowId: string) => ['workflow-events', currentOrganizationId(), workflowId] as const,
+  workflowActivity: () => ['workflow-activity', currentOrganizationId()] as const,
   integrations: () => ['integrations', currentOrganizationId()] as const,
   sources: () => ['knowledge-sources', currentOrganizationId()] as const,
   source: (sourceId: string) => ['knowledge-source', currentOrganizationId(), sourceId] as const,

@@ -70,6 +70,11 @@ func (s *gcpStore) retrieve(ctx context.Context, request Request, scope map[stri
 		if item == nil || item.Memory == nil {
 			continue
 		}
+		// Vertex Memory Bank is scoped by request, but keep the organization
+		// boundary explicit at the adapter boundary as defense in depth.
+		if item.Memory.Scope["organization_id"] != request.OrganizationID {
+			continue
+		}
 		records = append(records, recordFromMemory(item.Memory))
 	}
 	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: records}, nil

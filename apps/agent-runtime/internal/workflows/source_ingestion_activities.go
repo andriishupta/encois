@@ -93,6 +93,9 @@ func NewSourceIngestionActivities(gateway *gatewayclient.Client, store memory.St
 }
 
 func ValidateSourceIngestionContract(_ context.Context, input SourceIngestionWorkflowInput) error {
+	if !workflowIDBelongsToOrganization(input.WorkflowID, input.OrganizationID) {
+		return fmt.Errorf("workflow id is outside the organization scope")
+	}
 	payload := map[string]any{
 		"contractVersion": input.ContractVersion, "requestId": input.RequestID, "workflowId": input.WorkflowID,
 		"organizationId": input.OrganizationID, "actorId": input.ActorID, "policyVersion": input.PolicyVersion,

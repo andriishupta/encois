@@ -39,6 +39,22 @@ const command: WorkflowStartCommand = {
 };
 
 describe("Temporal workflow client cancellation", () => {
+	it("rejects a workflow start whose id belongs to another organization", async () => {
+		const client = createWorkflowClient(config);
+		const crossOrganizationCommand: WorkflowStartCommand = {
+			...command,
+			workflowId: "workflow:org-2:encois.user-blueprint.v1:cross-organization",
+			input: {
+				...command.input,
+				workflowId: "workflow:org-2:encois.user-blueprint.v1:cross-organization",
+			},
+		};
+
+		await expect(client.start(crossOrganizationCommand, "default")).rejects.toThrow(
+			"workflow id is outside the organization scope",
+		);
+	});
+
 	it("cancels an active tenant workflow and safely replays cancellation", async () => {
 		const client = createWorkflowClient(config);
 		await client.start(command, "default");

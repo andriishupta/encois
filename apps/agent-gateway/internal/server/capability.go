@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
@@ -66,6 +67,9 @@ func verifyExecutionCapability(raw, secret string, context domain.ExecutionConte
 		claims.Organization != context.OrganizationID || claims.Workflow != context.WorkflowID ||
 		claims.Actor != context.ActorID || claims.PolicyVersion != context.PolicyVersion {
 		return fmt.Errorf("execution capability claims do not match execution context")
+	}
+	if !strings.HasPrefix(context.WorkflowID, "workflow:"+context.OrganizationID+":") {
+		return fmt.Errorf("workflow id is outside the organization scope")
 	}
 	nowSeconds := now.Unix()
 	if claims.IssuedAt > nowSeconds+30 || claims.ExpiresAt <= nowSeconds || claims.ExpiresAt <= claims.IssuedAt {

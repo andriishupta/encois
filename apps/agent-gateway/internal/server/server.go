@@ -198,7 +198,7 @@ func (s *Server) invokeTool(c *gin.Context) {
 		return
 	}
 
-	data, evidenceRefs, freshness, ok := mockTool(request.Tool)
+	data, evidenceRefs, freshness, ok := mockTool(request.Tool, request.OrganizationID)
 	if !ok {
 		errorResponse(c, http.StatusNotImplemented, "tool_not_implemented", "provider adapter is not configured", false)
 		return
@@ -348,28 +348,31 @@ func (s *Server) graphStoreStatus() string {
 	return "mock-in-memory"
 }
 
-func mockTool(toolName string) (map[string]any, []string, []contractschemas.SourceFreshness, bool) {
+func mockTool(toolName, organizationID string) (map[string]any, []string, []contractschemas.SourceFreshness, bool) {
 	now := time.Now().UTC().Format(time.RFC3339)
+	projectID := "mock-project-checkout"
 	switch toolName {
 	case "jira.project_tasks":
 		return map[string]any{
 			"source":         "jira",
-			"projectId":      "mock-project-checkout",
+			"organizationId": organizationID,
+			"projectId":      projectID,
 			"totalTasks":     10,
 			"completedTasks": 8,
 			"remainingTasks": 2,
 			"blockedTasks":   1,
 			"observedAt":     time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock:jira:project-checkout"}, []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
+		}, []string{"mock://organizations/" + organizationID + "/jira/project-checkout"}, []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
 	case "github.project_activity":
 		return map[string]any{
 			"source":             "github",
-			"projectId":          "mock-project-checkout",
+			"organizationId":     organizationID,
+			"projectId":          projectID,
 			"openPullRequests":   2,
 			"failingChecks":      1,
 			"commitsSinceCutoff": 12,
 			"observedAt":         time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock:github:project-checkout"}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
+		}, []string{"mock://organizations/" + organizationID + "/github/project-checkout"}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
 	default:
 		return nil, nil, nil, false
 	}

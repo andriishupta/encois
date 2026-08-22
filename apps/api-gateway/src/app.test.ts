@@ -286,6 +286,14 @@ describe("API Gateway", () => {
     await expect(getResponse.json()).resolves.toMatchObject({
       data: { organizationId: "org-1", status: "queued", workflowType: "encois.user-blueprint.v1" },
     });
+
+    const eventsResponse = await app.request(`/api/v1/workflows/${started.data.workflowId}/events`);
+    expect(eventsResponse.status).toBe(200);
+    await expect(eventsResponse.json()).resolves.toEqual({ data: [] });
+
+    const activityResponse = await app.request("/api/v1/workflows/activity");
+    expect(activityResponse.status).toBe(200);
+    await expect(activityResponse.json()).resolves.toEqual({ data: [] });
   });
 
   it("rejects workflow reads when the principal has no workflow permission", async () => {

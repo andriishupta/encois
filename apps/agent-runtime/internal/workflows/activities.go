@@ -19,6 +19,9 @@ type Activities struct {
 // execution context has its own schema because the Blueprint contract is the
 // workflow input envelope, not the context object itself.
 func ValidateBlueprintContract(_ context.Context, input BlueprintWorkflowInput) error {
+	if !workflowIDBelongsToOrganization(input.WorkflowID, input.OrganizationID) {
+		return fmt.Errorf("workflow id is outside the organization scope")
+	}
 	blueprint := input.Blueprint
 	if blueprint.WorkflowType == "" {
 		blueprint = input.Payload

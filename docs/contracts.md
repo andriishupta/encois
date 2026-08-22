@@ -418,6 +418,8 @@ POST /api/v1/public/waitlist
 POST /api/v1/workflows
 GET  /api/v1/workflows
 GET  /api/v1/workflows/{workflowId}
+GET  /api/v1/workflows/{workflowId}/events
+GET  /api/v1/workflows/activity
 POST /api/v1/workflows/{workflowId}/signals
 POST /api/v1/workflows/{workflowId}/updates
 GET  /api/v1/integrations

@@ -31,6 +31,10 @@ Avengers`. Each organization gets its own units, users, integrations,
 Knowledge Sources with revisions and ingestion runs, webhook deliveries, six
 workflow projections, and workflow event timelines. It is idempotent and only
 creates or updates these local fixture records.
+Each workflow timeline includes activity start/completion or failure events,
+retry attempts, shard labels, evidence references, and issue metadata. These
+are control-plane projections for the local mock; they do not create Temporal
+executions.
 
 Local credentials:
 
@@ -44,17 +48,22 @@ Existing-workspace users:
 | Email | Password | Organization | Role | Scope |
 | --- | --- | --- | --- | --- |
 | `owner@local.test` | `local-password-1234` | Organization Test | organization admin | All units |
-| `dev@local.test` | `local-dev-1234` | Organization Test | manager | All units; full product pages except admin-only actions |
-| `manager@local.test` | `local-manager-1234` | Organization Test | manager | Engineering and descendants |
+| `dev@local.test` | `local-dev-1234` | Organization Test | organization admin | All units; full product pages |
+| `manager@local.test` | `local-manager-1234` | Organization Test | organization admin | All units; full product pages |
 | `test@local.test` | `local-test-1234` | Organization Test | viewer | Checkout only; read-only |
 | `avengers-owner@local.test` | `local-avengers-1234` | Organization Avengers | organization admin | All units |
 | `avengers-manager@local.test` | `local-avengers-manager-1234` | Organization Avengers | manager | Product and descendants |
 
 The five `onboarding1..5@local.test` users are verified Firebase Emulator
-accounts with pending organization invites. They are intentionally separate
-from the active users so onboarding can be tested repeatedly without changing
-the full-access fixture. Their passwords are `local-onboarding-1` through
+accounts with organization invites. On first sign-in the invite is accepted
+and the fixture receives `onboarding:manage`, so the local onboarding screens
+open instead of the waitlist. They are intentionally separate from the main
+active users so onboarding can be tested repeatedly without changing the
+full-access fixture. Their passwords are `local-onboarding-1` through
 `local-onboarding-5`.
+The dashboard stores mock onboarding state by organization and Firebase user,
+so switching between these accounts in one browser does not reuse another
+account's progress.
 
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
@@ -106,6 +115,31 @@ The existing organization permissions screen is available at
 user (`auth:invite-user`) or revoking an invite. A bulk invite editor is not
 part of this local MVP fixture and remains a separate product-surface task.
 
+After the seed completes, verify the expected tenant fixtures and workflow
+states with:
+
+```bash
+docker compose -f compose.local.yaml run --rm local-auth-seed \
+  node dist/verify-local.js
+
+docker compose -f compose.local.yaml run --rm \
+  -e LOCAL_API_URL=http://api-gateway:8787/api/v1 \
+  local-auth-seed node dist/verify-local-api.js
+```
+
+The same checks are available from the repository root:
+
+```bash
+pnpm dev:local:watch:verify
+pnpm dev:local:watch:verify:api
+```
+
+The second command signs in through the Firebase Auth Emulator and verifies
+owner and Avengers-owner visibility, restricted `test@local.test` hierarchy
+scope, rejection of unauthorized workflow changes and out-of-scope events,
+onboarding invite acceptance and `onboarding:manage`, workflow events, and
+rejection of cross-organization headers.
+
 ## Useful checks
 
 ```bash
@@ -121,8 +155,11 @@ The local Agent Runtime uses `AGENT_AI_MODE=mock` and the local data plane uses
 dashboard explicitly uses `VITE_ENCOIS_UI_MODE=mock`. No Gemini key or GCP
 credentials are required. Temporal, source ingestion, Graph, Memory Bank,
 Cloud Storage, and the synthetic Agent Gateway tools all have local
-implementations. External Jira/GitHub calls remain deterministic fixtures;
-live provider credentials and adapters are hosted follow-up work.
+implementations. The mock Graph and Memory adapters create deterministic
+organization-scoped fixtures on first access; source ingestion can later add
+realistic projections to the same tenant-scoped stores. External Jira/GitHub
+calls remain deterministic fixtures; live provider credentials and adapters
+are hosted follow-up work.
 
 ## Production-like local mode
 
@@ -173,8 +210,19 @@ docker compose -f compose.local.yaml run --rm local-auth-seed
 ```
 
 The reset is deliberately scoped to the fixture slugs/emails. It does not
-delete Docker volumes. The seed is safe to run repeatedly and will not create
-duplicate memberships, integrations, revisions, or workflow projections.
+delete Docker volumes. The Agent Runtime memory mock and Agent Gateway graph /
+artifact mocks are process-scoped, so restart those two services after a
+manual reset to clear their in-memory state as well. The same operation is
+available as:
+
+```bash
+pnpm dev:local:watch:reset
+```
+
+The seed is safe to run repeatedly and will not create duplicate memberships,
+integrations, revisions, or workflow projections.
+To run only the idempotent seed without resetting fixtures, use
+`pnpm dev:local:watch:seed`.
 
 ## Verification scope
 

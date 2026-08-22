@@ -63,8 +63,9 @@ func (s *memoryGraphStore) Upsert(_ context.Context, mutation domain.GraphMutati
 }
 
 func (s *memoryGraphStore) Query(_ context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	s.ensureLocalFixture(request.OrganizationID)
+	defer s.mu.Unlock()
 	nodes := make([]domain.GraphNode, 0, len(s.nodes))
 	edges := make([]domain.GraphEdge, 0, len(s.edges))
 	for _, candidate := range s.nodes {
@@ -78,6 +79,60 @@ func (s *memoryGraphStore) Query(_ context.Context, request domain.GraphQueryReq
 		}
 	}
 	return graphResponse(request, nodes, edges), nil
+}
+
+// ensureLocalFixture gives every local organization a small deterministic
+// context even before a source-ingestion workflow has projected live facts.
+// Keys still include organizationID, so identical fixture node IDs can never
+// make one tenant's graph visible to another tenant.
+func (s *memoryGraphStore) ensureLocalFixture(organizationID string) {
+	if organizationID == "" {
+		return
+	}
+	prefix := organizationID + "\x00"
+	for key := range s.nodes {
+		if strings.HasPrefix(key, prefix) {
+			return
+		}
+	}
+
+	projectID := "mock-project-checkout"
+	blockerID := "mock-blocker-release-risk"
+	s.nodes[prefix+projectID] = scopedGraphNode{
+		organizationID: organizationID,
+		node: domain.GraphNode{
+			ID:   projectID,
+			Type: "project",
+			Properties: map[string]any{
+				"organizationId": organizationID,
+				"name":           "Checkout",
+				"status":         "active",
+			},
+		},
+	}
+	s.nodes[prefix+blockerID] = scopedGraphNode{
+		organizationID: organizationID,
+		node: domain.GraphNode{
+			ID:   blockerID,
+			Type: "blocker",
+			Properties: map[string]any{
+				"organizationId": organizationID,
+				"projectId":      projectID,
+				"status":         "blocked",
+				"title":          "Mock release risk requires QA confirmation",
+			},
+		},
+	}
+	s.edges[prefix+"mock-edge-release-risk"] = scopedGraphEdge{
+		organizationID: organizationID,
+		edge: domain.GraphEdge{
+			ID:           "mock-edge-release-risk",
+			SourceID:     projectID,
+			TargetID:     blockerID,
+			Relationship: "has_blocker",
+			Properties:   map[string]any{"organizationId": organizationID},
+		},
+	}
 }
 
 func graphResponse(request domain.GraphQueryRequest, nodes []domain.GraphNode, edges []domain.GraphEdge) domain.GraphQueryResponse {

@@ -273,6 +273,22 @@ export type WorkflowExecutionProjection = {
   updatedAt: string;
 };
 
+export type WorkflowEventProjection = {
+  id: string;
+  eventType: string;
+  status: string;
+  activityName?: string;
+  agentRunId?: string;
+  evidenceRef?: string;
+  metadata: JsonObject;
+  occurredAt: string;
+};
+
+export type WorkflowRecentActivityProjection = WorkflowEventProjection & {
+  workflowId: string;
+  workflowLabel: string;
+};
+
 export type IntegrationProjection = {
   id: string;
   name: string;

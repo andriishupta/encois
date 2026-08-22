@@ -3,6 +3,7 @@ import type { GatewayEnv } from "../middleware/aos.js";
 import type { WorkflowClient } from "./temporal-client.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
 import { getWorkflowRoute } from "./routes/get-workflow.route.js";
+import { getWorkflowEventsRoute } from "./routes/get-workflow-events.route.js";
 import { listWorkflowsRoute } from "./routes/list-workflows.route.js";
 import { signalWorkflowRoute } from "./routes/signal-workflow.route.js";
 import { updateWorkflowRoute } from "./routes/update-workflow.route.js";
@@ -11,6 +12,7 @@ import { submitWorkflowPlanRoute } from "./routes/submit-workflow-plan.route.js"
 import { approveWorkflowPlanRoute } from "./routes/approve-workflow-plan.route.js";
 import { applyWorkflowPlanRoute } from "./routes/apply-workflow-plan.route.js";
 import { listWorkflowTemplatesRoute } from "./routes/list-workflow-templates.route.js";
+import { listWorkflowActivityRoute } from "./routes/list-workflow-activity.route.js";
 import type { AppConfig } from "../config.js";
 
 export function createWorkflowsRouter(
@@ -33,9 +35,11 @@ export function createWorkflowsRouter(
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());
   router.post("/plans/:planId/apply", applyWorkflowPlanRoute(options));
   router.get("/templates", listWorkflowTemplatesRoute);
+  router.get("/activity", listWorkflowActivityRoute(options));
   router.get("/", listWorkflowsRoute(options));
   router.post("/:workflowId/signals", signalWorkflowRoute(options));
   router.post("/:workflowId/updates", updateWorkflowRoute(options));
+  router.get("/:workflowId/events", getWorkflowEventsRoute(options));
   router.get("/:workflowId", getWorkflowRoute(options));
   return router;
 }

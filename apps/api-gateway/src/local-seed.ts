@@ -85,8 +85,8 @@ type ActiveUserFixture = {
 
 const activeUsers: readonly ActiveUserFixture[] = [
   { key: "test-owner", uid: ownerUid, email: ownerEmail, password: ownerPassword, displayName: "Organization Test Owner", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
-  { key: "test-dev", uid: "local-dev", email: "dev@local.test", password: "local-dev-1234", displayName: "Dev Full Access", organizationSlug: "organization-test", roleKey: "manager", unitSlug: "root", access: "manager" },
-  { key: "test-manager", uid: "local-manager", email: "manager@local.test", password: "local-manager-1234", displayName: "Engineering Manager", organizationSlug: "organization-test", roleKey: "manager", unitSlug: "engineering", access: "manager" },
+  { key: "test-dev", uid: "local-dev", email: "dev@local.test", password: "local-dev-1234", displayName: "Dev Full Access", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
+  { key: "test-manager", uid: "local-manager", email: "manager@local.test", password: "local-manager-1234", displayName: "Manager Full Access", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
   { key: "test-user", uid: "local-test-user", email: "test@local.test", password: "local-test-1234", displayName: "Restricted Test User", organizationSlug: "organization-test", roleKey: "viewer", unitSlug: "checkout", access: "viewer" },
   { key: "avengers-owner", uid: "local-avengers-owner", email: "avengers-owner@local.test", password: "local-avengers-1234", displayName: "Avengers Owner", organizationSlug: "organization-avengers", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
   { key: "avengers-manager", uid: "local-avengers-manager", email: "avengers-manager@local.test", password: "local-avengers-manager-1234", displayName: "Avengers Product Manager", organizationSlug: "organization-avengers", roleKey: "manager", unitSlug: "product", access: "manager" },
@@ -99,15 +99,15 @@ type OnboardingFixture = {
   uid: string;
   organizationSlug: string;
   unitSlug: string;
-  roleKey: "manager" | "member";
+  roleKey: "organization_admin";
 };
 
 const onboardingUsers: readonly OnboardingFixture[] = [
-  { email: "onboarding1@local.test", password: "local-onboarding-1", displayName: "Onboarding One", uid: "local-onboarding-1", organizationSlug: "organization-test", unitSlug: "root", roleKey: "member" },
-  { email: "onboarding2@local.test", password: "local-onboarding-2", displayName: "Onboarding Two", uid: "local-onboarding-2", organizationSlug: "organization-test", unitSlug: "engineering", roleKey: "member" },
-  { email: "onboarding3@local.test", password: "local-onboarding-3", displayName: "Onboarding Three", uid: "local-onboarding-3", organizationSlug: "organization-test", unitSlug: "checkout", roleKey: "manager" },
-  { email: "onboarding4@local.test", password: "local-onboarding-4", displayName: "Onboarding Four", uid: "local-onboarding-4", organizationSlug: "organization-avengers", unitSlug: "root", roleKey: "member" },
-  { email: "onboarding5@local.test", password: "local-onboarding-5", displayName: "Onboarding Five", uid: "local-onboarding-5", organizationSlug: "organization-avengers", unitSlug: "product", roleKey: "manager" },
+  { email: "onboarding1@local.test", password: "local-onboarding-1", displayName: "Onboarding One", uid: "local-onboarding-1", organizationSlug: "organization-test", unitSlug: "root", roleKey: "organization_admin" },
+  { email: "onboarding2@local.test", password: "local-onboarding-2", displayName: "Onboarding Two", uid: "local-onboarding-2", organizationSlug: "organization-test", unitSlug: "engineering", roleKey: "organization_admin" },
+  { email: "onboarding3@local.test", password: "local-onboarding-3", displayName: "Onboarding Three", uid: "local-onboarding-3", organizationSlug: "organization-test", unitSlug: "checkout", roleKey: "organization_admin" },
+  { email: "onboarding4@local.test", password: "local-onboarding-4", displayName: "Onboarding Four", uid: "local-onboarding-4", organizationSlug: "organization-avengers", unitSlug: "root", roleKey: "organization_admin" },
+  { email: "onboarding5@local.test", password: "local-onboarding-5", displayName: "Onboarding Five", uid: "local-onboarding-5", organizationSlug: "organization-avengers", unitSlug: "product", roleKey: "organization_admin" },
 ];
 
 const firebaseApp = initializeApp({ projectId }, `local-auth-seed-${projectId}`);
@@ -216,6 +216,24 @@ async function ensureActiveFixtureUser(
   if (!membershipId) throw new Error(`Local membership for ${identity.email} was not persisted.`);
   await tx.update(organizationMemberships).set({ roleId: role.id, status: "active", updatedAt: new Date() }).where(eq(organizationMemberships.id, membershipId));
   await tx.insert(membershipScopes).values({ organizationId: organization.id, membershipId, organizationUnitId: unit.id, access: spec.access }).onConflictDoUpdate({ target: [membershipScopes.membershipId, membershipScopes.organizationUnitId], set: { access: spec.access } });
+  const email = (identity.email ?? "").trim().toLowerCase();
+  if (!email) throw new Error(`Local fixture ${identity.uid} has no email.`);
+  const [existingInvite] = await tx
+    .select({ id: organizationInvites.id })
+    .from(organizationInvites)
+    .where(and(eq(organizationInvites.organizationId, organization.id), eq(organizationInvites.emailNormalized, email)))
+    .orderBy(desc(organizationInvites.updatedAt))
+    .limit(1);
+  const acceptedInvite = {
+    organizationUnitId: unit.id,
+    roleId: role.id,
+    status: "accepted" as const,
+    acceptedUserId: user.id,
+    acceptedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  if (existingInvite) await tx.update(organizationInvites).set(acceptedInvite).where(eq(organizationInvites.id, existingInvite.id));
+  else await tx.insert(organizationInvites).values({ organizationId: organization.id, emailNormalized: email, ...acceptedInvite });
   return { id: user.id, email: user.email ?? identity.email ?? "unknown@local.test" };
 }
 
@@ -287,8 +305,8 @@ async function ensureKnowledgeSource(
   const revisionStatus = sourceStatus === "failed" ? "failed" : sourceStatus === "ingesting" ? "ingesting" : "active";
   const [revision] = await tx.select({ id: sourceRevisions.id }).from(sourceRevisions).where(and(eq(sourceRevisions.organizationId, organization.id), eq(sourceRevisions.sourceId, source.id), eq(sourceRevisions.revision, "r1"))).limit(1);
   const revisionRow = revision
-    ? (await tx.update(sourceRevisions).set({ status: revisionStatus, artifactRef: `artifact://local/${organization.slug}/${sourceKey}/r1`, sourceObjectId: `${organization.slug}/${sourceKey}/r1`, contentType: "application/json", checksum: `fixture-${organization.slug}-${sourceKey}-r1`, observedAt: new Date(Date.now() - 60 * 60 * 1000), ingestedAt: revisionStatus === "active" ? new Date(Date.now() - 30 * 60 * 1000) : null, metadata: { fixture: true, sourceKey } }).where(eq(sourceRevisions.id, revision.id)).returning({ id: sourceRevisions.id }))[0]
-    : (await tx.insert(sourceRevisions).values({ organizationId: organization.id, sourceId: source.id, revision: "r1", status: revisionStatus, artifactRef: `artifact://local/${organization.slug}/${sourceKey}/r1`, sourceObjectId: `${organization.slug}/${sourceKey}/r1`, contentType: "application/json", checksum: `fixture-${organization.slug}-${sourceKey}-r1`, observedAt: new Date(Date.now() - 60 * 60 * 1000), ingestedAt: revisionStatus === "active" ? new Date(Date.now() - 30 * 60 * 1000) : undefined, metadata: { fixture: true, sourceKey } }).returning({ id: sourceRevisions.id }))[0];
+    ? (await tx.update(sourceRevisions).set({ status: revisionStatus, artifactRef: `artifact://local/${organization.id}/${sourceKey}/r1`, sourceObjectId: `${organization.slug}/${sourceKey}/r1`, contentType: "application/json", checksum: `fixture-${organization.slug}-${sourceKey}-r1`, observedAt: new Date(Date.now() - 60 * 60 * 1000), ingestedAt: revisionStatus === "active" ? new Date(Date.now() - 30 * 60 * 1000) : null, metadata: { fixture: true, sourceKey } }).where(eq(sourceRevisions.id, revision.id)).returning({ id: sourceRevisions.id }))[0]
+    : (await tx.insert(sourceRevisions).values({ organizationId: organization.id, sourceId: source.id, revision: "r1", status: revisionStatus, artifactRef: `artifact://local/${organization.id}/${sourceKey}/r1`, sourceObjectId: `${organization.slug}/${sourceKey}/r1`, contentType: "application/json", checksum: `fixture-${organization.slug}-${sourceKey}-r1`, observedAt: new Date(Date.now() - 60 * 60 * 1000), ingestedAt: revisionStatus === "active" ? new Date(Date.now() - 30 * 60 * 1000) : undefined, metadata: { fixture: true, sourceKey } }).returning({ id: sourceRevisions.id }))[0];
   if (!revisionRow) throw new Error(`Revision for ${name} was not created.`);
   await tx.update(knowledgeSources).set({ currentRevisionId: revisionRow.id }).where(eq(knowledgeSources.id, source.id));
   return { id: source.id, name, revisionId: revisionRow.id };
@@ -310,7 +328,7 @@ async function ensureWebhookFixture(tx: PersistenceTransaction, organization: Fi
     : (await tx.insert(webhookEndpoints).values({ organizationId: organization.id, provider, endpointKey, status: "active" }).returning({ id: webhookEndpoints.id }))[0];
   if (!endpoint) throw new Error(`Webhook endpoint ${endpointKey} was not created.`);
   const [delivery] = await tx.select({ id: webhookDeliveries.id }).from(webhookDeliveries).where(and(eq(webhookDeliveries.organizationId, organization.id), eq(webhookDeliveries.endpointId, endpoint.id), eq(webhookDeliveries.providerEventId, `${endpointKey}-event-1`))).limit(1);
-  if (!delivery) await tx.insert(webhookDeliveries).values({ organizationId: organization.id, endpointId: endpoint.id, providerEventId: `${endpointKey}-event-1`, status: "processed", payloadRef: `artifact://local/${organization.slug}/webhooks/${endpointKey}/event-1`, receivedAt: new Date(Date.now() - 15 * 60 * 1000), processedAt: new Date(Date.now() - 14 * 60 * 1000) });
+  if (!delivery) await tx.insert(webhookDeliveries).values({ organizationId: organization.id, endpointId: endpoint.id, providerEventId: `${endpointKey}-event-1`, status: "processed", payloadRef: `artifact://local/${organization.id}/webhooks/${endpointKey}/event-1`, receivedAt: new Date(Date.now() - 15 * 60 * 1000), processedAt: new Date(Date.now() - 14 * 60 * 1000) });
 }
 
 type WorkflowFixture = {
@@ -383,7 +401,7 @@ async function ensureWorkflowFixture(tx: PersistenceTransaction, organization: F
       { eventType: fixture.status === "failed" ? "activity_failed" : "activity_completed", status: fixture.status === "failed" ? "failed" : "completed", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef: `evidence://local/${organization.slug}/${fixture.key}/collector`, metadata: { fixture: true, shard: "collector", attempt: fixture.status === "failed" ? 3 : 1, durationMs: fixture.status === "failed" ? 4800 : 1240, ...(fixture.issue ? { issue: fixture.issue } : {}) } },
       { eventType: "workflow_status_updated", status: fixture.status, metadata: { fixture: true, shard: "summary", ...(fixture.issue ? { issue: fixture.issue } : {}) } },
     ];
-    await tx.insert(workflowEvents).values(events.map((event) => ({ organizationId: organization.id, workflowRunId: run.id, ...event, occurredAt: new Date(Date.now() - 10 * 60 * 1000) })));
+    await tx.insert(workflowEvents).values(events.map((event, index) => ({ organizationId: organization.id, workflowRunId: run.id, ...event, occurredAt: new Date(Date.now() - (10 - index) * 60 * 1000) })));
   }
 }
 

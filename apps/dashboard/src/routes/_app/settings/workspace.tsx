@@ -31,7 +31,7 @@ function WorkspaceSettingsPage() {
   function saveSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!mockMode) return
-    queryClient.setQueryData(workspaceQueryKey, updateMockOnboardingState({ workspaceName: name }))
+    queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ workspaceName: name }))
     setSaved(true)
     window.setTimeout(() => setSaved(false), 1800)
   }

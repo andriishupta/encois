@@ -14,6 +14,8 @@ import type {
   WaitlistRequest,
   WaitlistSubmissionResponse,
   WorkflowExecutionProjection,
+  WorkflowEventProjection,
+  WorkflowRecentActivityProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
   WorkflowUpdateRequest,
@@ -77,6 +79,22 @@ function isWorkflowProjection(value: unknown): value is WorkflowExecutionProject
   if (typeof value.workflowId !== 'string' || typeof value.workflowType !== 'string' || typeof value.namespace !== 'string' || typeof value.taskQueue !== 'string' || typeof value.organizationId !== 'string' || typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string') return false
   if (!Object.values(WorkflowExecutionStatus).includes(value.status as WorkflowExecutionStatus)) return false
   return value.statusReason === undefined || Object.values(WorkflowStatusReason).includes(value.statusReason as WorkflowStatusReason)
+}
+
+function isWorkflowEvent(value: unknown): value is WorkflowEventProjection {
+  return isJsonObject(value)
+    && typeof value.id === 'string'
+    && typeof value.eventType === 'string'
+    && typeof value.status === 'string'
+    && isJsonObject(value.metadata)
+    && typeof value.occurredAt === 'string'
+}
+
+function isWorkflowActivity(value: unknown): value is WorkflowRecentActivityProjection {
+  return isJsonObject(value)
+    && isWorkflowEvent(value)
+    && typeof (value as Record<string, unknown>).workflowId === 'string'
+    && typeof (value as Record<string, unknown>).workflowLabel === 'string'
 }
 
 function isIntegrationProjection(value: unknown): value is IntegrationProjection {
@@ -287,6 +305,14 @@ export async function getWorkflow(workflowId: string): Promise<WorkflowExecution
   const value = await request<unknown>(`/workflows/${encodeURIComponent(workflowId)}`)
   if (!isWorkflowProjection(value)) throw createApiError(200, 'The service returned an invalid workflow response.', 'INVALID_RESPONSE')
   return value
+}
+
+export function getWorkflowEvents(workflowId: string): Promise<readonly WorkflowEventProjection[]> {
+  return request<unknown>(`/workflows/${encodeURIComponent(workflowId)}/events`).then((value) => parseList(value, isWorkflowEvent, 'workflow event list'))
+}
+
+export function listWorkflowActivity(): Promise<readonly WorkflowRecentActivityProjection[]> {
+  return request<unknown>('/workflows/activity').then((value) => parseList(value, isWorkflowActivity, 'workflow activity list'))
 }
 
 export async function startWorkflow(input: WorkflowStartRequest): Promise<WorkflowExecutionProjection> {

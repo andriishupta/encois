@@ -1,4 +1,4 @@
-import { getAuthSession } from '@/lib/auth'
+import { getAuthSession, getAuthUserKey } from '@/lib/auth'
 
 export type MemorySource = 'slack' | 'github' | 'jira' | 'linear' | 'document'
 export type CoordinationMode = 'start-coordinator' | 'connect-only'
@@ -32,7 +32,7 @@ const emptyState: MockOnboardingState = {
 
 function storageKey(): string {
   const organizationId = getAuthSession()?.organizationId ?? 'unscoped'
-  return `${STORAGE_KEY_PREFIX}.${organizationId}`
+  return `${STORAGE_KEY_PREFIX}.${organizationId}.${encodeURIComponent(getAuthUserKey())}`
 }
 
 export function getMockOnboardingState(): MockOnboardingState | null {

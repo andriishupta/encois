@@ -46,6 +46,8 @@ export type WorkflowStartCommand = {
 
 export type {
   WorkflowExecutionProjection,
+  WorkflowEventProjection,
+  WorkflowRecentActivityProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
   WorkflowUpdateRequest,

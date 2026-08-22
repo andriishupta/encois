@@ -154,6 +154,31 @@ func TestDynamicBlueprintWorkflowRejectsEmptyScope(t *testing.T) {
 	}
 }
 
+func TestDynamicBlueprintWorkflowRejectsCrossOrganizationWorkflowID(t *testing.T) {
+	err := validateBlueprintWorkflowInput(BlueprintWorkflowInput{
+		ContractVersion: "workflow-blueprint.v1",
+		WorkflowID:      "workflow:org-2:release-1",
+		OrganizationID:  "org-1",
+		ActorID:         "user-1",
+		RequestID:       "request-cross-organization",
+		PolicyVersion:   "policy-read-only-fixture-v1",
+		Capability:      "test-capability",
+		Scope:           map[string]any{"ids": []any{"team-a"}},
+		Blueprint: coordinator.WorkflowBlueprint{
+			ContractVersion: "workflow-blueprint.v1",
+			BlueprintID:     "cross-organization",
+			Version:         "1.0.0",
+			Name:            "Cross organization",
+			WorkflowType:    UserBlueprintWorkflowType,
+			Purpose:         "Reject mismatched tenant identity",
+			Steps:           []coordinator.WorkflowStep{{ID: "transform", Kind: "transform"}},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected workflow id organization mismatch to be rejected")
+	}
+}
+
 func testBlueprintActivity(_ context.Context, input BlueprintStepInput) (BlueprintStepResult, error) {
 	return BlueprintStepResult{
 		StepID: input.Step.ID,

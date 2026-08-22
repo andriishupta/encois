@@ -76,6 +76,13 @@ func TestExecutionCapabilityBindsExecutionContextAndScope(t *testing.T) {
 	if err := verifyExecutionCapability(execution.Capability, secret, execution, now); err == nil {
 		t.Fatal("organization change was accepted by a capability bound to a different organization")
 	}
+
+	execution = capabilityTestContext()
+	execution.WorkflowID = "workflow:org-other:release-readiness:one"
+	execution.Capability = signedTestCapability(t, secret, execution, now)
+	if err := verifyExecutionCapability(execution.Capability, secret, execution, now); err == nil {
+		t.Fatal("a validly signed workflow ID outside the organization prefix was accepted")
+	}
 }
 
 func TestConfiguredRouterRejectsMissingOrMismatchedCapability(t *testing.T) {

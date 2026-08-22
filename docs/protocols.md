@@ -105,13 +105,14 @@ The Gateway API accepts application requests:
 ```text
 POST /v1/workflows
 GET  /v1/workflows/{workflowId}
+GET  /v1/workflows/{workflowId}/events
+GET  /v1/workflows/activity
 POST /v1/workflows/{workflowId}/signals
 POST /v1/workflows/{workflowId}/updates
 POST /v1/workflows/plans/validate
 POST /v1/workflows/plans
 POST /v1/workflows/plans/{planId}/approve
 POST /v1/workflows/plans/{planId}/apply
-GET  /v1/workflows/{workflowId}/events
 ```
 
 Private Runtime/Coordinator boundary:

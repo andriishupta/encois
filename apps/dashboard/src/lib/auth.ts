@@ -112,10 +112,10 @@ function storedPermissions(): PermissionKey[] {
 }
 
 function legacyPermissions(value: { canOnboard?: unknown; canManageKnowledgeSources?: unknown }): PermissionKey[] {
-  return [
-    value.canOnboard === true ? Permission.OnboardingManage : undefined,
-    value.canManageKnowledgeSources === true ? Permission.KnowledgeManage : undefined,
-  ].filter((permission): permission is PermissionKey => permission !== undefined)
+  const permissions: PermissionKey[] = []
+  if (value.canOnboard === true) permissions.push(Permission.OnboardingManage)
+  if (value.canManageKnowledgeSources === true) permissions.push(Permission.KnowledgeManage)
+  return permissions
 }
 
 /** Wait until Firebase has restored the browser session before routing. */
@@ -160,6 +160,12 @@ export function getAuthIdentity(): AuthIdentity {
   }
 }
 
+/** Stable, non-secret browser key for local per-user UI state. */
+export function getAuthUserKey(): string {
+  const firebaseUserKey = currentFirebaseUser?.uid?.trim() || currentFirebaseUser?.email?.trim().toLowerCase()
+  return firebaseUserKey || 'development-session'
+}
+
 /** Gets a fresh bearer token without exposing Firebase refresh tokens to API code. */
 export async function getAuthSessionToken(): Promise<AuthSession | null> {
   const localSession = getAuthSession()
@@ -172,6 +178,7 @@ export async function getAuthSessionToken(): Promise<AuthSession | null> {
   return {
     accessToken: await firebaseAuth.currentUser.getIdToken(),
     ...(organizationId ? { organizationId } : {}),
+    permissions: storedPermissions(),
   }
 }
 

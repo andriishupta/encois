@@ -45,6 +45,20 @@ function temporalStatus(value: string): WorkflowRunStatus {
   return WorkflowExecutionStatus.Running;
 }
 
+function workflowIdBelongsToOrganization(workflowId: string, organizationId: string): boolean {
+  return Boolean(organizationId) && workflowId.startsWith(`workflow:${organizationId}:`);
+}
+
+function assertWorkflowCommandTenant(command: WorkflowStartCommand): void {
+  if (
+    !command.input.organizationId ||
+    !workflowIdBelongsToOrganization(command.workflowId, command.input.organizationId) ||
+    command.input.workflowId !== command.workflowId
+  ) {
+    throw new Error("workflow id is outside the organization scope");
+  }
+}
+
 function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
   const executions = new Map<string, WorkflowExecutionProjection>();
   const requestHashes = new Map<string, string>();
@@ -52,6 +66,7 @@ function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
 
   return {
     async start(command, namespace) {
+      assertWorkflowCommandTenant(command);
       const existing = executions.get(command.workflowId);
       if (existing && existing.organizationId === command.input.organizationId) {
         const previousHash = requestHashes.get(command.workflowId);
@@ -101,7 +116,10 @@ function createInMemoryWorkflowClient(): WorkflowClient & WorkflowResultReader {
       executions.set(workflowId, { ...execution, status, updatedAt: now() });
     },
 
-    async signalCoordinator(coordinatorId, organizationId, _namespace, _event) {
+    async signalCoordinator(coordinatorId, organizationId, _namespace, event) {
+      if (!organizationId || !coordinatorId || event.organizationId !== organizationId || event.coordinatorId !== coordinatorId) {
+        throw new Error("Coordinator event scope does not match the target");
+      }
       const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
       const execution = executions.get(workflowId);
       if (!execution || execution.organizationId !== organizationId) throw new Error("Coordinator workflow not found");
@@ -175,6 +193,7 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
 
   return {
     async start(command, namespace) {
+      assertWorkflowCommandTenant(command);
       const existing = await withOrganizationContext(database!, command.input.organizationId, async (db) => {
         const [row] = await db
           .select()
@@ -206,6 +225,7 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
     },
 
     async get(workflowId, organizationId, namespace) {
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) return null;
       const row = await withOrganizationContext(database!, organizationId, async (db) => {
         const [found] = await db
           .select()
@@ -225,6 +245,7 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
     },
 
     async signal(workflowId, organizationId, _namespace, request) {
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       await withOrganizationContext(database!, organizationId, async (db) => {
         const status = request.payload.approved === false ? WorkflowExecutionStatus.Failed : WorkflowExecutionStatus.Running;
         await db
@@ -234,7 +255,10 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
       });
     },
 
-    async signalCoordinator(coordinatorId, organizationId, _namespace, _event) {
+    async signalCoordinator(coordinatorId, organizationId, _namespace, event) {
+      if (!organizationId || !coordinatorId || event.organizationId !== organizationId || event.coordinatorId !== coordinatorId) {
+        throw new Error("Coordinator event scope does not match the target");
+      }
       const workflowId = buildCoordinatorWorkflowId(organizationId, coordinatorId);
       await withOrganizationContext(database!, organizationId, async (db) => {
         await db
@@ -245,6 +269,7 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
     },
 
     async update(workflowId, organizationId) {
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       await withOrganizationContext(database!, organizationId, async (db) => {
         await db
           .update(workflowRuns)
@@ -254,6 +279,7 @@ function createDatabaseWorkflowClient(): WorkflowClient & WorkflowResultReader {
     },
 
     async cancel(workflowId, organizationId) {
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       await withOrganizationContext(database!, organizationId, async (db) => {
         await db
           .update(workflowRuns)
@@ -311,6 +337,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
 
   return {
     async start(command, namespace) {
+      assertWorkflowCommandTenant(command);
       const client = await getClient();
       const existingHandle = client.workflow.getHandle(command.workflowId);
       let description: Awaited<ReturnType<typeof existingHandle.describe>> | undefined;

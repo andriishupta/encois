@@ -7,7 +7,7 @@ import { ProductTerm } from '@/components/product-term'
 import { WorkflowCanvas } from '@/components/workflow-canvas'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getWorkflow } from '@/lib/api'
+import { getWorkflow, getWorkflowEvents } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
@@ -22,7 +22,11 @@ export const Route = createFileRoute('/_app/workflows/$workflowId')({
 function WorkflowDetailPage() {
   const { workflowId } = Route.useParams()
   const workflow = useQuery({ queryKey: queryKeys.workflow(workflowId), queryFn: () => getWorkflow(workflowId), refetchInterval: 30_000 })
+  const events = useQuery({ queryKey: queryKeys.workflowEvents(workflowId), queryFn: () => getWorkflowEvents(workflowId), enabled: workflow.isSuccess, refetchInterval: 30_000 })
   const status = workflow.data?.status ?? (workflow.isLoading ? 'loading' : 'unavailable')
+  const eventRows = events.data ?? []
+  const activityRows = eventRows.filter((event) => event.activityName && event.eventType.startsWith('activity_'))
+  const transitionCount = eventRows.filter((event) => event.eventType === 'workflow_status_updated').length
 
   return (
     <div className="flex flex-col gap-8">
@@ -32,7 +36,7 @@ function WorkflowDetailPage() {
         <SummaryCard label="Status" value={status} icon={CircleDashed} />
         <SummaryCard label="Workflow ID" value={workflowId} icon={GitBranch} mono />
         <SummaryCard label="Run ID" value={workflow.data?.runId ?? 'Not available'} icon={RotateCcw} />
-        <SummaryCard label="Transitions" value="—" icon={TimerReset} />
+        <SummaryCard label="Transitions" value={events.isLoading ? '…' : String(transitionCount)} icon={TimerReset} />
       </div>
 
       <Card>
@@ -57,7 +61,11 @@ function WorkflowDetailPage() {
           <CardDescription>Step activity and specialist work for this <ProductTerm term="workflow" />.</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyPanel icon={CircleDashed} title="No step activity yet" description="Detailed step activity will appear here when available." />
+          {events.isError ? <p className="text-sm text-destructive">Could not load step activity: {events.error.message}</p> : null}
+          {!events.isLoading && !events.isError && activityRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No step activity yet" description="Detailed step activity will appear here when available." /> : null}
+          <div className="flex flex-col gap-2">
+            {activityRows.map((event) => <ActivityRow key={event.id} event={event} />)}
+          </div>
         </CardContent>
       </Card>
 
@@ -67,11 +75,32 @@ function WorkflowDetailPage() {
           <CardDescription>Source references, timestamps, retries, and state transitions will appear here.</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyPanel icon={CircleDashed} title="No event history yet" description={<><ProductTerm term="evidence" /> references, retries, and state transitions will appear here when available.</>} />
+          {!events.isLoading && !events.isError && eventRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No event history yet" description={<><ProductTerm term="evidence" /> references, retries, and state transitions will appear here when available.</>} /> : null}
+          <div className="flex flex-col gap-2">
+            {eventRows.map((event) => <EventRow key={event.id} event={event} />)}
+          </div>
         </CardContent>
       </Card>
     </div>
   )
+}
+
+function ActivityRow({ event }: { event: import('@encois/contracts').WorkflowEventProjection }) {
+  const issue = typeof event.metadata.issue === 'string' ? event.metadata.issue : undefined
+  const attempt = typeof event.metadata.attempt === 'number' ? `attempt ${event.metadata.attempt}` : undefined
+  const shard = typeof event.metadata.shard === 'string' ? `shard ${event.metadata.shard}` : undefined
+  const duration = typeof event.metadata.durationMs === 'number' ? `${event.metadata.durationMs}ms` : undefined
+  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:gap-4"><span className="min-w-0 flex-1 font-medium">{event.activityName}</span><span className="text-xs text-muted-foreground">{event.status}{attempt ? ` · ${attempt}` : ''}{shard ? ` · ${shard}` : ''}{duration ? ` · ${duration}` : ''}{issue ? ` · ${issue}` : ''}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div>
+}
+
+function EventRow({ event }: { event: import('@encois/contracts').WorkflowEventProjection }) {
+  const shard = typeof event.metadata.shard === 'string' ? event.metadata.shard : undefined
+  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{event.eventType}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div><div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{event.status}</span>{shard ? <span>shard: {shard}</span> : null}{event.evidenceRef ? <span className="font-mono">{event.evidenceRef}</span> : null}{event.agentRunId ? <span className="font-mono">{event.agentRunId}</span> : null}</div></div>
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.valueOf()) ? 'Time unavailable' : date.toLocaleString()
 }
 
 function SummaryCard({

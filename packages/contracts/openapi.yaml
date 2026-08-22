@@ -382,6 +382,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowExecutionListResponse'
+  /api/v1/workflows/activity:
+    get:
+      operationId: listWorkflowActivity
+      summary: List recent workflow events visible in the caller's effective scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scoped recent workflow activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRecentActivityListResponse'
   /api/v1/internal/coordinator/plans/validate:
     post:
       operationId: validateCoordinatorWorkflowChangePlan
@@ -489,6 +502,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowExecutionResponse'
+  /api/v1/workflows/{workflowId}/events:
+    get:
+      operationId: getWorkflowEvents
+      summary: Read activity, evidence, and lifecycle events for a workflow
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Scoped workflow events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowEventListResponse'
   /api/v1/workflows/{workflowId}/signals:
     post:
       operationId: signalWorkflow
@@ -1039,6 +1071,41 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowExecutionProjection'
+    WorkflowEvent:
+      type: object
+      additionalProperties: false
+      required: [id, eventType, status, metadata, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string }
+        status: { type: string }
+        activityName: { type: string }
+        agentRunId: { type: string }
+        evidenceRef: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        occurredAt: { type: string }
+    WorkflowEventListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowEvent' }
+    WorkflowRecentActivity:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowEvent'
+        - type: object
+          required: [workflowId, workflowLabel]
+          properties:
+            workflowId: { type: string }
+            workflowLabel: { type: string }
+    WorkflowRecentActivityListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowRecentActivity' }
     WorkflowExecutionProjection:
       type: object
       required: [workflowId, workflowType, namespace, taskQueue, status, organizationId, createdAt, updatedAt]

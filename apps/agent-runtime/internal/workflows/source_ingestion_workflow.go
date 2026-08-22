@@ -90,6 +90,9 @@ func validateSourceIngestionWorkflowInput(input SourceIngestionWorkflowInput) er
 	if input.RequestID == "" || input.WorkflowID == "" || input.OrganizationID == "" || input.ActorID == "" || input.PolicyVersion == "" || input.Capability == "" {
 		return fmt.Errorf("source ingestion execution context is incomplete")
 	}
+	if !workflowIDBelongsToOrganization(input.WorkflowID, input.OrganizationID) {
+		return fmt.Errorf("workflow id is outside the organization scope")
+	}
 	if input.SourceID == "" || input.SourceRevisionID == "" || input.Trigger == "" || input.SourceKind == "" {
 		return fmt.Errorf("source ingestion source identity is incomplete")
 	}
