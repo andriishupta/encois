@@ -81,21 +81,51 @@ revision without `start` does not start an execution. Pending starts remain in
 Coordinator state until the idempotent start Activity succeeds. Scheduler
 invocation and hosted delivery remain deployment work.
 
-The organization projection includes the tenant-scoped `organization_onboarding`
-record. `PATCH /api/v1/organization/onboarding` is limited to
-`onboarding:manage` and persists the selected coordination mode and workflow
-catalog references. The Gateway accepts only published Template keys or current
-approved organization Blueprints and rejects unknown selections before changing
-state. `POST /api/v1/organization/onboarding/start` starts the stable
-organization Coordinator Workflow through the existing Gateway WorkflowClient,
-persists the Coordinator run projection, and enqueues a
-`reconcile-requested` `coordinator-event.v1` in the durable outbox. The browser
-never supplies a Coordinator or Workflow runtime ID. The selected coordination
-mode and catalog references are included in the Coordinator start contract and
-persisted run business input. The persisted Coordinator
-run is a control-plane record, not a user Run: ordinary workflow list/detail,
-event, and control routes exclude it, while onboarding and future admin
-surfaces address it through their own permission boundary.
+### Organization onboarding and readiness
+
+The organization projection includes the tenant-scoped
+`organization_onboarding` record. Its externally visible status is one of
+`pending`, `initializing`, `ready`, or `failed`; a missing row is not a status
+and is reported as the technical error `ORGANIZATION_ONBOARDING_NOT_FOUND`
+with HTTP `503`. Reads do not create a missing row. The migration/backfill or
+an explicit repair flow owns that correction.
+
+`PATCH /api/v1/organization/onboarding` is limited to `onboarding:manage` and
+persists the selected coordination mode and workflow catalog references. The
+Gateway accepts only published Template keys or current approved organization
+Blueprints and rejects unknown selections before changing state.
+`POST /api/v1/organization/onboarding/start` starts the stable organization
+Coordinator Workflow through the existing Gateway WorkflowClient, persists the
+Coordinator run projection, and enqueues a `reconcile-requested`
+`coordinator-event.v1` in the durable outbox. A successful start changes
+`pending` to `initializing`; it cannot change the organization directly to
+`ready`.
+
+Only a versioned, service-authenticated `coordinator.v1` status callback may
+persist the `ready` or `failed` transition after the Coordinator has performed
+its initial reconciliation. The callback must be organization-scoped and
+match the active Coordinator identity. An administrator retry is idempotent,
+reuses that stable Coordinator identity, and returns the organization to
+`initializing`.
+
+While the status is not `ready`, ordinary tenant product routes return
+`ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. The exceptions are the
+organization projection, onboarding update/start/retry, onboarding Source
+upload and ingestion, and published Template/current approved Blueprint
+catalog reads. Existing authentication and permission checks still apply to
+those exceptions. A user without `onboarding:manage` can inspect progress but
+cannot update or retry onboarding. `GET /health/ready` is service readiness,
+not organization onboarding readiness. See the complete route matrix in
+[`flows.md`](flows.md#onboarding-readiness-states) and the runtime boundary in
+[`architecture.md`](architecture.md#45-organization-onboarding-and-coordinator).
+
+The browser never supplies a Coordinator, Blueprint revision, Workflow, Run,
+or Temporal runtime ID. The selected coordination mode and catalog references
+are included in the Coordinator start contract and persisted run business
+input. The persisted Coordinator run is a control-plane record, not a user
+Run: ordinary workflow list/detail, event, and control routes exclude it,
+while onboarding and future admin surfaces address it through their own
+permission boundary.
 
 ## Repository layout
 

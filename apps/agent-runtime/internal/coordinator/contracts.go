@@ -3,22 +3,23 @@ package coordinator
 import contracts "github.com/andriishupta/encois/packages/contracts"
 
 const (
-	CoordinatorWorkflowName       = string(contracts.WorkflowTypeCoordinator)
-	BootstrapProjectWorkflowName  = string(contracts.WorkflowTypeBootstrapProject)
-	CoordinatorContractVersion    = string(contracts.ContractCoordinator)
-	WorkflowChangePlanVersion     = string(contracts.ContractWorkflowChangePlan)
-	UserBlueprintWorkflowType     = string(contracts.WorkflowTypeUserBlueprint)
-	SignalIntegrationConnected    = string(contracts.SignalIntegrationConnected)
-	SignalSourceReady             = string(contracts.SignalSourceReady)
-	SignalReconcile               = string(contracts.SignalReconcile)
-	SignalWorkflowCompleted       = string(contracts.SignalWorkflowCompleted)
-	SignalProviderChanged         = string(contracts.SignalProviderChanged)
-	SignalApprovalResolved        = string(contracts.SignalApprovalResolved)
-	SignalCoordinatorEvent        = string(contracts.SignalCoordinatorEvent)
-	CoordinatorPlanActivityName   = "CreateCoordinatorPlan"
-	CoordinatorSubmitActivityName = "SubmitWorkflowChangePlan"
-	CoordinatorStartActivityName  = "StartApprovedWorkflow"
-	CoordinatorStateQueryName     = "coordinator-state"
+	CoordinatorWorkflowName                 = string(contracts.WorkflowTypeCoordinator)
+	BootstrapProjectWorkflowName            = string(contracts.WorkflowTypeBootstrapProject)
+	CoordinatorContractVersion              = string(contracts.ContractCoordinator)
+	WorkflowChangePlanVersion               = string(contracts.ContractWorkflowChangePlan)
+	UserBlueprintWorkflowType               = string(contracts.WorkflowTypeUserBlueprint)
+	SignalIntegrationConnected              = string(contracts.SignalIntegrationConnected)
+	SignalSourceReady                       = string(contracts.SignalSourceReady)
+	SignalReconcile                         = string(contracts.SignalReconcile)
+	SignalWorkflowCompleted                 = string(contracts.SignalWorkflowCompleted)
+	SignalProviderChanged                   = string(contracts.SignalProviderChanged)
+	SignalApprovalResolved                  = string(contracts.SignalApprovalResolved)
+	SignalCoordinatorEvent                  = string(contracts.SignalCoordinatorEvent)
+	CoordinatorPlanActivityName             = "CreateCoordinatorPlan"
+	CoordinatorSubmitActivityName           = "SubmitWorkflowChangePlan"
+	CoordinatorStartActivityName            = "StartApprovedWorkflow"
+	CoordinatorOnboardingStatusActivityName = "UpdateOnboardingStatus"
+	CoordinatorStateQueryName               = "coordinator-state"
 )
 
 type ScopeType string
@@ -75,6 +76,14 @@ type CoordinatorSignal struct {
 	WorkflowID      string   `json:"workflowId,omitempty"`
 	Approved        *bool    `json:"approved,omitempty"`
 	References      []string `json:"references,omitempty"`
+}
+
+type OnboardingStatusUpdate struct {
+	ContractVersion string `json:"contractVersion"`
+	CoordinatorID   string `json:"coordinatorId"`
+	OrganizationID  string `json:"organizationId"`
+	Status          string `json:"status"`
+	LastError       string `json:"lastError,omitempty"`
 }
 
 // CoordinatorEvent is the cross-language lifecycle envelope used to notify a

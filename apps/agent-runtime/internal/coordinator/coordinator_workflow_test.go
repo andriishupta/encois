@@ -90,11 +90,84 @@ func TestCoordinatorWorkflowSubmitsAPlanAfterReconciliationSignal(t *testing.T) 
 		ProjectID:       "project-1",
 		ScopeType:       ScopeProject,
 		PolicyVersion:   "policy-read-only-fixture-v1",
-		State:           CoordinatorState{Status: StatusOnboarding},
+		State:           CoordinatorState{Status: StatusReady},
 	})
 
 	if !submitted {
 		t.Fatal("expected reconciliation to submit the proposed plan")
+	}
+}
+
+func TestCoordinatorWorkflowPerformsInitialOnboardingReconciliation(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(CoordinatorWorkflow)
+
+	planCalls := 0
+	statusUpdates := 0
+	env.RegisterActivityWithOptions(func(context.Context, CoordinatorStartInput) (CoordinatorPlanActivityResult, error) {
+		planCalls++
+		return CoordinatorPlanActivityResult{
+			Status: "proposed",
+			Plan: &WorkflowChangePlan{
+				ContractVersion: WorkflowChangePlanVersion,
+				PlanID:          "plan-onboarding-1",
+				CoordinatorID:   "coord-1",
+				OrganizationID:  "org-1",
+				ObservedAt:      "2026-08-20T16:00:00.000Z",
+			},
+		}, nil
+	}, activity.RegisterOptions{Name: CoordinatorPlanActivityName})
+	env.RegisterActivityWithOptions(func(context.Context, WorkflowChangePlan) (PlanSubmissionResult, error) {
+		return PlanSubmissionResult{PlanID: "plan-onboarding-1", Accepted: true, Status: "proposed"}, nil
+	}, activity.RegisterOptions{Name: CoordinatorSubmitActivityName})
+	env.RegisterActivityWithOptions(func(context.Context, OnboardingStatusUpdate) error {
+		statusUpdates++
+		return nil
+	}, activity.RegisterOptions{Name: CoordinatorOnboardingStatusActivityName})
+	env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, time.Second)
+
+	env.ExecuteWorkflow(CoordinatorWorkflow, CoordinatorStartInput{
+		ContractVersion: CoordinatorContractVersion,
+		CoordinatorID:   "coord-1",
+		OrganizationID:  "org-1",
+		PolicyVersion:   "policy-read-only-fixture-v1",
+		State:           CoordinatorState{Status: StatusOnboarding},
+	})
+
+	if planCalls != 1 {
+		t.Fatalf("expected initial reconciliation to run immediately, got %d plan calls", planCalls)
+	}
+	if statusUpdates != 1 {
+		t.Fatalf("expected initial reconciliation to report readiness once, got %d updates", statusUpdates)
+	}
+}
+
+func TestCoordinatorWorkflowFailsOnboardingWhenBootstrapIsDeferred(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(CoordinatorWorkflow)
+
+	var update OnboardingStatusUpdate
+	env.RegisterActivityWithOptions(func(context.Context, CoordinatorStartInput) (CoordinatorPlanActivityResult, error) {
+		return CoordinatorPlanActivityResult{Status: "deferred-no-agent-model"}, nil
+	}, activity.RegisterOptions{Name: CoordinatorPlanActivityName})
+	env.RegisterActivityWithOptions(func(_ context.Context, received OnboardingStatusUpdate) error {
+		update = received
+		return nil
+	}, activity.RegisterOptions{Name: CoordinatorOnboardingStatusActivityName})
+	env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, time.Second)
+
+	env.ExecuteWorkflow(CoordinatorWorkflow, CoordinatorStartInput{
+		ContractVersion: CoordinatorContractVersion,
+		CoordinatorID:   "coord-1",
+		OrganizationID:  "org-1",
+		PolicyVersion:   "policy-read-only-fixture-v1",
+		State:           CoordinatorState{Status: StatusOnboarding},
+	})
+
+	if update.Status != "failed" || update.LastError == "" {
+		t.Fatalf("expected deferred bootstrap failure status, got %+v", update)
 	}
 }
 

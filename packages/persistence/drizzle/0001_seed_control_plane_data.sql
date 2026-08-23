@@ -1,3 +1,56 @@
+-- Consolidated system seed data and permissions for a fresh control-plane database.
+
+INSERT INTO "roles" ("organization_id", "key", "name", "description", "is_system")
+VALUES
+  (NULL, 'organization_admin', 'Organization administrator', 'Full control within one organization.', true),
+  (NULL, 'manager', 'Manager', 'Read and manage assigned organizational scope.', true),
+  (NULL, 'member', 'Member', 'Read and contribute within assigned scope.', true),
+  (NULL, 'viewer', 'Viewer', 'Read-only access within assigned scope.', true);
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", permissions.permission
+FROM "roles"
+JOIN (VALUES
+  ('organization_admin', 'integrations:read'),
+  ('organization_admin', 'integrations:manage'),
+  ('organization_admin', 'onboarding:manage'),
+  ('organization_admin', 'organization:read'),
+  ('organization_admin', 'organization:manage'),
+  ('organization_admin', 'settings:read'),
+  ('organization_admin', 'settings:manage'),
+  ('organization_admin', 'workflows:read'),
+  ('organization_admin', 'workflows:run'),
+  ('organization_admin', 'workflows:manage'),
+  ('organization_admin', 'knowledge:read'),
+  ('organization_admin', 'knowledge:manage'),
+  ('manager', 'integrations:read'),
+  ('manager', 'integrations:manage'),
+  ('manager', 'organization:read'),
+  ('manager', 'organization:manage'),
+  ('manager', 'settings:read'),
+  ('manager', 'workflows:read'),
+  ('manager', 'workflows:run'),
+  ('manager', 'knowledge:read'),
+  ('manager', 'knowledge:manage'),
+  ('member', 'integrations:read'),
+  ('member', 'organization:read'),
+  ('member', 'settings:read'),
+  ('member', 'workflows:read'),
+  ('member', 'workflows:run'),
+  ('member', 'knowledge:read'),
+  ('member', 'knowledge:manage'),
+  ('viewer', 'integrations:read'),
+  ('viewer', 'organization:read'),
+  ('viewer', 'settings:read'),
+  ('viewer', 'workflows:read'),
+  ('viewer', 'knowledge:read')
+) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
+WHERE "roles"."organization_id" IS NULL;
+
+--> statement-breakpoint
+
 INSERT INTO "workflow_templates" (
   "key", "category", "title", "description", "keywords", "required_capabilities", "published_version", "status"
 ) VALUES
@@ -10,7 +63,9 @@ INSERT INTO "workflow_templates" (
   ('documentation-state', 'documentation', 'Documentation State Workflow', 'Compare documentation changes with implementation and tracked work to identify drift.', ARRAY['documentation', 'docs', 'architecture', 'github', 'gitlab', 'jira', 'notion'], ARRAY['documents.read', 'code.read', 'issues.read'], '1.0.0', 'published'),
   ('engineering-delivery-health', 'engineering', 'Engineering Delivery Health Workflow', 'Explain delivery throughput, blockers, and aging work across engineering teams.', ARRAY['engineering', 'delivery', 'throughput', 'blockers', 'github', 'jira', 'linear'], ARRAY['code.read', 'issues.read', 'ci.read'], '1.0.0', 'published'),
   ('customer-escalations', 'customer-success', 'Customer Escalations Workflow', 'Connect customer escalations with tracked engineering work and team responses.', ARRAY['customer', 'support', 'escalations', 'zendesk', 'intercom', 'jira', 'slack'], ARRAY['support.read', 'issues.read', 'messages.read'], '1.0.0', 'published'),
-  ('security-risk-review', 'security', 'Security Risk Review Workflow', 'Identify security-relevant changes, unresolved findings, and evidence gaps for review.', ARRAY['security', 'risk', 'vulnerability', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'security-findings.read', 'issues.read'], '1.0.0', 'published');--> statement-breakpoint
+  ('security-risk-review', 'security', 'Security Risk Review Workflow', 'Identify security-relevant changes, unresolved findings, and evidence gaps for review.', ARRAY['security', 'risk', 'vulnerability', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'security-findings.read', 'issues.read'], '1.0.0', 'published');
+
+--> statement-breakpoint
 
 INSERT INTO "workflow_template_versions" (
   "workflow_template_id", "version", "schema_version", "template", "status"
@@ -50,7 +105,61 @@ JOIN (
       {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.user-blueprint.v1","purpose":"Identify security-relevant changes, unresolved findings, and evidence gaps for review.","inputs":{"scope":{"type":"execution-scope","description":"Repository, service, or organization security scope.","required":true}},"providerSlots":[{"key":"source-control","capabilities":["code.read"],"preferredProviders":["github","gitlab"],"required":true},{"key":"security","capabilities":["security-findings.read"],"preferredProviders":["github-security","snyk","dependabot"],"required":true},{"key":"issue-tracker","capabilities":["issues.read"],"preferredProviders":["jira","linear"]}],"steps":[{"id":"collect-security-changes","kind":"tool","tool":"code.security-changes","providerSlot":"source-control"},{"id":"collect-findings","kind":"tool","tool":"security.findings","providerSlot":"security"},{"id":"review-security-risk","kind":"agent","agentDefinition":"workflow-synthesis","dependsOn":["collect-security-changes","collect-findings"],"input":{"instruction":"Prioritize findings and evidence gaps; do not make remediation changes or claim a vulnerability without source evidence."}}],"output":{"type":"security-risk-report","description":"Security findings, change context, and reviewable evidence gaps."}}
     $$::jsonb)
 ) AS templates(key, template) ON templates.key = workflows.key
-WHERE workflows.organization_id IS NULL;--> statement-breakpoint
+WHERE workflows.organization_id IS NULL;
 
-COMMENT ON TABLE "workflow_templates" IS 'Provider-neutral workflow templates. Published rows are catalog input for Workflow Creator, not executable Runtime definitions.';--> statement-breakpoint
+--> statement-breakpoint
+
+COMMENT ON TABLE "workflow_templates" IS 'Provider-neutral workflow templates. Published rows are catalog input for Workflow Creator, not executable Runtime definitions.';
+
+--> statement-breakpoint
+
 COMMENT ON TABLE "workflow_template_versions" IS 'Immutable versioned JSONB snapshots for workflow templates.';
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", permissions.permission
+FROM "roles"
+JOIN (VALUES
+  ('organization_admin', 'onboarding:manage'),
+  ('organization_admin', 'organization:read'),
+  ('organization_admin', 'organization:manage'),
+  ('organization_admin', 'settings:read'),
+  ('organization_admin', 'settings:manage'),
+  ('manager', 'organization:read'),
+  ('manager', 'organization:manage'),
+  ('manager', 'settings:read'),
+  ('member', 'organization:read'),
+  ('member', 'settings:read'),
+  ('viewer', 'organization:read'),
+  ('viewer', 'settings:read')
+) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
+WHERE "roles"."organization_id" IS NULL
+ON CONFLICT ("role_id", "permission") DO NOTHING;
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", permissions.permission
+FROM "roles"
+JOIN (VALUES
+  ('organization_admin', 'context:read'),
+  ('organization_admin', 'memory:read')
+) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
+WHERE "roles"."organization_id" IS NULL
+ON CONFLICT ("role_id", "permission") DO NOTHING;
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", 'memory:manage'
+FROM "roles"
+WHERE "roles"."organization_id" IS NULL AND "roles"."key" = 'organization_admin'
+ON CONFLICT ("role_id", "permission") DO NOTHING;
+
+--> statement-breakpoint
+
+INSERT INTO "organization_onboarding" ("organization_id", "coordinator_id")
+SELECT "id", 'organization:' || "id" FROM "organizations"
+ON CONFLICT ("organization_id") DO NOTHING;
+

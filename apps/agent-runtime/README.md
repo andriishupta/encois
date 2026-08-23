@@ -92,9 +92,9 @@ Registered workflows:
 
 - `encois.user-blueprint.v1` — generic workflow that interprets a validated
   company-specific Blueprint and executes typed tool/agent steps;
-- `CoordinatorWorkflow` — long-lived organization/project onboarding and
+- `CoordinatorWorkflow` — long-lived organization onboarding and
   reconciliation loop; uses Signals, timers, and Continue-As-New;
-- `BootstrapProjectWorkflow` — short initial bootstrap phase.
+- `BootstrapProjectWorkflow` — short initial organization bootstrap phase.
 - `encois.source-ingestion.v1` — platform-owned source/revision ingestion
   coordinator. It is distinct from user Blueprints and runs the shared
   acquire → parse → facts/provenance → Graph → Memory pipeline. Local mode

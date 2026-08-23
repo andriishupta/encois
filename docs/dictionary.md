@@ -194,8 +194,8 @@ The coordinator cannot invent capabilities, widen organization scope, or bypass 
 
 ### Coordinator Workflow
 
-The long-lived Temporal Workflow that owns one organization/project
-coordination loop. It coordinates onboarding, bootstrap, workflow proposals,
+The long-lived Temporal Workflow that owns one organization coordination loop.
+It coordinates onboarding, bootstrap, workflow proposals,
 reconciliation, and waits for Signals or schedules. It is logically persistent
 but uses Continue-As-New to keep each concrete Run History bounded.
 
@@ -224,10 +224,27 @@ for the Coordinator.
 
 ### Onboarding
 
-The required setup state in which an organization or project connects approved
-sources or uploads documents, establishes initial scope, and builds enough
-context for the dashboard. A project is not dashboard-ready until its
-onboarding state is `READY`.
+The required, server-enforced setup state in which an organization connects
+approved Sources or uploads documents, establishes initial scope, and builds
+enough context for the dashboard. Encois uses organization terminology; this
+is not a project lifecycle. An organization is not dashboard-ready until its
+persisted onboarding status is `ready`.
+
+Canonical onboarding statuses:
+
+- `pending` — the organization exists, but required setup or source context is
+  incomplete; only onboarding surfaces are available.
+- `initializing` — Temporal accepted the Coordinator start and bootstrap is in
+  progress; ordinary product surfaces remain blocked.
+- `ready` — the Coordinator completed the required initial reconciliation and
+  the Gateway persisted readiness; normal product permissions apply.
+- `failed` — bootstrap or required reconciliation failed or was deferred; an
+  authorized administrator may explicitly retry.
+
+A missing `organization_onboarding` row is not `pending` and is not a user
+onboarding state. It is a control-plane data or migration error. The API must
+return `ORGANIZATION_ONBOARDING_NOT_FOUND`, and neither the API nor dashboard
+may fabricate a fallback state. See the [onboarding flow and route policy](flows.md#onboarding-readiness-states).
 
 ### Workflow Blueprint
 

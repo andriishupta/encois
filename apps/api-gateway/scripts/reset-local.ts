@@ -6,11 +6,12 @@ import { createDatabase, organizationMemberships, organizations, users } from "@
 const projectId = process.env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || "demo-encois";
 const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim();
 const databaseUrl = process.env.DATABASE_MIGRATION_URL?.trim();
-const fixtureOrganizationSlugs = ["organization-test", "organization-avengers", "encois-local"] as const;
+const fixtureOrganizationSlugs = ["organization-sun", "organization-test", "organization-avengers", "encois-local"] as const;
 const fixtureEmails = [
   "owner@local.test",
   "dev@local.test",
   "manager@local.test",
+  "viewer@local.test",
   "test@local.test",
   "avengers-owner@local.test",
   "avengers-manager@local.test",
@@ -23,6 +24,7 @@ const fixtureEmails = [
   "dev@localtest",
 ];
 
+if (process.env.NODE_ENV === "production") throw new Error("The local auth reset cannot run in production.");
 if (!emulatorHost) throw new Error("FIREBASE_AUTH_EMULATOR_HOST is required for the local reset.");
 if (!databaseUrl) throw new Error("DATABASE_MIGRATION_URL is required for the local reset.");
 

@@ -181,9 +181,10 @@ func graphNodeMatchesQuery(node domain.GraphNode, request domain.GraphQueryReque
 	if nodeType := graphParamString(request, "nodeType"); nodeType != "" && node.Type != nodeType {
 		return false
 	}
-	switch strings.TrimSpace(request.Query) {
-	case "all", "all_context", "source.facts":
+	if isBroadGraphQuery(request.Query) {
 		return true
+	}
+	switch strings.TrimSpace(request.Query) {
 	case "project.related_entities":
 		projectID := graphParamString(request, "projectId")
 		return projectID != "" && (node.ID == projectID || stringProperty(node.Properties, "projectId") == projectID)
@@ -207,7 +208,7 @@ func graphEdgeMatchesLogicalQuery(edge domain.GraphEdge, request domain.GraphQue
 	if relationship := graphParamString(request, "relationship"); relationship != "" && edge.Relationship != relationship {
 		return false
 	}
-	if request.Query == "all" || request.Query == "all_context" || request.Query == "source.facts" {
+	if isBroadGraphQuery(request.Query) {
 		return true
 	}
 	projectID := graphParamString(request, "projectId")
@@ -218,6 +219,14 @@ func graphEdgeMatchesLogicalQuery(edge domain.GraphEdge, request domain.GraphQue
 		return true
 	}
 	return false
+}
+
+func isBroadGraphQuery(query string) bool {
+	return query == "all" || query == "all_context" || query == "source.facts"
+}
+
+func isSupportedGraphQuery(query string) bool {
+	return isBroadGraphQuery(query) || query == "project.related_entities" || query == "release.blockers"
 }
 
 func graphEdgeTouches(edge domain.GraphEdge, nodeIDs map[string]struct{}) bool {
@@ -332,7 +341,7 @@ func (s *spannerGraphStore) Upsert(ctx context.Context, mutation domain.GraphMut
 }
 
 func (s *spannerGraphStore) Query(ctx context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
-	if request.Query != "all" && request.Query != "all_context" && request.Query != "source.facts" && request.Query != "project.related_entities" && request.Query != "release.blockers" {
+	if !isSupportedGraphQuery(request.Query) {
 		return domain.GraphQueryResponse{}, fmt.Errorf("unsupported logical graph query %q", request.Query)
 	}
 	nodes, matchingNodeIDs, err := s.readGraphNodes(ctx, graphNodesStatement(request), request, func(node domain.GraphNode) bool {

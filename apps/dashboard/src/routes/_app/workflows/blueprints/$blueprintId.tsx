@@ -50,7 +50,7 @@ function BlueprintRevisionPage() {
     <PageHeader title={selected?.name ?? 'Blueprint revisions'} description="Review immutable Blueprint versions and inspect what changed before using a revision for a new Run." actions={<ButtonLink to="/workflows/blueprints"><ArrowLeft data-icon="inline-start" />Back to Blueprints</ButtonLink>} />
     <WorkflowSurfaceNav />
     {blueprints.isLoading ? <p className="text-sm text-muted-foreground">Loading revision history…</p> : null}
-    {blueprints.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load revisions: {blueprints.error.message}</p><Button type="button" variant="outline" onClick={() => void blueprints.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+    {blueprints.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load revisions: {blueprints.error.message}</p></CardContent></Card> : null}
     {!blueprints.isLoading && !blueprints.isError && versions.length === 0 ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="Blueprint not found" description="This Blueprint is not available in the current organization or scope." /></CardContent></Card> : null}
     {selected ? <>
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">

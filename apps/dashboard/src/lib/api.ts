@@ -49,7 +49,7 @@ import type {
   RecommendationProjection,
 } from '@encois/contracts'
 import { AccessLevel, ContractVersion, CoordinationMode, IntegrationStatus, isJsonObject, isPermission, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, OrganizationOnboardingStatus, RecommendationStatus, RecommendationTarget, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason, WorkflowStepKind } from '@encois/contracts'
-import { clearAuthSession, getAuthSessionToken, isDashboardMockMode, setAuthOrganizationId } from '@/lib/auth'
+import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
 const apiBaseUrl = (environment.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
@@ -500,10 +500,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const payload = errorPayload(body)
-    // The local UI fixture intentionally runs without an API process. Keep
-    // its development session intact so route-level mock flows can still be
-    // reviewed; hosted/API-backed sessions must be invalidated on 401.
-    if (response.status === 401 && !isDashboardMockMode()) clearAuthSession()
+    if (response.status === 401) clearAuthSession()
     throw createApiError(
       response.status,
       payload?.error?.message ?? `API request failed (${response.status})`,
@@ -651,12 +648,6 @@ export async function cancelWorkflow(workflowId: string): Promise<{ accepted: tr
 export async function rerunWorkflow(workflowId: string): Promise<WorkflowExecutionProjection> {
   const value = await request<unknown>(`/workflows/${encodeURIComponent(workflowId)}/rerun`, { method: 'POST' })
   if (!isWorkflowProjection(value)) throw createApiError(200, 'The service returned an invalid rerun workflow response.', 'INVALID_RESPONSE')
-  return value
-}
-
-export async function retryWorkflow(workflowId: string): Promise<WorkflowExecutionProjection> {
-  const value = await request<unknown>(`/workflows/${encodeURIComponent(workflowId)}/retry`, { method: 'POST' })
-  if (!isWorkflowProjection(value)) throw createApiError(200, 'The service returned an invalid retry workflow response.', 'INVALID_RESPONSE')
   return value
 }
 

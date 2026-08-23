@@ -28,6 +28,42 @@ Do not invent product requirements that conflict with those documents. If implem
 6. Use TODOs for deliberately deferred production work. Every TODO should state the missing behavior or decision, not merely say “improve this”.
 7. Optimize for the hackathon demo without creating avoidable security or operational debt.
 8. Run tests only after full implementation - unit or tools like tsx/go are fine for harder things and multi-step implementations, but e2e should be definetly run only once; e2e is not mandatory on every run, only when we see it is required.
+9. No need to add tests everywhere ad this point - only some crucial parts can be covered on api/agent code
+10. If during goal persue you notice some unrelated issues or gaps - report them but don't start to implement them or dont count them as part of goal - it is ok to stop, when not sure
+
+## Product truth and mocking policy
+
+Product state must always come from the real contract and the real system of
+record. Never fabricate, infer, or persist a fake product state just to make a
+screen or API appear complete. This applies to the dashboard, Gateway API,
+agent runtime, persistence, contracts, seed data, and shared UI components.
+
+- Do not replace missing or incomplete backend data with a fake `ready`,
+  `pending`, `completed`, `active`, `healthy`, onboarding, workflow, Run,
+  integration, permission, user, or organization state.
+- Do not invent IDs, records, status transitions, counts, timestamps, evidence,
+  permissions, or successful API responses in browser code or API fallbacks.
+- If the API does not return a status, field, record, or capability, preserve
+  that fact. Show a truthful loading, empty, unavailable, unknown, or error
+  state, and report the contract/backend gap. Do not add a UI hack that makes
+  the unsupported behavior look implemented.
+- If the API returns a status set that differs from the UI contract, stop at the
+  boundary: validate and surface the mismatch, then fix the API/contract and UI
+  together. Do not silently map an unknown status to a successful or convenient
+  status.
+- A mock is allowed only at an explicit third-party or infrastructure adapter
+  boundary when the real dependency is unavailable in the target environment.
+  Examples include Memory Bank, Spanner Graph, Vertex AI, provider APIs, or
+  other external services. The mock must be explicitly configured, use the same
+  contract and failure semantics, remain scoped to that adapter, and never
+  spread mock decisions through product logic.
+- Mocks are acceptable in isolated tests and deterministic fixtures. Runtime
+  mock mode must be visible in configuration and must not be the production
+  source of truth. A third-party adapter mock must not fabricate control-plane
+  onboarding, organization, authorization, workflow, or Run state.
+- When a required dependency or contract is missing, block or narrow the
+  affected capability and tell the user what is unavailable. Do not create a
+  parallel local state machine to hide the problem.
 
 ## Iterative collaboration and approval boundary
 

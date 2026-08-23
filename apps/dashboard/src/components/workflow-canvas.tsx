@@ -6,6 +6,7 @@ import {
   Panel,
   Position,
   ReactFlow,
+  useNodesState,
   type Edge,
   type Node,
   type NodeProps,
@@ -15,6 +16,7 @@ import { CircleDashed, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { WorkflowEventProjection, WorkflowExecutionStatus } from '@encois/contracts'
 import { InteractiveMiniMap } from '@/components/interactive-minimap'
+import { WorkflowStatusIndicator } from '@/components/workflow-status'
 import { getWorkflowCanvasStages, type WorkflowNodeStatus } from '@/lib/workflow-canvas-model'
 
 type WorkflowNodeData = {
@@ -57,7 +59,6 @@ function graphFromEvents(events: readonly WorkflowEventProjection[], runStatus?:
 
 function WorkflowStepNode({ data }: NodeProps<WorkflowNode>) {
   const Icon = nodeIcon[data.icon]
-  const statusLabel = statusLabels[data.status]
 
   return (
     <div className={`workflow-node workflow-node-${data.status}`}>
@@ -69,21 +70,25 @@ function WorkflowStepNode({ data }: NodeProps<WorkflowNode>) {
           <p className="truncate text-xs text-muted-foreground">{data.description}</p>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-muted-foreground"><span className="workflow-status-dot" aria-hidden="true" />{statusLabel}</div>
+      <div className="mt-3"><WorkflowStatusIndicator status={data.status} compact /></div>
       <Handle type="source" position={Position.Right} />
     </div>
   )
 }
 
 const nodeIcon = { blueprint: GitBranch, evidence: CircleDashed, provider: GitBranch, synthesis: Sparkles }
-const statusLabels: Record<WorkflowNodeStatus, string> = { completed: 'Completed', running: 'Running now', pending: 'Pending', waiting: 'Waiting for approval', paused: 'Paused', partial: 'Partial', failed: 'Failed', cancelled: 'Cancelled' }
 const statusColors: Record<WorkflowNodeStatus, string> = { completed: 'var(--muted-foreground)', running: 'var(--primary)', pending: 'var(--muted-foreground)', waiting: 'var(--foreground)', paused: 'var(--foreground)', partial: 'var(--foreground)', failed: 'var(--destructive)', cancelled: 'var(--muted-foreground)' }
 
 export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runStatus }: { refreshCount: number; lastPolledAt: Date | null; events?: readonly WorkflowEventProjection[]; runStatus?: WorkflowExecutionStatus }) {
   const [isCompact, setIsCompact] = useState(false)
   const graph = useMemo(() => graphFromEvents(events, runStatus), [events, runStatus])
+  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(graph.nodes)
   const nodeTypes = useMemo(() => ({ workflow: WorkflowStepNode }), [])
   const isLive = !runStatus || !terminalRunStatuses.has(runStatus)
+
+  useEffect(() => {
+    setNodes(graph.nodes)
+  }, [graph.nodes, setNodes])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 640px)')
@@ -93,7 +98,7 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runSta
     return () => mediaQuery.removeEventListener('change', updateLayout)
   }, [])
 
-  const visibleNodes = graph.nodes.map((node, index) => ({
+  const visibleNodes = nodes.map((node, index) => ({
     ...node,
     position: isCompact ? { x: 10, y: index * 120 } : node.position,
   }))
@@ -105,9 +110,11 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runSta
         nodes={visibleNodes}
         edges={graph.edges}
         nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
         fitView
         fitViewOptions={{ padding: 0.28 }}
-        nodesDraggable={false}
+        nodesDraggable
+        deleteKeyCode={null}
         nodesConnectable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
@@ -120,7 +127,7 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runSta
         <Panel position="top-left">
           <div className="flex flex-col gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
             <div className="flex items-center gap-2"><span className={isLive ? 'workflow-live-dot' : 'workflow-status-dot'} aria-hidden="true" /><span className="font-medium">{isLive ? 'Live run topology' : 'Run topology'}</span><span className="text-muted-foreground">{lastPolledAt ? `Polled ${lastPolledAt.toLocaleTimeString()}` : 'Waiting for status'}</span></div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-waiting" />Waiting</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-failed" />Failed</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-pending" />Pending</span></div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><WorkflowStatusIndicator status="running" compact /><WorkflowStatusIndicator status="waiting" compact /><WorkflowStatusIndicator status="failed" compact /><WorkflowStatusIndicator status="pending" compact /></div>
           </div>
         </Panel>
       </ReactFlow>

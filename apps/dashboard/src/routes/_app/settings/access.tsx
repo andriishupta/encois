@@ -24,7 +24,7 @@ export const Route = createFileRoute('/_app/settings/access')({
 
 function AccessSettingsPage() {
   const queryClient = useQueryClient()
-  const { units, members, permissions, isLoading, isUsingApi, error } = useOrganization()
+  const { units, members, permissions, isLoading, isLoaded, error } = useOrganization()
   const { permissions: capabilities, can } = usePermissions()
   const session = getAuthSession()
   const identity = getAuthIdentity()
@@ -33,7 +33,7 @@ function AccessSettingsPage() {
   const requestableUnitIds = new Set(getEffectiveUnitIds(units, currentScopes, currentMember?.id ?? session?.userId ?? ''))
   const requestableUnits = units.filter((unit) => requestableUnitIds.has(unit.id))
   const isOrganizationAdministrator = currentMember?.roleKey === 'organization_admin'
-  const accessRequests = useQuery({ queryKey: queryKeys.organizationAccessRequests(), queryFn: listOrganizationAccessRequests, enabled: isUsingApi && can(Permission.OrganizationRead), refetchInterval: 15_000 })
+  const accessRequests = useQuery({ queryKey: queryKeys.organizationAccessRequests(), queryFn: listOrganizationAccessRequests, enabled: isLoaded && can(Permission.OrganizationRead), refetchInterval: 15_000 })
   const [requestUnitId, setRequestUnitId] = useState('')
   const [requestAccess, setRequestAccess] = useState<'viewer' | 'contributor' | 'manager'>('contributor')
   const [requestReason, setRequestReason] = useState('')
@@ -79,7 +79,7 @@ function AccessSettingsPage() {
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <Card className="min-w-0">
-          <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />Your access</CardTitle><CardDescription>{isUsingApi ? 'Resolved from the current organization membership and permission session.' : 'Development fixture data is shown only in explicit local mock mode.'}</CardDescription></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />Your access</CardTitle><CardDescription>Resolved from the current organization membership and permission session.</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-4">
             {currentMember ? <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">{currentMember.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{currentMember.name}</p><p className="truncate text-xs text-muted-foreground">{currentMember.email}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">{currentMember.role}</span></div> : <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Your organization membership is not visible in the current scope.</div>}
             <div className="grid gap-2 text-sm"><DetailRow label="Identity" value={identity.email ?? 'Identity provider account'} /><DetailRow label="Membership" value={currentMember?.status ?? 'Not reported'} /><DetailRow label="Direct scopes" value={currentScopes.length ? String(currentScopes.length) : 'None reported'} /></div>
@@ -103,7 +103,7 @@ function AccessSettingsPage() {
         <CardHeader><CardTitle className="flex items-center gap-2"><Send className="size-4 text-muted-foreground" aria-hidden="true" />Access requests</CardTitle><CardDescription>{isOrganizationAdministrator ? 'Review requests without changing roles. Approval and scope application are separate audited steps.' : 'Request a higher level on a scope you can currently see. An organization administrator must approve and apply it.'}</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-5">
           {accessRequests.error ? <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Access requests could not be loaded: {accessRequests.error.message}</div> : null}
-          {isUsingApi && can(Permission.OrganizationRead) && requestableUnits.length ? <form className="grid min-w-0 gap-3 rounded-lg border bg-muted/10 p-4" onSubmit={submitRequest}>
+          {isLoaded && can(Permission.OrganizationRead) && requestableUnits.length ? <form className="grid min-w-0 gap-3 rounded-lg border bg-muted/10 p-4" onSubmit={submitRequest}>
             <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
               <label className="flex min-w-0 flex-col gap-2 text-sm font-medium" htmlFor="access-request-unit">Organization unit<select id="access-request-unit" value={requestUnitId} onChange={(event) => setRequestUnitId(event.target.value)} className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{requestableUnits.map((unit) => <option key={unit.id} value={unit.id}>{formatUnitPath(units, unit.id)}</option>)}</select></label>
               <label className="flex min-w-0 flex-col gap-2 text-sm font-medium" htmlFor="access-request-level">Requested access<select id="access-request-level" value={requestAccess} onChange={(event) => setRequestAccess(event.target.value as typeof requestAccess)} className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{(['viewer', 'contributor', 'manager'] as const).map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select></label>
@@ -111,9 +111,9 @@ function AccessSettingsPage() {
             <label className="flex min-w-0 flex-col gap-2 text-sm font-medium" htmlFor="access-request-reason">Why is this access needed?<textarea id="access-request-reason" value={requestReason} onChange={(event) => setRequestReason(event.target.value)} minLength={5} maxLength={2000} rows={3} placeholder="Describe the investigation or workflow you need to support." className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50" required /></label>
             {createRequest.error ? <p role="alert" className="text-sm text-destructive">Could not submit the request: {createRequest.error.message}</p> : null}
             <div className="flex flex-wrap items-center justify-between gap-3"><p className="min-w-0 flex-1 text-xs text-muted-foreground">Administrator access is never requestable from this form.</p><Button type="submit" className="shrink-0" disabled={createRequest.isPending || !requestReason.trim()}><Send data-icon="inline-start" />{createRequest.isPending ? 'Submitting…' : 'Submit request'}</Button></div>
-          </form> : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{!isUsingApi ? 'Access requests are available when the live organization API is connected.' : !can(Permission.OrganizationRead) ? 'Organization access request visibility is restricted by the current session.' : 'No requestable scope is visible. Contact an organization administrator for a unit outside your current scope.'}</p>}
+          </form> : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{!isLoaded ? 'Organization access state is still loading.' : !can(Permission.OrganizationRead) ? 'Organization access request visibility is restricted by the current session.' : 'No requestable scope is visible. Contact an organization administrator for a unit outside your current scope.'}</p>}
           {accessRequests.isLoading ? <p className="text-sm text-muted-foreground">Loading access requests…</p> : null}
-          {isUsingApi && !accessRequests.isLoading && !accessRequests.error && !accessRequests.data?.length ? <p className="text-sm text-muted-foreground">No access requests in the current organization scope.</p> : null}
+          {isLoaded && !accessRequests.isLoading && !accessRequests.error && !accessRequests.data?.length ? <p className="text-sm text-muted-foreground">No access requests in the current organization scope.</p> : null}
           {accessRequests.data?.map((request) => <AccessRequestRow key={request.id} request={request} canDecide={Boolean(isOrganizationAdministrator && request.requestedByUserId !== currentMember?.id)} busy={reviewRequest.isPending} onAction={(action) => reviewRequest.mutate({ id: request.id, action })} />)}
           {reviewRequest.error ? <p role="alert" className="text-sm text-destructive">Could not update the access request: {reviewRequest.error.message}</p> : null}
         </CardContent>

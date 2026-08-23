@@ -40,8 +40,10 @@ Architecture references:
 - [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state diagram with service boundaries and execution flow.
 - [`docs/infra.md`](docs/infra.md) — initial GCP/Terraform deployment blueprint, state, IAM, and rollout procedure.
 - [`docs/CI-CD.md`](docs/CI-CD.md) — proposed local/manual, GitHub Actions, and GCP-native CI/CD approaches.
-- [`docs/flows.md`](docs/flows.md) — user, integration, investigation, query, permission, and recovery flows.
+- [`docs/flows.md`](docs/flows.md) — user, integration, investigation, query, permission, recovery, and mandatory onboarding flows.
+- [`docs/flows.md#onboarding-readiness-states`](docs/flows.md#onboarding-readiness-states) — canonical onboarding states, route gate, and Coordinator transitions.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI, JSON Schema, shared DTO rules, and TypeScript/Go boundaries.
+- [`docs/contracts.md#organization-onboarding-and-readiness`](docs/contracts.md#organization-onboarding-and-readiness) — onboarding status and API error contract.
 - [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint and MCP/ADK/Temporal communication model.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
 - [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
@@ -84,8 +86,8 @@ verifies the ID token and provisions the local `users` row and organization
 membership only when a pending invite matches the verified email. Unknown or
 pending users are sent to `/waitlist`; they cannot reach tenant routes.
 
-For database-free local UI work, the development-only bearer fixture remains
-available and is session-scoped. Never put a hosted or production credential
+For API-backed local UI work, a development-only bearer session remains
+available from the login screen. Never put a hosted or production credential
 in a `VITE_*` variable.
 
 The first organization and invited admin are created with the operator script
@@ -143,21 +145,22 @@ pnpm run dev:local
 This starts Postgres, the Temporal development server, migrations, API Gateway,
 Firebase Auth Emulator, local auth seed, Agent Gateway, Agent Runtime, and the
 Vite-served dashboard through `compose.local.yaml`. The local Runtime uses
-`AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters; and
-the dashboard uses explicit `VITE_ENCOIS_UI_MODE=mock`, so no Gemini key or
-Google Cloud credentials are required.
+`AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters, so
+no Gemini key or Google Cloud credentials are required. The dashboard uses the
+API Gateway and Temporal for workflow execution. Local fixture data is created
+by an explicit seed script and is not an API execution backend.
 The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `http://localhost:5173`; the Firebase Emulator UI is at
 `http://localhost:4000`; and the API health endpoints are at
 `http://localhost:8787/health/live` and `/health/ready`. Local login uses
-`owner@local.test` / `local-password-1234`. Compose uses the durable local
-database-backed workflow mock for seeded dashboard projections; the Temporal
-stack remains available for the Go runtime and explicit workflow smoke tests.
+`owner@local.test` / `local-password-1234`. Compose uses the local Temporal
+stack for workflow execution; the seed script creates explicit organization
+and source fixtures but is not selected as an API workflow backend.
 See [`docs/local.md`](docs/local.md) for the onboarding and database
 verification flow. Follow service logs with
 `docker compose -f compose.local.yaml logs -f`.
 
-This local mock mode includes live reload: the Dashboard uses Vite HMR, the
+This local service mode includes live reload: the Dashboard uses Vite HMR, the
 API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
 and Agent Runtime. Stop it with `pnpm run dev:local:down`.
 

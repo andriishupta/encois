@@ -24,7 +24,6 @@ import {
 import { cn } from '@/lib/utils'
 import { authSessionEventName, clearAuthSession, getAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { useWorkspace } from '@/lib/workspace'
 import { flattenUnitOptions, formatUnitPath, getOrganizationUnit } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 import { usePermissions } from '@/lib/permissions'
@@ -50,7 +49,7 @@ const connectionNavigation: readonly NavigationItem[] = [
 
 const secondaryNavigation: readonly NavigationItem[] = [
   { label: 'Review queue', to: '/review', icon: CircleGauge, anyPermission: [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead] },
-  { label: 'Project context', to: '/context', icon: Network, permission: Permission.ContextRead },
+  { label: 'Organization context', to: '/context', icon: Network, permission: Permission.ContextRead },
   { label: 'Memory', to: '/memory', icon: BrainCircuit, permission: Permission.MemoryRead },
   { label: 'Saved investigations', to: '/investigations', icon: Bookmark, anyPermission: [Permission.OrganizationManage, Permission.WorkflowsRead, Permission.KnowledgeRead, Permission.ContextRead, Permission.MemoryRead] },
   { label: 'Notifications', to: '/settings/notifications', icon: Bell, anyPermission: [Permission.SettingsRead, Permission.WorkflowsRead, Permission.KnowledgeRead] },
@@ -63,10 +62,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const { workspace } = useWorkspace()
   const { organizationName, units, currentUnitId, setCurrentUnitId } = useOrganization()
   const { can } = usePermissions()
-  const workspaceName = workspace?.workspaceName ?? organizationName ?? 'Encois'
+  const workspaceName = organizationName ?? 'Encois'
   const organizationUnitOptions = flattenUnitOptions(units)
   const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
   const currentScopeLabel = currentUnit ? currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id) : 'Organization scope unavailable'
@@ -231,7 +229,7 @@ function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbR
   if (pathname === '/integrations/new') return [{ label: 'Integrations', to: '/integrations' }, { label: 'Add integration' }]
   if (pathname.startsWith('/integrations/')) return [{ label: 'Integrations', to: '/integrations' }, { label: getIntegrationLabel(pathname) }]
   if (pathname === '/review') return [{ label: 'Review queue' }]
-  if (pathname === '/context') return [{ label: 'Project context' }]
+  if (pathname === '/context') return [{ label: 'Organization context' }]
   if (pathname === '/investigations') return [{ label: 'Saved investigations' }]
   if (pathname === '/memory') return [{ label: 'Memory' }]
   if (pathname === '/organization') return [{ label: 'Organization' }]

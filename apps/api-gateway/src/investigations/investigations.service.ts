@@ -1,6 +1,11 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Permission, isJsonObject, type ExecutionScope, type JsonObject, type SavedInvestigation, type SavedInvestigationCreateRequest } from "@encois/contracts";
-import { savedInvestigations, withOrganizationContext } from "@encois/persistence";
+import {
+  savedInvestigations,
+  type PersistenceDatabase,
+  type PersistenceTransaction,
+  withOrganizationContext,
+} from "@encois/persistence";
 import { database } from "../database.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 import { hasPermission } from "../auth/authorization.js";
@@ -15,6 +20,23 @@ function error(code: string, message: string): InvestigationServiceError {
 
 export function isInvestigationServiceError(value: unknown): value is InvestigationServiceError {
   return value instanceof Error && typeof (value as Partial<InvestigationServiceError>).code === "string";
+}
+
+type QueryDatabase = PersistenceDatabase | PersistenceTransaction;
+
+const savedInvestigationReadPermissions = [
+  Permission.WorkflowsRead,
+  Permission.KnowledgeRead,
+  Permission.OrganizationManage,
+  Permission.ContextRead,
+  Permission.MemoryRead,
+] as const;
+
+async function canAccessSavedInvestigations(db: QueryDatabase, principal: AosPrincipal): Promise<boolean> {
+  for (const permission of savedInvestigationReadPermissions) {
+    if (await hasPermission(db, principal, permission)) return true;
+  }
+  return false;
 }
 
 function userId(principal: AosPrincipal): string {
@@ -50,7 +72,7 @@ export async function listSavedInvestigations(principal: AosPrincipal): Promise<
   if (!database) throw error("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.WorkflowsRead)) && !(await hasPermission(db, principal, Permission.KnowledgeRead)) && !(await hasPermission(db, principal, Permission.OrganizationManage)) && !(await hasPermission(db, principal, Permission.ContextRead)) && !(await hasPermission(db, principal, Permission.MemoryRead))) {
+    if (!(await canAccessSavedInvestigations(db, principal))) {
       throw error("FORBIDDEN", "The user cannot read saved investigations.");
     }
     const rows = await db.select().from(savedInvestigations).where(and(eq(savedInvestigations.organizationId, principal.organizationId), eq(savedInvestigations.ownerUserId, ownerUserId))).orderBy(desc(savedInvestigations.updatedAt));
@@ -72,7 +94,7 @@ export async function createSavedInvestigation(principal: AosPrincipal, request:
   if (!savedScope || !scopeWithinPrincipal(savedScope, principal)) throw error("SCOPE_DENIED", "A saved investigation scope cannot exceed the caller's scope.");
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.WorkflowsRead)) && !(await hasPermission(db, principal, Permission.KnowledgeRead)) && !(await hasPermission(db, principal, Permission.OrganizationManage)) && !(await hasPermission(db, principal, Permission.ContextRead)) && !(await hasPermission(db, principal, Permission.MemoryRead))) {
+    if (!(await canAccessSavedInvestigations(db, principal))) {
       throw error("FORBIDDEN", "The user cannot create saved investigations.");
     }
     const [row] = await db.insert(savedInvestigations).values({
@@ -93,7 +115,7 @@ export async function deleteSavedInvestigation(principal: AosPrincipal, investig
   if (!database) throw error("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.WorkflowsRead)) && !(await hasPermission(db, principal, Permission.KnowledgeRead)) && !(await hasPermission(db, principal, Permission.OrganizationManage)) && !(await hasPermission(db, principal, Permission.ContextRead)) && !(await hasPermission(db, principal, Permission.MemoryRead))) throw error("FORBIDDEN", "The user cannot delete saved investigations.");
+    if (!(await canAccessSavedInvestigations(db, principal))) throw error("FORBIDDEN", "The user cannot delete saved investigations.");
     const result = await db.delete(savedInvestigations).where(and(eq(savedInvestigations.id, investigationId), eq(savedInvestigations.organizationId, principal.organizationId), eq(savedInvestigations.ownerUserId, ownerUserId))).returning({ id: savedInvestigations.id });
     return result.length > 0;
   });

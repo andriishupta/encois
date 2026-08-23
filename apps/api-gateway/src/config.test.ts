@@ -12,4 +12,18 @@ describe("API auth configuration", () => {
         .identityPlatformAllowedSignInProviders,
     ).toEqual(["google.com", "password"]);
   });
+
+  it("rejects password authentication in production", () => {
+    expect(() => loadConfig({
+      NODE_ENV: "production",
+      IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: "google.com,password",
+    })).toThrow("Production Identity Platform authentication must allow only google.com.");
+  });
+
+  it("rejects the Firebase Auth Emulator in production", () => {
+    expect(() => loadConfig({
+      NODE_ENV: "production",
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099",
+    })).toThrow("FIREBASE_AUTH_EMULATOR_HOST must not be configured in production.");
+  });
 });

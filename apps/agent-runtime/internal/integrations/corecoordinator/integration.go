@@ -24,6 +24,7 @@ import (
 type Client interface {
 	SubmitWorkflowChangePlan(context.Context, coordinator.WorkflowChangePlan) (PlanSubmission, error)
 	StartApprovedWorkflow(context.Context, StartWorkflowRequest) (WorkflowReference, error)
+	UpdateOnboardingStatus(context.Context, coordinator.OnboardingStatusUpdate) error
 }
 
 type PlanSubmission struct {
@@ -100,6 +101,17 @@ func (c *HTTPClient) StartApprovedWorkflow(ctx context.Context, request StartWor
 		"idempotencyKey":   request.IdempotencyKey,
 	}
 	return doJSON[WorkflowReference](c, ctx, http.MethodPost, "/api/v1/internal/coordinator/workflows", body, request.RequestID, request.ActorID, request.OrganizationID, optionalString(request.TraceID))
+}
+
+func (c *HTTPClient) UpdateOnboardingStatus(ctx context.Context, update coordinator.OnboardingStatusUpdate) error {
+	if update.ContractVersion != coordinator.CoordinatorContractVersion || update.CoordinatorID == "" || update.OrganizationID == "" {
+		return fmt.Errorf("onboarding status update is incomplete")
+	}
+	if update.Status != "ready" && update.Status != "failed" {
+		return fmt.Errorf("unsupported onboarding status %q", update.Status)
+	}
+	_, err := doJSON[map[string]any](c, ctx, http.MethodPost, "/api/v1/internal/coordinator/onboarding-status", update, "onboarding-status:"+update.OrganizationID, update.CoordinatorID, update.OrganizationID, nil)
+	return err
 }
 
 type responseEnvelope[T any] struct {

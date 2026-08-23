@@ -102,6 +102,7 @@ func main() {
 	w.RegisterActivity(memoryActivities.ExecuteAgentMemory)
 	w.RegisterActivity(controlPlaneActivities.SubmitWorkflowChangePlan)
 	w.RegisterActivity(controlPlaneActivities.StartApprovedWorkflow)
+	w.RegisterActivity(controlPlaneActivities.UpdateOnboardingStatus)
 
 	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: healthServer.Handler()}
 	go func() {

@@ -19,6 +19,7 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	if state.Status == "" {
 		state.Status = StatusOnboarding
 	}
+	initialReconcile := state.Status == StatusOnboarding && !state.OnboardingComplete
 	if err := workflow.SetQueryHandler(ctx, CoordinatorStateQueryName, func() (CoordinatorState, error) {
 		return state, nil
 	}); err != nil {
@@ -34,98 +35,101 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	eventCh := workflow.GetSignalChannel(ctx, SignalCoordinatorEvent)
 
 	for {
-		shouldReconcile := false
+		shouldReconcile := initialReconcile
+		initialReconcile = false
 		pendingStarts := append([]WorkflowStartSpec(nil), state.PendingWorkflowStarts...)
-		timerCtx, cancelTimer := workflow.WithCancel(ctx)
-		reconcileTimer := workflow.NewTimer(timerCtx, coordinatorReconcileInterval)
-		selector := workflow.NewSelector(ctx)
+		if !shouldReconcile {
+			timerCtx, cancelTimer := workflow.WithCancel(ctx)
+			reconcileTimer := workflow.NewTimer(timerCtx, coordinatorReconcileInterval)
+			selector := workflow.NewSelector(ctx)
 
-		selector.AddReceive(integrationCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalIntegrationConnected
-			if signal.SourceID != "" {
-				state.ConnectedIntegrationIDs = appendUnique(state.ConnectedIntegrationIDs, signal.SourceID)
-			}
-			state.Status = StatusBootstrapping
-			shouldReconcile = true
-		})
-		selector.AddReceive(sourceReadyCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalSourceReady
-			state.Status = StatusBootstrapping
-			shouldReconcile = true
-		})
-		selector.AddReceive(reconcileCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalReconcile
-			state.Status = StatusReconciling
-			shouldReconcile = true
-		})
-		selector.AddReceive(workflowCompletedCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalWorkflowCompleted
-			state.Status = StatusReconciling
-			shouldReconcile = true
-		})
-		selector.AddReceive(providerChangedCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalProviderChanged
-			state.Status = StatusReconciling
-			shouldReconcile = true
-		})
-		selector.AddReceive(approvalCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var signal CoordinatorSignal
-			channel.Receive(ctx, &signal)
-			state.LastEvent = SignalApprovalResolved
-			state.Status = StatusReconciling
-			shouldReconcile = true
-		})
-		selector.AddReceive(eventCh, func(channel workflow.ReceiveChannel, _ bool) {
-			var event CoordinatorEvent
-			channel.Receive(ctx, &event)
-			if event.OrganizationID != "" && event.OrganizationID != input.OrganizationID {
-				return
-			}
-			if event.CoordinatorID != "" && event.CoordinatorID != input.CoordinatorID {
-				return
-			}
-			if event.EventID == "" || contains(state.ProcessedEventIDs, event.EventID) {
-				return
-			}
-			state.ProcessedEventIDs = rememberEvent(state.ProcessedEventIDs, event.EventID)
-			state.LastEvent = event.EventType
-			switch event.EventType {
-			case "integration-connected", "source-ready":
-				state.Status = StatusBootstrapping
-			default:
-				state.Status = StatusReconciling
-			}
-			if event.PlanID != "" && (event.EventType == "workflow-plan-applied" || event.EventType == "workflow-plan-approved") {
-				state.PendingPlanIDs = removeValue(state.PendingPlanIDs, event.PlanID)
-			}
-			if event.WorkflowID != "" && event.EventType == "workflow-completed" {
-				state.ActiveWorkflowIDs = removeValue(state.ActiveWorkflowIDs, event.WorkflowID)
-			}
-			if event.EventType == "workflow-plan-applied" {
-				for _, start := range event.WorkflowStarts {
-					pendingStarts = appendWorkflowStartUnique(pendingStarts, start)
+			selector.AddReceive(integrationCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalIntegrationConnected
+				if signal.SourceID != "" {
+					state.ConnectedIntegrationIDs = appendUnique(state.ConnectedIntegrationIDs, signal.SourceID)
 				}
-			}
-			shouldReconcile = true
-		})
-		selector.AddFuture(reconcileTimer, func(workflow.Future) {
-			state.LastEvent = "scheduled-reconcile"
-			state.Status = StatusReconciling
-			shouldReconcile = true
-		})
+				state.Status = StatusBootstrapping
+				shouldReconcile = true
+			})
+			selector.AddReceive(sourceReadyCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalSourceReady
+				state.Status = StatusBootstrapping
+				shouldReconcile = true
+			})
+			selector.AddReceive(reconcileCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalReconcile
+				state.Status = StatusReconciling
+				shouldReconcile = true
+			})
+			selector.AddReceive(workflowCompletedCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalWorkflowCompleted
+				state.Status = StatusReconciling
+				shouldReconcile = true
+			})
+			selector.AddReceive(providerChangedCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalProviderChanged
+				state.Status = StatusReconciling
+				shouldReconcile = true
+			})
+			selector.AddReceive(approvalCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var signal CoordinatorSignal
+				channel.Receive(ctx, &signal)
+				state.LastEvent = SignalApprovalResolved
+				state.Status = StatusReconciling
+				shouldReconcile = true
+			})
+			selector.AddReceive(eventCh, func(channel workflow.ReceiveChannel, _ bool) {
+				var event CoordinatorEvent
+				channel.Receive(ctx, &event)
+				if event.OrganizationID != "" && event.OrganizationID != input.OrganizationID {
+					return
+				}
+				if event.CoordinatorID != "" && event.CoordinatorID != input.CoordinatorID {
+					return
+				}
+				if event.EventID == "" || contains(state.ProcessedEventIDs, event.EventID) {
+					return
+				}
+				state.ProcessedEventIDs = rememberEvent(state.ProcessedEventIDs, event.EventID)
+				state.LastEvent = event.EventType
+				switch event.EventType {
+				case "integration-connected", "source-ready":
+					state.Status = StatusBootstrapping
+				default:
+					state.Status = StatusReconciling
+				}
+				if event.PlanID != "" && (event.EventType == "workflow-plan-applied" || event.EventType == "workflow-plan-approved") {
+					state.PendingPlanIDs = removeValue(state.PendingPlanIDs, event.PlanID)
+				}
+				if event.WorkflowID != "" && event.EventType == "workflow-completed" {
+					state.ActiveWorkflowIDs = removeValue(state.ActiveWorkflowIDs, event.WorkflowID)
+				}
+				if event.EventType == "workflow-plan-applied" {
+					for _, start := range event.WorkflowStarts {
+						pendingStarts = appendWorkflowStartUnique(pendingStarts, start)
+					}
+				}
+				shouldReconcile = true
+			})
+			selector.AddFuture(reconcileTimer, func(workflow.Future) {
+				state.LastEvent = "scheduled-reconcile"
+				state.Status = StatusReconciling
+				shouldReconcile = true
+			})
 
-		selector.Select(ctx)
-		cancelTimer()
+			selector.Select(ctx)
+			cancelTimer()
+		}
 		state.Version++
 		state.ReconciliationCount++
 
@@ -145,6 +149,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 				// failure. A later Signal or timer can retry reconciliation.
 				state.Status = StatusSuspended
 				state.LastEvent = "reconciliation-failed"
+				if !state.OnboardingComplete {
+					_ = reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "failed", LastError: err.Error()})
+				}
 			}
 		}
 
@@ -239,7 +246,19 @@ func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, sta
 	}
 	if proposal.Status != "proposed" || proposal.Plan == nil {
 		state.Status = StatusWaiting
-		state.LastEvent = "reconciliation-deferred"
+		state.LastEvent = "onboarding-bootstrap-deferred"
+		if !state.OnboardingComplete {
+			status := proposal.Status
+			if status == "" {
+				status = "unknown"
+			}
+			if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{
+				Status:    "failed",
+				LastError: fmt.Sprintf("Coordinator bootstrap did not produce a plan (status: %s).", status),
+			}); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -252,7 +271,30 @@ func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, sta
 	}
 	state.Status = StatusWaiting
 	state.LastEvent = "workflow-plan-submitted"
+	if !state.OnboardingComplete {
+		if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "ready"}); err != nil {
+			return err
+		}
+		state.OnboardingComplete = true
+		state.Status = StatusReady
+		state.LastEvent = "onboarding-ready"
+	}
 	return nil
+}
+
+func reportOnboardingStatus(ctx workflow.Context, input CoordinatorStartInput, update OnboardingStatusUpdate) error {
+	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    2 * time.Second,
+			BackoffCoefficient: 2,
+			MaximumAttempts:    2,
+		},
+	})
+	update.CoordinatorID = input.CoordinatorID
+	update.OrganizationID = input.OrganizationID
+	update.ContractVersion = CoordinatorContractVersion
+	return workflow.ExecuteActivity(activityCtx, CoordinatorOnboardingStatusActivityName, update).Get(ctx, nil)
 }
 
 func BootstrapProjectWorkflow(ctx workflow.Context, input BootstrapProjectInput) (BootstrapProjectResult, error) {

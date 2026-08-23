@@ -7,14 +7,14 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  type Auth,
   type User,
 } from 'firebase/auth'
 
 export type AuthSession = {
-  /** Only populated for the local development fixture. Production uses Firebase SDK token acquisition. */
+  /** The access token is kept in memory/session storage for API authentication. */
   accessToken: string
   userId?: string
   organizationId?: string
@@ -34,7 +34,6 @@ const FIREBASE_AUTH_SENTINEL = 'identity-platform-sdk'
 
 type DashboardEnv = {
   MODE?: string
-  VITE_ENCOIS_UI_MODE?: string
   VITE_ENCOIS_ACCESS_TOKEN?: string
   VITE_ENCOIS_ORGANIZATION_ID?: string
   VITE_FIREBASE_API_KEY?: string
@@ -43,7 +42,7 @@ type DashboardEnv = {
   VITE_FIREBASE_APP_ID?: string
   VITE_FIREBASE_AUTH_EMULATOR_HOST?: string
   VITE_ENCOIS_PERMISSIONS?: string
-  /** Deprecated local fixture flags; converted to permissions for compatibility. */
+  /** Deprecated flags; converted to permissions for compatibility. */
   VITE_ENCOIS_CAN_ONBOARD?: string
   VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?: string
 }
@@ -68,7 +67,7 @@ const firebaseAuth = configuredFirebase()
     )
   : null
 
-const firebaseAuthEmulatorHost = environment().VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim()
+const firebaseAuthEmulatorHost = environment().MODE === 'development' ? environment().VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim() : undefined
 if (firebaseAuth && firebaseAuthEmulatorHost) {
   connectAuthEmulator(firebaseAuth, `http://${firebaseAuthEmulatorHost}`, { disableWarnings: true })
 }
@@ -142,7 +141,7 @@ export function getAuthSession(): AuthSession | null {
       }
     }
   } catch {
-    // A malformed local development fixture is treated as signed out.
+    // A malformed stored session is treated as signed out.
   }
 
   const organizationId = storedOrganizationId()
@@ -161,12 +160,6 @@ export function getAuthIdentity(): AuthIdentity {
     ...(currentFirebaseUser?.displayName?.trim() ? { displayName: currentFirebaseUser.displayName.trim() } : {}),
     ...(currentFirebaseUser?.email?.trim() ? { email: currentFirebaseUser.email.trim() } : {}),
   }
-}
-
-/** Stable, non-secret browser key for local per-user UI state. */
-export function getAuthUserKey(): string {
-  const firebaseUserKey = currentFirebaseUser?.uid?.trim() || currentFirebaseUser?.email?.trim().toLowerCase()
-  return firebaseUserKey || 'development-session'
 }
 
 /** Gets a fresh bearer token without exposing Firebase refresh tokens to API code. */
@@ -226,11 +219,9 @@ export async function signInWithGoogle(): Promise<User> {
   return result.user
 }
 
-export async function signInWithEmail(email: string, password: string): Promise<User> {
-  if (!firebaseAuth || !firebaseAuthEmulatorHost) throw new Error('Local Firebase Auth Emulator is not configured.')
-
-  const result = await signInWithEmailAndPassword(firebaseAuth, email, password)
-  return result.user
+/** Internal adapter boundary for the development-only local auth module. */
+export function getFirebaseAuth(): Auth | null {
+  return firebaseAuth
 }
 
 export async function signOutFromIdentityPlatform(): Promise<void> {
@@ -276,15 +267,6 @@ export function getDevelopmentAuthSession(): AuthSession | null {
 
 export function hasPermission(session: AuthSession | null, permission: PermissionKey): boolean {
   return session ? permissionIncludes(session.permissions, permission) : false
-}
-
-/**
- * The local UI fixture is opt-in. API-backed pages must not silently turn
- * transient API failures into fabricated organization or workspace state.
- */
-export function isDashboardMockMode(): boolean {
-  const env = environment()
-  return env.MODE === 'development' && env.VITE_ENCOIS_UI_MODE?.trim().toLowerCase() === 'mock'
 }
 
 export function authSessionEventName(): string {

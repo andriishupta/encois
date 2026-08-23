@@ -26,7 +26,7 @@ export type AppConfig = {
   agentGatewayPolicyVersion: string;
   agentGatewayCapabilitySecret?: string;
   executionCapabilityTtlMs: number;
-  workflowMode: "memory" | "database" | "temporal";
+  workflowMode: "temporal";
   temporalAddress?: string;
   temporalApiKey?: string;
   temporalTlsClientCertPath?: string;
@@ -54,11 +54,11 @@ function positiveInteger(value: string | undefined, fallback: number): number {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const nodeEnv = env.NODE_ENV?.trim() || DEFAULTS.nodeEnv;
   const temporalAddress = env.TEMPORAL_ADDRESS?.trim() || undefined;
-  const workflowMode = env.ENCOIS_WORKFLOW_MODE?.trim() ||
-    (!temporalAddress && (nodeEnv === "development" || nodeEnv === "test") ? "memory" : "temporal");
-  if (workflowMode !== "memory" && workflowMode !== "database" && workflowMode !== "temporal") {
-    throw new Error(`Unsupported ENCOIS_WORKFLOW_MODE ${workflowMode}`);
+  const configuredWorkflowMode = env.ENCOIS_WORKFLOW_MODE?.trim();
+  if (configuredWorkflowMode && configuredWorkflowMode !== "temporal") {
+    throw new Error(`ENCOIS_WORKFLOW_MODE must be temporal; product workflow fixtures are not supported by the API.`);
   }
+  const workflowMode = "temporal" as const;
   const corsOrigins = (env.CORS_ORIGINS ?? "http://localhost:5173")
     .split(",")
     .map((origin) => origin.trim())
@@ -67,6 +67,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .split(",")
     .map((provider) => provider.trim())
     .filter(Boolean);
+  if (nodeEnv === "production") {
+    if (env.FIREBASE_AUTH_EMULATOR_HOST?.trim()) {
+      throw new Error("FIREBASE_AUTH_EMULATOR_HOST must not be configured in production.");
+    }
+    if (identityPlatformAllowedSignInProviders.length !== 1 || identityPlatformAllowedSignInProviders[0] !== "google.com") {
+      throw new Error("Production Identity Platform authentication must allow only google.com.");
+    }
+  }
 
   return {
     bodyLimitBytes: positiveInteger(env.BODY_LIMIT_BYTES, DEFAULTS.bodyLimitBytes),

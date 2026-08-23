@@ -1,6 +1,6 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap } from 'lucide-react'
 import { IntegrationStatus, type IntegrationProjection } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
@@ -20,7 +20,7 @@ const providerCatalog = [
   { key: 'jira', name: 'Jira', description: 'Issues, projects, and operational activity.', capabilities: ['issues.read', 'activity.read'] },
   { key: 'linear', name: 'Linear', description: 'Issues and project execution context.', capabilities: ['issues.read', 'activity.read'] },
   { key: 'slack', name: 'Slack', description: 'Read-only message and activity context.', capabilities: ['messages.read', 'activity.read'] },
-  { key: 'google-drive', name: 'Google Drive', description: 'Scoped documents for project context.', capabilities: ['documents.read'] },
+  { key: 'google-drive', name: 'Google Drive', description: 'Scoped documents for organization context.', capabilities: ['documents.read'] },
 ] as const
 
 export const Route = createFileRoute('/_app/integrations/')({
@@ -42,7 +42,7 @@ function IntegrationsPage() {
         actions={canManage ? <Button asChild><Link to="/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
-      {integrations.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load integrations: {integrations.error.message}</p><Button type="button" variant="outline" onClick={() => void integrations.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+      {integrations.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load integrations: {integrations.error.message}</p></CardContent></Card> : null}
       {integrations.data?.length ? <div className="grid gap-4 md:grid-cols-2">{integrations.data.map((integration) => <IntegrationPreviewCard key={integration.id} integration={integration} />)}</div> : null}
       {!integrations.isLoading && !integrations.isError && !integrations.data?.length ? <Card>
         <CardContent className="pt-6">

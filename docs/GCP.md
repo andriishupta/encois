@@ -121,10 +121,10 @@ For local development, the Agent Gateway and Runtime select in-process mock
 data adapters with `AGENT_GATEWAY_DATA_MODE=mock` and
 `AGENT_MEMORY_MODE=mock`. Hosted deployments select `gcp`, use ADC, and must
 provide the bucket, Spanner database, and Vertex AI Reasoning Engine resource.
-The API also supports `ENCOIS_WORKFLOW_MODE=database` in local Compose. This is
-a Postgres-backed fixture projection used to exercise the dashboard across API
-restarts without creating fake Temporal executions; it must not be used for
-production or cross-instance execution coordination.
+The API uses Temporal for workflow execution in every environment. Local
+fixture data is created by an explicit seed script and is never selected as an
+API workflow backend. Deployments must provide the Temporal address, namespace,
+task queue, and credentials required by the configured Temporal environment.
 
 Temporal Namespace policy: the MVP uses one shared Namespace with
 organization-prefixed Workflow IDs and Gateway/Agent Gateway authorization.

@@ -14,6 +14,7 @@ import { usePermissions } from '@/lib/permissions'
 import { useOrganization } from '@/lib/organization-context'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
+import { WorkflowStatusIndicator } from '@/components/workflow-status'
 
 export const Route = createFileRoute('/_app/review')({
   beforeLoad: () => {
@@ -96,10 +97,6 @@ function ReviewQueuePage() {
   const reviewUnavailable = reviewQueries.some((query) => query.isError)
   const reviewLoading = reviewQueries.some((query) => query.isLoading)
 
-  function retryReviewQueue() {
-    for (const query of reviewQueries) void query.refetch()
-  }
-
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -117,7 +114,7 @@ function ReviewQueuePage() {
         <QueueSummary icon={UserRound} label="Access requests" value={canViewOrganization ? queueMetric(accessRequests, pendingAccessRequests.length) : '—'} detail={canViewOrganization ? 'Membership scopes awaiting decision' : 'Access restricted'} />
       </div>
 
-      {reviewUnavailable ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 text-destructive" /><div><p className="font-medium">Review queue unavailable</p><p className="mt-1 text-sm text-muted-foreground">Some operational data could not be loaded, so the queue is not marked clear.</p></div></div><Button type="button" variant="outline" onClick={retryReviewQueue}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+      {reviewUnavailable ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="flex items-start gap-3 p-5"><AlertTriangle className="mt-0.5 size-5 text-destructive" /><div><p className="font-medium">Review queue unavailable</p><p className="mt-1 text-sm text-muted-foreground">Some operational data could not be loaded, so the queue is not marked clear. Reload the page after the service is available.</p></div></CardContent></Card> : null}
       {!reviewUnavailable && !reviewLoading && attentionCount === 0 ? <Card className="border-emerald-500/30 bg-emerald-500/5"><CardContent className="flex items-start gap-3 p-5"><CheckCircle2 className="mt-0.5 size-5 text-emerald-600" /><div><p className="font-medium">Nothing needs attention</p><p className="mt-1 text-sm text-muted-foreground">No waiting approvals, failing runs, unhealthy Sources, or incomplete Integrations are visible in this scope.</p></div></CardContent></Card> : null}
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-2">
@@ -168,7 +165,7 @@ function ReviewCard({ title, description, icon: Icon, loading, error, empty, has
 }
 
 function WorkflowReviewRow({ workflow }: { workflow: WorkflowExecutionProjection }) {
-  return <Link to="/workflows/$workflowId" params={{ workflowId: workflow.workflowId }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><GitBranch className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{workflowLabel(workflow.blueprintId, workflow.workflowType)}</span><span className="block truncate text-xs text-muted-foreground">{workflow.statusMessage ?? workflowStatusLabel(workflow.status, workflow.statusReason)} · {formatDate(workflow.updatedAt)}</span></span><span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">{workflowStatusLabel(workflow.status)}</span></Link>
+  return <Link to="/workflows/$workflowId" params={{ workflowId: workflow.workflowId }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><GitBranch className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{workflowLabel(workflow.blueprintId, workflow.workflowType)}</span><span className="block truncate text-xs text-muted-foreground">{workflow.statusMessage ?? workflowStatusLabel(workflow.status, workflow.statusReason)} · {formatDate(workflow.updatedAt)}</span></span><WorkflowStatusIndicator status={workflow.status} reason={workflow.statusReason} compact /></Link>
 }
 
 function SourceReviewRow({ source }: { source: KnowledgeSource }) {

@@ -2,22 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
-import { isApiError } from '@/lib/api'
 import { initializeBrowserAuth } from '@/lib/auth'
 import { router } from '@/router'
 import './index.css'
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error) => {
-        if (isApiError(error) && error.status >= 400 && error.status < 500) return false
-        return failureCount < 2
-      },
-    },
-    mutations: { retry: false },
-  },
-})
+const queryClient = new QueryClient()
 
 async function bootstrap() {
   await initializeBrowserAuth()

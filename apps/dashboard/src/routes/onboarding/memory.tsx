@@ -1,23 +1,20 @@
 import { useState, type ChangeEvent } from 'react'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Check, FileText, Github, LoaderCircle, MessageSquare, PlugZap, Upload, Workflow } from 'lucide-react'
+import { KnowledgeSourceKind } from '@encois/contracts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ProductTerm } from '@/components/product-term'
-import { isApiError, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
-import { getMockOnboardingState, updateMockOnboardingState, type MemorySource } from '@/lib/onboarding'
-import { getAuthUserKey, getDevelopmentAuthSession, isDashboardMockMode, setAuthSession } from '@/lib/auth'
+import { isApiError, listKnowledgeSources, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
+import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/onboarding/memory')({
-  beforeLoad: () => {
-    const state = getMockOnboardingState()
-    if (!state?.workspaceName) throw redirect({ to: '/onboarding/workspace' })
-  },
   component: MemorySetupPage,
 })
 
-const integrationSources: { id: MemorySource; label: string; description: string; icon: typeof Github }[] = [
+const integrationSources: { id: string; label: string; description: string; icon: typeof Github }[] = [
   { id: 'slack', label: 'Slack', description: 'Team updates and decisions', icon: MessageSquare },
   { id: 'github', label: 'GitHub', description: 'Repositories and delivery activity', icon: Github },
   { id: 'jira', label: 'Jira', description: 'Projects, issues, and releases', icon: Workflow },
@@ -26,70 +23,52 @@ const integrationSources: { id: MemorySource; label: string; description: string
 
 function MemorySetupPage() {
   const navigate = useNavigate()
-  const existing = getMockOnboardingState()
-  const [selectedSource, setSelectedSource] = useState<MemorySource | undefined>(existing?.memorySource === 'document' && existing.memorySourceId ? 'document' : undefined)
-  const [sourceLabel, setSourceLabel] = useState(existing?.memorySource === 'document' && existing.memorySourceId ? existing.memorySourceLabel : undefined)
+  const queryClient = useQueryClient()
+  const sources = useQuery({
+    queryKey: queryKeys.sources(),
+    queryFn: listKnowledgeSources,
+  })
   const [file, setFile] = useState<File | undefined>()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const existingSource = sources.data?.find((source) => source.kind === KnowledgeSourceKind.UploadedDocument)
 
   function handleDocument(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0]
     if (!nextFile) return
     setFile(nextFile)
-    setSelectedSource('document')
-    setSourceLabel(nextFile.name)
     setError(null)
   }
 
   async function handleContinue() {
-    if (!file && !existing?.memorySourceId) {
+    if (!file && !existingSource) {
       setError('Upload at least one PDF to continue. This step cannot be skipped.')
       return
     }
     setUploading(true)
     setError(null)
     try {
-      let sourceId = existing?.memorySourceId
       if (file) {
-        const uploaded = await uploadKnowledgeSourcePdf(file, sourceLabel)
-        sourceId = uploaded.source.id
+        const uploaded = await uploadKnowledgeSourcePdf(file, file.name)
         await startSourceIngestion(uploaded.source.id, uploaded.revision.id)
-        updateMockOnboardingState({ memorySource: 'document', memorySourceLabel: sourceLabel ?? file.name, memorySourceId: sourceId })
+        await queryClient.invalidateQueries({ queryKey: queryKeys.sources() })
       }
-      if (!sourceId) throw new Error('The source was not created.')
-      void navigate({ to: '/onboarding/coordination' })
+      await navigate({ to: '/onboarding/coordination' })
     } catch (cause) {
-      if (isDashboardMockMode()) {
-        const developmentSession = getDevelopmentAuthSession()
-        if (developmentSession) setAuthSession(developmentSession)
-        const sourceId = `mock-source:${getAuthUserKey()}`
-        updateMockOnboardingState({ memorySource: 'document', memorySourceLabel: sourceLabel ?? file?.name ?? 'Local fixture', memorySourceId: sourceId })
-        void navigate({ to: '/onboarding/coordination' })
-        return
-      }
       setError(isApiError(cause) ? cause.message : 'The source could not be uploaded.')
     } finally {
       setUploading(false)
     }
   }
 
-  function useLocalFixture() {
-    if (!isDashboardMockMode()) return
-    const sourceId = `mock-source:${getAuthUserKey()}`
-    updateMockOnboardingState({
-      memorySource: 'document',
-      memorySourceLabel: 'Local project context fixture',
-      memorySourceId: sourceId,
-    })
-    void navigate({ to: '/onboarding/coordination' })
-  }
+  const sourceLabel = file?.name ?? existingSource?.name
+  const canContinue = Boolean(file || existingSource) && !uploading && !sources.isLoading
 
   return (
     <div className="flex flex-col gap-6">
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">Give your <ProductTerm term="coordinator" /> some memory</h1>
-        <p className="mt-2 text-muted-foreground">Connect at least one source of project context. This is required before Encois can produce useful, evidence-backed insights.</p>
+        <p className="mt-2 text-muted-foreground">Upload at least one organization context document. Encois stores it as a scoped source and starts the common ingestion workflow.</p>
       </div>
 
       <Card>
@@ -107,27 +86,26 @@ function MemorySetupPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Upload other sources</CardTitle>
+          <CardTitle>Upload organization context</CardTitle>
           <CardDescription>PDF upload is available now. The file becomes a scoped source <ProductTerm term="revision" /> and starts the common <ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.</CardDescription>
         </CardHeader>
         <CardContent>
-          <label className={cn('flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors hover:bg-accent', selectedSource === 'document' && 'border-primary bg-accent')} htmlFor="onboarding-source-file">
+          <label className={cn('flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors hover:bg-accent', sourceLabel && 'border-primary bg-accent')} htmlFor="onboarding-source-file">
             <span className="flex size-10 items-center justify-center rounded-full bg-muted"><FileText className="size-5 text-muted-foreground" aria-hidden="true" /></span>
-            <span className="text-sm font-medium">{file?.name ?? sourceLabel ?? 'Choose a project PDF'}</span>
+            <span className="text-sm font-medium">{sourceLabel ?? 'Choose an organization context PDF'}</span>
             <span className="text-xs text-muted-foreground">PDF only · maximum 10 MiB</span>
             <span className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium"><Upload className="size-3.5" aria-hidden="true" /> Choose file</span>
             <input id="onboarding-source-file" type="file" accept="application/pdf,.pdf" className="sr-only" onChange={handleDocument} />
           </label>
+          {existingSource && !file ? <p className="mt-3 text-xs text-muted-foreground">An uploaded source already exists in this organization. Choose another PDF to add a new revision.</p> : null}
         </CardContent>
       </Card>
 
+      {sources.isError ? <p className="text-sm text-muted-foreground">Existing sources could not be listed. You can still upload a new PDF.</p> : null}
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-        <p className="text-sm text-muted-foreground">{selectedSource ? `Selected: ${sourceLabel}` : 'Select a PDF source to continue.'}</p>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          {isDashboardMockMode() ? <Button type="button" variant="outline" disabled={uploading} onClick={useLocalFixture}>Use local fixture</Button> : null}
-          <Button type="button" disabled={uploading || (!file && !existing?.memorySourceId)} onClick={() => void handleContinue()}>{uploading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}{uploading ? 'Uploading source…' : 'Continue'}<ArrowRight data-icon="inline-end" /></Button>
-        </div>
+        <p className="text-sm text-muted-foreground">{sourceLabel ? `Selected: ${sourceLabel}` : 'Select a PDF source to continue.'}</p>
+        <Button type="button" disabled={!canContinue} onClick={() => void handleContinue()}>{uploading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}{uploading ? 'Uploading source…' : 'Continue'}<ArrowRight data-icon="inline-end" /></Button>
       </div>
     </div>
   )

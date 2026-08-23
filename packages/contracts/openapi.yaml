@@ -1023,26 +1023,6 @@ paths:
                 $ref: '#/components/schemas/WorkflowExecutionResponse'
         '409':
           description: Parent run is not rerunnable or its Blueprint revision is unavailable
-  /api/v1/workflows/{workflowId}/retry:
-    post:
-      operationId: retryWorkflow
-      summary: Retry a failed or partial workflow from its persisted revision
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: workflowId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '202':
-          description: Retry accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowExecutionResponse'
-        '409':
-          description: Parent run is not retryable or its Blueprint revision is unavailable
   /api/v1/workflows/templates:
     get:
       operationId: listWorkflowTemplates

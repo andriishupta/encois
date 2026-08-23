@@ -47,6 +47,12 @@ export type OrganizationServiceErrorCode =
   | "INVALID_REQUEST"
   | "DUPLICATE_ORGANIZATION_UNIT";
 
+export type CoordinatorOnboardingStatusUpdate = {
+  coordinatorId: string;
+  status: Extract<OrganizationOnboardingStatus, "ready" | "failed">;
+  lastError?: string;
+};
+
 export type OrganizationServiceError = Error & { code: OrganizationServiceErrorCode };
 
 export type OrganizationOnboardingServiceOptions = {
@@ -516,13 +522,26 @@ export async function startOrganizationOnboardingForPrincipal(
       reason: "Initial organization onboarding reconciliation.",
     };
 
-    await db
+    const [initialized] = await db
       .update(organizationOnboarding)
       .set({ status: OrganizationOnboardingStatus.Initializing, lastError: null, updatedAt: new Date() })
-      .where(eq(organizationOnboarding.organizationId, principal.organizationId));
+      .where(eq(organizationOnboarding.organizationId, principal.organizationId))
+      .returning();
+    if (!initialized) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found.");
 
     try {
       const projection = await options.workflowClient.start(command, options.namespace);
+      if (projection.reused) {
+        // A failed onboarding retry may reuse the long-lived Coordinator
+        // execution. Wake it explicitly; the initial start is reconciled by
+        // the workflow itself and does not need a synthetic browser signal.
+        await options.workflowClient.signalCoordinator(
+          context.onboarding.coordinatorId,
+          principal.organizationId,
+          options.namespace,
+          event,
+        );
+      }
       const [definition] = await db
         .select({ id: workflowDefinitions.id })
         .from(workflowDefinitions)
@@ -589,14 +608,56 @@ export async function startOrganizationOnboardingForPrincipal(
           eventId: event.eventId,
         },
       });
-      const [updated] = await db.update(organizationOnboarding).set({ status: OrganizationOnboardingStatus.Ready, lastError: null, updatedAt: new Date() }).where(eq(organizationOnboarding.organizationId, principal.organizationId)).returning();
-      if (!updated) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found.");
-      return projectOnboarding(updated);
+      // Starting Temporal proves only that the Coordinator was accepted by
+      // the runtime. Readiness is reported by the Coordinator after its
+      // first successful bootstrap reconciliation.
+      return projectOnboarding(initialized);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Coordinator could not be started.";
       await db.update(organizationOnboarding).set({ status: OrganizationOnboardingStatus.Failed, lastError: message.slice(0, 1000), updatedAt: new Date() }).where(eq(organizationOnboarding.organizationId, principal.organizationId));
       throw organizationError("ONBOARDING_START_FAILED", message);
     }
+  });
+}
+
+export async function updateOrganizationOnboardingFromCoordinator(
+  principal: AosPrincipal,
+  update: CoordinatorOnboardingStatusUpdate,
+): Promise<OrganizationOnboardingProjection> {
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OnboardingManage);
+    if (context.onboarding.coordinatorId !== update.coordinatorId) {
+      throw organizationError("ORGANIZATION_ONBOARDING_CONFLICT", "The Coordinator does not belong to this organization onboarding record.");
+    }
+    if (context.onboarding.status === OrganizationOnboardingStatus.Ready && update.status === OrganizationOnboardingStatus.Ready) {
+      return projectOnboarding(context.onboarding);
+    }
+    if (context.onboarding.status !== OrganizationOnboardingStatus.Initializing) {
+      throw organizationError("ORGANIZATION_ONBOARDING_CONFLICT", "The onboarding record is not waiting for a Coordinator bootstrap result.");
+    }
+
+    const [updated] = await db
+      .update(organizationOnboarding)
+      .set({
+        status: update.status,
+        lastError: update.status === OrganizationOnboardingStatus.Failed ? (update.lastError?.slice(0, 1000) || "Coordinator bootstrap failed.") : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(organizationOnboarding.organizationId, principal.organizationId))
+      .returning();
+    if (!updated) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found.");
+
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: `organization.onboarding.${update.status}`,
+      outcome: "accepted",
+      resourceType: "organization_onboarding",
+      resourceId: principal.organizationId,
+      scope: { organizationId: principal.organizationId },
+      metadata: { coordinatorId: update.coordinatorId },
+    });
+    return projectOnboarding(updated);
   });
 }
 

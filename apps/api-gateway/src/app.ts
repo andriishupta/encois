@@ -1,4 +1,5 @@
 import { bodyLimit } from "hono/body-limit";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
@@ -8,6 +9,7 @@ import { aosMiddleware, type AosAuthenticator, type GatewayEnv } from "./middlew
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { requestLoggingMiddleware } from "./middleware/request-logging.js";
 import { traceContextMiddleware } from "./middleware/trace-context.js";
+import { onboardingReadinessMiddleware } from "./middleware/onboarding-readiness.js";
 import type { AppConfig } from "./config.js";
 import { loadConfig } from "./config.js";
 import {
@@ -45,6 +47,8 @@ import { createInvestigationsRouter, createNotificationPreferencesRouter, create
 import type { IntegrationAuthorizationAdapter } from "./integrations/authorization-adapter.js";
 import { createOAuthIntegrationAuthorizationAdapter } from "./integrations/oauth-authorization-adapter.js";
 import { createAuthorizationCallbackRoute } from "./integrations/routes/authorization-callback.route.js";
+import { database } from "./database.js";
+import { organizationOnboarding, withOrganizationContext } from "@encois/persistence";
 
 const ACTIVE_API_VERSION = "v1" as const;
 
@@ -202,6 +206,23 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
 
   const v1Router = new Hono<GatewayEnv>();
   v1Router.use("*", aosMiddleware({ authenticate }));
+  const runtimeDatabase = database;
+  if (runtimeDatabase) {
+    v1Router.use(
+      "*",
+      onboardingReadinessMiddleware(async (organizationId) => {
+        const rows = await withOrganizationContext(runtimeDatabase, organizationId, (db) =>
+          db
+            .select({ status: organizationOnboarding.status, lastError: organizationOnboarding.lastError })
+            .from(organizationOnboarding)
+            .where(eq(organizationOnboarding.organizationId, organizationId))
+            .limit(1),
+        );
+        const row = rows[0];
+        return row ? { status: row.status, lastError: row.lastError } : null;
+      }),
+    );
+  }
   v1Router.route("/integrations", createIntegrationsRouter({ authorizationAdapter: integrationAuthorizationAdapter, webhookEndpoint: webhookEndpointOptions }));
   const workflowServiceOptions = {
     namespace: config.temporalNamespace,

@@ -25,16 +25,19 @@ The stack starts:
 | Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
-`local-auth-seed` runs after migrations. It creates a deterministic local
-dataset for two isolated organizations: `Organization Test` and `Organization
-Avengers`. Each organization gets its own units, users, integrations,
-Knowledge Sources with revisions and ingestion runs, webhook deliveries, six
-workflow projections, and workflow event timelines. It is idempotent and only
-creates or updates these local fixture records.
-Each workflow timeline includes activity start/completion or failure events,
-retry attempts, shard labels, evidence references, and issue metadata. These
-are control-plane projections for the local mock; they do not create Temporal
-executions.
+`local-auth-seed` runs after migrations. It creates one deterministic local
+dataset for `Organization Sun`. It includes hierarchical units, users with
+different roles and scopes, integrations, Knowledge Sources with revisions and
+ingestion runs, webhook deliveries, and persisted workflow runs/events.
+It also ensures the Organization Sun onboarding row is explicitly `ready` for
+the pre-bootstrapped demo organization. That fixture is intentionally ready so
+the standard local dashboard can be used immediately; it is not a substitute
+for testing the incomplete onboarding lifecycle. It is idempotent and only
+creates or updates these local fixture records. The seeded workflow rows
+deliberately have no Temporal execution, so opening one can exercise the
+unavailable-runtime error path. The API-backed lifecycle and route gate are
+defined in [`flows.md`](flows.md#onboarding-readiness-states) and
+[`contracts.md`](contracts.md#organization-onboarding-and-readiness).
 
 Local credentials:
 
@@ -47,26 +50,18 @@ Existing-workspace users:
 
 | Email | Password | Organization | Role | Scope |
 | --- | --- | --- | --- | --- |
-| `owner@local.test` | `local-password-1234` | Organization Test | organization admin | All units |
-| `dev@local.test` | `local-dev-1234` | Organization Test | organization admin | All units; full product pages |
-| `manager@local.test` | `local-manager-1234` | Organization Test | organization admin | All units; full product pages |
-| `test@local.test` | `local-test-1234` | Organization Test | viewer | Checkout only; read-only |
-| `avengers-owner@local.test` | `local-avengers-1234` | Organization Avengers | organization admin | All units |
-| `avengers-manager@local.test` | `local-avengers-manager-1234` | Organization Avengers | manager | Product and descendants |
+| `owner@local.test` | `local-password-1234` | Organization Sun | organization admin | All units |
+| `manager@local.test` | `local-manager-1234` | Organization Sun | manager | Engineering and descendants |
+| `dev@local.test` | `local-dev-1234` | Organization Sun | manager | Development and descendants |
+| `viewer@local.test` | `local-viewer-1234` | Organization Sun | viewer | Checkout only; read-only |
 
-The five `onboarding1..5@local.test` users are verified Firebase Emulator
+The three `onboarding1..3@local.test` users are verified Firebase Emulator
 accounts with organization invites. On first sign-in the invite is accepted
-and the fixture receives `onboarding:manage`, so the local onboarding screens
-open instead of the waitlist. They are intentionally separate from the main
-active users so onboarding can be tested repeatedly without changing the
-full-access fixture. Their passwords are `local-onboarding-1` through
-`local-onboarding-5`.
-When `VITE_DASHBOARD_MOCK_MODE=true`, the dashboard stores mock onboarding state
-by organization and Firebase user, so switching between these accounts in one
-browser does not reuse another account's progress. Hosted and non-mock builds
-read onboarding from the API's tenant-scoped `organization_onboarding` state;
-the Start Coordinator action therefore exercises the control-plane workflow
-boundary instead of a browser timer.
+and the fixture receives `onboarding:manage`, so organization initialization
+settings can be reviewed through the API-backed workspace settings surface.
+They are invite-acceptance fixtures in an already-ready demo organization;
+they do not put that organization back into `pending`. Their passwords are
+`local-onboarding-1` through `local-onboarding-3`.
 
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
@@ -88,18 +83,42 @@ Stop it with:
 pnpm run dev:local:down
 ```
 
-## Onboarding test
+## Authentication and onboarding test
+
+The seeded demo organizations are already `ready`, so signing in with the
+active users above tests authentication, invite acceptance, permissions, and
+the normal dashboard. It does not test a blocked organization. The
+`onboarding1..5` users test the same invite acceptance path and may review
+onboarding settings after joining a ready organization.
+
+To test the strict organization lifecycle, use a newly bootstrapped local
+organization rather than changing the seeded fixture:
 
 1. Start Compose and wait until `local-auth-seed` exits with code `0`.
-2. Open http://localhost:5173/login.
-3. Use any active or onboarding credentials above.
-4. The Dashboard calls `GET /api/v1/auth/me` with the emulator ID token.
-5. The API finds the pending invite and transactionally creates:
-   - `users`;
-   - `organization_memberships`;
-   - `membership_scopes`;
-   - the accepted invite record.
-6. Continue through the existing onboarding screens.
+2. Run the operator `auth:bootstrap-organization` flow to create a new
+   organization, root unit, admin invite, and `organization_onboarding` row in
+   `pending`.
+3. Sign in with the invited Firebase Emulator account. `GET /api/v1/auth/me`
+   accepts the invite and creates the local user, membership, and scope, but
+   the dashboard keeps the user in onboarding.
+4. Verify that ordinary dashboard, member/unit, integration, Workflow, Run,
+   review, and other product routes are rejected with
+   `ORGANIZATION_ONBOARDING_REQUIRED` (`409`). Onboarding settings, Source
+   upload/ingestion, and Template/Blueprint catalog reads remain available
+   according to permission.
+5. Complete the required onboarding upload and catalog selection. The final
+   action calls `POST /api/v1/organization/onboarding/start`; the state must
+   become `initializing`, never optimistic `ready`.
+6. Observe the local Temporal Coordinator. Its first reconciliation reports
+   `ready` only after required context validation, or `failed` when bootstrap
+   errors or is deferred. An administrator can explicitly retry a failed
+   onboarding; a non-admin receives the administrator handoff.
+
+An onboarding row must never be created by a dashboard fallback or a normal
+`GET /api/v1/organization` read. To diagnose a missing row, inspect the
+control-plane migration/backfill and repair the data through the operator
+flow. `ORGANIZATION_ONBOARDING_NOT_FOUND` is a `503` data/readiness error, not
+the `pending` user experience.
 
 To inspect the resulting database rows:
 
@@ -118,16 +137,16 @@ The existing organization permissions screen is available at
 user (`auth:invite-user`) or revoking an invite. A bulk invite editor is not
 part of this local MVP fixture and remains a separate product-surface task.
 
-After the seed completes, verify the expected tenant fixtures and workflow
-states with:
+After the seed completes, verify the expected tenant, onboarding, source, and
+integration fixtures with:
 
 ```bash
 docker compose -f compose.local.yaml run --rm local-auth-seed \
-  node dist/verify-local.js
+  node dist/scripts/verify-local.js
 
 docker compose -f compose.local.yaml run --rm \
   -e LOCAL_API_URL=http://api-gateway:8787/api/v1 \
-  local-auth-seed node dist/verify-local-api.js
+  local-auth-seed node dist/scripts/verify-local-api.js
 ```
 
 The same checks are available from the repository root:
@@ -135,7 +154,12 @@ The same checks are available from the repository root:
 ```bash
 pnpm run verify:local
 pnpm run verify:local:api
+pnpm run verify:production-auth
 ```
+
+`verify:production-auth` checks the source and Docker target boundaries without
+building or starting services. After production artifacts already exist, add
+`-- --artifacts` to scan the generated files as well.
 
 The repository runners remove only disposable migration containers left in a
 `Created` or failed state before starting a seed or verification command. This
@@ -143,10 +167,11 @@ keeps an interrupted Compose bootstrap from blocking the next local check;
 Postgres volumes and application containers are not removed.
 
 The second command signs in through the Firebase Auth Emulator and verifies
-owner and Avengers-owner visibility, restricted `test@local.test` hierarchy
-scope, rejection of unauthorized workflow changes and out-of-scope events,
-onboarding invite acceptance and `onboarding:manage`, workflow events, and
-rejection of cross-organization headers.
+owner and Viewer access, Engineering/Development hierarchy scopes, onboarding
+invite acceptance and `onboarding:manage`, Temporal workflow list access, and
+the seeded persisted workflow boundary. The persisted fixture runs are not
+created in Temporal; their detail page should therefore expose the runtime
+availability error instead of pretending that an execution exists.
 
 ## Useful checks
 
@@ -159,20 +184,15 @@ docker compose -f compose.local.yaml logs -f api-gateway local-auth-seed
 
 The local Agent Runtime uses `AGENT_AI_MODE=mock` and the local data plane uses
 `AGENT_GATEWAY_DATA_MODE=mock` plus `AGENT_MEMORY_MODE=mock` and
-`AGENT_MEMORY_FIXTURE=local`, while the
-dashboard explicitly uses `VITE_ENCOIS_UI_MODE=mock`. No Gemini key or GCP
-credentials are required. Temporal, source ingestion, Graph, Memory Bank,
-Cloud Storage, and the synthetic Agent Gateway tools all have local
-implementations. The mock Graph and Memory adapters create deterministic
+`AGENT_MEMORY_FIXTURE=local`. No Gemini key or GCP credentials are required.
+The dashboard uses the API Gateway and the local Temporal server for workflow
+execution, while
+Graph, Memory Bank, Cloud Storage, and provider calls use explicit data-plane
+adapters. The mock Graph and Memory adapters create deterministic
 organization-scoped fixtures on first access; source ingestion can later add
 realistic projections to the same tenant-scoped stores. External Jira/GitHub
 calls remain deterministic fixtures; live provider credentials and adapters
 are hosted follow-up work.
-
-In this explicit dashboard mock mode, onboarding also exposes a `Use local
-fixture` action so the complete first-run flow can be reviewed without a PDF
-file or a running API. It is available only in mock mode and is not rendered
-in hosted builds.
 
 ## Production-like local mode
 
@@ -218,7 +238,7 @@ touching unrelated database data):
 
 ```bash
 docker compose -f compose.local.yaml run --rm local-auth-seed \
-  node dist/reset-local.js
+  node dist/scripts/reset-local.js
 docker compose -f compose.local.yaml run --rm local-auth-seed
 ```
 
@@ -233,16 +253,15 @@ pnpm run local:reset
 ```
 
 The seed is safe to run repeatedly and will not create duplicate memberships,
-integrations, revisions, or workflow projections.
+integrations, revisions, or onboarding rows.
 To run only the idempotent seed without resetting fixtures, use
 `pnpm run local:seed`.
 
 ## Verification scope
 
 The local auth path is covered by configuration/type/build checks and the
-existing API auth/invite tests. Compose uses the Postgres-backed `database`
-workflow mock for seeded UI projections; Temporal remains available for the Go
-runtime and real workflow smoke tests. The full browser onboarding and
+existing API auth/invite tests. Compose seeds data through an explicit script,
+while Temporal remains the only workflow execution backend. The workspace initialization and
 workflow demonstration should be run manually after the stack starts.
 
 ## What this does not emulate

@@ -32,3 +32,10 @@ func (a *CoordinatorControlPlaneActivities) StartApprovedWorkflow(ctx context.Co
 	}
 	return a.client.StartApprovedWorkflow(ctx, request)
 }
+
+func (a *CoordinatorControlPlaneActivities) UpdateOnboardingStatus(ctx context.Context, update coordinator.OnboardingStatusUpdate) error {
+	if a == nil || a.client == nil {
+		return fmt.Errorf("Coordinator control-plane client is not configured")
+	}
+	return a.client.UpdateOnboardingStatus(ctx, update)
+}

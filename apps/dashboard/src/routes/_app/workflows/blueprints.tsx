@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { FilePlus2, GitBranch, RefreshCw, Search } from 'lucide-react'
+import { FilePlus2, GitBranch, Search } from 'lucide-react'
 import { useState } from 'react'
 import type { WorkflowBlueprintProjection, WorkflowBlueprintStatus } from '@encois/contracts'
 import { Permission } from '@encois/contracts'
@@ -45,10 +45,10 @@ function WorkflowBlueprintsPage() {
       </CardContent>
     </Card>
     {blueprints.isLoading ? <p className="text-sm text-muted-foreground">Loading Blueprints…</p> : null}
-    {blueprints.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load Blueprints: {blueprints.error.message}</p><Button type="button" variant="outline" onClick={() => void blueprints.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+    {blueprints.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load Blueprints: {blueprints.error.message}</p></CardContent></Card> : null}
     {filteredBlueprints.length ? <div className="grid gap-4 md:grid-cols-2">{filteredBlueprints.map((blueprint) => <BlueprintCard key={`${blueprint.blueprintId}:${blueprint.version}`} blueprint={blueprint} />)}</div> : null}
     {!blueprints.isLoading && !blueprints.isError && blueprints.data?.length && !filteredBlueprints.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Blueprints match" description="Change the search or lifecycle filter." /></CardContent></Card> : null}
-    {!blueprints.isLoading && !blueprints.isError && !blueprints.data?.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No Blueprints" description={<>Create one from a published <ProductTerm term="template" /> and submit it through the approval boundary.</>} /></CardContent></Card> : null}
+    {!blueprints.isLoading && !blueprints.isError && !blueprints.data?.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No Blueprints" description={<>Create one from a published <ProductTerm term="template" /> and submit it through the <ProductTerm term="approvalBoundary" />.</>} /></CardContent></Card> : null}
   </div>
 }
 

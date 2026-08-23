@@ -18,7 +18,6 @@ import { submitWorkflowCreationRoute } from "./routes/submit-workflow-creation.r
 import { listWorkflowActivityRoute } from "./routes/list-workflow-activity.route.js";
 import { cancelWorkflowRoute } from "./routes/cancel-workflow.route.js";
 import { rerunWorkflowRoute } from "./routes/rerun-workflow.route.js";
-import { retryWorkflowRoute } from "./routes/retry-workflow.route.js";
 import { listWorkflowPlansRoute } from "./routes/list-workflow-plans.route.js";
 import { listWorkflowPlannerVersionsRoute } from "./routes/list-workflow-planner-versions.route.js";
 import { createBlueprintLifecyclePlanRoute } from "./routes/create-blueprint-lifecycle-plan.route.js";
@@ -55,7 +54,6 @@ export function createWorkflowsRouter(
   router.get("/", listWorkflowsRoute(options));
   router.post("/:workflowId/cancel", cancelWorkflowRoute(options));
   router.post("/:workflowId/rerun", rerunWorkflowRoute(options));
-  router.post("/:workflowId/retry", retryWorkflowRoute(options));
   router.post("/:workflowId/signals", signalWorkflowRoute(options));
   router.post("/:workflowId/updates", updateWorkflowRoute(options));
   router.get("/:workflowId/events", getWorkflowEventsRoute(options));

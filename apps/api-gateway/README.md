@@ -37,11 +37,44 @@ creates the local user, membership, and organization-unit scope. There is no
 email/password signup or self-service organization creation.
 
 The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
-`password` provider, and uses `src/local-seed.ts` to create two isolated fixture
+`password` provider, and uses `scripts/seed-local.ts` to create two isolated fixture
 organizations (`Organization Test` and `Organization Avengers`), active users,
 five onboarding invite users, scoped organization units, integrations,
-Knowledge Sources/revisions, ingestion runs, webhooks, and workflow timelines.
-The seed is idempotent and local-only.
+Knowledge Sources/revisions, ingestion runs, and webhooks. It does not create
+workflow executions or fake workflow timelines; those come from the local
+Temporal server. The seed is idempotent and local-only.
+
+The production API image uses the `production` Docker target and contains only
+the Gateway server. Local Compose selects the separate `local-seed` target so
+seed and verification scripts are not shipped in production.
+
+### Organization onboarding readiness
+
+Organization onboarding is a server-enforced tenant lifecycle. The persisted
+status is `pending`, `initializing`, `ready`, or `failed`; a missing
+`organization_onboarding` row is a data/migration error, not `pending`.
+
+- Missing row: ordinary tenant routes are blocked with
+  `ORGANIZATION_ONBOARDING_NOT_FOUND` (`503`). Reads do not create a fallback
+  row.
+- `pending`, `initializing`, or `failed`: ordinary dashboard, membership,
+  integration, Workflow, Run, and review routes are blocked with
+  `ORGANIZATION_ONBOARDING_REQUIRED` (`409`). Only the onboarding settings and
+  Source upload/ingestion paths, published Template/current approved Blueprint
+  catalogs, and authorized start/retry operations remain available.
+- `ready`: the normal dashboard opens and the existing authentication,
+  organization scope, and permission rules apply.
+
+`POST /api/v1/organization/onboarding/start` moves an eligible organization to
+`initializing` only after Temporal accepts the idempotent Coordinator start.
+The Coordinator's versioned `coordinator.v1` callback persists `ready` or
+`failed` after initial reconciliation. The browser never supplies Coordinator,
+Blueprint revision, Workflow, Run, or Temporal IDs. Service readiness at
+`GET /health/ready` is independent from this tenant-level onboarding gate.
+
+See the full [onboarding flow and state matrix](../../docs/flows.md#onboarding-readiness-states),
+[contract rules](../../docs/contracts.md#organization-onboarding-and-readiness),
+and [local lifecycle test](../../docs/local.md#authentication-and-onboarding-test).
 
 Current blueprint routes:
 
@@ -65,7 +98,7 @@ Current blueprint routes:
 - `POST /api/v1/organization/permissions` — create or update a direct membership scope.
 - `PATCH /api/v1/organization/permissions/:permissionId` — change a direct scope's access level.
 - `DELETE /api/v1/organization/permissions/:permissionId` — remove a direct scope; the Gateway writes an audit event.
-- `POST /api/v1/workflows` — start a workflow through Temporal, the volatile in-memory adapter, or the durable local database-backed mock.
+- `POST /api/v1/workflows` — start a workflow through the configured Temporal namespace.
 - `GET /api/v1/workflows` — list tenant-visible workflow projections.
 - `GET /api/v1/workflows/activity` — list recent tenant-visible workflow events for the dashboard feed.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
@@ -102,16 +135,12 @@ submission and application, while optional gaps are returned as warnings.
 Integration IDs remain server-side and are not accepted from the browser as
 workflow-creation input.
 
-The in-memory workflow adapter is available only in development/test or when
-`ENCOIS_WORKFLOW_MODE=memory` is explicitly selected. Local Compose uses
-`ENCOIS_WORKFLOW_MODE=database`: it reads and updates seeded workflow
-projections in Postgres, so UI data survives an API restart without creating
-fake executions in Temporal. Production and
-production-like Compose require `ENCOIS_WORKFLOW_MODE=temporal`,
-`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, and either
-`TEMPORAL_API_KEY` or mTLS settings; the API fails closed instead of silently
-falling back to memory. The API starts executions; the Go runtime owns the
-workers that poll the task queue.
+The API always requires `ENCOIS_WORKFLOW_MODE=temporal`,
+`TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, and `TEMPORAL_TASK_QUEUE`, with
+either `TEMPORAL_API_KEY` or mTLS settings for hosted Temporal. It fails closed
+instead of selecting a product fixture backend. Local fixture data is created
+by `scripts/seed-local.ts`; it is not a workflow execution adapter. The API
+starts executions and the Go runtime owns the workers that poll the task queue.
 
 `AGENT_GATEWAY_POLICY_VERSION` must match the policy version configured in the
 private Agent Gateway; it is propagated through the generic workflow input and

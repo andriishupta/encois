@@ -75,7 +75,7 @@ function IntegrationDetailPage() {
   })
 
   if (integrations.isLoading) return <p className="text-sm text-muted-foreground">Loading integration…</p>
-  if (integrations.isError) return <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load integration: {integrations.error.message}</p><Button type="button" variant="outline" onClick={() => void integrations.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card>
+  if (integrations.isError) return <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load integration: {integrations.error.message}</p></CardContent></Card>
   if (!integration) return <Card><CardContent className="pt-6"><EmptyPanel icon={PlugZap} title="Integration not found" description="This integration is not visible in the current organization scope." /></CardContent></Card>
 
   const Icon = integration.provider.toLowerCase() === 'github' ? Github : PlugZap
@@ -213,7 +213,6 @@ function IntegrationDetailPage() {
           if (status === 'disabled' && !window.confirm('Disable this webhook endpoint? Provider deliveries will receive a not-found response.')) return
           webhookStatusMutation.mutate(status)
         }}
-        onRetry={() => void webhookEndpoint.refetch()}
         isMutating={webhookProvisionMutation.isPending || webhookRotateMutation.isPending || webhookStatusMutation.isPending}
         mutationError={webhookProvisionMutation.error ?? webhookRotateMutation.error ?? webhookStatusMutation.error}
       />
@@ -229,7 +228,7 @@ function IntegrationDetailPage() {
           </div>
           {!canViewSources ? <EmptyPanel icon={PlugZap} title="Source history is restricted" description="Knowledge source visibility is not included in the current permissions." /> : null}
           {canViewSources && (sources.isLoading || sourceDetailQueries.some((query) => query.isLoading)) ? <p className="text-sm text-muted-foreground">Loading sync history…</p> : null}
-          {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Some source history is unavailable.</p><Button type="button" variant="outline" onClick={() => { void sources.refetch(); for (const query of sourceDetailQueries) void query.refetch() }}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+          {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <p role="alert" className="text-sm text-destructive">Some source history is unavailable. Reload the page when the service is available.</p> : null}
           {canViewSources && !sources.isLoading && !sourceDetailQueries.some((query) => query.isLoading) && !syncHistory.length ? <EmptyPanel icon={Clock3} title="No ingestion runs yet" description={integrationSources.length ? 'Connected Sources have not recorded an ingestion run in this scope.' : 'Create a Knowledge Source after this Integration becomes active.'} /> : null}
           {syncHistory.map(({ source, run }) => <div key={run.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link to="/sources/$sourceId" params={{ sourceId: source.id }} className="block truncate text-sm font-medium hover:underline">{source.name}</Link><p className="text-xs text-muted-foreground">{humanizeKey(run.trigger)} · {humanizeKey(run.status)} · {run.factsCount} facts</p></div><div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right"><p>{formatDate(run.updatedAt)}</p>{run.error ? <p className="max-w-64 truncate text-destructive">{run.error}</p> : null}</div></div>)}
         </CardContent>
@@ -239,7 +238,7 @@ function IntegrationDetailPage() {
         <CardHeader><CardTitle>Knowledge Sources</CardTitle><CardDescription>Sources currently referencing this Integration in your visible scope.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-2">
           {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading Sources…</p> : null}
-          {sources.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p><Button type="button" variant="outline" onClick={() => void sources.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+          {sources.isError ? <p role="alert" className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p> : null}
           {!sources.isLoading && !sources.isError && !integrationSources.length ? <EmptyPanel icon={PlugZap} title="No Sources use this Integration" description="Create a Knowledge Source after the connection is authorized and active." /> : null}
           {integrationSources.map((source) => <Link key={source.id} to="/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><span className="min-w-0"><span className="block truncate font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.status.replace('_', ' ')} · {source.currentRevisionId ? 'revision available' : 'no revision yet'}</span></span><span className="text-xs text-muted-foreground">Open</span></Link>)}
         </CardContent>
@@ -305,7 +304,6 @@ function WebhookIngressCard({
   onProvision,
   onRotate,
   onSetStatus,
-  onRetry,
   isMutating,
   mutationError,
 }: {
@@ -318,7 +316,6 @@ function WebhookIngressCard({
   onProvision: (endpointKey?: string) => void
   onRotate: () => void
   onSetStatus: (status: 'active' | 'disabled') => void
-  onRetry: () => void
   isMutating: boolean
   mutationError: Error | null
 }) {
@@ -338,7 +335,7 @@ function WebhookIngressCard({
     if (isApiError(error)) {
       if (error.code === 'WEBHOOK_ENDPOINT_EXISTS') return 'This Integration already has an active endpoint.'
       if (error.code === 'INTEGRATION_NOT_ACTIVE') return 'Authorize and activate the Integration before provisioning webhook ingress.'
-      if (error.code === 'WEBHOOK_SECRET_STORE_UNAVAILABLE') return 'Secret Manager is unavailable. The endpoint was not exposed; retry after the deployment is ready.'
+      if (error.code === 'WEBHOOK_SECRET_STORE_UNAVAILABLE') return 'Secret Manager is unavailable. The endpoint was not exposed; check again after the deployment is ready.'
       if (error.code === 'WEBHOOK_ENDPOINT_DISABLED') return 'Enable the endpoint before rotating its secret.'
     }
     return error.message
@@ -357,7 +354,7 @@ function WebhookIngressCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {query.isLoading ? <p className="text-sm text-muted-foreground">Loading webhook endpoint…</p> : null}
-        {query.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load webhook endpoint: {query.error?.message ?? 'Unknown error'}</p><Button type="button" variant="outline" onClick={onRetry}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+        {query.isError ? <p role="alert" className="text-sm text-destructive">Could not load webhook endpoint: {query.error?.message ?? 'Unknown error'}</p> : null}
 
         {!query.isLoading && !query.isError && !endpoint ? <div className="flex flex-col gap-3 rounded-lg border border-dashed bg-muted/20 p-4">
           <div>

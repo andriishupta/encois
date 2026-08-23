@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { isDashboardMockMode } from '@/lib/auth'
-import { getMockOnboardingState } from '@/lib/onboarding'
+import { StatusPage } from '@/components/status-page'
 
 export const Route = createRootRoute({
   component: RootLayout,
+  errorComponent: () => <StatusPage code={500} />,
+  notFoundComponent: () => <StatusPage code={404} />,
 })
 
 function RootLayout() {
@@ -21,11 +22,9 @@ function RootLayout() {
 
 function DocumentTitle() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const workspaceName = isDashboardMockMode() ? getMockOnboardingState()?.workspaceName ?? 'Encois' : 'Encois'
-
   useEffect(() => {
-    document.title = `${getPageTitle(pathname)} | ${workspaceName}`
-  }, [pathname, workspaceName])
+    document.title = `${getPageTitle(pathname)} | Encois`
+  }, [pathname])
 
   return null
 }
@@ -34,10 +33,6 @@ function getPageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard'
   if (pathname === '/login') return 'Sign in'
   if (pathname === '/sign-up' || pathname === '/waitlist') return 'Join the waitlist'
-  if (pathname === '/onboarding/workspace') return 'Workspace setup'
-  if (pathname === '/onboarding/memory') return 'Project memory setup'
-  if (pathname === '/onboarding/coordination') return 'Coordinator setup'
-  if (pathname === '/onboarding/workflows') return 'Workflow setup'
   if (pathname === '/workflows') return 'Workflows'
   if (pathname === '/workflows/new') return 'New workflow'
   if (pathname === '/workflows/templates') return 'Workflow templates'
@@ -51,7 +46,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/integrations/new') return 'Add integration'
   if (pathname.startsWith('/integrations/')) return getIntegrationTitle(pathname)
   if (pathname === '/review') return 'Review queue'
-  if (pathname === '/context') return 'Project context'
+  if (pathname === '/context') return 'Organization context'
   if (pathname === '/memory') return 'Memory'
   if (pathname === '/investigations') return 'Saved investigations'
   if (pathname === '/organization') return 'Organization'
@@ -61,7 +56,8 @@ function getPageTitle(pathname: string) {
   if (pathname === '/settings/notifications') return 'Notifications'
   if (pathname === '/settings/access') return 'Access'
   if (pathname === '/profile') return 'Profile'
-  return 'Dashboard'
+  if (pathname === '/forbidden') return 'Access denied'
+  return 'Page not found'
 }
 
 function getIntegrationTitle(pathname: string) {

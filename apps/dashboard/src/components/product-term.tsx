@@ -19,6 +19,22 @@ export type ProductTermKey =
   | 'plan'
   | 'graph'
   | 'memory'
+  | 'activity'
+  | 'event'
+  | 'workflowStep'
+  | 'agentRun'
+  | 'provenance'
+  | 'freshness'
+  | 'investigation'
+  | 'tool'
+  | 'agentDefinition'
+  | 'memoryBank'
+  | 'query'
+  | 'spannerGraph'
+  | 'workflowInstance'
+  | 'approvalBoundary'
+  | 'partialResult'
+  | 'businessPause'
 
 const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string; description: string }> = {
   coordinator: {
@@ -29,12 +45,12 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
   knowledgeSource: {
     label: 'Knowledge source',
     pluralLabel: 'Knowledge sources',
-    description: 'A scoped origin of project context, such as an integration, document, or manual update.',
+    description: 'A scoped origin of organization context, such as an integration, document, or manual update.',
   },
   workflow: {
     label: 'Workflow',
     pluralLabel: 'Workflows',
-    description: 'A repeatable sequence of checks that Encois runs to investigate a project signal.',
+    description: 'A repeatable sequence of checks that Encois runs to investigate an organization signal.',
   },
   blueprint: {
     label: 'Blueprint',
@@ -92,14 +108,94 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     description: 'A reviewable proposal that describes a Blueprint change before it is approved and applied.',
   },
   graph: {
-    label: 'Project context',
-    pluralLabel: 'Project contexts',
-    description: 'A relationship view of organizations, projects, systems, people, and evidence used to explain an investigation.',
+    label: 'Organization context',
+    pluralLabel: 'Organization contexts',
+    description: 'A relationship view of organization units, systems, people, and evidence used to explain an investigation.',
   },
   memory: {
     label: 'Memory',
     pluralLabel: 'Memory',
     description: 'Scoped distilled context available to authorized workflows. It is inspectable product state, not hidden model reasoning.',
+  },
+  activity: {
+    label: 'Activity',
+    pluralLabel: 'Activities',
+    description: 'A bounded operation performed by a Worker on behalf of a Workflow, such as reading evidence or invoking an approved tool.',
+  },
+  event: {
+    label: 'Execution event',
+    pluralLabel: 'Execution events',
+    description: 'A durable lifecycle record for a Workflow Run, including state transitions, signals, and outcomes.',
+  },
+  workflowStep: {
+    label: 'Workflow step',
+    pluralLabel: 'Workflow steps',
+    description: 'A typed unit in a Blueprint that describes one stage of a Workflow execution.',
+  },
+  agentRun: {
+    label: 'Agent Run',
+    pluralLabel: 'Agent Runs',
+    description: 'One bounded execution of an agent definition inside a Workflow Run, with its own trace and evidence links.',
+  },
+  provenance: {
+    label: 'Provenance',
+    pluralLabel: 'Provenance',
+    description: 'The source, scope, timestamps, and transformation details that explain where a fact or result came from.',
+  },
+  freshness: {
+    label: 'Freshness',
+    pluralLabel: 'Freshness',
+    description: 'Metadata describing how current a source fact or evidence record is and when it should be reviewed again.',
+  },
+  investigation: {
+    label: 'Investigation',
+    pluralLabel: 'Investigations',
+    description: 'A bounded review that combines a scoped query, context, evidence, and an explainable result.',
+  },
+  tool: {
+    label: 'Tool',
+    pluralLabel: 'Tools',
+    description: 'An allowlisted capability an agent may invoke with an explicit scope, schema, and side-effect policy.',
+  },
+  agentDefinition: {
+    label: 'Agent Definition',
+    pluralLabel: 'Agent Definitions',
+    description: 'An approved, versioned agent role with bounded tools, input/output schemas, scope, model, retry, and budget policy.',
+  },
+  memoryBank: {
+    label: 'Memory Bank',
+    pluralLabel: 'Memory Bank',
+    description: 'The configured provider-backed store for scoped distilled agent memory. It is not a graph, workflow, or authorization store.',
+  },
+  query: {
+    label: 'Query',
+    pluralLabel: 'Queries',
+    description: 'A read-only request for a current graph, memory, or Workflow state. Queries do not mutate execution.',
+  },
+  spannerGraph: {
+    label: 'Spanner Graph',
+    pluralLabel: 'Spanner Graph',
+    description: 'The shared company-context graph layer for organization entities, relationships, normalized facts, provenance, and temporal validity.',
+  },
+  workflowInstance: {
+    label: 'Workflow instance',
+    pluralLabel: 'Workflow instances',
+    description: 'One running or completed execution of a Workflow definition with a specific input and state history.',
+  },
+  approvalBoundary: {
+    label: 'Approval boundary',
+    pluralLabel: 'Approval boundaries',
+    description: 'The explicit point where an authorized user or policy must approve a sensitive change or external write.',
+  },
+  partialResult: {
+    label: 'Partial result',
+    pluralLabel: 'Partial results',
+    description: 'A usable result produced from available evidence while one or more bounded sources failed or remain stale.',
+  },
+  businessPause: {
+    label: 'Business pause',
+    pluralLabel: 'Business pauses',
+    description: 'A normal Workflow state that waits for input or an external event; it is not necessarily a failure.',
   },
 }
 

@@ -31,7 +31,6 @@ export default defineConfig(({ mode }) => {
         output: {
         manualChunks: {
           'xyflow-canvas': ['@xyflow/react'],
-          'firebase-auth': ['firebase/app', 'firebase/auth'],
           vendor: ['react', 'react-dom', '@tanstack/react-query', '@tanstack/react-router'],
         },
         },

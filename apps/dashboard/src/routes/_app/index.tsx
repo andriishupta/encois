@@ -1,21 +1,20 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IntegrationStatus, RecommendationStatus, RecommendationTarget, WorkflowExecutionStatus, type RecommendationProjection } from '@encois/contracts'
-import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, PlugZap, RefreshCw, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
+import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, PlugZap, Sparkles, TriangleAlert } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { listIntegrations, listKnowledgeSources, listRecommendations, listWorkflowActivity, listWorkflows, startOrganizationOnboarding, updateRecommendation } from '@/lib/api'
-import { isDashboardMockMode } from '@/lib/auth'
-import { updateMockOnboardingState, type CoordinationMode, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
-import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 import { usePermissions } from '@/lib/permissions'
+import { useOrganization } from '@/lib/organization-context'
 import { Permission } from '@encois/contracts'
 import { formatDate, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
+import { WorkflowStatusIndicator } from '@/components/workflow-status'
 
 export const Route = createFileRoute('/_app/')({
   component: DashboardPage,
@@ -23,7 +22,7 @@ export const Route = createFileRoute('/_app/')({
 
 function DashboardPage() {
   const queryClient = useQueryClient()
-  const { workspace } = useWorkspace()
+  const { organizationName, onboarding } = useOrganization()
   const { can } = usePermissions()
   const canViewWorkflows = can(Permission.WorkflowsRead)
   const canViewSources = can(Permission.KnowledgeRead)
@@ -35,7 +34,7 @@ function DashboardPage() {
   const activity = useQuery({ queryKey: queryKeys.workflowActivity(), queryFn: listWorkflowActivity, enabled: canViewWorkflows, refetchInterval: 10_000 })
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
   const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations, enabled: canViewIntegrations })
-  const recommendations = useQuery({ queryKey: queryKeys.recommendations(), queryFn: listRecommendations, enabled: !isDashboardMockMode(), retry: 1, refetchInterval: 30_000 })
+  const recommendations = useQuery({ queryKey: queryKeys.recommendations(), queryFn: listRecommendations, refetchInterval: 30_000 })
   const recommendationAction = useMutation({
     mutationFn: ({ recommendationId, action }: { recommendationId: string; action: 'accept' | 'dismiss' }) => updateRecommendation(recommendationId, action),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations() }),
@@ -44,39 +43,24 @@ function DashboardPage() {
     mutationFn: startOrganizationOnboarding,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.organization() }),
   })
-  const [startingInitialization, setStartingInitialization] = useState(false)
   const activeRuns = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
   const runningRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
   const waitingRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
   const attentionRuns = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
 
   function startInitialization() {
-    if (!isDashboardMockMode()) {
-      onboardingStart.mutate()
-      return
-    }
-    setStartingInitialization(true)
-    queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ status: 'initializing' }))
-    window.setTimeout(() => {
-      setStartingInitialization(false)
-      queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ status: 'ready' }))
-    }, 1200)
-  }
-
-  function dismissReadyBanner() {
-    if (!isDashboardMockMode()) return
-    queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ initializationBannerDismissed: true }))
+    onboardingStart.mutate()
   }
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Dashboard"
-        description={<>Current activity for <ProductTerm term="scope" /> <span className="font-medium text-foreground">{workspace?.workspaceName ?? 'this organization'}</span>. Counts and events are limited by your permissions; active Runs refresh automatically.</>}
+        description={<>Current activity for <ProductTerm term="scope" /> <span className="font-medium text-foreground">{organizationName ?? 'this organization'}</span>. Counts and events are limited by your permissions; active Runs refresh automatically.</>}
         actions={<div className="flex flex-wrap items-center gap-2">{canManageIntegrations ? <Button variant="outline" asChild><Link to="/integrations"><PlugZap data-icon="inline-start" />Connect integration</Link></Button> : null}{canManageWorkflows ? <Button asChild><Link to="/workflows/new"><GitBranch data-icon="inline-start" />New workflow</Link></Button> : null}</div>}
       />
 
-      {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} coordinationMode={workspace.coordinationMode} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization || onboardingStart.isPending} /> : null}
+      {onboarding && onboarding.status !== 'ready' ? <InitializationCard status={onboarding.status} workspaceName={organizationName ?? undefined} coordinationMode={onboarding.coordinationMode} selectedWorkflows={onboarding.selectedWorkflows.length} onStart={startInitialization} starting={onboardingStart.isPending} /> : null}
       {onboardingStart.isError ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not start the Coordinator: {onboardingStart.error.message}</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -121,7 +105,7 @@ function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {!canViewWorkflows ? <EmptyPanel icon={CircleDashed} title="Workflows are restricted" description="Ask an organization administrator for workflow access." /> : null}
-            {canViewWorkflows && workflows.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p><Button type="button" variant="outline" onClick={() => void workflows.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+            {canViewWorkflows && workflows.isError ? <p role="alert" className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
             {canViewWorkflows && !workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title="No workflow runs yet" description={canManageWorkflows ? <>Create a run from a published <ProductTerm term="template" /> or approved <ProductTerm term="blueprint" />.</> : 'An authorized member can start the first run in this scope.'} /> : null}
             {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflowLabel(workflow.blueprintId, workflow.workflowType)} status={workflow.status} detail={workflow.statusMessage ?? (workflow.statusReason ? workflowStatusLabel(workflow.status, workflow.statusReason) : 'No status reason reported')} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : null}
           </CardContent>
@@ -133,7 +117,7 @@ function DashboardPage() {
             <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {activity.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load recent activity: {activity.error.message}</p><Button type="button" variant="outline" onClick={() => void activity.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+            {activity.isError ? <p role="alert" className="text-sm text-destructive">Could not load recent activity: {activity.error.message}</p> : null}
             {!activity.isLoading && !activity.isError && activity.data?.length === 0 ? <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." /> : null}
             {activity.data?.map((event) => <ActivityRow key={event.id} event={event} />)}
           </CardContent>
@@ -262,11 +246,11 @@ function ActionCenter({
     actions.push({ key: 'review', title: 'Review workflow attention', description: 'Waiting, failed, or partial Runs need an explicit human decision before they can progress.', to: '/review', label: 'Review Runs', tone: 'attention' })
   }
   if (!recommendations && canViewSources && canViewWorkflows && sources && workflows && sources.length > 0 && workflows.length > 0) {
-    actions.push({ key: 'context', title: 'Check project context', description: 'Inspect the scoped graph and freshness before trusting a new investigation.', to: '/context', label: 'Open context' })
+    actions.push({ key: 'context', title: 'Check organization context', description: 'Inspect the scoped graph and freshness before trusting a new investigation.', to: '/context', label: 'Open context' })
   }
 
   const handledCount = recommendations?.filter((recommendation) => recommendation.status !== RecommendationStatus.Open).length ?? 0
-  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Next actions</CardTitle><CardDescription>{unavailable || recommendationsUnavailable ? 'Some recommendations are unavailable because a scoped data source failed to load.' : loading || recommendationsLoading ? 'Checking the current workspace state…' : actions.length ? recommendations ? 'Persisted recommendations based on the data and permissions visible in this scope.' : 'Recommended actions based on the data and permissions visible in this scope.' : handledCount ? `${handledCount} recommendation${handledCount === 1 ? '' : 's'} already acknowledged in this scope.` : 'No immediate setup action is required in the current scope.'}</CardDescription></CardHeader><CardContent>{recommendationActionError ? <p role="alert" className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the recommendation: {recommendationActionError}</p> : null}{unavailable || recommendationsUnavailable ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Retry the affected panel below to refresh recommendations.</p><Link to="/review" className="text-sm font-medium underline underline-offset-4">Open review</Link></div> : loading || recommendationsLoading ? <p className="text-sm text-muted-foreground">Loading recommendations…</p> : actions.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{actions.slice(0, 6).map((action) => <div key={action.key} className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 ${action.tone === 'attention' ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'bg-background'}`}><div className="min-w-0 flex-1"><p className="text-sm font-medium">{action.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p></div><div className="flex flex-wrap gap-2"><Button variant={action.tone === 'attention' ? 'default' : 'outline'} size="sm" asChild><Link to={action.to}>{action.label}<ArrowRight data-icon="inline-end" /></Link></Button>{action.recommendationId ? <><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'accept')}>Mark accepted</Button><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'dismiss')}>Dismiss</Button></> : null}</div></div>)}</div> : <div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />Workspace foundations and active review queues are in place.</div>}</CardContent></Card>
+  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Next actions</CardTitle><CardDescription>{unavailable || recommendationsUnavailable ? 'Some recommendations are unavailable because a scoped data source failed to load.' : loading || recommendationsLoading ? 'Checking the current workspace state…' : actions.length ? recommendations ? 'Persisted recommendations based on the data and permissions visible in this scope.' : 'Recommended actions based on the data and permissions visible in this scope.' : handledCount ? `${handledCount} recommendation${handledCount === 1 ? '' : 's'} already acknowledged in this scope.` : 'No immediate setup action is required in the current scope.'}</CardDescription></CardHeader><CardContent>{recommendationActionError ? <p role="alert" className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the recommendation: {recommendationActionError}</p> : null}{unavailable || recommendationsUnavailable ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Reload the page to refresh unavailable recommendations.</p><Link to="/review" className="text-sm font-medium underline underline-offset-4">Open review</Link></div> : loading || recommendationsLoading ? <p className="text-sm text-muted-foreground">Loading recommendations…</p> : actions.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{actions.slice(0, 6).map((action) => <div key={action.key} className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 ${action.tone === 'attention' ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'bg-background'}`}><div className="min-w-0 flex-1"><p className="text-sm font-medium">{action.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p></div><div className="flex flex-wrap gap-2"><Button variant={action.tone === 'attention' ? 'default' : 'outline'} size="sm" asChild><Link to={action.to}>{action.label}<ArrowRight data-icon="inline-end" /></Link></Button>{action.recommendationId ? <><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'accept')}>Mark accepted</Button><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'dismiss')}>Dismiss</Button></> : null}</div></div>)}</div> : <div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />Workspace foundations and active review queues are in place.</div>}</CardContent></Card>
 }
 
 function InitializationCard({
@@ -275,47 +259,44 @@ function InitializationCard({
   coordinationMode,
   selectedWorkflows,
   onStart,
-  onDismiss,
   starting,
 }: {
-  status: WorkspaceInitializationStatus
+  status: import('@encois/contracts').OrganizationOnboardingProjection['status']
   workspaceName?: string
-  coordinationMode?: CoordinationMode
+  coordinationMode?: import('@encois/contracts').OrganizationOnboardingProjection['coordinationMode']
   selectedWorkflows: number
   onStart: () => void
-  onDismiss: () => void
   starting: boolean
 }) {
-  const isReady = status === 'ready'
   const isInitializing = status === 'initializing'
+  const isFailed = status === 'failed'
   const isConnectOnly = coordinationMode === 'connect-only'
 
   return (
-    <Card className={isReady ? 'border-primary/30' : 'border-primary/30 bg-primary/[0.025]'}>
+    <Card className="border-primary/30 bg-primary/[0.025]">
       <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex items-start gap-4">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-5" aria-hidden="true" /></span>
           <div>
-            <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{isReady ? 'Workspace is ready' : isInitializing ? <><ProductTerm term="coordinator" /> is initializing</> : 'Workspace pending initialization'}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">{selectedWorkflows} <ProductTerm term="workflow" plural /> selected</span></div>
-            <p className="mt-1 text-sm text-muted-foreground">{isConnectOnly && !isReady ? 'Sources are connected. Start the Coordinator when you are ready.' : workspaceName ? `${workspaceName} has the context needed to begin.` : <>Your <ProductTerm term="coordinator" /> is ready to prepare the first workspace context.</>}</p>
+            <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{isInitializing ? <><ProductTerm term="coordinator" /> is initializing</> : isFailed ? 'Workspace initialization failed' : 'Workspace pending initialization'}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">{selectedWorkflows} <ProductTerm term="workflow" plural /> selected</span></div>
+            <p className="mt-1 text-sm text-muted-foreground">{isConnectOnly ? 'Sources are connected. Start the Coordinator when you are ready.' : workspaceName ? `${workspaceName} has the context needed to begin.` : <>Your <ProductTerm term="coordinator" /> is ready to prepare the first workspace context.</>}</p>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          {!isReady ? <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? <>Starting <ProductTerm term="coordinator" />…</> : isConnectOnly ? <>Start <ProductTerm term="coordinator" /></> : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button> : <span className="text-sm font-medium text-primary"><ProductTerm term="coordinator" /> ready</span>}
-          {!isReady ? <Link to="/onboarding/workflows" className="text-center text-xs text-muted-foreground underline underline-offset-4 sm:text-right">Review workflow selection</Link> : null}
+          <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? <>Starting <ProductTerm term="coordinator" />…</> : isConnectOnly ? <>Start <ProductTerm term="coordinator" /></> : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button>
+          <Link to="/settings/workspace" className="text-center text-xs text-muted-foreground underline underline-offset-4 sm:text-right">Review workspace configuration</Link>
         </div>
-        {isReady ? <Button type="button" variant="ghost" size="icon" aria-label="Dismiss workspace ready message" onClick={onDismiss}><X /></Button> : null}
       </CardContent>
     </Card>
   )
 }
 
 function DashboardWorkflowRow({ id, title, status, detail, icon: Icon }: { id: string; title: string; status: WorkflowExecutionStatus; detail: string; icon: typeof Activity }) {
-  return <Link to="/workflows/$workflowId" params={{ workflowId: id }} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="hidden rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground sm:block">{workflowStatusLabel(status)}</span><ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>
+  return <Link to="/workflows/$workflowId" params={{ workflowId: id }} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="hidden sm:block"><WorkflowStatusIndicator status={status} compact /></span><ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>
 }
 
 function RunRow({ title, status, time, icon: Icon }: { title: string; status: WorkflowExecutionStatus; time: string; icon: typeof Activity }) {
-  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{time}</span></span><span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"><Timer className="size-3.5" aria-hidden="true" />{workflowStatusLabel(status)}</span></div>
+  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{time}</span></span><WorkflowStatusIndicator status={status} compact /></div>
 }
 
 function OverviewCard({

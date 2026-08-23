@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, Check, CircleAlert, Mail, RefreshCw, Smartphone } from 'lucide-react'
+import { Bell, Check, CircleAlert, Mail, Smartphone } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,8 +22,8 @@ export const Route = createFileRoute('/_app/settings/notifications')({
 function NotificationsSettingsPage() {
   const queryClient = useQueryClient()
   const canManage = hasPermission(getAuthSession(), Permission.SettingsManage)
-  const preferences = useQuery({ queryKey: queryKeys.notificationPreferences(), queryFn: getNotificationPreferences, retry: false })
-  const notifications = useQuery({ queryKey: queryKeys.notifications(), queryFn: listNotifications, retry: false })
+  const preferences = useQuery({ queryKey: queryKeys.notificationPreferences(), queryFn: getNotificationPreferences })
+  const notifications = useQuery({ queryKey: queryKeys.notifications(), queryFn: listNotifications })
   const [draft, setDraft] = useState({ emailEnabled: false, pushEnabled: false, workflowUpdates: true, evidenceReady: true, weeklyDigest: false })
   useEffect(() => { if (preferences.data) setDraft({ emailEnabled: preferences.data.emailEnabled, pushEnabled: preferences.data.pushEnabled, workflowUpdates: preferences.data.workflowUpdates, evidenceReady: preferences.data.evidenceReady, weeklyDigest: preferences.data.weeklyDigest }) }, [preferences.data])
   const save = useMutation({ mutationFn: () => updateNotificationPreferences(draft), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.notificationPreferences() }) } })
@@ -33,7 +33,7 @@ function NotificationsSettingsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title="Notifications" description="Choose how Encois should surface workflow and evidence updates." actions={<Button type="button" onClick={() => save.mutate()} disabled={!canManage || save.isPending || preferences.isLoading}>{save.isPending ? 'Saving…' : 'Save changes'}</Button>} />
-      {preferences.isError ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3 text-sm"><CircleAlert className="mt-0.5 size-4 text-destructive" /><p className="text-destructive">Notification settings are unavailable: {isApiError(preferences.error) ? preferences.error.message : 'Encois did not return preferences.'}</p></div><Button type="button" variant="outline" onClick={() => void preferences.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+      {preferences.isError ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="pt-6"><div className="flex items-start gap-3 text-sm"><CircleAlert className="mt-0.5 size-4 text-destructive" /><p role="alert" className="text-destructive">Notification settings are unavailable: {isApiError(preferences.error) ? preferences.error.message : 'Encois did not return preferences.'}</p></div></CardContent></Card> : null}
       {save.isError ? <p role="alert" className="text-sm text-destructive">Could not save notification preferences: {save.error.message}</p> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -52,7 +52,7 @@ function NotificationsSettingsPage() {
           </CardContent>
         </Card>
       </div>
-      <Card><CardHeader><CardTitle>In-product notifications</CardTitle><CardDescription>Operational attention generated from the current scoped workflow, Source, and Integration state.</CardDescription></CardHeader><CardContent className="flex flex-col gap-2">{notifications.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load notifications: {notifications.error.message}</p><Button type="button" variant="outline" onClick={() => void notifications.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}{read.isError ? <p role="alert" className="text-sm text-destructive">Could not mark notification as read: {read.error.message}</p> : null}{notifications.isLoading ? <p className="text-sm text-muted-foreground">Loading notifications…</p> : null}{!notifications.isLoading && !notifications.isError && !notifications.data?.length ? <p className="text-sm text-muted-foreground">No operational notifications in the current scope.</p> : null}{notifications.data?.map((item) => <button type="button" key={item.id} onClick={() => item.readAt ? undefined : read.mutate(item.id)} className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${item.readAt ? 'opacity-60' : ''}`}><span className="mt-1 size-2 shrink-0 rounded-full bg-primary" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{item.title}</span><span className="mt-1 block text-xs text-muted-foreground">{item.message}</span><span className="mt-2 block text-[11px] text-muted-foreground">{formatDate(item.createdAt)} · {item.readAt ? 'Read' : 'Mark read'}</span></span></button>)}</CardContent></Card>
+      <Card><CardHeader><CardTitle>In-product notifications</CardTitle><CardDescription>Operational attention generated from the current scoped workflow, Source, and Integration state.</CardDescription></CardHeader><CardContent className="flex flex-col gap-2">{notifications.isError ? <p role="alert" className="text-sm text-destructive">Could not load notifications: {notifications.error.message}</p> : null}{read.isError ? <p role="alert" className="text-sm text-destructive">Could not mark notification as read: {read.error.message}</p> : null}{notifications.isLoading ? <p className="text-sm text-muted-foreground">Loading notifications…</p> : null}{!notifications.isLoading && !notifications.isError && !notifications.data?.length ? <p className="text-sm text-muted-foreground">No operational notifications in the current scope.</p> : null}{notifications.data?.map((item) => <button type="button" key={item.id} onClick={() => item.readAt ? undefined : read.mutate(item.id)} className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${item.readAt ? 'opacity-60' : ''}`}><span className="mt-1 size-2 shrink-0 rounded-full bg-primary" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{item.title}</span><span className="mt-1 block text-xs text-muted-foreground">{item.message}</span><span className="mt-2 block text-[11px] text-muted-foreground">{formatDate(item.createdAt)} · {item.readAt ? 'Read' : 'Mark read'}</span></span></button>)}</CardContent></Card>
     </div>
   )
 }

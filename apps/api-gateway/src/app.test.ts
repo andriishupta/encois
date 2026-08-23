@@ -21,7 +21,8 @@ const testConfig: AppConfig = {
   agentRuntimeUrl: "http://agent-runtime.test",
   agentRuntimeServiceToken: "test-runtime-token",
   executionCapabilityTtlMs: 86_400_000,
-  workflowMode: "memory",
+  workflowMode: "temporal",
+  temporalAddress: "temporal.test:7233",
   temporalNamespace: "default",
   temporalTaskQueue: "test",
   workflowRunRetentionDays: 30,
@@ -42,6 +43,54 @@ const noOpWorkflowClient: WorkflowClient = {
   async update() {},
   async cancel() {},
 };
+
+function createTestWorkflowClient(): WorkflowClient {
+  const executions = new Map<string, WorkflowExecutionProjection>();
+  const requestHashes = new Map<string, string>();
+  return {
+    async start(command, namespace) {
+      const existing = executions.get(command.workflowId);
+      if (existing) {
+        if (requestHashes.get(command.workflowId) !== command.requestHash) throw new Error("idempotency conflict");
+        return { ...existing, reused: true };
+      }
+      const projection: WorkflowExecutionProjection = {
+        workflowId: command.workflowId,
+        workflowType: command.workflowType,
+        namespace,
+        taskQueue: command.taskQueue,
+        status: "queued",
+        organizationId: command.input.organizationId,
+        ...(command.input.blueprint?.blueprintId ? { blueprintId: command.input.blueprint.blueprintId } : {}),
+        ...(command.input.blueprint?.version ? { blueprintVersion: command.input.blueprint.version } : {}),
+        createdAt: "2026-08-20T00:00:00.000Z",
+        updatedAt: "2026-08-20T00:00:00.000Z",
+      };
+      executions.set(command.workflowId, projection);
+      requestHashes.set(command.workflowId, command.requestHash);
+      return { ...projection, reused: false };
+    },
+    async get(workflowId, organizationId) {
+      const projection = executions.get(workflowId);
+      return projection?.organizationId === organizationId ? projection : null;
+    },
+    async list(organizationId) {
+      return [...executions.values()].filter((projection) => projection.organizationId === organizationId);
+    },
+    async signal(workflowId, organizationId) {
+      const projection = executions.get(workflowId);
+      if (!projection || projection.organizationId !== organizationId) throw new Error("workflow not found");
+      executions.set(workflowId, { ...projection, status: "running" });
+    },
+    async signalCoordinator() {},
+    async update() {},
+    async cancel(workflowId, organizationId) {
+      const projection = executions.get(workflowId);
+      if (!projection || projection.organizationId !== organizationId) throw new Error("workflow not found");
+      executions.set(workflowId, { ...projection, status: "cancelled" });
+    },
+  };
+}
 
 describe("API Gateway", () => {
   it("does not report database readiness before the current schema marker exists", async () => {
@@ -520,6 +569,7 @@ describe("API Gateway", () => {
         status: "authenticated" as const,
       }),
       config: testConfig,
+      workflowClient: createTestWorkflowClient(),
     });
 
     const startResponse = await app.request("/api/v1/workflows", {
@@ -1032,6 +1082,7 @@ describe("API Gateway", () => {
         status: "authenticated" as const,
       }),
       config: testConfig,
+      workflowClient: createTestWorkflowClient(),
     });
     const request = {
       workflowType: "encois.user-blueprint.v1",

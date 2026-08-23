@@ -54,7 +54,7 @@ function WaitlistPage() {
       await submitWaitlist(validation.value)
       setSubmitted(true)
     } catch (cause) {
-      setError(isApiError(cause) ? cause.message : 'We could not save your request. Please try again.')
+      setError(isApiError(cause) ? cause.message : 'We could not save your request.')
     } finally {
       setIsSubmitting(false)
     }

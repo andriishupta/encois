@@ -1,14 +1,16 @@
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { ContractVersion, isJsonObject, Permission, WorkflowExecutionStatus, WorkflowSignalName, type WorkflowEventProjection } from '@encois/contracts'
 import { CircleDashed, Clock3, GitBranch, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { WorkflowCanvas } from '@/components/workflow-canvas'
+import { WorkflowStatusIndicator } from '@/components/workflow-status'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { cancelWorkflow, getWorkflow, getWorkflowEvents, rerunWorkflow, retryWorkflow, signalWorkflow } from '@/lib/api'
+import { cancelWorkflow, getWorkflow, getWorkflowEvents, rerunWorkflow, signalWorkflow } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
@@ -81,13 +83,6 @@ function WorkflowDetailPage() {
       await navigate({ to: '/workflows/$workflowId', params: { workflowId: nextWorkflow.workflowId } })
     },
   })
-  const retry = useMutation({
-    mutationFn: () => retryWorkflow(workflowId),
-    onSuccess: async (nextWorkflow) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() })
-      await navigate({ to: '/workflows/$workflowId', params: { workflowId: nextWorkflow.workflowId } })
-    },
-  })
   const eventRows = events.data ?? []
   const activityRows = eventRows.filter((event) => event.activityName && event.eventType.startsWith('activity_'))
   const transitionCount = eventRows.filter((event) => event.eventType === 'workflow_status_updated').length
@@ -103,15 +98,16 @@ function WorkflowDetailPage() {
   const traceRows = eventRows.filter((event) => Boolean(event.trace || event.agentRunId || event.evidence?.length || event.evidenceRef))
 
   if (workflow.isLoading) return <p className="text-sm text-muted-foreground">Loading workflow run…</p>
-  if (workflow.isError || !workflow.data) return <div className="flex flex-col gap-6"><PageHeader title="Workflow run unavailable" description="The run could not be loaded in the current organization scope." /><Card><CardContent className="flex flex-col gap-4 pt-6"><p className="text-sm text-destructive">{workflow.error?.message ?? 'Encois returned no workflow projection.'}</p><Button type="button" variant="outline" onClick={() => void workflow.refetch()}>Try again</Button></CardContent></Card></div>
+  if (workflow.isError || !workflow.data) return <div className="flex flex-col gap-6"><PageHeader title="Workflow run unavailable" description="The run could not be loaded in the current organization scope." /><Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">{workflow.error?.message ?? 'Encois returned no workflow projection.'}</p></CardContent></Card></div>
   const status = workflow.data.status
+  const isRefreshing = workflow.isFetching || events.isFetching
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={workflow.data ? workflowLabel(workflow.data.blueprintId, workflow.data.workflowType) : 'Workflow run'}
         description={<><ProductTerm term="run" /> detail, live state, and <ProductTerm term="evidence" /> collection for the current scope.</>}
-        actions={<div className="flex flex-wrap items-center gap-2">{status === WorkflowExecutionStatus.Waiting && canRun ? <Button onClick={() => approval.mutate()} disabled={approval.isPending}>{approval.isPending ? 'Approving…' : 'Approve current pause'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Queued, WorkflowExecutionStatus.Running, WorkflowExecutionStatus.Waiting]).has(status) ? <Button variant="outline" onClick={() => control.mutate(WorkflowSignalName.WorkflowPause)} disabled={control.isPending}>{control.isPending ? 'Pausing…' : 'Pause run'}</Button> : null}{canRun && status === WorkflowExecutionStatus.Paused ? <Button onClick={() => control.mutate(WorkflowSignalName.WorkflowResume)} disabled={control.isPending}>{control.isPending ? 'Resuming…' : 'Resume run'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Queued, WorkflowExecutionStatus.Running, WorkflowExecutionStatus.Waiting, WorkflowExecutionStatus.Paused]).has(status) ? <Button variant="outline" onClick={() => { if (window.confirm('Cancel this workflow run? This cannot be undone.')) cancellation.mutate() }} disabled={cancellation.isPending}>{cancellation.isPending ? 'Cancelling…' : 'Cancel run'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Cancelled]).has(status) ? <Button variant="outline" onClick={() => rerun.mutate()} disabled={rerun.isPending}>{rerun.isPending ? 'Starting again…' : 'Run again'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Partial, WorkflowExecutionStatus.Failed]).has(status) ? <Button variant="outline" onClick={() => retry.mutate()} disabled={retry.isPending}>{retry.isPending ? 'Retrying…' : 'Retry failed work'}</Button> : null}</div>}
+        actions={<div className="flex flex-wrap items-center gap-2">{!terminalRunStatuses.has(status) ? <Button variant="outline" onClick={() => void Promise.all([workflow.refetch(), events.refetch()])} disabled={isRefreshing}><RefreshCw className={isRefreshing ? 'animate-spin' : undefined} data-icon="inline-start" />{isRefreshing ? 'Fetching…' : 'Fetch again'}</Button> : null}{status === WorkflowExecutionStatus.Waiting && canRun ? <Button onClick={() => approval.mutate()} disabled={approval.isPending}>{approval.isPending ? 'Approving…' : 'Approve current pause'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Queued, WorkflowExecutionStatus.Running, WorkflowExecutionStatus.Waiting]).has(status) ? <Button variant="outline" onClick={() => control.mutate(WorkflowSignalName.WorkflowPause)} disabled={control.isPending}>{control.isPending ? 'Pausing…' : 'Pause run'}</Button> : null}{canRun && status === WorkflowExecutionStatus.Paused ? <Button onClick={() => control.mutate(WorkflowSignalName.WorkflowResume)} disabled={control.isPending}>{control.isPending ? 'Resuming…' : 'Resume run'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Queued, WorkflowExecutionStatus.Running, WorkflowExecutionStatus.Waiting, WorkflowExecutionStatus.Paused]).has(status) ? <Button variant="outline" onClick={() => { if (window.confirm('Cancel this workflow run? This cannot be undone.')) cancellation.mutate() }} disabled={cancellation.isPending}>{cancellation.isPending ? 'Cancelling…' : 'Cancel run'}</Button> : null}{canRun && new Set<WorkflowExecutionStatus>([WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Cancelled]).has(status) ? <Button variant="outline" onClick={() => rerun.mutate()} disabled={rerun.isPending}>{rerun.isPending ? 'Starting again…' : 'Run again'}</Button> : null}</div>}
       />
 
       {approval.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not approve this run: {approval.error.message}</div> : null}
@@ -120,10 +116,9 @@ function WorkflowDetailPage() {
       {cancellation.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{cancellation.error.message}</div> : null}
       {rerun.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not start this workflow again: {rerun.error.message}</div> : null}
       {control.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not change run control: {control.error.message}</div> : null}
-      {retry.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not retry this run: {retry.error.message}</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Status" value={status ? workflowStatusLabel(status, workflow.data?.statusReason) : workflow.isLoading ? 'Loading' : 'Unavailable'} icon={CircleDashed} />
+        <SummaryCard label="Status" value={status ? <WorkflowStatusIndicator status={status} reason={workflow.data?.statusReason} /> : workflow.isLoading ? 'Loading' : 'Unavailable'} icon={CircleDashed} />
         <SummaryCard label="Blueprint" value={workflow.data ? workflowLabel(workflow.data.blueprintId, workflow.data.workflowType) : 'Not available'} icon={GitBranch} />
         <SummaryCard label="Revision" value={workflow.data?.blueprintVersion ?? 'Not recorded'} icon={RotateCcw} mono />
         <SummaryCard label="Started" value={formatDate(workflow.data?.createdAt)} icon={Clock3} />
@@ -150,11 +145,11 @@ function WorkflowDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Execution steps</CardTitle>
-          <CardDescription>Step activity and specialist work for this <ProductTerm term="run" />.</CardDescription>
+          <CardTitle><ProductTerm term="workflowStep" plural /></CardTitle>
+          <CardDescription>Step <ProductTerm term="activity" /> and specialist work for this <ProductTerm term="run" />.</CardDescription>
         </CardHeader>
         <CardContent>
-          {events.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load step activity: {events.error.message}</p><Button type="button" variant="outline" onClick={() => void events.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
+          {events.isError ? <p role="alert" className="text-sm text-destructive">Could not load step activity: {events.error.message}</p> : null}
           {!events.isLoading && !events.isError && activityRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No step activity yet" description="Detailed step activity will appear here when available." /> : null}
           <div className="flex flex-col gap-2">
             {activityRows.map((event) => <ActivityRow key={event.id} event={event} />)}
@@ -163,22 +158,22 @@ function WorkflowDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Execution trace</CardTitle><CardDescription>Operational trace attributes for this Run: lifecycle, activity, agent, evidence, and bounded metadata.</CardDescription></CardHeader>
-        <CardContent className="flex flex-col gap-3"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5"><TraceMetric label="Trace records" value={String(traceRows.length)} /><TraceMetric label="Agent runs" value={String(new Set(eventRows.map((event) => event.agentRunId).filter(Boolean)).size)} /><TraceMetric label="Evidence links" value={String(evidenceRows.length)} /><TraceMetric label="Max latency" value={traceDurations.length ? `${Math.max(...traceDurations)} ms` : 'Not reported'} /><TraceMetric label="Max attempt" value={traceAttempts.length ? String(Math.max(...traceAttempts)) : 'Not reported'} /></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>Provider: {traceProviders.join(', ') || 'Not reported'}</span><span>Model: {traceModels.join(', ') || 'Not reported'}</span><span>Budget: {traceBudget || 'Not reported'}</span></div>{traceRows.length ? traceRows.map((event) => <TraceRow key={`trace-${event.id}`} event={event} />) : <EmptyPanel icon={CircleDashed} title="No runtime trace attributes yet" description={eventRows.length ? 'Execution events are available below. Provider, model, latency, and retry details will appear when the runtime emits them.' : 'The runtime will expose trace attributes as the Run progresses.'} />}</CardContent>
+        <CardHeader><CardTitle>Execution trace</CardTitle><CardDescription>Operational trace attributes for this <ProductTerm term="run" />: lifecycle, <ProductTerm term="activity" />, <ProductTerm term="agentRun" />, <ProductTerm term="evidence" />, and bounded metadata.</CardDescription></CardHeader>
+        <CardContent className="flex flex-col gap-3"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5"><TraceMetric label="Trace records" value={String(traceRows.length)} /><TraceMetric label="Agent runs" value={String(new Set(eventRows.map((event) => event.agentRunId).filter(Boolean)).size)} /><TraceMetric label="Evidence links" value={String(evidenceRows.length)} /><TraceMetric label="Max latency" value={traceDurations.length ? `${Math.max(...traceDurations)} ms` : 'Not reported'} /><TraceMetric label="Max attempt" value={traceAttempts.length ? String(Math.max(...traceAttempts)) : 'Not reported'} /></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>Provider: {traceProviders.join(', ') || 'Not reported'}</span><span>Model: {traceModels.join(', ') || 'Not reported'}</span><span>Budget: {traceBudget || 'Not reported'}</span></div>{traceRows.length ? traceRows.map((event) => <TraceRow key={`trace-${event.id}`} event={event} />) : <EmptyPanel icon={CircleDashed} title="No runtime trace attributes yet" description={eventRows.length ? 'Execution events are available below. Provider, model, latency, and attempt details will appear when the runtime emits them.' : 'The runtime will expose trace attributes as the Run progresses.'} />}</CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle><ProductTerm term="evidence" /> records</CardTitle><CardDescription>Each reference is shown with the provenance fields returned by execution. Missing provider metadata remains visible as unavailable.</CardDescription></CardHeader>
+        <CardHeader><CardTitle><ProductTerm term="evidence" /> records</CardTitle><CardDescription>Each reference is shown with the <ProductTerm term="provenance" /> fields returned by execution. Missing provider metadata remains visible as unavailable.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-2">
-          {!events.isLoading && !events.isError && evidenceRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No evidence references yet" description="Evidence records will appear when a tool or agent returns a source reference." /> : null}
+          {!events.isLoading && !events.isError && evidenceRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No evidence references yet" description={<><ProductTerm term="evidence" /> records will appear when a <ProductTerm term="tool" /> or agent returns a source reference.</>} /> : null}
           {evidenceRows.map(({ event, reference }) => <EvidenceRow key={`${event.id}-${reference}`} event={event} reference={reference} units={units} />)}
         </CardContent>
       </Card>
 
       <Card>
           <CardHeader>
-          <CardTitle>Event history</CardTitle>
-          <CardDescription>State transitions, retries, and execution events for this <ProductTerm term="run" />.</CardDescription>
+          <CardTitle><ProductTerm term="event" plural /> history</CardTitle>
+          <CardDescription>State transitions, retries, and <ProductTerm term="event" plural /> for this <ProductTerm term="run" />.</CardDescription>
         </CardHeader>
         <CardContent>
           {!events.isLoading && !events.isError && eventRows.length === 0 ? <EmptyPanel icon={CircleDashed} title="No event history yet" description={<><ProductTerm term="evidence" /> references, retries, and state transitions will appear here when available.</>} /> : null}
@@ -204,7 +199,7 @@ function EvidenceRow({ event, reference, units }: { event: WorkflowEventProjecti
   const freshness = projection?.freshness
   const visibilityScope = Array.isArray(provenance.visibilityScope) ? provenance.visibilityScope.map((id) => formatUnitPath(units, id) || id).join(', ') : 'Scope enforced by Encois'
   const freshnessLabel = freshness ? `${freshness.status}${freshness.expiresAt ? ` · until ${formatDate(freshness.expiresAt)}` : ''}` : 'Not reported'
-  return <div className="rounded-lg border p-3 text-sm"><div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><div className="min-w-0"><p className="break-all font-mono text-xs">{reference}</p><p className="mt-1 text-xs text-muted-foreground">Produced by {event.activityName ?? event.eventType} · {formatDate(event.occurredAt)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${confidence === undefined ? 'bg-muted text-muted-foreground' : 'bg-secondary'}`}>Confidence {formatConfidence(confidence)}</span></div><dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2"><div><dt className="text-muted-foreground">Source</dt><dd className="font-medium">{source}</dd></div><div><dt className="text-muted-foreground">Source record</dt><dd className="font-mono">{sourceRecordId ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground">Observed</dt><dd>{formatDate(observedAt)}</dd></div><div><dt className="text-muted-foreground">Ingested</dt><dd>{formatDate(ingestedAt)}</dd></div><div><dt className="text-muted-foreground">Transformation</dt><dd>{transformationVersion ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground">Freshness</dt><dd>{freshnessLabel}</dd></div><div><dt className="text-muted-foreground">Scope</dt><dd>{visibilityScope}</dd></div></dl></div>
+  return <div className="rounded-lg border p-3 text-sm"><div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><div className="min-w-0"><p className="break-all font-mono text-xs">{reference}</p><p className="mt-1 text-xs text-muted-foreground">Produced by {event.activityName ?? event.eventType} · {formatDate(event.occurredAt)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${confidence === undefined ? 'bg-muted text-muted-foreground' : 'bg-secondary'}`}>Confidence {formatConfidence(confidence)}</span></div><dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2"><div><dt className="text-muted-foreground">Source</dt><dd className="font-medium">{source}</dd></div><div><dt className="text-muted-foreground">Source record</dt><dd className="font-mono">{sourceRecordId ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground">Observed</dt><dd>{formatDate(observedAt)}</dd></div><div><dt className="text-muted-foreground">Ingested</dt><dd>{formatDate(ingestedAt)}</dd></div><div><dt className="text-muted-foreground">Transformation</dt><dd>{transformationVersion ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground"><ProductTerm term="freshness" /></dt><dd>{freshnessLabel}</dd></div><div><dt className="text-muted-foreground">Scope</dt><dd>{visibilityScope}</dd></div></dl></div>
 }
 
 function formatConfidence(value: number | undefined): string {
@@ -232,12 +227,12 @@ function ActivityRow({ event }: { event: import('@encois/contracts').WorkflowEve
   const attempt = typeof event.metadata.attempt === 'number' ? `attempt ${event.metadata.attempt}` : undefined
   const shard = typeof event.metadata.shard === 'string' ? `shard ${event.metadata.shard}` : undefined
   const duration = typeof event.metadata.durationMs === 'number' ? `${event.metadata.durationMs}ms` : undefined
-  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:gap-4"><span className="min-w-0 flex-1 font-medium">{event.activityName}</span><span className="text-xs text-muted-foreground">{event.status}{attempt ? ` · ${attempt}` : ''}{shard ? ` · ${shard}` : ''}{duration ? ` · ${duration}` : ''}{issue ? ` · ${issue}` : ''}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div>
+  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:gap-4"><span className="min-w-0 flex-1 font-medium">{event.activityName}</span><span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><EventStatus status={event.status} />{attempt ? ` · ${attempt}` : ''}{shard ? ` · ${shard}` : ''}{duration ? ` · ${duration}` : ''}{issue ? ` · ${issue}` : ''}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div>
 }
 
 function EventRow({ event }: { event: import('@encois/contracts').WorkflowEventProjection }) {
   const shard = typeof event.metadata.shard === 'string' ? event.metadata.shard : undefined
-  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{event.eventType}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div><div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{event.status}</span>{shard ? <span>shard: {shard}</span> : null}{event.evidenceRef ? <span className="font-mono">{event.evidenceRef}</span> : null}{event.agentRunId ? <span className="font-mono">{event.agentRunId}</span> : null}</div></div>
+  return <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{event.eventType}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div><div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><EventStatus status={event.status} />{shard ? <span>shard: {shard}</span> : null}{event.evidenceRef ? <span className="font-mono">{event.evidenceRef}</span> : null}{event.agentRunId ? <span className="font-mono">{event.agentRunId}</span> : null}</div></div>
 }
 
 function TraceRow({ event }: { event: import('@encois/contracts').WorkflowEventProjection }) {
@@ -249,7 +244,12 @@ function TraceRow({ event }: { event: import('@encois/contracts').WorkflowEventP
   const outcome = event.trace?.outcome ?? metadataString(event, 'outcome') ?? 'Not reported'
   const budget = event.trace?.budget ?? metadataString(event, 'budget') ?? 'Not reported'
   const redacted = event.trace?.redacted ?? metadataBoolean(event, 'redacted')
-  return <div className="rounded-lg border p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{event.eventType}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div><div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{event.status}</span>{event.activityName ? <span>activity: {event.activityName}</span> : null}{event.agentRunId ? <span>agent: {shortIdentifier(event.agentRunId)}</span> : null}{event.evidenceRef ? <span>evidence linked</span> : null}<span>provider: {provider}</span><span>model: {model}</span><span>latency: {durationMs !== undefined ? `${durationMs}ms` : 'Not reported'}</span><span>attempt: {attempt !== undefined ? attempt : 'Not reported'}</span><span>outcome: {outcome}</span><span>budget: {budget}</span><span>redaction: {redacted === undefined ? 'Not reported' : redacted ? 'applied' : 'not applied'}</span></div>{metadata.length ? <details className="mt-2 text-xs text-muted-foreground"><summary className="cursor-pointer">Trace metadata</summary><div className="mt-2 flex flex-wrap gap-2">{metadata.map(([key, value]) => <span key={key} className="rounded bg-muted px-2 py-1">{key}: {typeof value === 'string' ? value : JSON.stringify(value)}</span>)}</div></details> : null}</div>
+  return <div className="rounded-lg border p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">{event.eventType}</span><span className="text-xs text-muted-foreground">{formatDate(event.occurredAt)}</span></div><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><EventStatus status={event.status} />{event.activityName ? <span>activity: {event.activityName}</span> : null}{event.agentRunId ? <span>agent: {shortIdentifier(event.agentRunId)}</span> : null}{event.evidenceRef ? <span>evidence linked</span> : null}<span>provider: {provider}</span><span>model: {model}</span><span>latency: {durationMs !== undefined ? `${durationMs}ms` : 'Not reported'}</span><span>attempt: {attempt !== undefined ? attempt : 'Not reported'}</span><span>outcome: {outcome}</span><span>budget: {budget}</span><span>redaction: {redacted === undefined ? 'Not reported' : redacted ? 'applied' : 'not applied'}</span></div>{metadata.length ? <details className="mt-2 text-xs text-muted-foreground"><summary className="cursor-pointer">Trace metadata</summary><div className="mt-2 flex flex-wrap gap-2">{metadata.map(([key, value]) => <span key={key} className="rounded bg-muted px-2 py-1">{key}: {typeof value === 'string' ? value : JSON.stringify(value)}</span>)}</div></details> : null}</div>
+}
+
+function EventStatus({ status }: { status: string }) {
+  const knownStatus = Object.values(WorkflowExecutionStatus).find((value) => value === status)
+  return knownStatus ? <WorkflowStatusIndicator status={knownStatus} compact /> : <span>{status}</span>
 }
 
 function metadataBoolean(event: import('@encois/contracts').WorkflowEventProjection, key: string): boolean | undefined {
@@ -263,7 +263,7 @@ function SummaryCard({
   mono = false,
 }: {
   label: string
-  value: string
+  value: ReactNode
   icon: typeof GitBranch
   mono?: boolean
 }) {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { FilePlus2, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { FilePlus2, Search, Sparkles } from 'lucide-react'
 import type { WorkflowTemplateProjection } from '@encois/contracts'
 import { Permission } from '@encois/contracts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,7 +34,7 @@ function WorkflowTemplatesPage() {
       </CardContent>
     </Card>
     {templates.isLoading ? <p className="text-sm text-muted-foreground">Loading templates…</p> : null}
-    {templates.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load templates: {templates.error.message}</p><Button type="button" variant="outline" onClick={() => void templates.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+    {templates.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load templates: {templates.error.message}</p></CardContent></Card> : null}
     {templates.data?.length ? <div className="grid gap-4 md:grid-cols-2">{templates.data.map((template) => <TemplateCard key={template.id} template={template} />)}</div> : null}
     {!templates.isLoading && !templates.isError && !templates.data?.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Sparkles} title="No templates match" description="Try another search or ask an administrator to publish a reviewed template." /></CardContent></Card> : null}
   </div>

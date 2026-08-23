@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   createDatabase,
   organizationInvites,
+  organizationOnboarding,
   organizationUnits,
   organizations,
   roles,
@@ -33,6 +34,11 @@ try {
       })
       .returning({ id: organizationUnits.id });
     if (!rootUnit) throw new Error("Organization root unit was not created.");
+
+    await tx.insert(organizationOnboarding).values({
+      organizationId: organization.id,
+      coordinatorId: `organization:${organization.id}`,
+    });
 
     const [role] = await tx
       .select({ id: roles.id })

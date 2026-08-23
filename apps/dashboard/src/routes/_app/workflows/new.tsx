@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, RefreshCw, Sparkles, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, Sparkles, WandSparkles } from 'lucide-react'
 import type { WorkflowBlueprintProjection, WorkflowCreationIntent, WorkflowPlanRecord, WorkflowTemplateProjection } from '@encois/contracts'
 import { Permission, WorkflowStepKind } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
@@ -139,7 +139,7 @@ function NewWorkflowPage() {
         <StepIndicator number="3" label="Review & apply" active={stage === 3} complete={completed} />
       </div>
 
-      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={mode === 'template' ? templates.error : mode === 'blueprint' ? blueprints.error : null} onRetry={() => { if (mode === 'template') void templates.refetch(); if (mode === 'blueprint') void blueprints.refetch() }} prompt={prompt} onPromptChange={setPrompt} /> : null}
+      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={mode === 'template' ? templates.error : mode === 'blueprint' ? blueprints.error : null} prompt={prompt} onPromptChange={setPrompt} /> : null}
       {stage === 2 ? <ConfigureStage name={name} description={description} mode={mode} sourceTitle={selectedSourceTitle} currentScope={currentScope} prompt={prompt} onNameChange={setName} onDescriptionChange={setDescription} onBack={() => setStage(1)} onPreview={goToPreview} canPreview={canPreview} error={preview.error} /> : null}
       {stage === 3 ? <ReviewStage preview={preview.data} isLoading={preview.isPending} error={preview.error ?? submit.error ?? approve.error ?? apply.error} runAfterApply={runAfterApply} onRunChange={setRunAfterApply} submitted={submitted} approved={approved} completed={completed} onSubmit={() => submit.mutate()} submitting={submit.isPending} onApprove={() => approve.mutate()} approving={approve.isPending} onApply={() => apply.mutate()} applying={apply.isPending} onBack={() => { preview.reset(); setStage(2) }} onOpenWorkflows={() => void navigate({ to: '/workflows' })} /> : null}
       {stage === 1 ? <div className="flex justify-end"><Button type="button" disabled={!canContinueToConfigure} onClick={() => setStage(2)}>Continue <ArrowRight data-icon="inline-end" /></Button></div> : null}
@@ -147,7 +147,7 @@ function NewWorkflowPage() {
   )
 }
 
-function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, onRetry, prompt, onPromptChange }: {
+function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, prompt, onPromptChange }: {
   mode: CreationMode | null
   onModeChange: (mode: CreationMode) => void
   templates: readonly WorkflowTemplateProjection[]
@@ -159,7 +159,6 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
   templatesLoading: boolean
   blueprintsLoading: boolean
   error: Error | null
-  onRetry: () => void
   prompt: string
   onPromptChange: (value: string) => void
 }) {
@@ -172,8 +171,8 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
           return <button key={option.mode} type="button" onClick={() => onModeChange(option.mode)} className={cn('flex min-h-36 flex-col items-start gap-4 rounded-xl border bg-card p-5 text-left transition hover:border-foreground/30 hover:bg-accent/30', mode === option.mode && 'border-foreground bg-accent/50 ring-2 ring-foreground/10')} aria-pressed={mode === option.mode}><span className="flex size-10 items-center justify-center rounded-lg bg-muted"><Icon className="size-5" aria-hidden="true" /></span><span><span className="block font-medium">{option.title}</span><span className="mt-1 block text-sm text-muted-foreground">{option.description}</span></span></button>
         })}
       </div>
-      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} onRetry={onRetry} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
-      {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} onRetry={onRetry} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
+      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
+      {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
       {mode === 'manual' ? <Card className="border-dashed"><CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="size-4" />Describe the outcome</CardTitle><CardDescription>Use plain language. Encois proposes a provider-aware Blueprint for review; nothing is persisted before approval and apply.</CardDescription></CardHeader><CardContent><textarea value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="Example: Check GitHub release readiness for Checkout and highlight blockers, missing evidence, and required approvals." className="min-h-32 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="Workflow description" /><p className="mt-2 text-xs text-muted-foreground">Mention GitHub or Jira when the investigation needs a scoped integration. Other providers can be used through a published Template or approved Blueprint once provider support is enabled.</p></CardContent></Card> : null}
     </div>
   )
@@ -311,8 +310,8 @@ function ProviderBindingList({ bindings, completed }: { bindings: readonly impor
   )
 }
 
-function SelectionList<T>({ title, description, loading, error, onRetry, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; onRetry: () => void; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
-  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><p role="alert">{error.message}</p><Button type="button" size="sm" variant="outline" onClick={onRetry}><RefreshCw data-icon="inline-start" />Retry</Button></div> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
+function SelectionList<T>({ title, description, loading, error, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error.message}</p> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
 }
 
 function TemplateOption({ item, selected }: { item: WorkflowTemplateProjection; selected: boolean }) {

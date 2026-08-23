@@ -160,7 +160,7 @@ function startCommand(
 
 export type WorkflowStartLineage = {
   parentWorkflowId?: string;
-  trigger?: "manual" | "rerun" | "retry";
+  trigger?: "manual" | "rerun";
 };
 
 export function stableSerialize(value: unknown): string {
@@ -1133,21 +1133,18 @@ export async function rerunWorkflow(
   requestId: string,
   traceId: string,
   options: WorkflowServiceOptions,
-  mode: "rerun" | "retry" = "rerun",
 ): Promise<WorkflowExecutionProjection> {
   if (!database) throw workflowServiceError("PERSISTENCE_UNAVAILABLE", "Run again requires persisted workflow history.");
   const userId = localUserId(principal);
   if (!userId) throw workflowServiceError("IDENTITY_NOT_RESOLVED", "The identity is not linked to a local user.");
   const canRun = await withOrganizationContext(database, principal.organizationId, (db) => hasPermission(db, principal, Permission.WorkflowsRun));
-  if (!canRun) throw workflowServiceError("FORBIDDEN", `The user cannot ${mode} workflows.`);
+  if (!canRun) throw workflowServiceError("FORBIDDEN", "The user cannot run workflows again.");
 
   const previous = await getWorkflow(principal, workflowId, options);
   if (!previous) throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
-  const rerunnableStatuses: readonly WorkflowExecutionStatus[] = mode === "retry"
-    ? [WorkflowExecutionStatus.Partial, WorkflowExecutionStatus.Failed]
-    : [WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Cancelled];
+  const rerunnableStatuses: readonly WorkflowExecutionStatus[] = [WorkflowExecutionStatus.Completed, WorkflowExecutionStatus.Cancelled];
   if (!rerunnableStatuses.includes(previous.status)) {
-    throw workflowServiceError("WORKFLOW_NOT_RERUNNABLE", `Workflow is ${previous.status} and cannot be ${mode === "retry" ? "retried" : "run again"}.`);
+    throw workflowServiceError("WORKFLOW_NOT_RERUNNABLE", `Workflow is ${previous.status} and cannot be run again.`);
   }
 
   const source = await withOrganizationContext(database, principal.organizationId, async (db) => {
@@ -1170,14 +1167,14 @@ export async function rerunWorkflow(
     const businessInput = isJsonObject(row.businessInput) ? row.businessInput : {};
     return { blueprintId, blueprintVersion: row.blueprintVersion, scope, businessInput };
   });
-  if (!source) throw workflowServiceError("FORBIDDEN", `The user cannot ${mode} this workflow in the current scope.`);
+  if (!source) throw workflowServiceError("FORBIDDEN", "The user cannot run this workflow again in the current scope.");
 
   const projection = await startWorkflow(
     principal,
     {
       workflowType: TemporalWorkflowType.UserBlueprint,
       version: "v1",
-      key: `${mode}-${randomUUID()}`,
+      key: `rerun-${randomUUID()}`,
       blueprintId: source.blueprintId,
       blueprintVersion: source.blueprintVersion,
       scope: source.scope,
@@ -1186,14 +1183,14 @@ export async function rerunWorkflow(
     requestId,
     traceId,
     options,
-    { parentWorkflowId: workflowId, trigger: mode },
+    { parentWorkflowId: workflowId, trigger: "rerun" },
   );
 
   await withOrganizationContext(database, principal.organizationId, async (db) => {
     await db.insert(auditEvents).values({
       organizationId: principal.organizationId,
       actorUserId: userId,
-      action: `workflow.${mode}.started`,
+      action: "workflow.rerun.started",
       outcome: "accepted",
       resourceType: "workflow_run",
       resourceId: projection.workflowId,

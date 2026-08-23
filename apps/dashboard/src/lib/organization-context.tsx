@@ -2,11 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type Dispatch,
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { OrganizationProjection, OrganizationUnitCreateRequest } from '@encois/contracts'
 import { createOrganizationPermission, createOrganizationUnit, deleteOrganizationPermission, getOrganization, isApiError, updateOrganizationPermission } from '@/lib/api'
-import { isDashboardMockMode } from '@/lib/auth'
 import {
-  initialOrganizationUnits,
-  initialUnitPermissions,
-  organizationMembers,
   type AccessLevel,
   type OrganizationMember,
   type OrganizationUnit,
@@ -25,8 +21,9 @@ type OrganizationContextValue = {
   currentUnitId: string
   setCurrentUnitId: Dispatch<SetStateAction<string>>
   isLoading: boolean
-  isUsingApi: boolean
+  isLoaded: boolean
   error: string | null
+  errorCode: string | null
   createUnit: (input: OrganizationUnitCreateRequest) => Promise<OrganizationUnit>
   createPermission: (input: { memberId: string; unitId: string; access: AccessLevel }) => Promise<UnitPermission>
   updatePermission: (permissionId: string, access: AccessLevel) => Promise<UnitPermission>
@@ -70,29 +67,16 @@ function toPermission(permission: OrganizationProjection['permissions'][number])
   }
 }
 
-function isSoftApiError(error: unknown): boolean {
-  return isApiError(error) && (error.status === 0 || error.status === 503)
-}
-
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
-  const mockMode = isDashboardMockMode()
   const query = useQuery<OrganizationProjection | null>({
     queryKey: queryKeys.organization(),
-    queryFn: async () => {
-      try {
-        return await getOrganization()
-      } catch (error) {
-        if (mockMode && isSoftApiError(error)) return null
-        throw error
-      }
-    },
+    queryFn: getOrganization,
     staleTime: 30_000,
-    refetchOnWindowFocus: false,
   })
-  const [units, setUnits] = useState<OrganizationUnit[]>(() => mockMode ? [...initialOrganizationUnits] : [])
-  const [members, setMembers] = useState<OrganizationMember[]>(() => mockMode ? [...organizationMembers] : [])
-  const [permissions, setPermissions] = useState<UnitPermission[]>(() => mockMode ? [...initialUnitPermissions] : [])
+  const [units, setUnits] = useState<OrganizationUnit[]>([])
+  const [members, setMembers] = useState<OrganizationMember[]>([])
+  const [permissions, setPermissions] = useState<UnitPermission[]>([])
   const [currentUnitId, setCurrentUnitId] = useState('organization')
 
   useEffect(() => {
@@ -108,11 +92,10 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   }, [currentUnitId, query.data, units])
 
   const value = useMemo<OrganizationContextValue>(() => {
-    const usingApi = query.data !== null && query.data !== undefined
     const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.organization() })
 
     return {
-      organizationName: query.data?.organization.name ?? (mockMode ? units.find((unit) => unit.parentId === null)?.name ?? null : null),
+      organizationName: query.data?.organization.name ?? null,
       onboarding: query.data?.onboarding ?? null,
       units,
       setUnits,
@@ -122,34 +105,16 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       currentUnitId,
       setCurrentUnitId,
       isLoading: query.isLoading,
-      isUsingApi: usingApi,
+      isLoaded: query.isSuccess,
       error: query.error instanceof Error ? query.error.message : null,
+      errorCode: isApiError(query.error) ? query.error.code ?? null : null,
       async createUnit(input) {
-        if (!usingApi) {
-          if (!mockMode) throw new Error('Organization API is unavailable.')
-          const id = `${input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unit'}-${units.length}`
-          const unit: OrganizationUnit = { id, parentId: input.parentId ?? null, type: input.type, name: input.name, description: 'A new organizational scope.', manager: 'Not assigned', memberCount: 0 }
-          setUnits((current) => [...current, unit])
-          return unit
-        }
         const created = toUnit(await createOrganizationUnit(input))
         setUnits((current) => [...current, created])
         await refresh()
         return created
       },
       async createPermission(input) {
-        if (!usingApi) {
-          if (!mockMode) throw new Error('Organization API is unavailable.')
-          const existing = permissions.find((permission) => permission.memberId === input.memberId && permission.unitId === input.unitId)
-          if (existing) {
-            const next = { ...existing, access: input.access, propagateToChildren: true }
-            setPermissions((current) => current.map((permission) => permission.id === existing.id ? next : permission))
-            return next
-          }
-          const permission: UnitPermission = { id: `permission-${input.memberId}-${input.unitId}-${permissions.length}`, ...input, propagateToChildren: true }
-          setPermissions((current) => [...current, permission])
-          return permission
-        }
         const saved = toPermission(await createOrganizationPermission(input))
         setPermissions((current) => {
           const existing = current.find((permission) => permission.id === saved.id || (permission.memberId === saved.memberId && permission.unitId === saved.unitId))
@@ -159,34 +124,18 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         return saved
       },
       async updatePermission(permissionId, access) {
-        if (!usingApi) {
-          if (!mockMode) throw new Error('Organization API is unavailable.')
-          let updated: UnitPermission | undefined
-          setPermissions((current) => current.map((permission) => {
-            if (permission.id !== permissionId) return permission
-            updated = { ...permission, access }
-            return updated
-          }))
-          if (!updated) throw new Error('Permission not found.')
-          return updated
-        }
         const updated = toPermission(await updateOrganizationPermission(permissionId, { access }))
         setPermissions((current) => current.map((permission) => permission.id === permissionId ? updated : permission))
         await refresh()
         return updated
       },
       async removePermission(permissionId) {
-        if (!usingApi) {
-          if (!mockMode) throw new Error('Organization API is unavailable.')
-          setPermissions((current) => current.filter((permission) => permission.id !== permissionId))
-          return
-        }
         await deleteOrganizationPermission(permissionId)
         setPermissions((current) => current.filter((permission) => permission.id !== permissionId))
         await refresh()
       },
     }
-  }, [currentUnitId, members, mockMode, permissions, query.data, query.error, query.isLoading, queryClient, units])
+  }, [currentUnitId, members, permissions, query.data, query.error, query.isLoading, query.isSuccess, queryClient, units])
 
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>
 }

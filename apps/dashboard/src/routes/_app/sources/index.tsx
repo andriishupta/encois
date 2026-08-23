@@ -50,7 +50,7 @@ function SourcesPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="knowledgeSource" plural />}
-        description={<>The scoped inputs Encois can ingest into project context. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
+        description={<>The scoped inputs Encois can ingest into organization context. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
         actions={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       <Card>
@@ -67,12 +67,12 @@ function SourcesPage() {
         </CardContent>
       </Card>
       {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading sources…</p> : null}
-      {sources.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load <ProductTerm term="knowledgeSource" plural />: {sources.error.message}</p><Button type="button" variant="outline" onClick={() => void sources.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
+      {sources.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load <ProductTerm term="knowledgeSource" plural />: {sources.error.message}</p></CardContent></Card> : null}
       {filteredSources.length ? <div className="grid gap-4 md:grid-cols-2">{filteredSources.map((source) => <SourceCard key={source.id} source={source} />)}</div> : null}
       {!sources.isLoading && !sources.isError && Boolean(sources.data?.length) && !filteredSources.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Sources match" description="Change the search or status filter." /></CardContent></Card> : null}
       {!sources.isLoading && !sources.isError && !sources.data?.length ? <Card>
         <CardContent className="pt-6">
-        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload a project PDF or connect a provider. Encois needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
+        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload an organization context document or connect a provider. Encois needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
         </CardContent>
       </Card> : null}
     </div>

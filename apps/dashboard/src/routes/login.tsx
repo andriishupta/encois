@@ -1,18 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { Activity, ArrowRight, Chrome } from 'lucide-react'
 import { getAuthStatus, isApiError } from '@/lib/api'
-import { getAuthSession, getDevelopmentAuthSession, hasPermission, isDashboardMockMode, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithEmail, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
-import { getMockOnboardingState } from '@/lib/onboarding'
-import { Permission } from '@encois/contracts'
+import { getAuthSession, getDevelopmentAuthSession, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-function postAuthPath(): '/' | '/onboarding/workspace' {
-  const session = getAuthSession()
-  return isDashboardMockMode() && hasPermission(session, Permission.OnboardingManage) && !getMockOnboardingState()?.onboardingComplete
-    ? '/onboarding/workspace'
-    : '/'
+const LocalAuthPanel = import.meta.env.DEV ? lazy(() => import('@/components/local-auth-panel')) : null
+
+function postAuthPath(): '/' {
+  return '/'
 }
 
 export const Route = createFileRoute('/login')({
@@ -28,56 +25,35 @@ function LoginPage() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [localEmail, setLocalEmail] = useState('dev@local.test')
-  const [localPassword, setLocalPassword] = useState('local-password-1234')
   const developmentSession = getDevelopmentAuthSession()
   const googleConfigured = isIdentityPlatformConfigured()
-  const emulatorConfigured = isFirebaseAuthEmulatorConfigured()
+  const localAuthEnabled = import.meta.env.DEV && isFirebaseAuthEmulatorConfigured()
+
+  async function completeSignIn() {
+    const status = await getAuthStatus()
+    if (status.status === 'pending') {
+      await signOutFromIdentityPlatform()
+      await navigate({ to: '/waitlist' })
+      return
+    }
+    await navigate({ to: postAuthPath() })
+  }
 
   async function continueWithGoogle() {
     setError(null)
     setIsSubmitting(true)
     try {
       await signInWithGoogle()
-      const status = await getAuthStatus()
-      if (status.status === 'pending') {
-        await signOutFromIdentityPlatform()
-        await navigate({ to: '/waitlist' })
-        return
-      }
-      await navigate({ to: postAuthPath() })
+      await completeSignIn()
     } catch (cause) {
       if (isApiError(cause) && cause.code === 'PERSISTENCE_UNAVAILABLE') {
-        setError('Access provisioning is not available yet. Please try again later.')
+        setError('Access provisioning is not available yet.')
       } else if (isApiError(cause) && cause.status === 401) {
         setError('This Google account is not enabled for Encois yet.')
       } else if (cause instanceof Error && cause.message.includes('popup')) {
         setError('Google sign-in was cancelled.')
       } else {
-        setError('We could not complete Google sign-in. Please try again.')
-      }
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function continueWithLocalEmail() {
-    setError(null)
-    setIsSubmitting(true)
-    try {
-      await signInWithEmail(localEmail, localPassword)
-      const status = await getAuthStatus()
-      if (status.status === 'pending') {
-        await signOutFromIdentityPlatform()
-        await navigate({ to: '/waitlist' })
-        return
-      }
-      await navigate({ to: postAuthPath() })
-    } catch (cause) {
-      if (isApiError(cause) && cause.status === 401) {
-        setError('This local account is not enabled for Encois yet.')
-      } else {
-        setError('We could not complete local sign-in. Check the emulator credentials.')
+        setError('Google sign-in could not be completed.')
       }
     } finally {
       setIsSubmitting(false)
@@ -109,15 +85,10 @@ function LoginPage() {
             {isSubmitting ? 'Connecting to Google…' : 'Continue with Google'}
           </Button>
 
-          {emulatorConfigured ? (
-            <div className="flex flex-col gap-3 rounded-md border p-3">
-              <p className="text-sm font-medium">Local Auth Emulator</p>
-              <input aria-label="Local email" type="email" value={localEmail} onChange={(event) => setLocalEmail(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" />
-              <input aria-label="Local password" type="password" value={localPassword} onChange={(event) => setLocalPassword(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" />
-              <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => void continueWithLocalEmail()}>
-                Sign in locally
-              </Button>
-            </div>
+          {localAuthEnabled && LocalAuthPanel ? (
+            <Suspense fallback={<p className="text-center text-xs text-muted-foreground">Loading local authentication…</p>}>
+              <LocalAuthPanel onAuthenticated={completeSignIn} />
+            </Suspense>
           ) : null}
 
           {developmentSession ? (

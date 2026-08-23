@@ -1,30 +1,27 @@
-# Next steps for testing and pre-production
+# Next steps
 
-These items improve confidence after the current MVP test path. They are not
-required to run the local mock Compose stack.
+This is the short product and engineering backlog after the current MVP slice.
 
-## Persistence coverage
+## Product and UI
 
-- Add repository unit tests for organization scoping, idempotent upserts,
-  transaction boundaries, and RLS context handling.
-- Add negative tests for cross-organization reads/writes, stale revisions,
-  duplicate workflow starts, and coordinator outbox lease/retry behavior.
-- Run the persistence suite against an ephemeral Postgres instance in CI;
-  keep the existing local Compose database path for manual smoke testing.
+- Add server-backed pagination or **Load more**, with a default page size of 10, for Runs, Templates, Blueprints, Sources, and Notifications.
+- Add consistent client-side validation, inline field errors, API error mapping, and schema validation at every form and contract boundary.
+- Finish the dashboard visual system: dark theme, responsive layouts, keyboard navigation, focus states, and an accessibility review where status meaning does not depend on color.
+- Complete loading, empty, stale, unavailable, forbidden, and retry states for every data-backed page without inventing product state in the browser.
+- Add live or bounded-refresh updates for running workflows, review items, ingestion, and notifications; support real notification history and **Mark all as read**.
+- Keep **Organization context** as the product name for the scoped graph surface; add richer search, filters, provenance, freshness, and safe graph inspection as the backend supports them.
+- Persist useful canvas layout preferences and preserve the selected organization-unit scope across navigation and reloads.
 
-## Hosted dependency coverage
+## API and control plane
 
-- Run one smoke workflow against Temporal Cloud with the deployed Go worker.
-- Verify ADC/IAM for Identity Platform, Cloud SQL, Cloud Storage, Spanner,
-  Vertex AI, and Memory Bank using synthetic data only.
-- Add contract tests for live Jira/GitHub adapters when those adapters exist;
-  deterministic fixtures remain sufficient for the hackathon MVP.
+- Align workflow creation around Template, approved Blueprint, or manual intent; resolve Blueprint, revision, workflow, and Run identifiers on the server.
+- Standardize pagination, sorting, filtering, status enums, validation errors, and request IDs across API projections.
+- Add end-to-end local Temporal smoke coverage for onboarding completion, failure/retry, and Run controls.
+- Keep Graph, Memory Bank, and provider mocks limited to explicit third-party or infrastructure adapter boundaries; never emulate missing product state.
 
-## Pre-production checks
+## Quality and operations
 
-- Add CI typecheck, lint, unit/integration tests, dependency scanning, secret
-  scanning, and a browser smoke test for the invite/login path.
-- Run a plan in the target GCP project before the first apply and review the
-  IAM, Identity Platform, database, bucket, and deletion-protection changes.
-- Record the deployed project, region, revisions, Temporal namespace/task
-  queue, database, buckets, model, and rollback procedure for the demo.
+- Add contract, authorization, onboarding-state, pagination, and tenant-isolation tests for the highest-risk API boundaries.
+- Add one browser smoke path for Google login, onboarding completion, workflow creation, Run review, and forbidden access.
+- Add CI checks for type safety, linting, builds, dependency/secret scanning, and a small production-like smoke environment.
+- Verify hosted IAM, Temporal, Cloud Storage, Spanner Graph, Memory Bank, provider authorization, observability, retention, and rollback before production use.

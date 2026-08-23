@@ -102,8 +102,11 @@ The gateway is an internal east-west boundary. Its tool catalog and invocation
 payloads follow the MCP shape, wrapped in an Encois execution context. It must
 not be browser-facing, an unrestricted HTTP fetcher, or a replacement for
 Temporal workflow state.
-The current mock tools are deliberately read-only and return synthetic data;
-they are available only when the explicit mock data mode is selected.
+The current mock tools and storage/graph adapters are deliberately scoped to
+the data-plane boundary and return synthetic provider/infrastructure data only;
+they are available only when the explicit mock data mode is selected. They do
+not create product users, permissions, onboarding state, workflow identity, or
+Run truth.
 The local multi-process smoke also verifies that missing service authentication
 returns `401` and an unknown tool returns `403` before the positive workflow
 path is started.

@@ -5,9 +5,11 @@
 This document describes what a person sees and what the system does. It complements [`architecture.md`](architecture.md), which defines the components and deployment model.
 
 The current repository implements the generic Workflow Blueprint skeleton,
-synthetic Agent Gateway tools, and the invite-only Identity Platform access
-slice. Provider APIs, Graph, Memory Bank, and production policy enforcement
-remain explicit later boundaries rather than being treated as implemented.
+invite-only Identity Platform access, API-backed onboarding and workflow
+projections, and read-only Graph/Memory inspection boundaries. Local provider,
+Graph, Memory Bank, and model adapters are explicit fixtures; hosted services
+and provider authorization remain deployment boundaries rather than being
+represented as browser state.
 
 Cross-language payloads and generation rules are defined in [`contracts.md`](contracts.md). The generic MCP/ADK/Temporal communication model is defined in [`protocols.md`](protocols.md). The public API uses OpenAPI; Temporal and private Agent Gateway payloads use versioned JSON Schema.
 
@@ -15,12 +17,15 @@ Cross-language payloads and generation rules are defined in [`contracts.md`](con
 
 - Every flow begins with an authenticated actor or an approved system trigger.
 - The Gateway API resolves organization and effective scope before data is loaded.
+- The Dashboard calls API projections for product state; it does not fabricate missing records, statuses, IDs, or onboarding progress.
 - Long-running work is a Temporal Workflow and returns a `workflowId`/`investigationId`.
 - Agents delegate only to approved Agent Definitions and call tools only through the Agent Gateway.
 - Temporal owns execution state, waits, retries, Signals, and recovery.
 - Memory Bank owns scoped agent context; Spanner Graph owns shared company relationships and normalized facts.
 - Every conclusion distinguishes observed facts, model inference, and recommendation.
 - Every visible conclusion has evidence IDs, source timestamps, freshness, confidence, and limitations.
+- The dashboard calls the scoped graph surface **Organization context**; an organization unit is a scope node, not a separate product hierarchy.
+- An organization that is not `ready` remains in onboarding and cannot use tenant product routes; a missing onboarding record is a data/readiness error.
 - External writes are disabled in the MVP.
 
 Background intelligence uses three triggers:
@@ -84,9 +89,9 @@ organization membership. The work-email check rejects common personal mailbox
 providers but does not prove mailbox ownership; email verification remains a
 later hardening step.
 
-## 2.1 Mandatory onboarding and Coordinator bootstrap
+## 2.1 Mandatory organization onboarding and Coordinator bootstrap
 
-Every new organization or project starts with a Coordinator, but it does not
+Every new organization starts with a Coordinator, but it does not
 become dashboard-ready until onboarding produces enough context for useful
 read-only intelligence.
 
@@ -104,14 +109,14 @@ sequenceDiagram
     participant Memory as Memory Bank
     participant Gemini as Gemini + ADK
 
-    User->>API: create organization/project
+    User->>API: create organization and root unit
     API->>API: create scope, onboarding state, idempotency key
     User->>API: PATCH /organization/onboarding
     API-->>User: onboarding state + coordinatorId
     User->>API: POST /organization/onboarding/start
     API->>Temporal: start CoordinatorWorkflow (tenant-scoped, idempotent)
     API->>Outbox: enqueue reconcile-requested event
-    API-->>User: onboarding initializing/ready + coordinatorId
+    API-->>User: onboarding initializing + coordinatorId
     Runtime-->>Temporal: poll CoordinatorWorkflow
 
     User->>API: connect Jira/GitHub or upload documents
@@ -131,8 +136,48 @@ sequenceDiagram
     Dispatcher->>Outbox: lease pending event
     Dispatcher->>Temporal: deliver applied plan event
     Temporal-->>Runtime: Coordinator starts only explicit workflowStarts
+    Runtime->>API: report bootstrap completion and required context
+    API->>API: validate readiness and transition onboarding to ready
     API-->>User: onboarding_ready + enabled workflow catalog
 ```
+
+### Onboarding readiness states
+
+The control plane owns one tenant-scoped onboarding status. The canonical API
+values are lower-case: `pending`, `initializing`, `ready`, and `failed`. A
+missing `organization_onboarding` row is not a status; it is a data or
+migration problem and must not be silently converted into `pending` by the
+API or dashboard.
+
+| State | Meaning | Dashboard and API behavior | Next transition |
+| --- | --- | --- | --- |
+| Missing row | The control plane has no onboarding record for the organization. | Block every ordinary tenant product route and return `ORGANIZATION_ONBOARDING_NOT_FOUND` with HTTP `503`. Do not create a row during `GET /organization`. | Migration, backfill, or an explicit repair flow creates the record. |
+| `pending` | The organization exists, but required onboarding configuration or source context is incomplete. | Keep the user in the onboarding surface. Ordinary dashboard reads and product mutations return `ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. | `PATCH /organization/onboarding` updates configuration; `POST /organization/onboarding/start` moves to `initializing`. |
+| `initializing` | The Coordinator start was accepted by Temporal and bootstrap/reconciliation is running. | Show progress and status only. Do not expose ordinary dashboard, membership, integration, workflow, or Run mutations. | A scoped Coordinator callback moves the record to `ready` or `failed`. |
+| `failed` | Bootstrap or required initial reconciliation failed or was deferred. | Keep the organization in the onboarding recovery surface. An administrator with `onboarding:manage` can retry; other users see that an administrator must resolve setup. | Retry reuses the idempotent Coordinator and moves to `initializing`; success moves to `ready`. |
+| `ready` | The Coordinator reported successful bootstrap and the API persisted the readiness transition. | Open the normal dashboard and all existing permission-scoped product surfaces. | A later product decision may explicitly return the organization to onboarding; the UI never invents that transition. |
+
+The service-level `GET /health/ready` endpoint is separate from tenant
+onboarding readiness. It reports whether the API process and required
+dependencies are available; one organization being `pending` or `failed` does
+not make the service unhealthy.
+
+Before `ready`, the onboarding exception surface is limited to reading the
+organization projection, updating onboarding settings, starting or retrying
+the Coordinator, listing published Templates and approved Blueprints, and
+registering/uploading/ingesting onboarding Sources. Internal Coordinator
+callbacks are service-authenticated and are not browser routes. All other
+tenant routes remain behind the readiness gate while the existing permissions
+still apply after the gate opens. The browser selects catalog references and
+business input; the API resolves Blueprint revisions, Workflow IDs, Run IDs,
+and Temporal IDs on the server.
+
+`POST /organization/onboarding/start` returns `initializing` only after the
+Temporal start request is accepted. It does not return `ready` optimistically.
+The Coordinator performs one immediate bootstrap reconciliation, reports
+`ready` only after the required context validation succeeds, and reports
+`failed` for an error or deferred completion. Retry is an explicit action and
+does not fabricate progress, runs, or readiness.
 
 The Coordinator is a long-lived logical Workflow. It waits on Temporal timers,
 Signals, and workflow events; it does not hold a Worker process in memory. A
@@ -154,14 +199,21 @@ intents; the Coordinator starts those approved snapshots through its private
 Gateway Activity and retains failed starts for retry. Scheduler invocation and
 hosted delivery remain deployment work.
 
-The dashboard gate is deterministic:
+The dashboard gate is deterministic and applies to every tenant route:
 
 ```text
-onboarding state != READY -> show setup/progress and missing context
-onboarding state == READY  -> show scoped dashboard and proposed workflows
+missing onboarding row -> block product routes; show a data/migration error
+pending                -> show onboarding; reject ordinary tenant routes (409)
+initializing           -> show bootstrap progress; reject ordinary routes (409)
+failed                 -> show recovery/retry; reject ordinary routes (409)
+ready                  -> render the scoped dashboard under existing permissions
 ```
 
-“Coordinator has all memory” means all authorized project/org context is
+The authenticated route guard follows the same policy as the API. A missing
+row is not treated as an onboarding screen, and a non-admin is not offered a
+retry control for a state they cannot manage.
+
+“Coordinator has all memory” means all authorized organization context is
 available for discovery. Every underlying read still passes current scope and
 policy checks, and secrets remain inside the Agent Gateway.
 
@@ -169,7 +221,10 @@ policy checks, and secrets remain inside the Agent Gateway.
 
 ```text
 CoordinatorWorkflow
-  -> wait for onboarding signal, Temporal Schedule, source event, or workflow result
+  -> perform one immediate bootstrap reconciliation after onboarding start
+  -> report ready only after successful required-context validation
+  -> report failed when bootstrap is deferred or errors
+  -> wait for later onboarding signals, Temporal Schedule, source events, or workflow results
   -> inspect freshness and enabled Integration Packs
   -> decide incremental versus scheduled reconciliation from source freshness budgets
   -> retrieve relevant scoped Graph/Memory Bank references
@@ -195,7 +250,7 @@ step depending on both runs afterwards.
 
 ```text
 POST /v1/workflows (Gateway API)
-  -> authenticate user and resolve organization/project scope
+  -> authenticate user and resolve organization-unit scope
   -> send blueprint to private Agent Gateway for capability and permission validation
   -> persist draft/version in the control plane
   -> create or update the Temporal execution/schedule
@@ -268,7 +323,7 @@ sequenceDiagram
     AgentGW->>Raw: read/write raw artifact reference
     AgentGW-->>Runtime: bounded data/evidence references
     Runtime->>Runtime: parse, validate scope, redact, extract, normalize
-    Runtime->>Graph: project facts/edges with provenance
+    Runtime->>Graph: organization facts/edges with provenance
     Runtime->>Memory: optionally distill scoped agent context
     Runtime-->>Temporal: typed result and evidence refs
     API-->>Admin: source/revision/ingestion status projection
@@ -288,8 +343,8 @@ The current implementation persists the first three control-plane records,
 accepts a validated PDF upload into the configured Cloud Storage adapter,
 exposes source revisions and ingestion runs to the Dashboard, and starts the
 registered Runtime Workflow. Local mode uses a deterministic reader/parser and
-mock data stores; hosted mode reads through Agent Gateway and projects facts to
-Spanner plus distilled context to Memory Bank. OCR/transcription and live
+explicit adapter fixtures; hosted mode reads through Agent Gateway and projects
+facts to Spanner plus distilled context to Memory Bank. OCR/transcription and live
 Jira/GitHub acquisition remain provider-specific adapters.
 
 ## 2. Request-to-worker flow

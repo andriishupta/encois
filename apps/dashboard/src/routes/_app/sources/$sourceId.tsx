@@ -76,7 +76,7 @@ function SourceDetailPage() {
   }
 
   if (source.isLoading) return <p className="text-sm text-muted-foreground">Loading source…</p>
-  if (source.isError) return <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load source: {source.error.message}</p><Button type="button" variant="outline" onClick={() => void source.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card>
+  if (source.isError) return <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load source: {source.error.message}</p></CardContent></Card>
   if (!source.data) return <Card><CardContent className="pt-6"><EmptyPanel icon={Waypoints} title="Source not found" description="This source is not visible in the current organization scope." /></CardContent></Card>
 
   const latestRevision = source.data.revisions[source.data.revisions.length - 1]

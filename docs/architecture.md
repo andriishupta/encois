@@ -26,9 +26,10 @@ The security properties for these boundaries, including tenant isolation, secret
 The maintained visual map of the current system, including service boundaries, implementation status, and the release investigation path, is [`docs/system-diagram.md`](system-diagram.md). Keep it synchronized with the repository when a boundary or deployment path changes.
 
 The architecture, system diagram, flows, protocols, security baseline, and
-application READMEs are the maintained implementation references. Deferred
-production work is recorded next to the affected boundary rather than in a
-separate backlog document.
+application READMEs are the maintained implementation references. Short,
+cross-cutting product and engineering follow-ups live in
+[`docs/next-steps.md`](next-steps.md); boundary-specific deferred work stays
+next to the affected boundary.
 
 ## 2. Architectural position
 
@@ -127,16 +128,17 @@ Use a React SPA. Astro is not part of the product architecture.
 - A typed API client and query/cache layer handle Gateway API data.
 - Business rules, credentials, provider SDKs, and authorization decisions stay outside the browser.
 - The UI receives only scoped projections and never queries Temporal, Spanner Graph, Memory Bank, or providers directly.
+- **Organization context** is the Dashboard name for the scoped Graph projection. Organization units define the selectable scope; the browser never receives raw Graph or Memory Bank credentials.
 - The Dashboard route tree fails closed without an authenticated browser session. The current local scaffold accepts a development-only bearer token through a session boundary; production token acquisition and refresh must be supplied by the Identity Platform/Firebase client adapter before hosted rollout.
 - The full Compose path also provides a Firebase Auth Emulator and a verified
   local fixture account. This exercises the production-shaped bearer-token and
   invite provisioning path without GCP credentials; the development bearer
-  fixture remains available for database-free UI work.
+  fixture remains available only for explicit local API/UI diagnostics.
 
 Primary screens:
 
 1. Company Overview — health, active investigations, warnings, freshness, and scope.
-2. Intelligence Canvas — organization structure, dependencies, graph relationships, agent runs, queues, and transitions.
+2. Organization Context — scoped organization-unit structure, dependencies, graph relationships, evidence, and freshness.
 3. Risks and Goals — releases, blockers, trends, owners, confidence, and evidence.
 4. Agent Activity — investigations, workflow steps, tool calls, retries, signals, and traces.
 5. Integrations — installed packs, health, granted scopes, last sync, and errors.
@@ -168,13 +170,10 @@ The first Node.js blueprint exposes `POST /api/v1/workflows`,
 `POST /api/v1/workflows/plans/validate`, and
 `GET /api/v1/workflows/:workflowId`. The API derives a tenant-prefixed workflow
 ID from the authenticated organization, workflow type, and request key, then
-uses the Temporal TypeScript Client to start or describe the execution. A local
-in-memory adapter is used only in development/test or when explicitly selected
-with `ENCOIS_WORKFLOW_MODE=memory`; it is not a durable execution substitute.
-Local Compose may use `ENCOIS_WORKFLOW_MODE=database`, a Postgres-backed mock
-client for seeded UI projections and permission testing; those rows are not
-claimed to be Temporal executions. The Go runtime remains the worker and owns
-the actual workflow implementation.
+uses the Temporal TypeScript Client to start or describe the execution. The API
+has no memory or database-backed product workflow adapter; local fixtures are
+created by explicit scripts and are not execution truth. The Go runtime remains
+the worker and owns the actual workflow implementation.
 
 The API does not expose raw Temporal, Spanner Graph, or Memory Bank credentials to the browser. It maps those systems into stable, versioned contracts in [`packages/contracts`](../packages/contracts/), while provider-specific DTOs remain inside their adapters. The API is not the execution-time data-plane owner: Runtime Activities and Agent Gateway/data adapters perform scoped reads and writes, then return references or safe projections to the API. This distinction keeps the Gateway API out of provider/model work and keeps the Go Runtime out of control-plane Postgres.
 
@@ -403,20 +402,20 @@ cross-source plans and propose changes to the workflow catalog. Thinking output
 is not exposed as chain-of-thought in logs or the UI; only validated decisions,
 evidence references, and structured results leave the agent boundary.
 
-### 4.5 Project onboarding and Coordinator
+### 4.5 Organization onboarding and Coordinator
 
 Onboarding is a required product state, not an optional setup wizard. A new
-organization or project is not ready for the intelligence dashboard until it
+organization is not ready for the intelligence dashboard until it
 has enough connected sources or uploaded documents to build an initial context.
 Before that point the UI shows onboarding progress, missing integrations, and
 data requirements rather than empty or misleading intelligence panels.
 
-Each organization/project scope has one logical long-lived Coordinator. The
+Each organization scope has one logical long-lived Coordinator. The
 Coordinator is represented by a Temporal Workflow instance and an approved
 Coordinator Agent definition; it is not a permanently running process or a
 special container. Its responsibilities are:
 
-- coordinate onboarding and initial project bootstrap;
+  - coordinate onboarding and initial organization bootstrap;
 - collect source availability, integration health, and document readiness;
 - request deterministic ingestion and memory-building Activities;
 - ask Gemini/ADK to propose bounded workflow changes from an approved blueprint catalog;
@@ -424,23 +423,57 @@ special container. Its responsibilities are:
 - monitor workflow outcomes and periodically reconcile stale or obsolete workflows.
 
 The Coordinator has broad read/discovery access to the authorized organization
-or project context so it can detect missing capabilities and propose useful
+context so it can detect missing capabilities and propose useful
 workflows. This does not mean unrestricted authority: it still goes through
 the Agent Gateway, cannot read connector secrets, cannot widen tenant scope,
 and cannot perform external writes without the normal authorization and
-approval boundary. “Full memory” means the complete authorized project
+approval boundary. “Full memory” means the complete authorized organization
 context, not a bypass of permissions.
 
-The lifecycle is:
+The control-plane onboarding lifecycle is:
 
 ```text
-CREATED
-  -> ONBOARDING
-  -> BOOTSTRAPPING
-  -> READY
-  -> RECONCILING
-  -> READY
+pending
+  -> initializing
+  -> ready
+initializing
+  -> failed
+  -> initializing   (explicit administrator retry)
 ```
+
+`pending`, `initializing`, `ready`, and `failed` are the persisted
+`organization_onboarding.status` values. A missing onboarding row is not a
+recoverable business state: it is a control-plane data or migration defect.
+The API returns `ORGANIZATION_ONBOARDING_NOT_FOUND` with HTTP `503` and does
+not create a row as a side effect of a read. Migration/backfill or an explicit
+repair operation must resolve it.
+
+The runtime has a separate internal phase vocabulary (`ONBOARDING`,
+`BOOTSTRAPPING`, `READY`, and `RECONCILING`) for the long-lived Coordinator
+Workflow. The runtime reports only the externally meaningful readiness result
+back to the Gateway. `POST /organization/onboarding/start` persists
+`initializing` after Temporal accepts the idempotent start request; it never
+marks the organization `ready` merely because a Workflow was started. The
+Coordinator performs its first reconciliation immediately, then reports
+`ready` only after required context validation succeeds or `failed` when
+bootstrap is deferred or errors. Retry is explicit, reuses the stable
+Coordinator identity, and does not fabricate progress or product records.
+
+Until `ready`, a tenant is allowed to read/update onboarding settings, use the
+onboarding Source upload/ingestion path, browse the published Template and
+approved Blueprint catalogs, and start or retry onboarding when authorized.
+Ordinary dashboard, member/unit, integration, Workflow, Run, review, and
+other product routes are rejected with `ORGANIZATION_ONBOARDING_REQUIRED`
+and HTTP `409`. The route gate is applied before product authorization and
+does not replace the existing permissions model; permissions still determine
+what a ready organization may do. A user without `onboarding:manage` can see
+progress and the administrator handoff but cannot change onboarding or retry.
+
+This tenant gate is independent from `GET /health/ready`, which is a
+service/dependency readiness check. The API must not report itself unhealthy
+because an individual organization is pending or failed. The complete state
+matrix and route exceptions are maintained in
+[`flows.md`](flows.md#onboarding-readiness-states).
 
 The Coordinator waits in Temporal between signals, schedules, and external
 events. Typical signals are integration connected, document uploaded, refresh
@@ -475,7 +508,7 @@ The memory layers remain separate:
 
 ```text
 Temporal          = Coordinator state, waits, signals, execution history
-Spanner Graph     = canonical organization/project facts and relationships
+Spanner Graph     = canonical organization facts and relationships
 Cloud Storage     = raw source snapshots and large documents
 Memory Bank       = scoped semantic context and bootstrap distillations
 Gateway API DB    = onboarding state, registry, blueprint versions, projections

@@ -18,6 +18,10 @@ func (fakeCoordinatorClient) StartApprovedWorkflow(context.Context, corecoordina
 	return corecoordinator.WorkflowReference{WorkflowID: "workflow-test", Status: "queued"}, nil
 }
 
+func (fakeCoordinatorClient) UpdateOnboardingStatus(context.Context, coordinator.OnboardingStatusUpdate) error {
+	return nil
+}
+
 func TestCoordinatorControlPlaneActivitiesDelegateWithoutDatabase(t *testing.T) {
 	activities := NewCoordinatorControlPlaneActivities(fakeCoordinatorClient{})
 	plan, err := activities.SubmitWorkflowChangePlan(context.Background(), coordinator.WorkflowChangePlan{PlanID: "plan-test"})
@@ -34,6 +38,9 @@ func TestCoordinatorControlPlaneActivitiesDelegateWithoutDatabase(t *testing.T) 
 func TestCoordinatorControlPlaneActivitiesFailClosedWhenUnconfigured(t *testing.T) {
 	activities := NewCoordinatorControlPlaneActivities(nil)
 	if _, err := activities.SubmitWorkflowChangePlan(context.Background(), coordinator.WorkflowChangePlan{}); err == nil {
+		t.Fatal("expected unconfigured control-plane client to fail closed")
+	}
+	if err := activities.UpdateOnboardingStatus(context.Background(), coordinator.OnboardingStatusUpdate{}); err == nil {
 		t.Fatal("expected unconfigured control-plane client to fail closed")
 	}
 }

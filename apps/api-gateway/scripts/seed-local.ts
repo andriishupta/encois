@@ -2,12 +2,6 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth, type UserRecord } from "firebase-admin/auth";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
-  ContractVersion,
-  TemporalWorkflowType,
-  WorkflowStepKind,
-  type WorkflowBlueprint,
-} from "@encois/contracts";
-import {
   createDatabase,
   integrationBindings,
   integrations,
@@ -15,18 +9,18 @@ import {
   membershipScopes,
   organizationInvites,
   organizationMemberships,
+  organizationOnboarding,
   organizationUnits,
   organizations,
   roles,
   sourceIngestionRuns,
   sourceRevisions,
-  users,
-  webhookDeliveries,
-  webhookEndpoints,
-  workflowBlueprints,
   workflowDefinitions,
   workflowEvents,
   workflowRuns,
+  users,
+  webhookDeliveries,
+  webhookEndpoints,
   type PersistenceTransaction,
 } from "@encois/persistence";
 
@@ -36,7 +30,9 @@ const databaseUrl = process.env.DATABASE_MIGRATION_URL?.trim();
 const ownerEmail = process.env.LOCAL_AUTH_EMAIL?.trim().toLowerCase() || "owner@local.test";
 const ownerPassword = process.env.LOCAL_AUTH_PASSWORD?.trim() || "local-password-1234";
 const ownerUid = process.env.LOCAL_AUTH_UID?.trim() || "local-owner";
+const controlPlaneServiceUserId = "00000000-0000-4000-8000-000000000010";
 
+if (process.env.NODE_ENV === "production") throw new Error("The local auth seed cannot run in production.");
 if (!emulatorHost) throw new Error("FIREBASE_AUTH_EMULATOR_HOST is required for the local auth seed.");
 if (!databaseUrl) throw new Error("DATABASE_MIGRATION_URL is required for the local auth seed.");
 if (ownerPassword.length < 6) throw new Error("LOCAL_AUTH_PASSWORD must contain at least six characters.");
@@ -49,24 +45,15 @@ type OrganizationFixture = {
 
 const organizationsFixture: readonly OrganizationFixture[] = [
   {
-    slug: "organization-test",
-    name: "Organization Test",
+    slug: "organization-sun",
+    name: "Organization Sun",
     units: [
       { slug: "engineering", name: "Engineering", type: "department", parent: "root" },
+      { slug: "development", name: "Development", type: "team", parent: "engineering" },
       { slug: "operations", name: "Operations", type: "department", parent: "root" },
-      { slug: "checkout", name: "Checkout", type: "project", parent: "engineering" },
+      { slug: "checkout", name: "Checkout", type: "project", parent: "development" },
       { slug: "payments-api", name: "Payments API", type: "project", parent: "engineering" },
       { slug: "customer-success", name: "Customer Success", type: "team", parent: "operations" },
-    ],
-  },
-  {
-    slug: "organization-avengers",
-    name: "Organization Avengers",
-    units: [
-      { slug: "platform", name: "Platform", type: "department", parent: "root" },
-      { slug: "product", name: "Product", type: "department", parent: "root" },
-      { slug: "shield-api", name: "Shield API", type: "project", parent: "platform" },
-      { slug: "stark-lab", name: "Stark Lab", type: "team", parent: "product" },
     ],
   },
 ];
@@ -84,12 +71,10 @@ type ActiveUserFixture = {
 };
 
 const activeUsers: readonly ActiveUserFixture[] = [
-  { key: "test-owner", uid: ownerUid, email: ownerEmail, password: ownerPassword, displayName: "Organization Test Owner", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
-  { key: "test-dev", uid: "local-dev", email: "dev@local.test", password: "local-dev-1234", displayName: "Dev Full Access", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
-  { key: "test-manager", uid: "local-manager", email: "manager@local.test", password: "local-manager-1234", displayName: "Manager Full Access", organizationSlug: "organization-test", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
-  { key: "test-user", uid: "local-test-user", email: "test@local.test", password: "local-test-1234", displayName: "Restricted Test User", organizationSlug: "organization-test", roleKey: "viewer", unitSlug: "checkout", access: "viewer" },
-  { key: "avengers-owner", uid: "local-avengers-owner", email: "avengers-owner@local.test", password: "local-avengers-1234", displayName: "Avengers Owner", organizationSlug: "organization-avengers", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
-  { key: "avengers-manager", uid: "local-avengers-manager", email: "avengers-manager@local.test", password: "local-avengers-manager-1234", displayName: "Avengers Product Manager", organizationSlug: "organization-avengers", roleKey: "manager", unitSlug: "product", access: "manager" },
+  { key: "owner", uid: ownerUid, email: ownerEmail, password: ownerPassword, displayName: "Organization Sun Owner", organizationSlug: "organization-sun", roleKey: "organization_admin", unitSlug: "root", access: "admin" },
+  { key: "engineering-manager", uid: "local-manager", email: "manager@local.test", password: "local-manager-1234", displayName: "Engineering Manager", organizationSlug: "organization-sun", roleKey: "manager", unitSlug: "engineering", access: "manager" },
+  { key: "dev-manager", uid: "local-dev", email: "dev@local.test", password: "local-dev-1234", displayName: "Dev Manager", organizationSlug: "organization-sun", roleKey: "manager", unitSlug: "development", access: "manager" },
+  { key: "viewer", uid: "local-viewer", email: "viewer@local.test", password: "local-viewer-1234", displayName: "Viewer", organizationSlug: "organization-sun", roleKey: "viewer", unitSlug: "checkout", access: "viewer" },
 ];
 
 type OnboardingFixture = {
@@ -103,11 +88,9 @@ type OnboardingFixture = {
 };
 
 const onboardingUsers: readonly OnboardingFixture[] = [
-  { email: "onboarding1@local.test", password: "local-onboarding-1", displayName: "Onboarding One", uid: "local-onboarding-1", organizationSlug: "organization-test", unitSlug: "root", roleKey: "organization_admin" },
-  { email: "onboarding2@local.test", password: "local-onboarding-2", displayName: "Onboarding Two", uid: "local-onboarding-2", organizationSlug: "organization-test", unitSlug: "engineering", roleKey: "organization_admin" },
-  { email: "onboarding3@local.test", password: "local-onboarding-3", displayName: "Onboarding Three", uid: "local-onboarding-3", organizationSlug: "organization-test", unitSlug: "checkout", roleKey: "organization_admin" },
-  { email: "onboarding4@local.test", password: "local-onboarding-4", displayName: "Onboarding Four", uid: "local-onboarding-4", organizationSlug: "organization-avengers", unitSlug: "root", roleKey: "organization_admin" },
-  { email: "onboarding5@local.test", password: "local-onboarding-5", displayName: "Onboarding Five", uid: "local-onboarding-5", organizationSlug: "organization-avengers", unitSlug: "product", roleKey: "organization_admin" },
+  { email: "onboarding1@local.test", password: "local-onboarding-1", displayName: "Onboarding One", uid: "local-onboarding-1", organizationSlug: "organization-sun", unitSlug: "root", roleKey: "organization_admin" },
+  { email: "onboarding2@local.test", password: "local-onboarding-2", displayName: "Onboarding Two", uid: "local-onboarding-2", organizationSlug: "organization-sun", unitSlug: "engineering", roleKey: "organization_admin" },
+  { email: "onboarding3@local.test", password: "local-onboarding-3", displayName: "Onboarding Three", uid: "local-onboarding-3", organizationSlug: "organization-sun", unitSlug: "checkout", roleKey: "organization_admin" },
 ];
 
 const firebaseApp = initializeApp({ projectId }, `local-auth-seed-${projectId}`);
@@ -119,6 +102,23 @@ type FixtureUser = { id: string; email: string };
 type FixtureIntegration = { id: string; displayName: string; provider: string };
 type FixtureSource = { id: string; name: string; revisionId: string };
 type FixtureOrganization = { id: string; slug: string; name: string; units: Map<string, FixtureUnit> };
+type WorkflowFixtureStatus = "running" | "waiting" | "partial" | "failed" | "completed";
+
+type WorkflowFixture = {
+  key: string;
+  status: WorkflowFixtureStatus;
+  scopeUnit: string;
+  actorKey: string;
+  activityName: string;
+};
+
+const workflowFixtures: readonly WorkflowFixture[] = [
+  { key: "release-readiness", status: "running", scopeUnit: "engineering", actorKey: "owner", activityName: "collect-code-changes" },
+  { key: "engineering-delivery-health", status: "waiting", scopeUnit: "engineering", actorKey: "engineering-manager", activityName: "review-evidence" },
+  { key: "automation-test-readiness", status: "completed", scopeUnit: "checkout", actorKey: "dev-manager", activityName: "assess-test-readiness" },
+  { key: "critical-issues", status: "failed", scopeUnit: "operations", actorKey: "owner", activityName: "collect-incidents" },
+  { key: "documentation-state", status: "partial", scopeUnit: "root", actorKey: "owner", activityName: "find-documentation-drift" },
+];
 
 async function waitForAuthEmulator(): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -149,7 +149,21 @@ async function ensureOrganization(tx: PersistenceTransaction, fixture: Organizat
     : (await tx.insert(organizations).values({ name: fixture.name, slug: fixture.slug }).returning({ id: organizations.id }))[0];
   if (!organization) throw new Error(`Local organization ${fixture.slug} was not created.`);
 
+  // This is explicit fixture data, not an API fallback. The seeded
+  // organizations represent an already bootstrapped local demo; real
+  // organizations get this row during creation or migration and transition
+  // through the Coordinator lifecycle.
+  await tx.insert(organizationOnboarding).values({
+    organizationId: organization.id,
+    coordinatorId: `organization:${organization.id}`,
+    status: "ready",
+  }).onConflictDoUpdate({
+    target: organizationOnboarding.organizationId,
+    set: { status: "ready", lastError: null, updatedAt: new Date() },
+  });
+
   const root = await ensureUnit(tx, organization.id, null, "organization", "root", fixture.name);
+  await ensureControlPlaneServiceUser(tx, organization.id, root.id, fixture.name);
   const units = new Map<string, FixtureUnit>([[root.slug, root]]);
   for (const unit of fixture.units) {
     const parent = units.get(unit.parent);
@@ -157,6 +171,37 @@ async function ensureOrganization(tx: PersistenceTransaction, fixture: Organizat
     units.set(unit.slug, await ensureUnit(tx, organization.id, parent.id, unit.type, unit.slug, unit.name));
   }
   return { id: organization.id, slug: fixture.slug, name: fixture.name, units };
+}
+
+async function ensureControlPlaneServiceUser(
+  tx: PersistenceTransaction,
+  organizationId: string,
+  rootUnitId: string,
+  organizationName: string,
+): Promise<void> {
+  const [user] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, controlPlaneServiceUserId))
+    .limit(1);
+  if (!user) {
+    await tx.insert(users).values({
+      id: controlPlaneServiceUserId,
+      identityProvider: "identity-platform",
+      identitySubject: "local-control-plane",
+      email: "control-plane@local.test",
+      displayName: "Local Control Plane",
+    });
+  }
+  const role = await systemRole(tx, "organization_admin");
+  const [membership] = await tx
+    .select({ id: organizationMemberships.id })
+    .from(organizationMemberships)
+    .where(and(eq(organizationMemberships.organizationId, organizationId), eq(organizationMemberships.userId, controlPlaneServiceUserId)))
+    .limit(1);
+  const membershipId = membership?.id ?? (await tx.insert(organizationMemberships).values({ organizationId, userId: controlPlaneServiceUserId, roleId: role.id, status: "active" }).returning({ id: organizationMemberships.id }))[0]?.id;
+  if (!membershipId) throw new Error(`Local control-plane membership for ${organizationName} was not persisted.`);
+  await tx.insert(membershipScopes).values({ organizationId, membershipId, organizationUnitId: rootUnitId, access: "admin" }).onConflictDoUpdate({ target: [membershipScopes.membershipId, membershipScopes.organizationUnitId], set: { access: "admin" } });
 }
 
 async function ensureUnit(
@@ -322,6 +367,104 @@ async function ensureSourceIngestion(tx: PersistenceTransaction, organization: F
   else await tx.insert(sourceIngestionRuns).values(values);
 }
 
+async function ensureWorkflowFixtures(
+  tx: PersistenceTransaction,
+  organization: FixtureOrganization,
+  usersByKey: ReadonlyMap<string, FixtureUser>,
+): Promise<void> {
+  const now = new Date();
+  const [definition] = await tx
+    .select({ id: workflowDefinitions.id })
+    .from(workflowDefinitions)
+    .where(and(eq(workflowDefinitions.organizationId, organization.id), eq(workflowDefinitions.key, "encois.user-blueprint.v1"), eq(workflowDefinitions.version, "v1")))
+    .limit(1);
+  const definitionRow = definition ?? (await tx.insert(workflowDefinitions).values({
+    organizationId: organization.id,
+    key: "encois.user-blueprint.v1",
+    version: "v1",
+    status: "approved",
+    inputSchemaRef: "contract://workflow-blueprint.v1",
+    outputSchemaRef: "contract://workflow-result.v1",
+  }).returning({ id: workflowDefinitions.id }))[0];
+  if (!definitionRow) throw new Error("Local workflow definition was not created.");
+
+  for (const fixture of workflowFixtures) {
+    const unit = organization.units.get(fixture.scopeUnit);
+    const actor = usersByKey.get(fixture.actorKey);
+    if (!unit) throw new Error(`Workflow scope unit ${fixture.scopeUnit} is missing in ${organization.slug}.`);
+    if (!actor) throw new Error(`Workflow actor ${fixture.actorKey} is missing in ${organization.slug}.`);
+
+    const workflowId = `workflow:${organization.id}:encois.user-blueprint.v1:${fixture.key}`;
+    const startedAt = new Date(now.getTime() - 25 * 60 * 1000);
+    const completedAt = fixture.status === "completed" || fixture.status === "failed"
+      ? new Date(now.getTime() - 5 * 60 * 1000)
+      : null;
+    const runValues = {
+      organizationId: organization.id,
+      definitionId: definitionRow.id,
+      actorUserId: actor.id,
+      temporalNamespace: "local-fixture",
+      temporalTaskQueue: "encois-agent-runtime",
+      temporalWorkflowId: workflowId,
+      temporalRunId: null,
+      blueprintId: fixture.key,
+      blueprintVersion: "1.0.0",
+      trigger: "local-fixture",
+      status: fixture.status,
+      scope: { ids: [unit.id] },
+      businessInput: { fixture: true, temporalExecution: "not-created" },
+      inputRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
+      resultRef: completedAt ? `artifact://local/${organization.id}/workflows/${fixture.key}/result.json` : null,
+      startedAt,
+      completedAt,
+      retentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: now,
+    } as const;
+    const [existingRun] = await tx
+      .select({ id: workflowRuns.id })
+      .from(workflowRuns)
+      .where(and(eq(workflowRuns.organizationId, organization.id), eq(workflowRuns.temporalWorkflowId, workflowId)))
+      .limit(1);
+    const run = existingRun
+      ? (await tx.update(workflowRuns).set(runValues).where(eq(workflowRuns.id, existingRun.id)).returning({ id: workflowRuns.id }))[0]
+      : (await tx.insert(workflowRuns).values(runValues).returning({ id: workflowRuns.id }))[0];
+    if (!run) throw new Error(`Local workflow run ${fixture.key} was not created.`);
+
+    const eventValues = [
+      {
+        eventType: "workflow_started",
+        status: "running",
+        activityName: "workflow-start",
+        evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
+        metadata: { fixture: true, temporalExecution: "not-created" },
+      },
+      {
+        eventType: fixture.status === "failed" ? "workflow_failed" : "workflow_status",
+        status: fixture.status,
+        activityName: fixture.activityName,
+        evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/evidence.json`,
+        metadata: {
+          fixture: true,
+          temporalExecution: "not-created",
+          ...(fixture.status === "failed" ? { error: "The local fixture has no Temporal execution." } : {}),
+        },
+      },
+    ] as const;
+    for (const event of eventValues) {
+      const [existingEvent] = await tx
+        .select({ id: workflowEvents.id })
+        .from(workflowEvents)
+        .where(and(eq(workflowEvents.organizationId, organization.id), eq(workflowEvents.workflowRunId, run.id), eq(workflowEvents.eventType, event.eventType), eq(workflowEvents.activityName, event.activityName)))
+        .limit(1);
+      if (existingEvent) {
+        await tx.update(workflowEvents).set({ ...event, occurredAt: now }).where(eq(workflowEvents.id, existingEvent.id));
+      } else {
+        await tx.insert(workflowEvents).values({ organizationId: organization.id, workflowRunId: run.id, ...event });
+      }
+    }
+  }
+}
+
 async function ensureWebhookFixture(tx: PersistenceTransaction, organization: FixtureOrganization, provider: string, endpointKey: string, integrationId?: string): Promise<void> {
   const [existing] = await tx.select({ id: webhookEndpoints.id }).from(webhookEndpoints).where(and(eq(webhookEndpoints.organizationId, organization.id), eq(webhookEndpoints.endpointKey, endpointKey))).limit(1);
   const endpoint = existing
@@ -330,103 +473,6 @@ async function ensureWebhookFixture(tx: PersistenceTransaction, organization: Fi
   if (!endpoint) throw new Error(`Webhook endpoint ${endpointKey} was not created.`);
   const [delivery] = await tx.select({ id: webhookDeliveries.id }).from(webhookDeliveries).where(and(eq(webhookDeliveries.organizationId, organization.id), eq(webhookDeliveries.endpointId, endpoint.id), eq(webhookDeliveries.providerEventId, `${endpointKey}-event-1`))).limit(1);
   if (!delivery) await tx.insert(webhookDeliveries).values({ organizationId: organization.id, endpointId: endpoint.id, providerEventId: `${endpointKey}-event-1`, status: "processed", payloadRef: `artifact://local/${organization.id}/webhooks/${endpointKey}/event-1`, receivedAt: new Date(Date.now() - 15 * 60 * 1000), processedAt: new Date(Date.now() - 14 * 60 * 1000) });
-}
-
-type WorkflowFixture = {
-  key: string;
-  blueprintId: string;
-  name: string;
-  status: "queued" | "running" | "waiting" | "partial" | "failed" | "completed" | "cancelled";
-  actorKey: string;
-  scopeUnit: string;
-  issue?: string;
-  activity: string;
-};
-
-const workflowFixtures: readonly WorkflowFixture[] = [
-  { key: "release-readiness", blueprintId: "release-workflow", name: "Release Workflow", status: "running", actorKey: "test-dev", scopeUnit: "engineering", activity: "Collect release signals" },
-  { key: "company-state", blueprintId: "company-state-workflow", name: "General Company State Workflow", status: "completed", actorKey: "test-owner", scopeUnit: "root", activity: "Synthesize company state" },
-  { key: "todays-status", blueprintId: "todays-status-workflow", name: "Today's Status Workflow", status: "partial", actorKey: "test-manager", scopeUnit: "engineering", issue: "Jira rate limit delayed one shard", activity: "Read Jira delivery status" },
-  { key: "critical-issues", blueprintId: "critical-issues-workflow", name: "Critical Issues Workflow", status: "failed", actorKey: "test-owner", scopeUnit: "operations", issue: "GitHub fixture unavailable", activity: "Investigate critical issues" },
-  { key: "automation-tests", blueprintId: "automation-test-workflow", name: "Automation Test Workflow", status: "waiting", actorKey: "test-manager", scopeUnit: "checkout", issue: "Waiting for approval", activity: "Review test failures" },
-  { key: "documentation-state", blueprintId: "documentation-state-workflow", name: "Documentation State Workflow", status: "queued", actorKey: "test-dev", scopeUnit: "payments-api", activity: "Check documentation freshness" },
-];
-
-function workflowBlueprint(fixture: WorkflowFixture, organizationId: string, unitId: string): WorkflowBlueprint {
-  return {
-    contractVersion: ContractVersion.WorkflowBlueprint,
-    blueprintId: fixture.blueprintId,
-    version: "1.0.0",
-    name: fixture.name,
-    workflowType: TemporalWorkflowType.UserBlueprint,
-    purpose: `Local fixture for ${fixture.name}.`,
-    enabled: true,
-    requiredScopes: [unitId],
-    allowedTools: ["github.repository_activity", "jira.project_tasks"],
-    parameters: { organizationId, fixtureKey: fixture.key },
-    steps: [
-      { id: "collect", kind: WorkflowStepKind.Tool, tool: "github.repository_activity" },
-      { id: "correlate", kind: WorkflowStepKind.Agent, agentDefinition: "context.synthesizer@1", dependsOn: ["collect"] },
-      { id: "approval", kind: WorkflowStepKind.Approval, dependsOn: ["correlate"], requiresApproval: fixture.status === "waiting" },
-    ],
-  };
-}
-
-async function ensureWorkflowFixture(tx: PersistenceTransaction, organization: FixtureOrganization, fixture: WorkflowFixture, actor: FixtureUser): Promise<void> {
-  const unit = organization.units.get(fixture.scopeUnit);
-  if (!unit) throw new Error(`Workflow scope unit ${fixture.scopeUnit} is missing in ${organization.slug}.`);
-  const blueprint = workflowBlueprint(fixture, organization.id, unit.id);
-  const [definition] = await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(and(eq(workflowDefinitions.organizationId, organization.id), eq(workflowDefinitions.key, TemporalWorkflowType.UserBlueprint), eq(workflowDefinitions.version, "v1"))).limit(1);
-  const definitionRow = definition ?? (await tx.insert(workflowDefinitions).values({ organizationId: organization.id, key: TemporalWorkflowType.UserBlueprint, version: "v1", status: "approved", inputSchemaRef: "fixture://workflow/input", outputSchemaRef: "fixture://workflow/output" }).returning({ id: workflowDefinitions.id }))[0];
-  if (!definitionRow) throw new Error(`Workflow definition for ${organization.slug} was not created.`);
-  const [existingBlueprint] = await tx.select({ id: workflowBlueprints.id }).from(workflowBlueprints).where(and(eq(workflowBlueprints.organizationId, organization.id), eq(workflowBlueprints.blueprintId, fixture.blueprintId), eq(workflowBlueprints.version, blueprint.version))).limit(1);
-  if (existingBlueprint) await tx.update(workflowBlueprints).set({ name: blueprint.name, workflowType: blueprint.workflowType, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", isCurrent: true, approvedAt: new Date(), updatedAt: new Date() }).where(eq(workflowBlueprints.id, existingBlueprint.id));
-  else await tx.insert(workflowBlueprints).values({ organizationId: organization.id, blueprintId: blueprint.blueprintId, version: blueprint.version, workflowType: blueprint.workflowType, name: blueprint.name, blueprint: blueprint as unknown as Record<string, unknown>, status: "approved", isCurrent: true, approvedAt: new Date() });
-
-  const temporalWorkflowId = `workflow:${organization.id}:${TemporalWorkflowType.UserBlueprint}:${fixture.key}`;
-  const [existingRun] = await tx.select({ id: workflowRuns.id }).from(workflowRuns).where(and(eq(workflowRuns.organizationId, organization.id), eq(workflowRuns.temporalWorkflowId, temporalWorkflowId))).limit(1);
-  const now = new Date();
-  const startedAt = new Date(now.getTime() - 30 * 60 * 1000);
-  const terminal = fixture.status === "completed" || fixture.status === "failed" || fixture.status === "cancelled";
-  const values = { organizationId: organization.id, definitionId: definitionRow.id, actorUserId: actor.id, temporalNamespace: "default", temporalTaskQueue: "encois-agent-runtime", temporalWorkflowId, temporalRunId: `mock-run:${organization.slug}:${fixture.key}:1`, blueprintId: fixture.blueprintId, blueprintVersion: blueprint.version, trigger: "manual", status: fixture.status, scope: { ids: [unit.id] }, inputRef: fixture.blueprintId, businessInput: { fixtureKey: fixture.key }, startedAt: fixture.status === "queued" ? undefined : startedAt, completedAt: terminal ? new Date(now.getTime() - 5 * 60 * 1000) : undefined, retentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), updatedAt: now };
-  const run = existingRun
-    ? (await tx.update(workflowRuns).set(values).where(eq(workflowRuns.id, existingRun.id)).returning({ id: workflowRuns.id }))[0]
-    : (await tx.insert(workflowRuns).values(values).returning({ id: workflowRuns.id }))[0];
-  if (!run) throw new Error(`Workflow ${fixture.key} was not created.`);
-
-  const source = fixture.activity.toLowerCase().includes("jira") ? "jira" : "github";
-  const observedAt = new Date(Date.now() - 12 * 60 * 1000).toISOString();
-  const ingestedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const evidenceRef = `evidence://local/${organization.slug}/${fixture.key}/collector`;
-  const evidenceMetadata = {
-    evidenceRefs: [evidenceRef],
-    provenance: {
-      source,
-      sourceId: `local-source:${organization.id}:${source}`,
-      sourceRecordId: `${source}:${fixture.key}`,
-      observedAt,
-      ingestedAt,
-      transformationVersion: "local-fixture-normalizer.v1",
-      visibilityScope: [unit.id],
-    },
-    freshness: { source, observedAt, ingestedAt, status: "fresh" },
-  };
-  const existingEvents = await tx.select({ id: workflowEvents.id, activityName: workflowEvents.activityName, metadata: workflowEvents.metadata }).from(workflowEvents).where(and(eq(workflowEvents.organizationId, organization.id), eq(workflowEvents.workflowRunId, run.id)));
-  if (existingEvents.length === 0) {
-    const events = [
-      { eventType: "workflow_started", status: fixture.status, metadata: { fixture: true, title: fixture.name, shard: "bootstrap" } },
-      { eventType: "activity_started", status: "running", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef, metadata: { fixture: true, shard: "collector", attempt: 1, durationMs: 840, ...evidenceMetadata } },
-      { eventType: fixture.status === "failed" ? "activity_failed" : "activity_completed", status: fixture.status === "failed" ? "failed" : "completed", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef, metadata: { fixture: true, shard: "collector", attempt: fixture.status === "failed" ? 3 : 1, durationMs: fixture.status === "failed" ? 4800 : 1240, ...(fixture.issue ? { issue: fixture.issue } : {}), ...evidenceMetadata } },
-      { eventType: "workflow_status_updated", status: fixture.status, metadata: { fixture: true, shard: "summary", ...(fixture.issue ? { issue: fixture.issue } : {}) } },
-    ];
-    await tx.insert(workflowEvents).values(events.map((event, index) => ({ organizationId: organization.id, workflowRunId: run.id, ...event, occurredAt: new Date(Date.now() - (10 - index) * 60 * 1000) })));
-  } else {
-    for (const event of existingEvents) {
-      if (event.activityName !== fixture.activity) continue;
-      const currentMetadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata) ? event.metadata : {};
-      await tx.update(workflowEvents).set({ evidenceRef, metadata: { ...currentMetadata, ...evidenceMetadata } }).where(eq(workflowEvents.id, event.id));
-    }
-  }
 }
 
 async function seedFixtures(): Promise<unknown> {
@@ -454,9 +500,9 @@ async function seedFixtures(): Promise<unknown> {
     const outputOrganizations: unknown[] = [];
     for (const organizationSpec of organizationsFixture) {
       const organization = organizationsBySlug.get(organizationSpec.slug)!;
-      const owner = usersByKey.get(organization.slug === "organization-test" ? "test-owner" : "avengers-owner")!;
-      const engineeringUnit = organization.units.get(organization.slug === "organization-test" ? "engineering" : "platform")!;
-      const operationsUnit = organization.units.get(organization.slug === "organization-test" ? "operations" : "product")!;
+      const owner = usersByKey.get("owner")!;
+      const engineeringUnit = organization.units.get("engineering")!;
+      const operationsUnit = organization.units.get("operations")!;
       const firstIntegration = await ensureIntegration(tx, organization, "GitHub Engineering", "github", engineeringUnit.slug, owner.id);
       const secondIntegration = await ensureIntegration(tx, organization, "Jira Operations", "jira", operationsUnit.slug, owner.id);
       const thirdIntegration = await ensureIntegration(tx, organization, "Slack Notifications", "slack", "root", owner.id, "disabled");
@@ -472,21 +518,14 @@ async function seedFixtures(): Promise<unknown> {
       await ensureSourceIngestion(tx, organization, sources[3]!, "failed", "acquired", 0);
       await ensureWebhookFixture(tx, organization, "github", "github-events", firstIntegration.id);
       await ensureWebhookFixture(tx, organization, "jira", "jira-events", secondIntegration.id);
-      for (const workflow of workflowFixtures) {
-        const actorKey = organization.slug === "organization-test" ? workflow.actorKey : workflow.actorKey === "test-owner" ? "avengers-owner" : "avengers-manager";
-        const actor = usersByKey.get(actorKey)!;
-        const scopeUnit = organization.units.has(workflow.scopeUnit)
-          ? workflow.scopeUnit
-          : ({ engineering: "platform", operations: "product", checkout: "shield-api", "payments-api": "shield-api", "customer-success": "stark-lab" } as Record<string, string>)[workflow.scopeUnit] ?? workflow.scopeUnit;
-        await ensureWorkflowFixture(tx, organization, { ...workflow, scopeUnit }, actor);
-      }
-      outputOrganizations.push({ id: organization.id, slug: organization.slug, name: organization.name, units: [...organization.units.values()], integrations: [firstIntegration, secondIntegration, thirdIntegration], sources: sources.map(({ id, name, revisionId }) => ({ id, name, revisionId })), workflows: workflowFixtures.map((workflow) => workflow.key) });
+      await ensureWorkflowFixtures(tx, organization, usersByKey);
+      outputOrganizations.push({ id: organization.id, slug: organization.slug, name: organization.name, units: [...organization.units.values()], integrations: [firstIntegration, secondIntegration, thirdIntegration], sources: sources.map(({ id, name, revisionId }) => ({ id, name, revisionId })) });
     }
     return {
       organizations: outputOrganizations,
       activeUsers: activeUsers.map((user) => ({ email: user.email, password: user.password, organization: user.organizationSlug, role: user.roleKey, scope: user.unitSlug })),
       onboardingUsers: onboardingUsers.map((user) => ({ email: user.email, password: user.password, organization: user.organizationSlug, scope: user.unitSlug })),
-      workflowMode: "database",
+      workflowMode: "temporal (persisted fixture runs intentionally have no execution)",
       memoryMode: "mock (process-scoped; source ingestion warms it when workflows execute)",
     };
   });

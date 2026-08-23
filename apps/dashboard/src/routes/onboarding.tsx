@@ -1,22 +1,20 @@
 import { useState } from 'react'
 import { Outlet, createFileRoute, Link, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Activity, Check, Circle, LogOut, ShieldAlert } from 'lucide-react'
-import { getAuthIdentity, getAuthSession, isDashboardMockMode, signOutFromIdentityPlatform } from '@/lib/auth'
-import { hasPermission } from '@/lib/auth'
+import { getAuthIdentity, getAuthSession, hasPermission, signOutFromIdentityPlatform } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: () => {
     if (!getAuthSession()) throw redirect({ to: '/login' })
-    if (!isDashboardMockMode()) throw redirect({ to: '/' })
   },
   component: OnboardingLayout,
 })
 
 const steps = [
   { label: 'Workspace', to: '/onboarding/workspace' },
-  { label: 'Project memory', to: '/onboarding/memory' },
+  { label: 'Organization memory', to: '/onboarding/memory' },
   { label: 'Coordinator', to: '/onboarding/coordination' },
   { label: 'Workflows', to: '/onboarding/workflows' },
 ] as const
@@ -34,7 +32,7 @@ function OnboardingLayout() {
     <div className="min-h-svh bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2 font-semibold">
+          <Link to="/onboarding/workspace" className="flex items-center gap-2 font-semibold">
             <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Activity className="size-4" aria-hidden="true" />
             </span>
@@ -112,7 +110,7 @@ function OnboardingAccessDenied() {
     <div className="min-h-svh bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2 font-semibold">
+          <Link to="/onboarding/workspace" className="flex items-center gap-2 font-semibold">
             <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Activity className="size-4" aria-hidden="true" />
             </span>
@@ -125,8 +123,7 @@ function OnboardingAccessDenied() {
         <div className="w-full rounded-xl border bg-background p-6 shadow-sm sm:p-8">
           <ShieldAlert className="size-8 text-muted-foreground" aria-hidden="true" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">Onboarding is reserved for the workspace owner</h1>
-          <p className="mt-3 text-muted-foreground">Please reach out to your company administrator to complete Encois onboarding. You can continue using the workspace once access has been configured.</p>
-          <Button asChild className="mt-6"><Link to="/">Go to workspace</Link></Button>
+          <p className="mt-3 text-muted-foreground">Please ask your organization administrator to complete Encois onboarding. Product surfaces stay locked until setup is complete.</p>
         </div>
       </main>
     </div>

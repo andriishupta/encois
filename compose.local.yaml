@@ -67,9 +67,10 @@ services:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
+      target: local-seed
       args:
         ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
-    command: ["node", "dist/local-seed.js"]
+    command: ["node", "dist/scripts/seed-local.js"]
     environment:
       DATABASE_MIGRATION_URL: postgresql://postgres:postgres@postgres:5432/encois
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
@@ -125,12 +126,14 @@ services:
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
       AGENT_RUNTIME_URL: http://agent-runtime:8090
       AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
+      CONTROL_PLANE_SERVICE_TOKEN: local-control-plane-token
+      CONTROL_PLANE_SERVICE_USER_ID: 00000000-0000-4000-8000-000000000010
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
       IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: google.com,password
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
       DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
-      # Seeded workflow projections are served by the local database-backed mock.
-      ENCOIS_WORKFLOW_MODE: database
+      ENCOIS_WORKFLOW_MODE: temporal
+      TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
     ports:
@@ -164,6 +167,8 @@ services:
       AGENT_MEMORY_MODE: mock
       AGENT_MEMORY_FIXTURE: local
       AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
+      CONTROL_PLANE_URL: http://api-gateway:8787
+      CONTROL_PLANE_SERVICE_TOKEN: local-control-plane-token
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
     ports:
@@ -195,7 +200,6 @@ services:
       VITE_FIREBASE_PROJECT_ID: demo-encois
       VITE_FIREBASE_APP_ID: local
       VITE_FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
-      VITE_ENCOIS_UI_MODE: mock
     ports:
       - "5173:5173"
     depends_on:

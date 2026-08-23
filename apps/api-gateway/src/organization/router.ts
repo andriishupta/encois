@@ -82,6 +82,7 @@ function parseOnboardingUpdate(value: unknown): OrganizationOnboardingUpdateRequ
 
 function statusForError(code: string): 400 | 403 | 404 | 409 | 503 {
   if (code === "PERSISTENCE_UNAVAILABLE") return 503;
+  if (code === "ORGANIZATION_ONBOARDING_NOT_FOUND") return 503;
   if (code === "FORBIDDEN") return 403;
   if (code === "ONBOARDING_START_FAILED") return 503;
   if (code.endsWith("_NOT_FOUND")) return 404;
