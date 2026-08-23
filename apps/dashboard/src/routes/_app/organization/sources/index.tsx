@@ -24,8 +24,11 @@ export const Route = createFileRoute('/_app/organization/sources/')({
 })
 
 function SourcesPage() {
-  const { units } = useOrganization()
-  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
+  const { organizationName, units, currentUnitId } = useOrganization()
+  const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
+  const currentUnit = units.find((unit) => unit.id === selectedScopeUnitId)
+  const scopeLabel = currentUnit?.type === 'organization' ? organizationName ?? currentUnit.name : currentUnit?.name ?? 'current scope'
+  const sources = useQuery({ queryKey: queryKeys.sources(selectedScopeUnitId), queryFn: () => listKnowledgeSources({ scopeUnitId: selectedScopeUnitId }) })
   const canManageKnowledgeSources = hasPermission(getAuthSession(), Permission.KnowledgeManage)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<KnowledgeSourceStatus | 'all'>('all')
@@ -50,7 +53,7 @@ function SourcesPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="knowledgeSource" plural />}
-        description={<>The scoped inputs this workspace can ingest into the organization graph. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
+        description={<>The scoped inputs available in {scopeLabel} that this workspace can ingest into the organization graph. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
         actions={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       <Card>
@@ -72,7 +75,7 @@ function SourcesPage() {
       {!sources.isLoading && !sources.isError && Boolean(sources.data?.length) && !filteredSources.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Sources match" description="Change the search or status filter." /></CardContent></Card> : null}
       {!sources.isLoading && !sources.isError && !sources.data?.length ? <Card>
         <CardContent className="pt-6">
-        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload an organization graph document or connect a provider. This workspace needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
+        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}</>} description={<>No Knowledge Sources are available in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}. Upload a document or connect a provider when this scope needs one.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add a source in this scope.</span>} />
         </CardContent>
       </Card> : null}
     </div>

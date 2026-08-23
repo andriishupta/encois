@@ -124,7 +124,7 @@ The Gateway API must:
 - protect browser sessions against CSRF, XSS, token theft, replay, and fixation according to the chosen client model;
 - return stable, non-sensitive errors that do not reveal whether unauthorized records exist.
 
-Roles are policy inputs, not permissions by themselves. A role must be combined with organization and resource scope. Typical identities include platform operator, organization administrator, manager, member, integration service identity, and agent-run identity. No role should automatically grant access to all tenants or all providers.
+Roles are policy inputs, not permissions by themselves. A role must be combined with organization and resource scope. Typical identities include platform operator, organization administrator, manager, member, integration service identity, and agent-run identity. No role should automatically grant access to all tenants or all providers. In particular, `organization:manage` permits organization actions within the actor's managed hierarchy; only the organization administrator role (`organization_admin`/`admin`) is a tenant-wide scope authority.
 
 For the Google Cloud baseline, Identity Platform/Firebase ID tokens establish the external identity only. The Gateway verifies the token with Application Default Credentials, maps the subject to the local `users` and `organization_memberships` tables, and computes effective scope from local roles and hierarchy grants. Do not treat arbitrary token claims, email domains, or client-selected organization IDs as authorization.
 

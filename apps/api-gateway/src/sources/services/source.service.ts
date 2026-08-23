@@ -24,16 +24,20 @@ import {
   integrations,
   integrationBindings,
   knowledgeSources,
+  membershipScopes,
+  organizationMemberships,
   sourceIngestionRuns,
   sourceRevisions,
+  organizationUnits,
   withOrganizationContext,
   type PersistenceTransaction,
   type SourceScope,
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
-import { hasPermission } from "../../auth/authorization.js";
+import { hasPermission, isOrganizationAdministrator } from "../../auth/authorization.js";
 import { createExecutionCapability } from "../../security/execution-capability.js";
+import { organizationScopeCovers, organizationScopesOverlap } from "../../security/organization-scope.js";
 import type { WorkflowClient, WorkflowResultReader } from "../../workflows/temporal-client.js";
 import { buildWorkflowId } from "../../workflows/types.js";
 
@@ -171,14 +175,20 @@ function toScope(value: unknown): SourceScope | null {
   return { ids };
 }
 
-function scopeIsWithinPrincipal(sourceScope: SourceScope, principalScope: readonly string[]): boolean {
-  if (principalScope.includes("*")) return true;
-  return sourceScope.ids.every((id) => principalScope.includes(id));
+function scopeIsWithinPrincipal(
+  units: readonly { id: string; parentId: string | null; type: typeof organizationUnits.$inferSelect.type }[],
+  sourceScope: SourceScope,
+  principalScope: readonly string[],
+): boolean {
+  return organizationScopeCovers(units, principalScope, sourceScope.ids);
 }
 
-function scopeOverlapsPrincipal(sourceScope: SourceScope, principalScope: readonly string[]): boolean {
-  if (principalScope.includes("*")) return true;
-  return sourceScope.ids.some((id) => principalScope.includes(id));
+function scopeOverlapsPrincipal(
+  units: readonly { id: string; parentId: string | null; type: typeof organizationUnits.$inferSelect.type }[],
+  sourceScope: SourceScope,
+  principalScope: readonly string[],
+): boolean {
+  return organizationScopesOverlap(units, sourceScope.ids, principalScope);
 }
 
 function safeConfiguration(value: unknown): JsonObject {
@@ -306,6 +316,30 @@ async function assertPermission(
   }
 }
 
+async function managerScopeCovers(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+  units: readonly { id: string; parentId: string | null; type: typeof organizationUnits.$inferSelect.type }[],
+  targetUnitIds: readonly string[],
+): Promise<boolean> {
+  const userId = localUserId(principal);
+  if (!userId) return false;
+  const rows = await db
+    .select({ unitId: membershipScopes.organizationUnitId, access: membershipScopes.access })
+    .from(membershipScopes)
+    .innerJoin(
+      organizationMemberships,
+      and(
+        eq(organizationMemberships.id, membershipScopes.membershipId),
+        eq(organizationMemberships.organizationId, principal.organizationId),
+        eq(organizationMemberships.userId, userId),
+        eq(organizationMemberships.status, "active"),
+      ),
+    )
+    .where(eq(membershipScopes.organizationId, principal.organizationId));
+  return organizationScopeCovers(units, rows.filter((row) => row.access === "manager" || row.access === "admin").map((row) => row.unitId), targetUnitIds);
+}
+
 function assertSourceKind(request: KnowledgeSourceCreateRequest): void {
   if (request.kind === KnowledgeSourceKind.Integration) {
     if (!request.provider || !request.integrationId) {
@@ -333,14 +367,26 @@ export async function createKnowledgeSource(
   const readScope = toScope(request.readScope);
   const visibilityScope = toScope(request.visibilityScope);
   if (!readScope || !visibilityScope) throw sourceServiceError("INVALID_SOURCE_SCOPE", "readScope and visibilityScope require non-empty ids.");
-  if (!scopeIsWithinPrincipal(readScope, principal.scope) || !scopeIsWithinPrincipal(visibilityScope, principal.scope)) {
-    throw sourceServiceError("SCOPE_DENIED", "A source scope cannot exceed the caller's scope.");
-  }
   assertSourceKind(request);
   const configuration = safeConfiguration(request.configuration);
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     await assertPermission(db, principal, Permission.KnowledgeManage);
+    if (request.kind === KnowledgeSourceKind.Integration && !(await hasPermission(db, principal, Permission.IntegrationsRead))) {
+      throw sourceServiceError("FORBIDDEN", "The user is not allowed to use organization integrations as Knowledge Sources.");
+    }
+    const isOrganizationAdmin = await isOrganizationAdministrator(db, principal);
+    const effectivePrincipalScope = isOrganizationAdmin ? ["*"] : principal.scope;
+    const units = await db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, principal.organizationId));
+    if (!scopeIsWithinPrincipal(units, readScope, effectivePrincipalScope) || !scopeIsWithinPrincipal(units, visibilityScope, effectivePrincipalScope)) {
+      throw sourceServiceError("SCOPE_DENIED", "A source scope cannot exceed the caller's scope.");
+    }
+    if (!isOrganizationAdmin && !await managerScopeCovers(db, principal, units, [...readScope.ids, ...visibilityScope.ids])) {
+      throw sourceServiceError("SCOPE_DENIED", "A source can only be created within an organization unit the caller manages.");
+    }
     if (request.kind === KnowledgeSourceKind.Integration) {
       const [integration] = await db
         .select({ provider: integrations.provider, status: integrations.status, credentialRef: integrations.credentialRef })
@@ -351,17 +397,17 @@ export async function createKnowledgeSource(
       if (integration.provider !== request.provider) throw sourceServiceError("INTEGRATION_PROVIDER_MISMATCH", "The source provider does not match the integration.");
       if (integration.status !== "active") throw sourceServiceError("INTEGRATION_NOT_ACTIVE", "The referenced integration is not active.");
       if (!integration.credentialRef) throw sourceServiceError("INTEGRATION_CREDENTIAL_REQUIRED", "The referenced integration has no configured provider credential.");
-      const [binding] = await db
-        .select({ id: integrationBindings.id })
+      const bindings = await db
+        .select({ organizationUnitId: integrationBindings.organizationUnitId })
         .from(integrationBindings)
         .where(and(
           eq(integrationBindings.integrationId, request.integrationId!),
           eq(integrationBindings.organizationId, principal.organizationId),
           eq(integrationBindings.status, "active"),
-          inArray(integrationBindings.organizationUnitId, readScope.ids),
-        ))
-        .limit(1);
-      if (!binding) throw sourceServiceError("INTEGRATION_SCOPE_UNAVAILABLE", "The Integration has no active binding in the requested read scope.");
+        ));
+      if (!organizationScopeCovers(units, bindings.map((binding) => binding.organizationUnitId), readScope.ids)) {
+        throw sourceServiceError("INTEGRATION_SCOPE_UNAVAILABLE", "The Integration has no active binding in the requested read scope.");
+      }
     }
 
     const [row] = await db
@@ -383,15 +429,36 @@ export async function createKnowledgeSource(
   });
 }
 
-export async function listKnowledgeSources(principal: AosPrincipal): Promise<readonly KnowledgeSource[]> {
+export async function listKnowledgeSources(
+  principal: AosPrincipal,
+  options: { scopeUnitId?: string } = {},
+): Promise<readonly KnowledgeSource[]> {
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     await assertPermission(db, principal, Permission.KnowledgeRead);
-    const rows = await db
-      .select()
-      .from(knowledgeSources)
-      .where(eq(knowledgeSources.organizationId, principal.organizationId));
-    const visibleRows = rows.filter((row) => scopeOverlapsPrincipal(row.readScope, principal.scope) && scopeOverlapsPrincipal(row.visibilityScope, principal.scope));
+    const isOrganizationAdmin = await isOrganizationAdministrator(db, principal);
+    const effectivePrincipalScope = isOrganizationAdmin ? ["*"] : principal.scope;
+    const [units, rows] = await Promise.all([
+      db
+        .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+        .from(organizationUnits)
+        .where(eq(organizationUnits.organizationId, principal.organizationId)),
+      db
+        .select()
+        .from(knowledgeSources)
+        .where(eq(knowledgeSources.organizationId, principal.organizationId)),
+    ]);
+    if (options.scopeUnitId && !organizationScopeCovers(units, effectivePrincipalScope, [options.scopeUnitId])) {
+      throw sourceServiceError("SCOPE_DENIED", "The requested organization scope is not available to this user.");
+    }
+    const visibleRows = rows.filter((row) => {
+      const visibleToPrincipal = scopeOverlapsPrincipal(units, row.readScope, effectivePrincipalScope) && scopeOverlapsPrincipal(units, row.visibilityScope, effectivePrincipalScope);
+      const visibleInSelectedScope = !options.scopeUnitId || (
+        organizationScopesOverlap(units, row.readScope.ids, [options.scopeUnitId]) &&
+        organizationScopesOverlap(units, row.visibilityScope.ids, [options.scopeUnitId])
+      );
+      return visibleToPrincipal && visibleInSelectedScope;
+    });
     if (visibleRows.length === 0) return [];
     const revisions = await db
       .select()
@@ -412,12 +479,18 @@ export async function getKnowledgeSource(
   if (!database) throw sourceServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     await assertPermission(db, principal, Permission.KnowledgeRead);
+    const isOrganizationAdmin = await isOrganizationAdministrator(db, principal);
+    const effectivePrincipalScope = isOrganizationAdmin ? ["*"] : principal.scope;
+    const units = await db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, principal.organizationId));
     const [row] = await db
       .select()
       .from(knowledgeSources)
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)))
       .limit(1);
-    if (!row || !scopeOverlapsPrincipal(row.readScope, principal.scope) || !scopeOverlapsPrincipal(row.visibilityScope, principal.scope)) return null;
+    if (!row || !scopeOverlapsPrincipal(units, row.readScope, effectivePrincipalScope) || !scopeOverlapsPrincipal(units, row.visibilityScope, effectivePrincipalScope)) return null;
     const revisions = await db
       .select()
       .from(sourceRevisions)
@@ -462,12 +535,19 @@ export async function createSourceRevision(
   const metadata = safeConfiguration(request.metadata);
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     if (!options.system) await assertPermission(db, principal, Permission.KnowledgeManage);
+    const isOrganizationAdmin = options.system ? false : await isOrganizationAdministrator(db, principal);
+    const effectivePrincipalScope = options.system || isOrganizationAdmin ? ["*"] : principal.scope;
+    const units = await db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, principal.organizationId));
     const [source] = await db
       .select()
       .from(knowledgeSources)
       .where(and(eq(knowledgeSources.id, sourceId), eq(knowledgeSources.organizationId, principal.organizationId)))
       .limit(1);
-    if (!source || !scopeIsWithinPrincipal(source.readScope, principal.scope) || !scopeIsWithinPrincipal(source.visibilityScope, principal.scope)) return null;
+    if (!source || !scopeIsWithinPrincipal(units, source.readScope, effectivePrincipalScope) || !scopeIsWithinPrincipal(units, source.visibilityScope, effectivePrincipalScope)) return null;
+    if (!options.system && !isOrganizationAdmin && !await managerScopeCovers(db, principal, units, [...source.readScope.ids, ...source.visibilityScope.ids])) return null;
     const [existing] = await db
       .select({ id: sourceRevisions.id })
       .from(sourceRevisions)
@@ -650,6 +730,12 @@ export async function startSourceIngestion(
   const requestHash = createHash("sha256").update(JSON.stringify({ sourceId, revisionId, trigger })).digest("hex");
   const prepared = await withOrganizationContext(database, principal.organizationId, async (db) => {
     if (!options.system) await assertPermission(db, principal, Permission.KnowledgeManage);
+    const isOrganizationAdmin = options.system ? false : await isOrganizationAdministrator(db, principal);
+    const effectivePrincipalScope = options.system || isOrganizationAdmin ? ["*"] : principal.scope;
+    const units = await db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, principal.organizationId));
     const [sourceRow] = await db
       .select()
       .from(knowledgeSources)
@@ -660,8 +746,11 @@ export async function startSourceIngestion(
       .from(sourceRevisions)
       .where(and(eq(sourceRevisions.id, revisionId), eq(sourceRevisions.sourceId, sourceId), eq(sourceRevisions.organizationId, principal.organizationId)))
       .limit(1);
-    if (!sourceRow || !revisionRow || !scopeIsWithinPrincipal(sourceRow.readScope, principal.scope) || !scopeIsWithinPrincipal(sourceRow.visibilityScope, principal.scope)) {
+    if (!sourceRow || !revisionRow || !scopeIsWithinPrincipal(units, sourceRow.readScope, effectivePrincipalScope) || !scopeIsWithinPrincipal(units, sourceRow.visibilityScope, effectivePrincipalScope)) {
       throw sourceServiceError("SOURCE_NOT_FOUND", "Source or revision not found.");
+    }
+    if (!options.system && !isOrganizationAdmin && !await managerScopeCovers(db, principal, units, [...sourceRow.readScope.ids, ...sourceRow.visibilityScope.ids])) {
+      throw sourceServiceError("SCOPE_DENIED", "The caller does not manage the source organization unit.");
     }
 
     const source = toKnowledgeSource(sourceRow);

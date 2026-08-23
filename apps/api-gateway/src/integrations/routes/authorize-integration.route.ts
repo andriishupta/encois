@@ -27,7 +27,7 @@ export function createAuthorizeIntegrationRoute(options: IntegrationAuthorizatio
         : context.json({ error: { code: "INTEGRATION_NOT_FOUND", message: "Integration not found." } }, 404);
     } catch (error) {
       const code = error instanceof Error ? error.message : "INTEGRATION_AUTHORIZATION_FAILED";
-      const status = code === "PERSISTENCE_UNAVAILABLE" ? 503 : code === "INVALID_CREDENTIAL_REFERENCE" ? 422 : 422;
+      const status = code === "PERSISTENCE_UNAVAILABLE" ? 503 : code === "FORBIDDEN" ? 403 : code === "INVALID_CREDENTIAL_REFERENCE" ? 422 : 422;
       return context.json({ error: { code, message: code === "PERSISTENCE_UNAVAILABLE" ? "Database access is not configured." : code === "INVALID_CREDENTIAL_REFERENCE" ? "credentialRef must be a Secret Manager reference in hosted environments; local references are limited to development and test adapters." : "The integration authorization state could not be updated." } }, status);
     }
   };

@@ -4,7 +4,7 @@ import { IntegrationStatus, Permission, type WebhookEndpointProjection, type Web
 import { auditEvents, integrations, webhookEndpoints, withOrganizationContext, type PersistenceTransaction } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
-import { hasPermission } from "../../auth/authorization.js";
+import { hasPermission, isOrganizationAdministrator } from "../../auth/authorization.js";
 import { accessibleIntegrations } from "./integrations.service.js";
 import type { WebhookSecretWriter } from "../../security/secret-manager.js";
 
@@ -61,7 +61,8 @@ async function assertManageAccess(db: QueryDatabase, principal: AosPrincipal, in
   const userId = localUserId(principal);
   if (!userId) throw serviceError("IDENTITY_NOT_RESOLVED");
   if (!(await hasPermission(db, principal, Permission.IntegrationsManage))) throw serviceError("FORBIDDEN");
-  const accessible = await accessibleIntegrations(db, principal.organizationId, userId, "manage", integrationId);
+  const organizationWide = await isOrganizationAdministrator(db, principal);
+  const accessible = await accessibleIntegrations(db, principal.organizationId, userId, "manage", integrationId, undefined, organizationWide);
   const integration = accessible[0];
   if (!integration) throw serviceError("INTEGRATION_NOT_FOUND");
   return { userId, integration };
@@ -71,7 +72,8 @@ async function assertReadAccess(db: QueryDatabase, principal: AosPrincipal, inte
   const userId = localUserId(principal);
   if (!userId) throw serviceError("IDENTITY_NOT_RESOLVED");
   if (!(await hasPermission(db, principal, Permission.IntegrationsRead))) throw serviceError("FORBIDDEN");
-  if ((await accessibleIntegrations(db, principal.organizationId, userId, "read", integrationId)).length === 0) throw serviceError("INTEGRATION_NOT_FOUND");
+  const organizationWide = await isOrganizationAdministrator(db, principal);
+  if ((await accessibleIntegrations(db, principal.organizationId, userId, "read", integrationId, undefined, organizationWide)).length === 0) throw serviceError("INTEGRATION_NOT_FOUND");
 }
 
 async function auditEndpoint(db: QueryDatabase, input: { organizationId: string; actorUserId: string; endpointId: string; action: string; scope: readonly string[]; status: string }): Promise<void> {

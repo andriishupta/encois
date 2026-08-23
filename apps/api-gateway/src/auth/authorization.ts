@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { isPermission, permissionIncludes, type PermissionKey } from "@encois/contracts";
 import {
   organizationMemberships,
+  roles,
   rolePermissions,
   type PersistenceDatabase,
   type PersistenceTransaction,
@@ -45,6 +46,39 @@ export async function hasPermission(
   required: PermissionKey,
 ): Promise<boolean> {
   return permissionIncludes(await getGrantedPermissions(db, principal), required);
+}
+
+export function isOrganizationAdministratorRole(roleKey: string): boolean {
+  return roleKey === "organization_admin" || roleKey === "admin";
+}
+
+/**
+ * Organization-wide scope is a role boundary, not a capability permission.
+ * Managers intentionally receive organization:manage for actions inside their
+ * assigned subtree, so that permission must never be used as a tenant-wide
+ * bypass.
+ */
+export async function isOrganizationAdministrator(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+): Promise<boolean> {
+  const userId = localUserId(principal);
+  if (!userId) return false;
+
+  const [membership] = await db
+    .select({ roleKey: roles.key })
+    .from(organizationMemberships)
+    .innerJoin(roles, eq(roles.id, organizationMemberships.roleId))
+    .where(
+      and(
+        eq(organizationMemberships.organizationId, principal.organizationId),
+        eq(organizationMemberships.userId, userId),
+        eq(organizationMemberships.status, "active"),
+      ),
+    )
+    .limit(1);
+
+  return membership ? isOrganizationAdministratorRole(membership.roleKey) : false;
 }
 
 export function hasPrincipalPermission(principal: AosPrincipal, required: PermissionKey): boolean {

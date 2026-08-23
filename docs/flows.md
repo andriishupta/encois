@@ -457,6 +457,13 @@ Every external read follows the same boundary sequence:
 
 The last policy check happens in the Agent Gateway immediately before the external call. For a revoked permission or disabled integration, the call stops there and the Workflow receives a typed policy/capability error. For a sensitive or future write operation, the gateway re-checks current policy even if the Workflow has an older policy snapshot.
 
+The Runtime already sends the selected Workflow scope in the execution context,
+so the existing Agent Gateway policy check can reject an out-of-scope tool
+request. The remaining production hardening is deterministic credential
+selection: pass that execution scope into the private resolver and require the
+selected Integration binding to cover the complete requested scope instead of
+choosing the first matching provider connection.
+
 The data ownership is deliberately split:
 
 ```text
@@ -626,6 +633,14 @@ Admin opens Integrations
 ```
 
 The UI shows connection state, granted scope, last successful read, last error, and exposed data types. It never shows raw tokens.
+
+An organization-level connection can be reused by descendant units through an
+active binding, so a unit manager does not create another Secret Manager
+credential just to add a Source for that unit. The API checks both the
+manager's effective unit scope and the binding's hierarchy coverage; selecting
+a unit in the Dashboard only narrows the server-side projection and never
+grants access. Resource-specific repository/channel configuration belongs on
+the unit-scoped Knowledge Source contract, not in browser-held credentials.
 
 For a connector without a usable API, a browser worker may be introduced later. It follows the same pack contract and policy boundary; it is not a way around authorization.
 

@@ -13,6 +13,7 @@ import { queryKeys } from '@/lib/query-keys'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
 import { formatDate, humanizeKey } from '@/lib/formatters'
+import { useOrganization } from '@/lib/organization-context'
 
 export const Route = createFileRoute('/_app/organization/integrations/$integrationId')({
   beforeLoad: () => {
@@ -24,11 +25,13 @@ export const Route = createFileRoute('/_app/organization/integrations/$integrati
 function IntegrationDetailPage() {
   const { integrationId } = Route.useParams()
   const queryClient = useQueryClient()
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const { units, currentUnitId } = useOrganization()
+  const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
+  const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
   const canManage = useCan(Permission.IntegrationsManage)
   const canViewSources = useCan(Permission.KnowledgeRead)
   const [activeTab, setActiveTab] = useState<IntegrationTab>('overview')
-  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
+  const sources = useQuery({ queryKey: queryKeys.sources(selectedScopeUnitId), queryFn: () => listKnowledgeSources({ scopeUnitId: selectedScopeUnitId }), enabled: canViewSources })
   const integration = integrations.data?.find((item) => item.id === integrationId)
   const integrationSources = sources.data?.filter((source) => source.integrationId === integrationId) ?? []
   const webhookEndpoint = useQuery({ queryKey: queryKeys.webhookEndpoint(integrationId), queryFn: () => getWebhookEndpoint(integrationId), enabled: Boolean(integration) })

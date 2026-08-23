@@ -5,6 +5,7 @@ import type {
   IntegrationAuthorizationAdapterRequest,
   IntegrationAuthorizationCompleteRequest,
   IntegrationAuthorizationCompleteResult,
+  IntegrationAuthorizationState,
 } from "./authorization-adapter.js";
 
 type OAuthProviderConfig = {
@@ -259,6 +260,19 @@ export function createOAuthIntegrationAuthorizationAdapter(options: OAuthAuthori
       authorizationUrl.searchParams.set("state", state);
       authorizationUrl.searchParams.set("scope", config.scopes.join(" "));
       return { status: "redirect" as const, authorizationUrl: authorizationUrl.toString(), expiresAt: new Date(expiresAt * 1000).toISOString(), stateHash: stateHash(state) };
+    },
+
+    async inspectState(request: IntegrationAuthorizationCompleteRequest): Promise<IntegrationAuthorizationState> {
+      if (!request.state.trim()) throw new Error("INTEGRATION_AUTHORIZATION_STATE_INVALID");
+      const state = decodeState(request.state, options.stateSecret);
+      return {
+        stateHash: stateHash(request.state),
+        integrationId: state.integrationId,
+        organizationId: state.organizationId,
+        actorId: state.actorId,
+        ...(state.userId ? { userId: state.userId } : {}),
+        provider: state.provider,
+      };
     },
 
     async complete(request: IntegrationAuthorizationCompleteRequest): Promise<IntegrationAuthorizationCompleteResult> {

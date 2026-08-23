@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
+  Permission,
   isJsonObject,
   parseWorkflowBlueprint,
   TemporalWorkflowType,
@@ -19,6 +20,8 @@ import {
 import { integrationBindings, integrations, membershipScopes, organizationMemberships, organizationUnits, workflowBlueprints, withOrganizationContext } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import { hasPermission, isOrganizationAdministrator } from "../../auth/authorization.js";
+import { organizationScopeCovers, organizationScopesOverlap } from "../../security/organization-scope.js";
 import { listWorkflowTemplatesForPrincipal } from "./workflow-template.service.js";
 import { workflowServiceError } from "./workflow.service.js";
 
@@ -226,10 +229,14 @@ function bindingTemplateFromBlueprint(blueprint: WorkflowBlueprint): WorkflowTem
 async function resolveProviderBindings(
   principal: AosPrincipal,
   template: WorkflowTemplate,
+  requestedScopeIds?: readonly string[],
 ): Promise<readonly WorkflowProviderBindingProjection[]> {
   if (!database) throw workflowServiceError("PERSISTENCE_UNAVAILABLE", "Integration capability registry access is not configured.");
   const rows = await withOrganizationContext(database, principal.organizationId, async (db) => {
-    const [units, memberships, scopes, integrationsRows] = await Promise.all([
+    if (!(await hasPermission(db, principal, Permission.WorkflowsRead)) || !(await hasPermission(db, principal, Permission.IntegrationsRead))) {
+      throw workflowServiceError("FORBIDDEN", "The user is not allowed to preview workflow provider bindings.");
+    }
+    const [units, memberships, scopes, integrationsRows, organizationWide] = await Promise.all([
       db.select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type }).from(organizationUnits).where(eq(organizationUnits.organizationId, principal.organizationId)),
       db.select({ id: organizationMemberships.id }).from(organizationMemberships).where(and(eq(organizationMemberships.organizationId, principal.organizationId), eq(organizationMemberships.userId, principal.userId ?? principal.actorId), eq(organizationMemberships.status, "active"))),
       db.select({ membershipId: membershipScopes.membershipId, unitId: membershipScopes.organizationUnitId }).from(membershipScopes).where(eq(membershipScopes.organizationId, principal.organizationId)),
@@ -237,16 +244,24 @@ async function resolveProviderBindings(
         .from(integrations)
         .innerJoin(integrationBindings, and(eq(integrationBindings.integrationId, integrations.id), eq(integrationBindings.organizationId, principal.organizationId), eq(integrationBindings.status, "active")))
         .where(and(eq(integrations.organizationId, principal.organizationId), eq(integrations.status, "active"))),
+      isOrganizationAdministrator(db, principal),
     ]);
     const membershipUnitIds = scopes.filter((scope) => memberships.some((membership) => membership.id === scope.membershipId)).map((scope) => scope.unitId);
-    const directUnitIds = membershipUnitIds.length > 0 ? membershipUnitIds : principal.scope.filter((scope) => scope !== "*");
+    const directUnitIds = organizationWide ? units.map((unit) => unit.id) : membershipUnitIds.length > 0 ? membershipUnitIds : principal.scope.filter((scope) => scope !== "*");
     const effectiveUnitIds = new Set(resolveEffectiveScope({
       units: units.map((unit) => ({ id: unit.id, ...(unit.parentId ? { parentId: unit.parentId } : {}), type: unit.type })),
-      directUnitIds: principal.scope.includes("*") ? units.map((unit) => unit.id) : directUnitIds,
+      directUnitIds: organizationWide || principal.scope.includes("*") ? units.map((unit) => unit.id) : directUnitIds,
     }).resolvedUnitIds);
+    const executionScope = requestedScopeIds?.length
+      ? requestedScopeIds
+      : organizationWide || principal.scope.includes("*") ? units.map((unit) => unit.id) : principal.scope;
+    if (!organizationScopeCovers(units, organizationWide ? ["*"] : principal.scope, executionScope)) {
+      throw workflowServiceError("SCOPE_DENIED", "The requested workflow scope exceeds the caller's organization-unit scope.");
+    }
     return integrationsRows
       .filter((row) => Boolean(row.credentialRef))
-      .filter((row) => principal.scope.includes("*") || effectiveUnitIds.has(row.organizationUnitId));
+      .filter((row) => organizationScopesOverlap(units, [row.organizationUnitId], [...effectiveUnitIds]))
+      .filter((row) => organizationScopeCovers(units, [row.organizationUnitId], executionScope));
   });
   const bindings: WorkflowProviderBindingProjection[] = [];
   for (const slot of template.providerSlots) {
@@ -280,7 +295,7 @@ async function resolveBlueprint(
 ): Promise<{ blueprint: WorkflowBlueprint; source: WorkflowCreationPreview["source"]; sourceSchemaVersion: string; requiredCapabilities: readonly string[]; providerBindings: readonly WorkflowProviderBindingProjection[] }> {
   if (intent.mode === "manual") {
     const template = manualTemplate(intent);
-    const providerBindings = await resolveProviderBindings(principal, template);
+    const providerBindings = await resolveProviderBindings(principal, template, intent.scope?.ids);
     return {
       blueprint: blueprintFromTemplate(intent, template, template.purpose, providerBindings),
       source: { kind: "manual", title: "Manual planner" },
@@ -296,7 +311,7 @@ async function resolveBlueprint(
     const templates = await listWorkflowTemplatesForPrincipal(principal, { query: key, limit: 10 });
     const selected = templates.find((candidate) => candidate.key === key);
     if (!selected) throw workflowServiceError("WORKFLOW_TEMPLATE_NOT_FOUND", "The selected workflow Template is not available in this scope.");
-    const providerBindings = await resolveProviderBindings(principal, selected.template as WorkflowTemplate);
+    const providerBindings = await resolveProviderBindings(principal, selected.template as WorkflowTemplate, intent.scope?.ids);
     return {
       blueprint: blueprintFromTemplate(intent, selected.template as WorkflowTemplate, selected.template.purpose, providerBindings),
       source: { kind: "template", key: selected.key, title: selected.title },
@@ -321,7 +336,7 @@ async function resolveBlueprint(
   if (!row || row.status !== "approved") throw workflowServiceError("WORKFLOW_BLUEPRINT_NOT_FOUND", "The selected approved Blueprint is not available in this scope.");
   const blueprint = blueprintFromStoredRow(row);
   const bindingTemplate = bindingTemplateFromBlueprint(blueprint);
-  const providerBindings = await resolveProviderBindings(principal, bindingTemplate);
+  const providerBindings = await resolveProviderBindings(principal, bindingTemplate, intent.scope?.ids);
   return {
     blueprint: { ...blueprint, name: intent.name.trim() || blueprint.name },
     source: { kind: "blueprint", key: row.blueprintId, title: row.name },

@@ -23,7 +23,7 @@ export function runIntegrationHealthCheckRoute(options: IntegrationHealthCheckSe
       return context.json({ data: result });
     } catch (error) {
       const code = error instanceof Error ? error.message : "INTEGRATION_HEALTH_CHECK_FAILED";
-      const status = code === "PERSISTENCE_UNAVAILABLE" || code === "AGENT_GATEWAY_UNAVAILABLE" ? 503 : 502;
+      const status = code === "PERSISTENCE_UNAVAILABLE" || code === "AGENT_GATEWAY_UNAVAILABLE" ? 503 : code === "FORBIDDEN" ? 403 : 502;
       return context.json({ error: { code, message: status === 503 ? "The scheduled integration health check is not configured." : "The scheduled integration health check failed." } }, status);
     }
   };

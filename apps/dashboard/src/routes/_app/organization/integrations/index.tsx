@@ -13,6 +13,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { useCan } from '@/lib/permissions'
 import { humanizeKey, shortIdentifier } from '@/lib/formatters'
+import { useOrganization } from '@/lib/organization-context'
 
 const providerCatalog = [
   { key: 'github', name: 'GitHub', description: 'Repositories, pull requests, and delivery activity.', capabilities: ['code.read', 'pull-requests.read', 'activity.read'] },
@@ -31,14 +32,18 @@ export const Route = createFileRoute('/_app/organization/integrations/')({
 })
 
 function IntegrationsPage() {
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const { organizationName, units, currentUnitId } = useOrganization()
+  const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
+  const currentUnit = units.find((unit) => unit.id === selectedScopeUnitId)
+  const scopeLabel = currentUnit?.type === 'organization' ? organizationName ?? currentUnit.name : currentUnit?.name ?? 'current scope'
+  const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
   const canManage = useCan(Permission.IntegrationsManage)
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="integration" plural />}
-        description={<>Manage the systems this workspace can read from and normalize into <ProductTerm term="evidence" />.</>}
+        description={<>Manage the systems this workspace can read from in {scopeLabel} and normalize into <ProductTerm term="evidence" />.</>}
         actions={canManage ? <Button asChild><Link to="/organization/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
@@ -46,7 +51,7 @@ function IntegrationsPage() {
       {integrations.data?.length ? <div className="grid gap-4 md:grid-cols-2">{integrations.data.map((integration) => <IntegrationPreviewCard key={integration.id} integration={integration} />)}</div> : null}
       {!integrations.isLoading && !integrations.isError && !integrations.data?.length ? <Card>
         <CardContent className="pt-6">
-          <EmptyPanel icon={PlugZap} title={<>No <ProductTerm term="integration" plural /> in <ProductTerm term="scope" /></>} description={<>No connected integrations are available in your current <ProductTerm term="scope" />.</>} />
+          <EmptyPanel icon={PlugZap} title={<>No <ProductTerm term="integration" plural /> in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}</>} description={<>No connected integrations are available in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}.</>} />
         </CardContent>
       </Card> : null}
       {canManage ? <Card>

@@ -35,7 +35,7 @@ export function createAuthorizationCallbackRoute(
         : context.json({ data: { integrationId: result.id, status: result.status }, message: "Integration authorization completed. Return to the dashboard to continue." });
     } catch (error) {
       const codeValue = error instanceof Error ? error.message : "INTEGRATION_AUTHORIZATION_FAILED";
-      const status = codeValue === "INTEGRATION_AUTHORIZATION_STATE_INVALID" ? 400 : codeValue === "PERSISTENCE_UNAVAILABLE" || codeValue === "INTEGRATION_AUTHORIZATION_UNAVAILABLE" ? 503 : 502;
+      const status = codeValue === "INTEGRATION_AUTHORIZATION_STATE_INVALID" ? 400 : codeValue === "FORBIDDEN" ? 403 : codeValue === "PERSISTENCE_UNAVAILABLE" || codeValue === "INTEGRATION_AUTHORIZATION_UNAVAILABLE" ? 503 : 502;
       return context.json({ error: { code: codeValue, message: codeValue === "INTEGRATION_AUTHORIZATION_STATE_INVALID" ? "This authorization link is expired or has already been used." : "The provider authorization could not be completed." } }, status);
     }
   };

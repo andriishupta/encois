@@ -226,6 +226,14 @@ provider/integration reference. MVP kinds are `integration`,
 provider connection and credential reference; a Knowledge Source may point to
 that connection without copying credentials into source configuration.
 
+An active Integration binding is a scope root, not a new credential. A binding
+at an organization or parent unit covers descendant units, while the caller's
+membership and manager permissions still gate every read or mutation. A
+Knowledge Source or Workflow may use the connection only when its requested
+scope is covered by the binding; provider capability grants remain separate
+from organization hierarchy scope. The Dashboard may request a selected unit
+for filtering, but the Gateway recomputes and validates that scope server-side.
+
 Uploaded or provider data is represented by an immutable `Source Revision`.
 Postgres stores source/revision metadata and an `artifactRef`; raw bytes stay
 in the artifact store boundary (target: Cloud Storage), not in Postgres,
@@ -605,6 +613,14 @@ ADK agent
 - A future write tool must require explicit human approval and produce an audit record before execution.
 
 The execution context passed through Temporal contains the actor, organization, effective scope, integration grant, request ID, and policy version. The Agent Gateway validates that context and re-checks current policy for sensitive operations or when the policy version is stale. A model-supplied organization, user, host, credential, or permission is never trusted. Connector credentials are resolved by the Agent Gateway from Secret Manager and are never placed in Temporal history or model context.
+
+The current private credential-resolution request is provider/capability based;
+the Runtime already carries the Workflow execution scope into Agent Gateway,
+but the normal provider resolver does not yet receive that scope as a selection
+input. Before multiple overlapping provider bindings are enabled in production,
+the private resolver should accept the execution scope and require a binding to
+cover it, with an explicit integration ID when a Workflow has one. No Agent
+Gateway or Runtime code is required for the current control-plane/UI change.
 
 The communication boundary is intentionally asymmetric:
 

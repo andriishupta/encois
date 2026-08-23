@@ -21,7 +21,8 @@ export const Route = createFileRoute('/_app/organization/sources/new')({
 function NewSourcePage() {
   const navigate = useNavigate()
   const { units, currentUnitId } = useOrganization()
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations })
+  const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
+  const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
   const [kind, setKind] = useState<KnowledgeSourceKind>(KnowledgeSourceKind.UploadedDocument)
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | undefined>()

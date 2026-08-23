@@ -663,8 +663,9 @@ export async function updateWorkflow(workflowId: string, input: WorkflowUpdateRe
   return value
 }
 
-export function listIntegrations(): Promise<readonly IntegrationProjection[]> {
-  return request<unknown>('/integrations').then((value) => parseList(value, isIntegrationProjection, 'integration list'))
+export function listIntegrations(options: { scopeUnitId?: string } = {}): Promise<readonly IntegrationProjection[]> {
+  const query = options.scopeUnitId ? `?scopeUnitId=${encodeURIComponent(options.scopeUnitId)}` : ''
+  return request<unknown>(`/integrations${query}`).then((value) => parseList(value, isIntegrationProjection, 'integration list'))
 }
 
 export async function createIntegration(input: IntegrationCreateRequest): Promise<IntegrationProjection> {
@@ -673,8 +674,9 @@ export async function createIntegration(input: IntegrationCreateRequest): Promis
   return value
 }
 
-export function listKnowledgeSources(): Promise<readonly KnowledgeSource[]> {
-  return request<unknown>('/sources').then((value) => parseList(value, isKnowledgeSource, 'Knowledge Source list'))
+export function listKnowledgeSources(options: { scopeUnitId?: string } = {}): Promise<readonly KnowledgeSource[]> {
+  const query = options.scopeUnitId ? `?scopeUnitId=${encodeURIComponent(options.scopeUnitId)}` : ''
+  return request<unknown>(`/sources${query}`).then((value) => parseList(value, isKnowledgeSource, 'Knowledge Source list'))
 }
 
 export async function createKnowledgeSource(input: KnowledgeSourceCreateRequest): Promise<KnowledgeSource> {

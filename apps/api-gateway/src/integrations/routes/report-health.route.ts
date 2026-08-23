@@ -26,6 +26,7 @@ export const reportIntegrationHealthRoute: Handler<GatewayEnv> = async (context)
       : context.json({ error: { code: "INTEGRATION_NOT_FOUND", message: "Integration not found." } }, 404);
   } catch (error) {
     const code = error instanceof Error ? error.message : "INTEGRATION_HEALTH_UPDATE_FAILED";
-    return context.json({ error: { code, message: code === "PERSISTENCE_UNAVAILABLE" ? "Database access is not configured." : "The integration health state could not be updated." } }, code === "PERSISTENCE_UNAVAILABLE" ? 503 : 502);
+    const status = code === "PERSISTENCE_UNAVAILABLE" ? 503 : code === "FORBIDDEN" ? 403 : 502;
+    return context.json({ error: { code, message: code === "PERSISTENCE_UNAVAILABLE" ? "Database access is not configured." : "The integration health state could not be updated." } }, status);
   }
 };

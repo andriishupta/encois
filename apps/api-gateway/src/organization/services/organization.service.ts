@@ -23,7 +23,7 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
-import { getGrantedPermissions } from "../../auth/authorization.js";
+import { getGrantedPermissions, isOrganizationAdministratorRole } from "../../auth/authorization.js";
 import type { WorkflowClient } from "../../workflows/temporal-client.js";
 import { buildCoordinatorWorkflowId, type WorkflowStartCommand } from "../../workflows/types.js";
 
@@ -134,10 +134,6 @@ function unitNodes(units: readonly UnitRow[]) {
 
 function effectiveUnitIds(units: readonly UnitRow[], directUnitIds: readonly string[]): Set<string> {
   return new Set(resolveEffectiveScope({ units: unitNodes(units), directUnitIds }).resolvedUnitIds);
-}
-
-function isAdministrator(roleKey: string): boolean {
-  return roleKey === "organization_admin" || roleKey === "admin";
 }
 
 function displayName(member: MemberRow): string {
@@ -263,7 +259,7 @@ async function loadContext(
     actorScopeIds,
     managedUnitIds,
     actorPermissions,
-    isAdministrator: isAdministrator(actor.roleKey),
+    isAdministrator: isOrganizationAdministratorRole(actor.roleKey),
   };
 }
 
