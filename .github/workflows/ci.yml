@@ -178,10 +178,21 @@ jobs:
           DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
         run: pnpm --filter @encois/persistence db:migrate
 
+      - name: Create restricted PostgreSQL runtime role
+        env:
+          PGPASSWORD: postgres
+        run: psql --host 127.0.0.1 --port 5432 --username postgres --dbname encois --file docker/postgres/init/00-runtime-role.sql
+
       - name: Verify RLS and command receipt schema
         env:
           DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
         run: pnpm --filter @encois/persistence db:verify
+
+      - name: Run persistence integration tests with runtime RLS
+        env:
+          DATABASE_TEST_URL: postgresql://api_gateway_runtime:api_gateway@127.0.0.1:5432/encois
+          DATABASE_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+        run: pnpm --filter @encois/persistence test:integration
 
       - name: Build shared runtime packages
         run: |
@@ -190,7 +201,8 @@ jobs:
 
       - name: Verify concurrent API command delivery
         env:
-          DATABASE_RUNTIME_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+          DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@127.0.0.1:5432/encois
+          DATABASE_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
         run: pnpm --filter @encois/api-gateway verify:command-receipts
 
   terraform:

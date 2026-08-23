@@ -28,7 +28,7 @@ CI tags images as `encois/<service>:<package-version>`. Local Compose uses the s
 Use a hybrid model:
 
 1. **Local bootstrap:** an authorized operator creates the GCP project/billing setup, Terraform state bucket, deployer identity, and first demo environment.
-2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service to verify RLS and command-receipt grants. It does not require GCP credentials or provider APIs.
+2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service. It then runs the persistence integration suite through a non-superuser runtime role with RLS enabled, plus the API command-receipt harness with separate admin fixture setup and runtime API connections. It does not require GCP credentials or provider APIs.
 3. **Manual image publishing:** `.github/workflows/publish-production-images.yml` builds the dashboard, API, Agent Gateway, Agent Runtime, and migration-job images, injects only public Firebase browser configuration into the dashboard build, and pushes an operator-selected immutable tag to Artifact Registry.
 4. **Manual production delivery:** `.github/workflows/deploy-production.yml` runs only from `workflow_dispatch`, verifies that the selected images exist and are not tagged `latest`, uses GitHub Environment approval and Workload Identity Federation, applies a reviewed Terraform plan, and smoke-tests the public edge.
 5. **Runtime migrations:** Terraform creates a dedicated Cloud Run migration Job with its own service account and Secret Manager reference. `.github/workflows/migrate-production.yml` executes that already deployed immutable job only after a protected Environment approval; migrations are not hidden inside Terraform or the API startup.
@@ -68,13 +68,17 @@ proves contract/runtime compilation and unit boundaries, but not a hosted
 Temporal or Cloud Run execution.
 
 The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
-privileged Drizzle migrations, and checks the command-receipt table, tenant RLS
-policy, uniqueness index, restricted `api_gateway` grants, and a concurrent
-duplicate insert race. It then runs a full API HTTP-route harness against the
-same database with two concurrent identical Updates. The harness verifies one
-accepted receipt and one logical Temporal Update ID application; the two
-transport attempts are intentional because an `in_flight` receipt may be
-replayed safely after an API crash.
+privileged Drizzle migrations, creates the restricted `api_gateway_runtime`
+role, and checks the command-receipt table, tenant RLS policy, uniqueness
+index, restricted grants, and a concurrent duplicate insert race. The
+`persistence` integration suite then verifies migration history, RLS coverage,
+`SET LOCAL` organization context reset, cross-tenant read/write isolation,
+composite organization foreign keys, tenant-scoped uniqueness, and database
+check constraints through the runtime role. Finally, the API HTTP harness uses
+the admin role only to seed/remove fixtures and the runtime role for API
+requests. It verifies one accepted receipt and one logical Temporal Update ID
+application; the two transport attempts are intentional because an
+`in_flight` receipt may be replayed safely after an API crash.
 
 The Terraform check should run separately from application checks:
 

@@ -30,6 +30,23 @@ pnpm --filter @encois/persistence db:generate -- add-logical-change
 pnpm --filter @encois/persistence typecheck
 ```
 
+Persistence integration tests use two connections and must never point at a
+production database. `DATABASE_TEST_URL` must use the non-bypass-RLS runtime
+role; `DATABASE_TEST_ADMIN_URL` is used only to inspect the schema and remove
+the test fixture. For the local Compose database:
+
+```bash
+DATABASE_TEST_URL=postgresql://api_gateway_runtime:api_gateway@localhost:5432/encois \
+DATABASE_TEST_ADMIN_URL=postgresql://postgres:postgres@localhost:5432/encois \
+pnpm --filter @encois/persistence test:integration
+```
+
+The suite verifies applied migration history, RLS/policy coverage, transaction
+context reset, tenant visibility and write isolation, composite organization
+foreign keys, tenant-scoped uniqueness, and database check constraints. The
+regular package test command does not require a database; these tests are
+skipped when the two explicit test URLs are absent.
+
 Migration names are stable kebab-case labels. The repository currently starts
 from `0000_initial_control_plane_schema` and `0001_seed_control_plane_data`.
 The schema and fresh-database seed are kept as two migrations until the first

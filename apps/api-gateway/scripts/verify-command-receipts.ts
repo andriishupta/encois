@@ -5,10 +5,12 @@ import type { AosPrincipal } from "../src/middleware/aos.js";
 import type { WorkflowClient } from "../src/workflows/temporal-client.js";
 import type { WorkflowExecutionProjection, WorkflowUpdateRequest } from "../src/workflows/types.js";
 
-const databaseUrl = process.env.DATABASE_RUNTIME_URL ?? process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_RUNTIME_URL is required");
+const seedDatabaseUrl = process.env.DATABASE_TEST_ADMIN_URL;
+if (!seedDatabaseUrl || !process.env.DATABASE_RUNTIME_URL) {
+  throw new Error("DATABASE_TEST_ADMIN_URL and DATABASE_RUNTIME_URL are required");
+}
 
-const { client: seedClient } = createDatabase({ url: databaseUrl });
+const { client: seedClient } = createDatabase({ url: seedDatabaseUrl });
 let apiDatabaseClient: typeof seedClient | undefined;
 let organizationId: string | undefined;
 let userId: string | undefined;
@@ -24,6 +26,10 @@ try {
   const workflowId = `workflow:${organizationId}:encois.user-blueprint.v1:receipt-concurrency`;
 
   await seedClient`INSERT INTO organizations (id, slug, name) VALUES (${organizationId}, ${`api-receipt-${organizationId}`}, 'API receipt verification')`;
+  await seedClient`
+    INSERT INTO organization_onboarding (organization_id, status, coordinator_id, coordination_mode)
+    VALUES (${organizationId}, 'ready', ${`coordinator:${organizationId}`}, 'connect-only')
+  `;
   await seedClient`
     INSERT INTO users (id, identity_provider, identity_subject, email)
     VALUES (${userId}, 'test', ${`subject-${userId}`}, 'receipt-test@example.invalid')
@@ -140,7 +146,8 @@ try {
     });
   const responses = await Promise.all([sendUpdate(), sendUpdate()]);
   if (responses.some((response) => response.status !== 200)) {
-    throw new Error(`concurrent API Updates failed: ${responses.map((response) => response.status).join(", ")}`);
+    const responseDetails = await Promise.all(responses.map(async (response) => `${response.status}: ${await response.text()}`));
+    throw new Error(`concurrent API Updates failed: ${responseDetails.join(" | ")}`);
   }
 
   const [receipt] = await seedClient`
