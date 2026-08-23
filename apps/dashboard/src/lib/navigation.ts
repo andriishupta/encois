@@ -7,7 +7,7 @@ export type NavigationTarget =
   | '/workflows/memory'
   | '/organization/sources'
   | '/organization/integrations'
-  | '/review'
+  | '/activity'
   | '/organization'
   | '/organization/memory'
   | '/organization/investigations'
@@ -16,6 +16,7 @@ export type NavigationTarget =
   | '/settings'
   | '/settings/workspace'
   | '/settings/notifications'
+  | '/settings/documentation'
 
 const workflowRunIdPath = /^\/workflows\/[^/]+$/u
 const workflowNonRunPaths = new Set(['/workflows/new', '/workflows/templates', '/workflows/blueprints', '/workflows/memory'])

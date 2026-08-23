@@ -21,4 +21,15 @@ describe('isNavigationItemActive', () => {
     expect(isNavigationItemActive('/organization/sources/source-123', '/organization/sources')).toBe(true)
     expect(isNavigationItemActive('/organization/integrations/github', '/organization/integrations')).toBe(true)
   })
+
+  it('keeps Activity isolated from Dashboard and other workspace routes', () => {
+    expect(isNavigationItemActive('/activity', '/activity')).toBe(true)
+    expect(isNavigationItemActive('/activity', '/')).toBe(false)
+    expect(isNavigationItemActive('/workflows/runs', '/activity')).toBe(false)
+  })
+
+  it('activates the standalone Settings documentation route', () => {
+    expect(isNavigationItemActive('/settings/documentation', '/settings/documentation')).toBe(true)
+    expect(isNavigationItemActive('/settings/workspace', '/settings/documentation')).toBe(false)
+  })
 })

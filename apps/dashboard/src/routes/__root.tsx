@@ -34,18 +34,20 @@ function DocumentTitle() {
     staleTime: 60_000,
   })
   const organizationName = organization.data?.organization.name
-  const workspaceName = organizationName ? getBranding(organizationName).workspaceName : undefined
+  const branding = getBranding(organizationName)
+  const productName = branding.productName
+  const workspaceName = organizationName ? branding.workspaceName : undefined
 
   useEffect(() => {
-    const pageTitle = getPageTitle(pathname)
+    const pageTitle = getPageTitle(pathname, productName)
     const publicPage = pathname === '/login' || pathname === '/sign-up' || pathname === '/waitlist'
     document.title = !publicPage && workspaceName ? `${pageTitle} | ${workspaceName}` : pageTitle
-  }, [pathname, workspaceName])
+  }, [pathname, productName, workspaceName])
 
   return null
 }
 
-function getPageTitle(pathname: string) {
+function getPageTitle(pathname: string, productName: string) {
   if (pathname === '/') return 'Dashboard'
   if (pathname === '/login') return getPublicWorkspaceTitle()
   if (pathname === '/sign-up' || pathname === '/waitlist') return 'Join the waitlist'
@@ -63,7 +65,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/organization/integrations') return 'Integrations'
   if (pathname === '/organization/integrations/new') return 'Add integration'
   if (pathname.startsWith('/organization/integrations/')) return getIntegrationTitle(pathname)
-  if (pathname === '/review') return 'Review'
+  if (pathname === '/activity') return 'Activity'
   if (pathname === '/organization/memory') return 'Organization memory graph'
   if (pathname === '/organization/investigations') return 'Investigations'
   if (pathname === '/organization') return 'Organization'
@@ -71,6 +73,7 @@ function getPageTitle(pathname: string) {
   if (pathname === '/settings') return 'Settings'
   if (pathname === '/settings/workspace') return 'Workspace settings'
   if (pathname === '/settings/notifications') return 'Notifications'
+  if (pathname === '/settings/documentation') return `${productName} Documentation`
   if (pathname === '/organization/access') return 'Organization access'
   if (pathname === '/profile') return 'Account'
   if (pathname === '/forbidden') return 'Access denied'

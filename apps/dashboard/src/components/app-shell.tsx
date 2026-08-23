@@ -5,6 +5,7 @@ import {
   Activity,
   Bell,
   Bookmark,
+  BookOpen,
   BrainCircuit,
   Building2,
   ChevronDown,
@@ -47,7 +48,7 @@ type NavigationItem = {
 
 const workspaceNavigation: readonly NavigationItem[] = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { label: 'Review', to: '/review', icon: CircleGauge, anyPermission: [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead] },
+  { label: 'Activity', to: '/activity', icon: CircleGauge, anyPermission: [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead, Permission.MemoryRead, Permission.OrganizationRead] },
 ] as const
 
 const workflowNavigation: readonly NavigationItem[] = [
@@ -71,6 +72,7 @@ const organizationNavigation: readonly NavigationItem[] = [
 const settingsNavigation: readonly NavigationItem[] = [
   { label: 'Workspace', to: '/settings/workspace', icon: Settings, permission: Permission.SettingsRead },
   { label: 'Notifications', to: '/settings/notifications', icon: Bell, anyPermission: [Permission.SettingsRead, Permission.WorkflowsRead, Permission.KnowledgeRead] },
+  { label: 'Documentation', to: '/settings/documentation', icon: BookOpen },
 ] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -166,7 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu /></Button>
-          <Breadcrumbs pathname={pathname} rootLabel={workspaceName} />
+          <Breadcrumbs pathname={pathname} rootLabel={workspaceName} productName={branding.productName} />
           <div className="relative ml-auto">
             <Button variant="outline" size="sm" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen((value) => !value)}><UserRound data-icon="inline-start" /><span className="hidden max-w-36 truncate text-left sm:block">{account.name}</span><ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" /></Button>
             {accountOpen ? <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 rounded-lg border bg-background p-2 shadow-lg">
@@ -194,14 +196,14 @@ function NavSection({ label, pathname, items, onNavigate }: { label: string; pat
   </div>
 }
 
-function Breadcrumbs({ pathname, rootLabel }: { pathname: string; rootLabel: string }) {
-  const items = getBreadcrumbItems(pathname)
+function Breadcrumbs({ pathname, rootLabel, productName }: { pathname: string; rootLabel: string; productName: string }) {
+  const items = getBreadcrumbItems(pathname, productName)
   return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link to="/" className="max-w-40 truncate text-muted-foreground transition-colors hover:text-foreground">{rootLabel}</Link>{items.map((item) => <span key={item.label} className="flex min-w-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="truncate text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="truncate font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/review' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/activity' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/documentation' | '/profile'
 
-function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbRoute }[] {
+function getBreadcrumbItems(pathname: string, productName: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
   if (pathname === '/workflows') return [{ label: 'Workflows' }]
   if (pathname === '/workflows/runs') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Runs' }]
@@ -211,7 +213,7 @@ function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbR
   if (pathname === '/workflows/new') return [{ label: 'Workflows', to: '/workflows' }, { label: 'New workflow' }]
   if (pathname === '/workflows/memory') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Memory' }]
   if (pathname.startsWith('/workflows/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Runs' }]
-  if (pathname === '/review') return [{ label: 'Review' }]
+  if (pathname === '/activity') return [{ label: 'Activity' }]
   if (pathname === '/organization/memory') return [{ label: 'Organization', to: '/organization' }, { label: 'Memory' }]
   if (pathname === '/organization/sources') return [{ label: 'Organization', to: '/organization' }, { label: 'Sources' }]
   if (pathname === '/organization/sources/new') return [{ label: 'Organization', to: '/organization' }, { label: 'Sources', to: '/organization/sources' }, { label: 'Add source' }]
@@ -225,6 +227,7 @@ function getBreadcrumbItems(pathname: string): { label: string; to?: BreadcrumbR
   if (pathname === '/settings') return [{ label: 'Settings' }]
   if (pathname === '/settings/workspace') return [{ label: 'Settings', to: '/settings' }, { label: 'Workspace' }]
   if (pathname === '/settings/notifications') return [{ label: 'Settings', to: '/settings' }, { label: 'Notifications' }]
+  if (pathname === '/settings/documentation') return [{ label: 'Settings', to: '/settings' }, { label: `${productName} Documentation` }]
   if (pathname === '/organization/access') return [{ label: 'Organization', to: '/organization' }, { label: 'Access' }]
   if (pathname === '/profile') return [{ label: 'Account' }]
   return [{ label: 'Dashboard', to: '/' }]

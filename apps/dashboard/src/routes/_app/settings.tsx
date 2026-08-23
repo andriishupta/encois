@@ -6,8 +6,8 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 
 export const Route = createFileRoute('/_app/settings')({
-  beforeLoad: () => {
-    if (!hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+  beforeLoad: ({ location }) => {
+    if (location.pathname !== '/settings/documentation' && !hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
   },
   component: () => <Outlet />,
 })
