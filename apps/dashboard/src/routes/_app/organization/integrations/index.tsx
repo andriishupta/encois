@@ -23,7 +23,7 @@ const providerCatalog = [
   { key: 'google-drive', name: 'Google Drive', description: 'Scoped documents for organization context.', capabilities: ['documents.read'] },
 ] as const
 
-export const Route = createFileRoute('/_app/integrations/')({
+export const Route = createFileRoute('/_app/organization/integrations/')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsRead)) throw redirect({ to: '/forbidden' })
   },
@@ -38,8 +38,8 @@ function IntegrationsPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="integration" plural />}
-        description={<>Manage the systems Encois can read from and normalize into <ProductTerm term="evidence" />.</>}
-        actions={canManage ? <Button asChild><Link to="/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
+        description={<>Manage the systems this workspace can read from and normalize into <ProductTerm term="evidence" />.</>}
+        actions={canManage ? <Button asChild><Link to="/organization/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
       {integrations.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load integrations: {integrations.error.message}</p></CardContent></Card> : null}
@@ -57,7 +57,7 @@ function IntegrationsPage() {
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {providerCatalog.map((provider) => {
             const connected = integrations.data?.filter((integration) => integration.provider.toLowerCase() === provider.key) ?? []
-            return <div key={provider.key} className="rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{provider.name}</p><p className="mt-1 text-xs text-muted-foreground">{provider.description}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{connected.length ? `${connected.length} registered` : 'Available'}</span></div><p className="mt-3 text-[11px] text-muted-foreground">Read scopes: {provider.capabilities.join(' · ')}</p><Button className="mt-4" variant="outline" size="sm" asChild><Link to="/integrations/new">Register {provider.name}</Link></Button></div>
+            return <div key={provider.key} className="rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{provider.name}</p><p className="mt-1 text-xs text-muted-foreground">{provider.description}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{connected.length ? `${connected.length} registered` : 'Available'}</span></div><p className="mt-3 text-[11px] text-muted-foreground">Read scopes: {provider.capabilities.join(' · ')}</p><Button className="mt-4" variant="outline" size="sm" asChild><Link to="/organization/integrations/new">Register {provider.name}</Link></Button></div>
           })}
         </CardContent>
       </Card> : null}
@@ -72,7 +72,7 @@ function IntegrationPreviewCard({
 }) {
   const Icon = integration.provider.toLowerCase() === 'github' ? Github : PlugZap
   return (
-    <Link to="/integrations/$integrationId" params={{ integrationId: integration.id }} className="group">
+    <Link to="/organization/integrations/$integrationId" params={{ integrationId: integration.id }} className="group">
       <Card className="h-full transition-colors group-hover:border-foreground/30">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="flex items-start gap-3">

@@ -14,7 +14,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
 import { formatDate, humanizeKey } from '@/lib/formatters'
 
-export const Route = createFileRoute('/_app/integrations/$integrationId')({
+export const Route = createFileRoute('/_app/organization/integrations/$integrationId')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsRead)) throw redirect({ to: '/forbidden' })
   },
@@ -230,7 +230,7 @@ function IntegrationDetailPage() {
           {canViewSources && (sources.isLoading || sourceDetailQueries.some((query) => query.isLoading)) ? <p className="text-sm text-muted-foreground">Loading sync history…</p> : null}
           {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <p role="alert" className="text-sm text-destructive">Some source history is unavailable. Reload the page when the service is available.</p> : null}
           {canViewSources && !sources.isLoading && !sourceDetailQueries.some((query) => query.isLoading) && !syncHistory.length ? <EmptyPanel icon={Clock3} title="No ingestion runs yet" description={integrationSources.length ? 'Connected Sources have not recorded an ingestion run in this scope.' : 'Create a Knowledge Source after this Integration becomes active.'} /> : null}
-          {syncHistory.map(({ source, run }) => <div key={run.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link to="/sources/$sourceId" params={{ sourceId: source.id }} className="block truncate text-sm font-medium hover:underline">{source.name}</Link><p className="text-xs text-muted-foreground">{humanizeKey(run.trigger)} · {humanizeKey(run.status)} · {run.factsCount} facts</p></div><div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right"><p>{formatDate(run.updatedAt)}</p>{run.error ? <p className="max-w-64 truncate text-destructive">{run.error}</p> : null}</div></div>)}
+          {syncHistory.map(({ source, run }) => <div key={run.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="block truncate text-sm font-medium hover:underline">{source.name}</Link><p className="text-xs text-muted-foreground">{humanizeKey(run.trigger)} · {humanizeKey(run.status)} · {run.factsCount} facts</p></div><div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right"><p>{formatDate(run.updatedAt)}</p>{run.error ? <p className="max-w-64 truncate text-destructive">{run.error}</p> : null}</div></div>)}
         </CardContent>
       </Card>
 
@@ -240,13 +240,13 @@ function IntegrationDetailPage() {
           {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading Sources…</p> : null}
           {sources.isError ? <p role="alert" className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p> : null}
           {!sources.isLoading && !sources.isError && !integrationSources.length ? <EmptyPanel icon={PlugZap} title="No Sources use this Integration" description="Create a Knowledge Source after the connection is authorized and active." /> : null}
-          {integrationSources.map((source) => <Link key={source.id} to="/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><span className="min-w-0"><span className="block truncate font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.status.replace('_', ' ')} · {source.currentRevisionId ? 'revision available' : 'no revision yet'}</span></span><span className="text-xs text-muted-foreground">Open</span></Link>)}
+          {integrationSources.map((source) => <Link key={source.id} to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><span className="min-w-0"><span className="block truncate font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.status.replace('_', ' ')} · {source.currentRevisionId ? 'revision available' : 'no revision yet'}</span></span><span className="text-xs text-muted-foreground">Open</span></Link>)}
         </CardContent>
       </Card> : null}
 
       {activeTab === 'errors' ? <Card>
         <CardHeader><CardTitle>Errors and recovery</CardTitle><CardDescription>Provider failures are reported by the server-side adapter. The dashboard never exposes credentials or raw provider responses.</CardDescription></CardHeader>
-        <CardContent className="flex flex-col gap-4">{integration.lastError ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{integration.lastError}</div> : <EmptyPanel icon={CheckCircle2} title="No reported provider errors" description="The last health callback did not report an error for this integration." />}<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!canManage || authorizationMutation.isPending} onClick={() => authorizationMutation.mutate()}>{authorizationMutation.isPending ? 'Starting…' : 'Reconnect provider'}</Button><Link to="/review" className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent">Open review queue</Link></div></CardContent>
+        <CardContent className="flex flex-col gap-4">{integration.lastError ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{integration.lastError}</div> : <EmptyPanel icon={CheckCircle2} title="No reported provider errors" description="The last health callback did not report an error for this integration." />}<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!canManage || authorizationMutation.isPending} onClick={() => authorizationMutation.mutate()}>{authorizationMutation.isPending ? 'Starting…' : 'Reconnect provider'}</Button><Link to="/review" className="inline-flex h-9 items-center rounded-md border border-input px-4 text-sm font-medium hover:bg-accent">Open review</Link></div></CardContent>
       </Card> : null}
 
       {activeTab === 'capabilities' ? <Card>

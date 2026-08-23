@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
-import { WorkflowSurfaceNav } from '@/components/workflow-surface-nav'
 import { createBlueprintLifecyclePlan, listWorkflowBlueprints } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
@@ -34,7 +33,7 @@ function BlueprintRevisionPage() {
   const lifecycle = useMutation({
     mutationFn: (input: Omit<WorkflowBlueprintLifecycleRequest, 'contractVersion'>) => createBlueprintLifecyclePlan(blueprintId, input),
     onSuccess: (plan) => {
-      setLifecycleSuccess(`Proposal ${plan.planId} is awaiting approval in Review queue.`)
+      setLifecycleSuccess(`Proposal ${plan.planId} is awaiting approval in Review.`)
       setReason('')
       void queryClient.invalidateQueries({ queryKey: queryKeys.workflowBlueprints() })
       void queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlans() })
@@ -48,7 +47,6 @@ function BlueprintRevisionPage() {
 
   return <div className="flex flex-col gap-8">
     <PageHeader title={selected?.name ?? 'Blueprint revisions'} description="Review immutable Blueprint versions and inspect what changed before using a revision for a new Run." actions={<ButtonLink to="/workflows/blueprints"><ArrowLeft data-icon="inline-start" />Back to Blueprints</ButtonLink>} />
-    <WorkflowSurfaceNav />
     {blueprints.isLoading ? <p className="text-sm text-muted-foreground">Loading revision history…</p> : null}
     {blueprints.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load revisions: {blueprints.error.message}</p></CardContent></Card> : null}
     {!blueprints.isLoading && !blueprints.isError && versions.length === 0 ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="Blueprint not found" description="This Blueprint is not available in the current organization or scope." /></CardContent></Card> : null}
@@ -85,7 +83,7 @@ function BlueprintRevisionPage() {
             </div>
             {lifecycle.isPending ? <p className="text-sm text-muted-foreground">Submitting proposal…</p> : null}
             {lifecycle.isError ? <p className="text-sm text-destructive">Could not submit proposal: {lifecycle.error.message}</p> : null}
-            {lifecycleSuccess ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{lifecycleSuccess} <Link className="font-medium underline underline-offset-4" to="/review">Open Review queue</Link></p> : null}
+            {lifecycleSuccess ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{lifecycleSuccess} <Link className="font-medium underline underline-offset-4" to="/review">Open Review</Link></p> : null}
           </>}
         </CardContent>
       </Card>

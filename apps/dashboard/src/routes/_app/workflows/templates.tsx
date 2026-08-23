@@ -8,9 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
-import { WorkflowSurfaceNav } from '@/components/workflow-surface-nav'
 import { listWorkflowTemplates } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
+import { useCan } from '@/lib/permissions'
 import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/workflows/templates')({
@@ -21,12 +21,12 @@ export const Route = createFileRoute('/_app/workflows/templates')({
 })
 
 function WorkflowTemplatesPage() {
+  const canManage = useCan(Permission.WorkflowsManage)
   const [query, setQuery] = useState('')
   const templates = useQuery({ queryKey: queryKeys.workflowTemplates(query), queryFn: () => listWorkflowTemplates({ query }), staleTime: 60_000 })
 
   return <div className="flex flex-col gap-8">
-    <PageHeader title="Workflow templates" description="Provider-neutral, reviewed patterns that can be resolved into an independent Blueprint." actions={<Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />Create workflow</Link></Button>} />
-    <WorkflowSurfaceNav />
+    <PageHeader title="Workflow templates" description="Provider-neutral, reviewed patterns that can be resolved into an independent Blueprint." actions={canManage ? <Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />Create workflow</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>} />
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search templates by name, purpose, or provider…" aria-label="Search workflow templates" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>

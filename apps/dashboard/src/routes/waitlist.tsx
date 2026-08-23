@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Activity, ArrowLeft, Check } from 'lucide-react'
 import { validateWaitlistRequest } from '@encois/contracts'
 import { isApiError, submitWaitlist } from '@/lib/api'
+import { getPublicWorkspaceTitle } from '@/lib/branding'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -66,11 +67,11 @@ function WaitlistPage() {
         <CardHeader className="gap-4">
           <Link to="/login" className="flex items-center gap-2 text-sm font-semibold">
             <Activity className="size-4" aria-hidden="true" />
-            Encois
+            {getPublicWorkspaceTitle()}
           </Link>
           <div className="flex flex-col gap-1.5">
             <CardTitle className="text-2xl">Join the waitlist</CardTitle>
-            <CardDescription>Encois is available by invitation while we prepare the first organizations.</CardDescription>
+            <CardDescription>The workspace is available by invitation while we prepare the first organizations.</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -116,7 +117,7 @@ function WaitlistPage() {
               </fieldset>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="waitlist-message">
                 What are you working on? <span className="font-normal text-muted-foreground">(optional)</span>
-                <textarea id="waitlist-message" name="message" value={form.message} onChange={(event) => updateField('message', event.target.value)} className={`${inputClassName} min-h-24 resize-y py-2`} placeholder="Tell us what context you want Encois to connect." />
+                <textarea id="waitlist-message" name="message" value={form.message} onChange={(event) => updateField('message', event.target.value)} className={`${inputClassName} min-h-24 resize-y py-2`} placeholder="Tell us what context you want the workspace to connect." />
               </label>
               {error ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p> : null}
               <Button type="submit" disabled={isSubmitting} className="mt-2 w-full">

@@ -84,10 +84,9 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
     <button
       type="button"
       className={cn(
-        'nodrag nopan w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors hover:border-foreground/40',
+        'w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors hover:border-foreground/40',
         data.selected && 'border-primary ring-2 ring-primary/20',
       )}
-      onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => { event.stopPropagation(); data.onSelect(data.unit.id) }}
     >
       <Handle type="target" position={Position.Top} className="!h-0 !w-0 !border-0 !bg-transparent" />
@@ -140,7 +139,7 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
         onNodeClick={(_, node) => onSelectUnit(node.id)}
         fitView
         fitViewOptions={{ padding: 0.24 }}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
@@ -156,7 +155,6 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
           <div className="flex items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
             <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
             <span className="font-medium">Organization structure</span>
-            <span className="text-muted-foreground">Read-only canvas</span>
           </div>
         </Panel>
       </ReactFlow>

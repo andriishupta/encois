@@ -16,7 +16,7 @@ import { humanizeKey } from '@/lib/formatters'
 import { formatUnitPath } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 
-export const Route = createFileRoute('/_app/sources/')({
+export const Route = createFileRoute('/_app/organization/sources/')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeRead)) throw redirect({ to: '/forbidden' })
   },
@@ -50,8 +50,8 @@ function SourcesPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="knowledgeSource" plural />}
-        description={<>The scoped inputs Encois can ingest into organization context. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
-        actions={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
+        description={<>The scoped inputs this workspace can ingest into the organization graph. <ProductTerm term="integration" plural /> are one source type; documents and manual inputs use the same pipeline.</>}
+        actions={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add source</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       <Card>
         <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
@@ -72,7 +72,7 @@ function SourcesPage() {
       {!sources.isLoading && !sources.isError && Boolean(sources.data?.length) && !filteredSources.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Sources match" description="Change the search or status filter." /></CardContent></Card> : null}
       {!sources.isLoading && !sources.isError && !sources.data?.length ? <Card>
         <CardContent className="pt-6">
-        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload an organization context document or connect a provider. Encois needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
+        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> yet</>} description={<>Upload an organization graph document or connect a provider. This workspace needs at least one scoped source before the <ProductTerm term="coordinator" /> can build useful context.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add the first source.</span>} />
         </CardContent>
       </Card> : null}
     </div>
@@ -84,7 +84,7 @@ function SourceCard({ source }: { source: KnowledgeSource }) {
   const statusLabel = source.status === KnowledgeSourceStatus.Ingesting ? 'Ingesting' : source.status.replace('_', ' ')
   const freshnessLabel = source.freshness?.status ? humanizeKey(source.freshness.status) : 'Freshness unavailable'
   return (
-    <Link to="/sources/$sourceId" params={{ sourceId: source.id }} className="group">
+    <Link to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="group">
       <Card className="h-full transition-colors group-hover:border-foreground/30">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">

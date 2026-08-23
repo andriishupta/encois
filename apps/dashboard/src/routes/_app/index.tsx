@@ -1,18 +1,16 @@
-import { type ReactNode } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { IntegrationStatus, RecommendationStatus, RecommendationTarget, WorkflowExecutionStatus, type RecommendationProjection } from '@encois/contracts'
-import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, PlugZap, Sparkles, TriangleAlert } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Permission, WorkflowExecutionStatus, type WorkflowRecentActivityProjection } from '@encois/contracts'
+import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, Play, TriangleAlert } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { listIntegrations, listKnowledgeSources, listRecommendations, listWorkflowActivity, listWorkflows, startOrganizationOnboarding, updateRecommendation } from '@/lib/api'
+import { listWorkflowActivity, listWorkflows } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { usePermissions } from '@/lib/permissions'
 import { useOrganization } from '@/lib/organization-context'
-import { Permission } from '@encois/contracts'
 import { formatDate, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
 import { WorkflowStatusIndicator } from '@/components/workflow-status'
 
@@ -21,282 +19,74 @@ export const Route = createFileRoute('/_app/')({
 })
 
 function DashboardPage() {
-  const queryClient = useQueryClient()
-  const { organizationName, onboarding } = useOrganization()
+  const { organizationName } = useOrganization()
   const { can } = usePermissions()
   const canViewWorkflows = can(Permission.WorkflowsRead)
-  const canViewSources = can(Permission.KnowledgeRead)
-  const canViewIntegrations = can(Permission.IntegrationsRead)
-  const canManageWorkflows = can(Permission.WorkflowsManage)
-  const canManageIntegrations = can(Permission.IntegrationsManage)
-  const canManageSources = can(Permission.KnowledgeManage)
   const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows, refetchInterval: (query) => query.state.data?.some((workflow) => isActiveWorkflow(workflow.status)) ? 5_000 : 30_000 })
   const activity = useQuery({ queryKey: queryKeys.workflowActivity(), queryFn: listWorkflowActivity, enabled: canViewWorkflows, refetchInterval: 10_000 })
-  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations, enabled: canViewIntegrations })
-  const recommendations = useQuery({ queryKey: queryKeys.recommendations(), queryFn: listRecommendations, refetchInterval: 30_000 })
-  const recommendationAction = useMutation({
-    mutationFn: ({ recommendationId, action }: { recommendationId: string; action: 'accept' | 'dismiss' }) => updateRecommendation(recommendationId, action),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations() }),
-  })
-  const onboardingStart = useMutation({
-    mutationFn: startOrganizationOnboarding,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.organization() }),
-  })
   const activeRuns = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
   const runningRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
   const waitingRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
   const attentionRuns = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
-
-  function startInitialization() {
-    onboardingStart.mutate()
-  }
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Dashboard"
         description={<>Current activity for <ProductTerm term="scope" /> <span className="font-medium text-foreground">{organizationName ?? 'this organization'}</span>. Counts and events are limited by your permissions; active Runs refresh automatically.</>}
-        actions={<div className="flex flex-wrap items-center gap-2">{canManageIntegrations ? <Button variant="outline" asChild><Link to="/integrations"><PlugZap data-icon="inline-start" />Connect integration</Link></Button> : null}{canManageWorkflows ? <Button asChild><Link to="/workflows/new"><GitBranch data-icon="inline-start" />New workflow</Link></Button> : null}</div>}
+        actions={canViewWorkflows ? <Button asChild><Link to="/workflows"><Play data-icon="inline-start" />Run workflow</Link></Button> : null}
       />
 
-      {onboarding && onboarding.status !== 'ready' ? <InitializationCard status={onboarding.status} workspaceName={organizationName ?? undefined} coordinationMode={onboarding.coordinationMode} selectedWorkflows={onboarding.selectedWorkflows.length} onStart={startInitialization} starting={onboardingStart.isPending} /> : null}
-      {onboardingStart.isError ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not start the Coordinator: {onboardingStart.error.message}</p> : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <OverviewCard icon={Activity} label="Active runs" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, activeRuns.length)} detail={!canViewWorkflows ? 'Access restricted' : workflows.isError ? 'Unavailable' : `${runningRuns} running · ${waitingRuns} waiting`} />
-        <OverviewCard icon={PlugZap} label="Knowledge sources" value={metricValue(canViewSources, sources.isLoading, sources.isError, sources.data?.length ?? 0)} detail={!canViewSources ? 'Access restricted' : sources.isError ? 'Unavailable' : `${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope`} />
-        <OverviewCard icon={GitBranch} label="Recent activity" value={metricValue(canViewWorkflows, activity.isLoading, activity.isError, activity.data?.length ?? 0)} detail={activity.isError ? 'Unavailable' : 'Events in the current scope'} />
         <OverviewCard icon={TriangleAlert} label="Needs attention" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, attentionRuns)} detail={workflows.isError ? 'Unavailable' : 'Failed or partial runs'} />
       </div>
 
-      <ActionCenter
-        workflows={workflows.data}
-        sources={sources.data}
-        integrations={integrations.data}
-        canViewWorkflows={canViewWorkflows}
-        canViewSources={canViewSources}
-        canViewIntegrations={canViewIntegrations}
-        canManageWorkflows={canManageWorkflows}
-        canManageSources={canManageSources}
-        canManageIntegrations={canManageIntegrations}
-        recommendations={recommendations.data}
-        recommendationsLoading={recommendations.isLoading}
-        recommendationsUnavailable={recommendations.isError}
-        onRecommendationAction={(recommendationId, action) => recommendationAction.mutate({ recommendationId, action })}
-        recommendationActionPending={recommendationAction.isPending}
-        recommendationActionError={recommendationAction.error?.message}
-        loading={workflows.isLoading || sources.isLoading || integrations.isLoading || recommendations.isLoading}
-        unavailable={workflows.isError || sources.isError || integrations.isError || recommendations.isError}
-      />
-
-      {canViewWorkflows && canViewSources && workflows.isSuccess && sources.isSuccess && (!workflows.data.length || !sources.data.length) ? <SetupNextStepCard hasWorkflows={Boolean(workflows.data.length)} hasSources={Boolean(sources.data.length)} canManageWorkflows={canManageWorkflows} canManageIntegrations={canManageIntegrations} /> : null}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Card className="min-w-0">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-1.5">
-                <CardTitle>Recent <ProductTerm term="run" plural /></CardTitle>
-                <CardDescription>Open a Run to inspect status, evidence, and recovery actions.</CardDescription>
-              </div>
-              <Link to="/workflows" aria-label="View all workflows" className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1.5">
+              <CardTitle>Recent <ProductTerm term="run" plural /></CardTitle>
+              <CardDescription>Open a Run to inspect status, evidence, and recovery actions.</CardDescription>
             </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {!canViewWorkflows ? <EmptyPanel icon={CircleDashed} title="Workflows are restricted" description="Ask an organization administrator for workflow access." /> : null}
-            {canViewWorkflows && workflows.isError ? <p role="alert" className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
-            {canViewWorkflows && !workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title="No workflow runs yet" description={canManageWorkflows ? <>Create a run from a published <ProductTerm term="template" /> or approved <ProductTerm term="blueprint" />.</> : 'An authorized member can start the first run in this scope.'} /> : null}
-            {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflowLabel(workflow.blueprintId, workflow.workflowType)} status={workflow.status} detail={workflow.statusMessage ?? (workflow.statusReason ? workflowStatusLabel(workflow.status, workflow.statusReason) : 'No status reason reported')} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : null}
-          </CardContent>
-        </Card>
+            <Link to="/workflows" aria-label="View all workflows" className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {!canViewWorkflows ? <EmptyPanel icon={CircleDashed} title="Workflows are restricted" description="Ask an organization administrator for workflow access." /> : null}
+          {canViewWorkflows && workflows.isError ? <p role="alert" className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p> : null}
+          {canViewWorkflows && !workflows.isLoading && !workflows.isError && !workflows.data?.length ? <EmptyPanel icon={CircleDashed} title="No workflow runs yet" description="Open Workflows to start a Run from an approved workflow." /> : null}
+          {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <DashboardWorkflowRow key={workflow.workflowId} id={workflow.workflowId} title={workflowLabel(workflow.blueprintId, workflow.workflowType)} status={workflow.status} detail={workflow.statusMessage ?? (workflow.statusReason ? workflowStatusLabel(workflow.status, workflow.statusReason) : 'No status reason reported')} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : null}
+        </CardContent>
+      </Card>
 
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
-            <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {activity.isError ? <p role="alert" className="text-sm text-destructive">Could not load recent activity: {activity.error.message}</p> : null}
-            {!activity.isLoading && !activity.isError && activity.data?.length === 0 ? <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." /> : null}
-            {activity.data?.map((event) => <ActivityRow key={event.id} event={event} />)}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Workflow runs</CardTitle>
-            <CardDescription>Runs today and over the last seven days.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {canViewWorkflows ? workflows.data?.slice(0, 5).map((workflow) => <RunRow key={workflow.workflowId} title={workflowLabel(workflow.blueprintId, workflow.workflowType)} status={workflow.status} time={formatDate(workflow.updatedAt)} icon={workflow.status === WorkflowExecutionStatus.Completed ? Activity : GitBranch} />) : <p className="text-sm text-muted-foreground">Workflow run history is restricted.</p>}
-            {canViewWorkflows && !workflows.isLoading && !workflows.data?.length ? <p className="text-sm text-muted-foreground">No workflow runs yet.</p> : null}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent activity</CardTitle>
+          <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {!canViewWorkflows ? <EmptyPanel icon={CircleDashed} title="Activity is restricted" description="Ask an organization administrator for workflow access." /> : null}
+          {canViewWorkflows && activity.isError ? <p role="alert" className="text-sm text-destructive">Could not load recent activity: {activity.error.message}</p> : null}
+          {canViewWorkflows && !activity.isLoading && !activity.isError && activity.data?.length === 0 ? <EmptyPanel icon={CircleDashed} title="No recent activity" description="Workflow events and evidence history will appear here when available." /> : null}
+          {canViewWorkflows ? activity.data?.map((event) => <ActivityRow key={event.id} event={event} />) : null}
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
-function ActivityRow({ event }: { event: import('@encois/contracts').WorkflowRecentActivityProjection }) {
+function ActivityRow({ event }: { event: WorkflowRecentActivityProjection }) {
   const issue = typeof event.metadata.issue === 'string' ? ` · ${event.metadata.issue}` : ''
   return <Link to="/workflows/$workflowId" params={{ workflowId: event.workflowId }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Activity className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{event.workflowLabel}</span><span className="block truncate text-xs text-muted-foreground">{event.eventType} · {event.status}{issue}</span></span><span className="hidden shrink-0 text-xs text-muted-foreground sm:block">{formatDate(event.occurredAt)}</span></Link>
 }
 
 function isActiveWorkflow(status: WorkflowExecutionStatus): boolean {
-  return status === WorkflowExecutionStatus.Queued || status === WorkflowExecutionStatus.Running || status === WorkflowExecutionStatus.Waiting || status === WorkflowExecutionStatus.Paused || status === WorkflowExecutionStatus.Partial
-}
-
-function SetupNextStepCard({ hasWorkflows, hasSources, canManageWorkflows, canManageIntegrations }: { hasWorkflows: boolean; hasSources: boolean; canManageWorkflows: boolean; canManageIntegrations: boolean }) {
-  return (
-    <Card className="border-primary/25 bg-primary/[0.025]">
-      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div>
-          <p className="font-semibold">Complete the workspace foundation</p>
-          <p className="mt-1 text-sm text-muted-foreground">Workflows need a connected source and a clear scope before investigations can produce useful evidence.</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground"><span className="rounded-full bg-secondary px-2 py-1">{hasSources ? 'Source connected' : 'Source missing'}</span><span className="rounded-full bg-secondary px-2 py-1">{hasWorkflows ? 'Run created' : 'No runs yet'}</span></div>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">{!hasSources && canManageIntegrations ? <Button variant="outline" asChild><Link to="/integrations">Connect source</Link></Button> : null}{!hasWorkflows && canManageWorkflows ? <Button asChild><Link to="/workflows/new">Create workflow</Link></Button> : null}</div>
-      </CardContent>
-    </Card>
-  )
-}
-
-type Action = {
-  key: string
-  title: string
-  description: string
-  to: '/integrations' | '/sources' | '/sources/new' | '/workflows' | '/workflows/new' | '/context' | '/review'
-  label: string
-  tone?: 'attention' | 'default'
-  recommendationId?: string
-}
-
-const recommendationTargets: Record<RecommendationTarget, Action['to']> = {
-  [RecommendationTarget.Integrations]: '/integrations',
-  [RecommendationTarget.Sources]: '/sources',
-  [RecommendationTarget.NewSource]: '/sources/new',
-  [RecommendationTarget.Workflows]: '/workflows',
-  [RecommendationTarget.NewWorkflow]: '/workflows/new',
-  [RecommendationTarget.Review]: '/review',
-  [RecommendationTarget.Context]: '/context',
-}
-
-function ActionCenter({
-  workflows,
-  sources,
-  integrations,
-  canViewWorkflows,
-  canViewSources,
-  canViewIntegrations,
-  canManageWorkflows,
-  canManageSources,
-  canManageIntegrations,
-  recommendations,
-  recommendationsLoading,
-  recommendationsUnavailable,
-  onRecommendationAction,
-  recommendationActionPending,
-  recommendationActionError,
-  loading,
-  unavailable,
-}: {
-  workflows?: readonly import('@encois/contracts').WorkflowExecutionProjection[]
-  sources?: readonly import('@encois/contracts').KnowledgeSource[]
-  integrations?: readonly import('@encois/contracts').IntegrationProjection[]
-  canViewWorkflows: boolean
-  canViewSources: boolean
-  canViewIntegrations: boolean
-  canManageWorkflows: boolean
-  canManageSources: boolean
-  canManageIntegrations: boolean
-  recommendations?: readonly RecommendationProjection[]
-  recommendationsLoading: boolean
-  recommendationsUnavailable: boolean
-  onRecommendationAction: (recommendationId: string, action: 'accept' | 'dismiss') => void
-  recommendationActionPending: boolean
-  recommendationActionError?: string
-  loading: boolean
-  unavailable: boolean
-}) {
-  const actions: Action[] = (recommendations ? recommendations.filter((recommendation) => recommendation.status === RecommendationStatus.Open).map((recommendation) => ({
-    key: recommendation.id,
-    title: recommendation.title,
-    description: recommendation.description,
-    to: recommendationTargets[recommendation.target],
-    label: recommendation.actionLabel,
-    tone: recommendation.severity === 'attention' ? 'attention' : 'default',
-    recommendationId: recommendation.id,
-  })) : [])
-  const activeIntegrations = integrations?.filter((item) => item.status === IntegrationStatus.Active) ?? []
-  const needsRunReview = workflows?.some((item) => item.status === WorkflowExecutionStatus.Waiting || item.status === WorkflowExecutionStatus.Failed || item.status === WorkflowExecutionStatus.Partial)
-
-  if (!recommendations && canViewIntegrations && canManageIntegrations && integrations && activeIntegrations.length === 0) {
-    actions.push({ key: 'integration', title: 'Connect a provider', description: 'Authorize a read-only provider before creating a workflow that needs external evidence.', to: '/integrations', label: 'Open integrations' })
-  }
-  if (!recommendations && canViewSources && canManageSources && sources && sources.length === 0) {
-    actions.push({ key: 'source', title: 'Add a Knowledge Source', description: 'Upload context or bind an authorized integration to make evidence available to runs.', to: '/sources/new', label: 'Add Source' })
-  }
-  if (!recommendations && canViewWorkflows && canManageWorkflows && workflows && workflows.length === 0) {
-    actions.push({ key: 'workflow', title: 'Create the first workflow', description: 'Choose a published Template, an approved Blueprint, or describe a GitHub/Jira investigation.', to: '/workflows/new', label: 'Create workflow' })
-  }
-  if (!recommendations && canViewWorkflows && needsRunReview) {
-    actions.push({ key: 'review', title: 'Review workflow attention', description: 'Waiting, failed, or partial Runs need an explicit human decision before they can progress.', to: '/review', label: 'Review Runs', tone: 'attention' })
-  }
-  if (!recommendations && canViewSources && canViewWorkflows && sources && workflows && sources.length > 0 && workflows.length > 0) {
-    actions.push({ key: 'context', title: 'Check organization context', description: 'Inspect the scoped graph and freshness before trusting a new investigation.', to: '/context', label: 'Open context' })
-  }
-
-  const handledCount = recommendations?.filter((recommendation) => recommendation.status !== RecommendationStatus.Open).length ?? 0
-  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Next actions</CardTitle><CardDescription>{unavailable || recommendationsUnavailable ? 'Some recommendations are unavailable because a scoped data source failed to load.' : loading || recommendationsLoading ? 'Checking the current workspace state…' : actions.length ? recommendations ? 'Persisted recommendations based on the data and permissions visible in this scope.' : 'Recommended actions based on the data and permissions visible in this scope.' : handledCount ? `${handledCount} recommendation${handledCount === 1 ? '' : 's'} already acknowledged in this scope.` : 'No immediate setup action is required in the current scope.'}</CardDescription></CardHeader><CardContent>{recommendationActionError ? <p role="alert" className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the recommendation: {recommendationActionError}</p> : null}{unavailable || recommendationsUnavailable ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Reload the page to refresh unavailable recommendations.</p><Link to="/review" className="text-sm font-medium underline underline-offset-4">Open review</Link></div> : loading || recommendationsLoading ? <p className="text-sm text-muted-foreground">Loading recommendations…</p> : actions.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{actions.slice(0, 6).map((action) => <div key={action.key} className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 ${action.tone === 'attention' ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'bg-background'}`}><div className="min-w-0 flex-1"><p className="text-sm font-medium">{action.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p></div><div className="flex flex-wrap gap-2"><Button variant={action.tone === 'attention' ? 'default' : 'outline'} size="sm" asChild><Link to={action.to}>{action.label}<ArrowRight data-icon="inline-end" /></Link></Button>{action.recommendationId ? <><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'accept')}>Mark accepted</Button><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'dismiss')}>Dismiss</Button></> : null}</div></div>)}</div> : <div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />Workspace foundations and active review queues are in place.</div>}</CardContent></Card>
-}
-
-function InitializationCard({
-  status,
-  workspaceName,
-  coordinationMode,
-  selectedWorkflows,
-  onStart,
-  starting,
-}: {
-  status: import('@encois/contracts').OrganizationOnboardingProjection['status']
-  workspaceName?: string
-  coordinationMode?: import('@encois/contracts').OrganizationOnboardingProjection['coordinationMode']
-  selectedWorkflows: number
-  onStart: () => void
-  starting: boolean
-}) {
-  const isInitializing = status === 'initializing'
-  const isFailed = status === 'failed'
-  const isConnectOnly = coordinationMode === 'connect-only'
-
-  return (
-    <Card className="border-primary/30 bg-primary/[0.025]">
-      <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="flex items-start gap-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-5" aria-hidden="true" /></span>
-          <div>
-            <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{isInitializing ? <><ProductTerm term="coordinator" /> is initializing</> : isFailed ? 'Workspace initialization failed' : 'Workspace pending initialization'}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">{selectedWorkflows} <ProductTerm term="workflow" plural /> selected</span></div>
-            <p className="mt-1 text-sm text-muted-foreground">{isConnectOnly ? 'Sources are connected. Start the Coordinator when you are ready.' : workspaceName ? `${workspaceName} has the context needed to begin.` : <>Your <ProductTerm term="coordinator" /> is ready to prepare the first workspace context.</>}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? <>Starting <ProductTerm term="coordinator" />…</> : isConnectOnly ? <>Start <ProductTerm term="coordinator" /></> : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button>
-          <Link to="/settings/workspace" className="text-center text-xs text-muted-foreground underline underline-offset-4 sm:text-right">Review workspace configuration</Link>
-        </div>
-      </CardContent>
-    </Card>
-  )
+  return status === WorkflowExecutionStatus.Queued || status === WorkflowExecutionStatus.Running || status === WorkflowExecutionStatus.Waiting || status === WorkflowExecutionStatus.Paused
 }
 
 function DashboardWorkflowRow({ id, title, status, detail, icon: Icon }: { id: string; title: string; status: WorkflowExecutionStatus; detail: string; icon: typeof Activity }) {
   return <Link to="/workflows/$workflowId" params={{ workflowId: id }} className="group flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span></span><span className="hidden sm:block"><WorkflowStatusIndicator status={status} compact /></span><ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></Link>
-}
-
-function RunRow({ title, status, time, icon: Icon }: { title: string; status: WorkflowExecutionStatus; time: string; icon: typeof Activity }) {
-  return <div className="flex items-center gap-3 rounded-lg border p-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{title}</span><span className="block text-xs text-muted-foreground">{time}</span></span><WorkflowStatusIndicator status={status} compact /></div>
 }
 
 function OverviewCard({
@@ -306,7 +96,7 @@ function OverviewCard({
   detail,
 }: {
   icon: typeof Activity
-  label: ReactNode
+  label: string
   value: string
   detail: string
 }) {

@@ -3,7 +3,9 @@ import { Check, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { clearAuthSession, getAuthIdentity, getAuthSession } from '@/lib/auth'
+import { clearAuthSession, getAuthSession } from '@/lib/auth'
+import { getAccountSummary } from '@/lib/account'
+import { useOrganization } from '@/lib/organization-context'
 
 export const Route = createFileRoute('/_app/profile')({
   component: ProfilePage,
@@ -11,10 +13,9 @@ export const Route = createFileRoute('/_app/profile')({
 
 function ProfilePage() {
   const navigate = useNavigate()
-  const identity = getAuthIdentity()
   const session = getAuthSession()
-  const displayName = identity.displayName || 'Workspace member'
-  const email = identity.email || 'Identity provider account'
+  const { members } = useOrganization()
+  const account = getAccountSummary(members)
 
   function signOut() {
     clearAuthSession()
@@ -23,11 +24,11 @@ function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Profile" description="Your Encois identity and current session controls." />
+      <PageHeader title="Account" description="Your identity and current session controls." />
       <div className="grid gap-4 xl:grid-cols-[1fr_0.75fr]">
         <Card>
-          <CardHeader><div className="flex items-center gap-4"><div className="flex size-14 items-center justify-center rounded-full bg-primary text-lg font-medium text-primary-foreground">{initials(displayName)}</div><div><CardTitle>Account profile</CardTitle><CardDescription>Identity details are read from the configured Identity Platform provider.</CardDescription></div></div></CardHeader>
-          <CardContent className="flex flex-col gap-5"><DetailRow label="Name" value={displayName} /><DetailRow label="Email" value={email} /><DetailRow label="Organization" value={session?.organizationId ? 'Current organization' : 'Not selected'} /><div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="text-muted-foreground">Profile editing and avatar storage are not exposed by the current control-plane contract, so this screen does not pretend to save local-only changes.</span></div></CardContent>
+          <CardHeader><div className="flex items-center gap-4"><div className="flex size-14 items-center justify-center rounded-full bg-primary text-lg font-medium text-primary-foreground">{account.initials}</div><div><CardTitle>Account profile</CardTitle><CardDescription>Identity details come from the signed-in provider or organization membership.</CardDescription></div></div></CardHeader>
+          <CardContent className="flex flex-col gap-5"><DetailRow label="Name" value={account.name} /><DetailRow label="Email" value={account.email} /><DetailRow label="Organization" value={session?.organizationId ? 'Current organization' : 'Not selected'} /><div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="text-muted-foreground">Profile editing and avatar storage are not exposed by the current control-plane contract, so this screen does not pretend to save local-only changes.</span></div></CardContent>
         </Card>
 
         <div className="flex flex-col gap-4">
@@ -37,11 +38,6 @@ function ProfilePage() {
       </div>
     </div>
   )
-}
-
-function initials(value: string): string {
-  const parts = value.trim().split(/\s+/u).filter(Boolean)
-  return (parts.length > 1 ? `${parts[0]?.[0] ?? ''}${parts.at(-1)?.[0] ?? ''}` : value.slice(0, 2)).toUpperCase()
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

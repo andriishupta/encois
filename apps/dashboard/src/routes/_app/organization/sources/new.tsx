@@ -11,7 +11,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useOrganization } from '@/lib/organization-context'
 import { queryKeys } from '@/lib/query-keys'
 
-export const Route = createFileRoute('/_app/sources/new')({
+export const Route = createFileRoute('/_app/organization/sources/new')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeManage)) throw redirect({ to: '/forbidden' })
   },
@@ -74,7 +74,7 @@ function NewSourcePage() {
       if (kind === KnowledgeSourceKind.UploadedDocument && file) {
         const uploaded = await uploadKnowledgeSourcePdf(file, name, scopes)
         await startSourceIngestion(uploaded.source.id, uploaded.revision.id)
-        await navigate({ to: '/sources/$sourceId', params: { sourceId: uploaded.source.id } })
+        await navigate({ to: '/organization/sources/$sourceId', params: { sourceId: uploaded.source.id } })
         return
       }
       const input: KnowledgeSourceCreateRequest = {
@@ -85,7 +85,7 @@ function NewSourcePage() {
         ...scopes,
       }
       const source = await createKnowledgeSource(input)
-      await navigate({ to: '/sources/$sourceId', params: { sourceId: source.id } })
+      await navigate({ to: '/organization/sources/$sourceId', params: { sourceId: source.id } })
     } catch (cause) {
       setError(isApiError(cause) ? cause.message : 'The source could not be created.')
     } finally {
@@ -95,13 +95,13 @@ function NewSourcePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Add Knowledge Source" description={<>Create a provider-backed source or upload an immutable document. The source keeps its Integration, read scope, visibility scope, and revision history.</>} actions={<Button variant="outline" asChild><Link to="/sources"><ArrowLeft data-icon="inline-start" />Back to Sources</Link></Button>} />
+      <PageHeader title="Add Knowledge Source" description={<>Create a provider-backed source or upload an immutable document. The source keeps its Integration, read scope, visibility scope, and revision history.</>} actions={<Button variant="outline" asChild><Link to="/organization/sources"><ArrowLeft data-icon="inline-start" />Back to Sources</Link></Button>} />
       <form className="max-w-3xl" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
             <div className="flex size-10 items-center justify-center rounded-md border bg-muted/30">{kind === KnowledgeSourceKind.Integration ? <PlugZap className="size-5 text-muted-foreground" aria-hidden="true" /> : <FileText className="size-5 text-muted-foreground" aria-hidden="true" />}</div>
             <CardTitle>Source configuration</CardTitle>
-            <CardDescription>These scopes are enforced by Encois before the Source or its ingestion workflow is created.</CardDescription>
+            <CardDescription>These scopes are enforced before the Source or its ingestion workflow is created.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="source-kind">Source type<select id="source-kind" value={kind} onChange={(event) => setKind(event.target.value as KnowledgeSourceKind)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value={KnowledgeSourceKind.UploadedDocument}>Uploaded document</option><option value={KnowledgeSourceKind.Integration}>Integration source</option></select></label>
@@ -116,7 +116,7 @@ function NewSourcePage() {
             <p className="text-xs text-muted-foreground">Read scope controls what ingestion may access. Visibility scope controls who can discover the normalized Source and its evidence.</p>
             {kind === KnowledgeSourceKind.Integration ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><p className="font-medium">Provider authorization remains explicit</p><p className="mt-1 text-muted-foreground">Creating this Source does not copy credentials or enable write access. Ingestion will remain unavailable until the Integration has valid provider credentials.</p></div> : null}
             {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" asChild><Link to="/sources">Cancel</Link></Button><Button type="submit" disabled={saving || !readScopeId || !visibilityScopeId || (kind === KnowledgeSourceKind.Integration && (!selectedIntegration || integrations.isLoading))}>{saving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}{saving ? 'Saving…' : kind === KnowledgeSourceKind.Integration ? 'Create Source' : 'Upload and ingest'}</Button></div>
+            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" asChild><Link to="/organization/sources">Cancel</Link></Button><Button type="submit" disabled={saving || !readScopeId || !visibilityScopeId || (kind === KnowledgeSourceKind.Integration && (!selectedIntegration || integrations.isLoading))}>{saving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}{saving ? 'Saving…' : kind === KnowledgeSourceKind.Integration ? 'Create Source' : 'Upload and ingest'}</Button></div>
           </CardContent>
         </Card>
       </form>

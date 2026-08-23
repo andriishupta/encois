@@ -82,9 +82,20 @@ if (!localAuthModule.includes("signInWithEmailAndPassword") || !localAuthPanel.i
   sourceMatches.push("local password auth is not isolated in the local-only modules");
 }
 const scriptsBuildIndex = apiDockerfile.indexOf("RUN pnpm --filter @encois/api-gateway build:scripts");
-const localSeedStageIndex = apiDockerfile.indexOf("FROM build AS local-seed-build");
-if (scriptsBuildIndex < localSeedStageIndex || localSeedStageIndex < 0) {
-  sourceMatches.push("API local scripts are not confined to the local-seed Docker target");
+const deployIndex = apiDockerfile.indexOf("RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out");
+const localSeedStageIndex = apiDockerfile.indexOf("FROM runtime AS local-seed");
+const productionStageIndex = apiDockerfile.indexOf("FROM runtime AS production");
+const localSeedScriptsCopyIndex = apiDockerfile.indexOf(
+  "COPY --from=build /local-seed-scripts /app/dist/scripts",
+);
+if (
+  scriptsBuildIndex < 0 ||
+  deployIndex < scriptsBuildIndex ||
+  localSeedStageIndex < 0 ||
+  localSeedScriptsCopyIndex < localSeedStageIndex ||
+  localSeedScriptsCopyIndex > productionStageIndex
+) {
+  sourceMatches.push("API local scripts are not isolated from the production Docker target");
 }
 if (!apiDockerfile.includes("FROM runtime AS production") || !apiDockerfile.includes("COPY --from=build /out ./")) {
   sourceMatches.push("API production Docker target is not separated from the local-seed target");

@@ -3,6 +3,7 @@ import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-ro
 import { Activity, ArrowRight, Chrome } from 'lucide-react'
 import { getAuthStatus, isApiError } from '@/lib/api'
 import { getAuthSession, getDevelopmentAuthSession, isFirebaseAuthEmulatorConfigured, isIdentityPlatformConfigured, setAuthSession, signInWithGoogle, signOutFromIdentityPlatform } from '@/lib/auth'
+import { getBranding, getPublicWorkspaceTitle } from '@/lib/branding'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -26,6 +27,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const developmentSession = getDevelopmentAuthSession()
+  const branding = getBranding()
   const googleConfigured = isIdentityPlatformConfigured()
   const localAuthEnabled = import.meta.env.DEV && isFirebaseAuthEmulatorConfigured()
 
@@ -49,7 +51,7 @@ function LoginPage() {
       if (isApiError(cause) && cause.code === 'PERSISTENCE_UNAVAILABLE') {
         setError('Access provisioning is not available yet.')
       } else if (isApiError(cause) && cause.status === 401) {
-        setError('This Google account is not enabled for Encois yet.')
+        setError('This Google account is not enabled for the workspace yet.')
       } else if (cause instanceof Error && cause.message.includes('popup')) {
         setError('Google sign-in was cancelled.')
       } else {
@@ -72,11 +74,12 @@ function LoginPage() {
         <CardHeader className="gap-4">
           <Link to="/" className="flex items-center gap-2 text-sm font-semibold">
             <Activity className="size-4" aria-hidden="true" />
-            Encois
+            {getPublicWorkspaceTitle()}
           </Link>
           <div className="flex flex-col gap-1.5">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>Encois is currently available by invitation only.</CardDescription>
+            <CardTitle className="text-2xl">{branding.productName} workspace</CardTitle>
+            <p className="text-sm font-medium text-foreground/80">Welcome back</p>
+            <CardDescription>This workspace is currently available by invitation only.</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

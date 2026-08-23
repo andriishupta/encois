@@ -32,8 +32,8 @@ function NotificationsSettingsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Notifications" description="Choose how Encois should surface workflow and evidence updates." actions={<Button type="button" onClick={() => save.mutate()} disabled={!canManage || save.isPending || preferences.isLoading}>{save.isPending ? 'Saving…' : 'Save changes'}</Button>} />
-      {preferences.isError ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="pt-6"><div className="flex items-start gap-3 text-sm"><CircleAlert className="mt-0.5 size-4 text-destructive" /><p role="alert" className="text-destructive">Notification settings are unavailable: {isApiError(preferences.error) ? preferences.error.message : 'Encois did not return preferences.'}</p></div></CardContent></Card> : null}
+      <PageHeader title="Notifications" description="Choose how this workspace should surface workflow and evidence updates." actions={<Button type="button" onClick={() => save.mutate()} disabled={!canManage || save.isPending || preferences.isLoading}>{save.isPending ? 'Saving…' : 'Save changes'}</Button>} />
+      {preferences.isError ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="pt-6"><div className="flex items-start gap-3 text-sm"><CircleAlert className="mt-0.5 size-4 text-destructive" /><p role="alert" className="text-destructive">Notification settings are unavailable: {isApiError(preferences.error) ? preferences.error.message : 'The workspace did not return preferences.'}</p></div></CardContent></Card> : null}
       {save.isError ? <p role="alert" className="text-sm text-destructive">Could not save notification preferences: {save.error.message}</p> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

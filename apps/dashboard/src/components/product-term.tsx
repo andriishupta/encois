@@ -30,7 +30,6 @@ export type ProductTermKey =
   | 'agentDefinition'
   | 'memoryBank'
   | 'query'
-  | 'spannerGraph'
   | 'workflowInstance'
   | 'approvalBoundary'
   | 'partialResult'
@@ -40,7 +39,7 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
   coordinator: {
     label: 'Coordinator',
     pluralLabel: 'Coordinators',
-    description: 'The read-only agent that gathers context and proposes what Encois should investigate next.',
+    description: 'The read-only agent that gathers context and proposes what this workspace should investigate next.',
   },
   knowledgeSource: {
     label: 'Knowledge source',
@@ -50,7 +49,7 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
   workflow: {
     label: 'Workflow',
     pluralLabel: 'Workflows',
-    description: 'A repeatable sequence of checks that Encois runs to investigate an organization signal.',
+    description: 'A repeatable sequence of checks that this workspace runs to investigate an organization signal.',
   },
   blueprint: {
     label: 'Blueprint',
@@ -80,7 +79,7 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
   ingestion: {
     label: 'Ingestion',
     pluralLabel: 'Ingestion',
-    description: 'The process that reads a source revision, validates it, and prepares facts for Encois.',
+    description: 'The process that reads a source revision, validates it, and prepares facts for this workspace.',
   },
   revision: {
     label: 'Revision',
@@ -108,8 +107,8 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     description: 'A reviewable proposal that describes a Blueprint change before it is approved and applied.',
   },
   graph: {
-    label: 'Organization context',
-    pluralLabel: 'Organization contexts',
+    label: 'Organization memory graph',
+    pluralLabel: 'Organization memory graphs',
     description: 'A relationship view of organization units, systems, people, and evidence used to explain an investigation.',
   },
   memory: {
@@ -163,19 +162,14 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     description: 'An approved, versioned agent role with bounded tools, input/output schemas, scope, model, retry, and budget policy.',
   },
   memoryBank: {
-    label: 'Memory Bank',
-    pluralLabel: 'Memory Bank',
-    description: 'The configured provider-backed store for scoped distilled agent memory. It is not a graph, workflow, or authorization store.',
+    label: 'Workflow memory',
+    pluralLabel: 'Workflow memory',
+    description: 'Scoped memory associated with workflow and agent execution. It is not the organization graph or an authorization store.',
   },
   query: {
     label: 'Query',
     pluralLabel: 'Queries',
     description: 'A read-only request for a current graph, memory, or Workflow state. Queries do not mutate execution.',
-  },
-  spannerGraph: {
-    label: 'Spanner Graph',
-    pluralLabel: 'Spanner Graph',
-    description: 'The shared company-context graph layer for organization entities, relationships, normalized facts, provenance, and temporal validity.',
   },
   workflowInstance: {
     label: 'Workflow instance',

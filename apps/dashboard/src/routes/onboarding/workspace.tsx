@@ -53,7 +53,7 @@ function WorkspaceSetupPage() {
         <CardHeader>
           <Building2 className="mb-2 size-5 text-primary-foreground/70" aria-hidden="true" />
           <CardTitle>Organization-scoped setup</CardTitle>
-          <CardDescription className="text-primary-foreground/70">This information comes from the Encois control plane for the signed-in organization.</CardDescription>
+          <CardDescription className="text-primary-foreground/70">This information comes from the workspace control plane for the signed-in organization.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm text-primary-foreground/80">
           <p>The next step uploads a real organization context document as a scoped Knowledge Source.</p>

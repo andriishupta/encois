@@ -14,7 +14,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { formatDate, humanizeKey } from '@/lib/formatters'
 
-export const Route = createFileRoute('/_app/sources/$sourceId')({
+export const Route = createFileRoute('/_app/organization/sources/$sourceId')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeRead)) throw redirect({ to: '/forbidden' })
   },
@@ -84,11 +84,11 @@ function SourceDetailPage() {
   const Icon = source.data.source.kind === KnowledgeSourceKind.UploadedDocument ? FileText : Waypoints
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title={source.data.source.name} description={`${source.data.source.provider ?? source.data.source.contentType ?? source.data.source.kind} · ${source.data.source.status.replace('_', ' ')}`} actions={<Button variant="outline" asChild><Link to="/sources"><ArrowLeft data-icon="inline-start" />All sources</Link></Button>} />
+      <PageHeader title={source.data.source.name} description={`${source.data.source.provider ?? source.data.source.contentType ?? source.data.source.kind} · ${source.data.source.status.replace('_', ' ')}`} actions={<Button variant="outline" asChild><Link to="/organization/sources"><ArrowLeft data-icon="inline-start" />All sources</Link></Button>} />
       <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4"><FreshnessCard label="Freshness" value={source.data.source.freshness ? humanizeKey(source.data.source.freshness.status) : 'Unavailable'} detail={source.data.source.freshness?.expiresAt ? `Expires ${formatDate(source.data.source.freshness.expiresAt)}` : 'Provider timestamp is not available'} /><FreshnessCard label="Latest revision" value={latestRevision ? latestRevision.revision : 'No revision'} detail={latestRevision ? formatDate(latestRevision.createdAt) : 'Awaiting acquisition'} /><FreshnessCard label="Observed" value={latestRevision?.observedAt ? formatDate(latestRevision.observedAt) : 'Not reported'} detail="Provider observation time" /><FreshnessCard label="Ingested" value={latestRevision?.ingestedAt ? formatDate(latestRevision.ingestedAt) : 'Not ingested'} detail="Normalized into context" /></div>
       <Card className="min-w-0">
-        <CardHeader><CardTitle>Scope and provenance</CardTitle><CardDescription>Encois keeps access scope separate from provider configuration and immutable revision content.</CardDescription></CardHeader>
-        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><ScopeValue label="Provider" value={source.data.source.provider ?? 'Uploaded document'} /><ScopeValue label="Integration" value={source.data.source.integrationId ? <Link className="underline underline-offset-2" to="/integrations/$integrationId" params={{ integrationId: source.data.source.integrationId }}>Open Integration</Link> : 'Not applicable'} /><ScopeValue label="Read scope" value={source.data.source.readScope.ids.join(', ')} /><ScopeValue label="Visibility scope" value={source.data.source.visibilityScope.ids.join(', ')} /></CardContent>
+        <CardHeader><CardTitle>Scope and provenance</CardTitle><CardDescription>The workspace keeps access scope separate from provider configuration and immutable revision content.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><ScopeValue label="Provider" value={source.data.source.provider ?? 'Uploaded document'} /><ScopeValue label="Integration" value={source.data.source.integrationId ? <Link className="underline underline-offset-2" to="/organization/integrations/$integrationId" params={{ integrationId: source.data.source.integrationId }}>Open Integration</Link> : 'Not applicable'} /><ScopeValue label="Read scope" value={source.data.source.readScope.ids.join(', ')} /><ScopeValue label="Visibility scope" value={source.data.source.visibilityScope.ids.join(', ')} /></CardContent>
       </Card>
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card className="min-w-0">

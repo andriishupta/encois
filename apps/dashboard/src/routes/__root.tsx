@@ -1,7 +1,12 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { StatusPage } from '@/components/status-page'
+import { getOrganization } from '@/lib/api'
+import { getAuthSession } from '@/lib/auth'
+import { getBranding, getPublicWorkspaceTitle } from '@/lib/branding'
+import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -22,40 +27,52 @@ function RootLayout() {
 
 function DocumentTitle() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const organization = useQuery({
+    queryKey: queryKeys.organization(),
+    queryFn: getOrganization,
+    enabled: Boolean(getAuthSession()),
+    staleTime: 60_000,
+  })
+  const organizationName = organization.data?.organization.name
+  const workspaceName = organizationName ? getBranding(organizationName).workspaceName : undefined
+
   useEffect(() => {
-    document.title = `${getPageTitle(pathname)} | Encois`
-  }, [pathname])
+    const pageTitle = getPageTitle(pathname)
+    const publicPage = pathname === '/login' || pathname === '/sign-up' || pathname === '/waitlist'
+    document.title = !publicPage && workspaceName ? `${pageTitle} | ${workspaceName}` : pageTitle
+  }, [pathname, workspaceName])
 
   return null
 }
 
 function getPageTitle(pathname: string) {
   if (pathname === '/') return 'Dashboard'
-  if (pathname === '/login') return 'Sign in'
+  if (pathname === '/login') return getPublicWorkspaceTitle()
   if (pathname === '/sign-up' || pathname === '/waitlist') return 'Join the waitlist'
   if (pathname === '/workflows') return 'Workflows'
+  if (pathname === '/workflows/runs') return 'Workflow runs'
   if (pathname === '/workflows/new') return 'New workflow'
   if (pathname === '/workflows/templates') return 'Workflow templates'
   if (pathname === '/workflows/blueprints') return 'Workflow Blueprints'
   if (pathname.startsWith('/workflows/blueprints/')) return 'Blueprint revision'
+  if (pathname === '/workflows/memory') return 'Workflow memory'
   if (pathname.startsWith('/workflows/')) return 'Workflow execution'
-  if (pathname === '/sources') return 'Knowledge sources'
-  if (pathname === '/sources/new') return 'Add knowledge source'
-  if (pathname.startsWith('/sources/')) return 'Knowledge source'
-  if (pathname === '/integrations') return 'Integrations'
-  if (pathname === '/integrations/new') return 'Add integration'
-  if (pathname.startsWith('/integrations/')) return getIntegrationTitle(pathname)
-  if (pathname === '/review') return 'Review queue'
-  if (pathname === '/context') return 'Organization context'
-  if (pathname === '/memory') return 'Memory'
-  if (pathname === '/investigations') return 'Saved investigations'
+  if (pathname === '/organization/sources') return 'Knowledge sources'
+  if (pathname === '/organization/sources/new') return 'Add knowledge source'
+  if (pathname.startsWith('/organization/sources/')) return 'Knowledge source'
+  if (pathname === '/organization/integrations') return 'Integrations'
+  if (pathname === '/organization/integrations/new') return 'Add integration'
+  if (pathname.startsWith('/organization/integrations/')) return getIntegrationTitle(pathname)
+  if (pathname === '/review') return 'Review'
+  if (pathname === '/organization/memory') return 'Organization memory graph'
+  if (pathname === '/organization/investigations') return 'Investigations'
   if (pathname === '/organization') return 'Organization'
   if (pathname === '/organization/permissions') return 'Organization permissions'
   if (pathname === '/settings') return 'Settings'
   if (pathname === '/settings/workspace') return 'Workspace settings'
   if (pathname === '/settings/notifications') return 'Notifications'
-  if (pathname === '/settings/access') return 'Access'
-  if (pathname === '/profile') return 'Profile'
+  if (pathname === '/organization/access') return 'Organization access'
+  if (pathname === '/profile') return 'Account'
   if (pathname === '/forbidden') return 'Access denied'
   return 'Page not found'
 }

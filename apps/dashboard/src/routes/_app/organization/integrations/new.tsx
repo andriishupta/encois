@@ -12,7 +12,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
 import { useOrganization } from '@/lib/organization-context'
 
-export const Route = createFileRoute('/_app/integrations/new')({
+export const Route = createFileRoute('/_app/organization/integrations/new')({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsManage)) throw redirect({ to: '/forbidden' })
   },
@@ -31,7 +31,7 @@ function NewIntegrationPage() {
     mutationFn: (input: IntegrationCreateRequest) => createIntegration(input),
     onSuccess: async (integration) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.integrations() })
-      await navigate({ to: '/integrations/$integrationId', params: { integrationId: integration.id } })
+      await navigate({ to: '/organization/integrations/$integrationId', params: { integrationId: integration.id } })
     },
   })
 
@@ -62,7 +62,7 @@ function NewIntegrationPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Register integration" description={<>Register a provider connection and bind it to an organization <ProductTerm term="scope" />. Credentials are never entered into the dashboard.</>} actions={<Button variant="outline" asChild><Link to="/integrations"><ArrowLeft data-icon="inline-start" />Back to integrations</Link></Button>} />
+      <PageHeader title="Register integration" description={<>Register a provider connection and bind it to an organization <ProductTerm term="scope" />. Credentials are never entered into the dashboard.</>} actions={<Button variant="outline" asChild><Link to="/organization/integrations"><ArrowLeft data-icon="inline-start" />Back to integrations</Link></Button>} />
       <Card className="max-w-3xl">
         <CardHeader>
           <div className="flex size-10 items-center justify-center rounded-md border bg-muted/30"><PlugZap className="size-5 text-muted-foreground" aria-hidden="true" /></div>
@@ -85,7 +85,7 @@ function NewIntegrationPage() {
             </fieldset>
             {mutation.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Could not register integration: {mutation.error.message}</div> : null}
             <div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-4 text-sm"><CheckCircle2 className="mt-0.5 size-4 text-primary" aria-hidden="true" /><div><p className="font-medium">Read-only by default</p><p className="mt-1 text-muted-foreground">This registration does not grant write access to GitHub, Jira, Slack, or any other provider.</p></div></div>
-            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" asChild><Link to="/integrations">Cancel</Link></Button><Button type="submit" disabled={mutation.isPending || !organizationUnitId}>{mutation.isPending ? 'Registering…' : <><Save data-icon="inline-start" />Register pending integration</>}</Button></div>
+            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" asChild><Link to="/organization/integrations">Cancel</Link></Button><Button type="submit" disabled={mutation.isPending || !organizationUnitId}>{mutation.isPending ? 'Registering…' : <><Save data-icon="inline-start" />Register pending integration</>}</Button></div>
           </form>
         </CardContent>
       </Card>

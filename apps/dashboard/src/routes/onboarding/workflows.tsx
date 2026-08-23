@@ -60,7 +60,7 @@ function WorkflowRecommendationsPage() {
     <div className="flex flex-col gap-6">
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">Choose your first workflows</h1>
-        <p className="mt-2 text-muted-foreground">Select published Templates or current approved Blueprints. Encois stores these product references and resolves runtime identifiers in the control plane.</p>
+        <p className="mt-2 text-muted-foreground">Select published Templates or current approved Blueprints. The workspace stores these product references and resolves runtime identifiers in the control plane.</p>
       </div>
       <Card>
         <CardHeader>

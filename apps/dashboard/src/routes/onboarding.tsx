@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, createFileRoute, Link, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Activity, Check, Circle, LogOut, ShieldAlert } from 'lucide-react'
+import { Check, Circle, LogOut, ShieldAlert } from 'lucide-react'
 import { getAuthIdentity, getAuthSession, hasPermission, signOutFromIdentityPlatform } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { Button } from '@/components/ui/button'
@@ -36,7 +36,7 @@ function OnboardingLayout() {
             <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Activity className="size-4" aria-hidden="true" />
             </span>
-            Encois
+            Workspace
           </Link>
           <div className="flex items-center gap-3">
             <div className="text-right text-xs text-muted-foreground">
@@ -114,7 +114,7 @@ function OnboardingAccessDenied() {
             <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Activity className="size-4" aria-hidden="true" />
             </span>
-            Encois
+            Workspace
           </Link>
           <OnboardingAccountActions />
         </div>
@@ -123,7 +123,7 @@ function OnboardingAccessDenied() {
         <div className="w-full rounded-xl border bg-background p-6 shadow-sm sm:p-8">
           <ShieldAlert className="size-8 text-muted-foreground" aria-hidden="true" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">Onboarding is reserved for the workspace owner</h1>
-          <p className="mt-3 text-muted-foreground">Please ask your organization administrator to complete Encois onboarding. Product surfaces stay locked until setup is complete.</p>
+          <p className="mt-3 text-muted-foreground">Please ask your organization administrator to complete workspace onboarding. Product surfaces stay locked until setup is complete.</p>
         </div>
       </main>
     </div>

@@ -68,7 +68,7 @@ function MemorySetupPage() {
     <div className="flex flex-col gap-6">
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">Give your <ProductTerm term="coordinator" /> some memory</h1>
-        <p className="mt-2 text-muted-foreground">Upload at least one organization context document. Encois stores it as a scoped source and starts the common ingestion workflow.</p>
+        <p className="mt-2 text-muted-foreground">Upload at least one organization graph document. The workspace stores it as a scoped source and starts the common ingestion workflow.</p>
       </div>
 
       <Card>

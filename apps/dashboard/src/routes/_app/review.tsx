@@ -100,7 +100,7 @@ function ReviewQueuePage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Review queue"
+        title="Review"
         description="Operational items that need a human decision or follow-up in the current scope. Each item links to the product surface that owns it; active Runs refresh automatically."
       />
 
@@ -169,11 +169,11 @@ function WorkflowReviewRow({ workflow }: { workflow: WorkflowExecutionProjection
 }
 
 function SourceReviewRow({ source }: { source: KnowledgeSource }) {
-  return <Link to="/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><Waypoints className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.provider ?? source.kind} · {source.status.replace('_', ' ')}</span></span><RefreshCw className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></Link>
+  return <Link to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><Waypoints className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.provider ?? source.kind} · {source.status.replace('_', ' ')}</span></span><RefreshCw className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></Link>
 }
 
 function IntegrationReviewRow({ integration }: { integration: IntegrationProjection }) {
-  return <Link to="/integrations/$integrationId" params={{ integrationId: integration.id }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><PlugZap className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{integration.name}</span><span className="block truncate text-xs text-muted-foreground">{integration.provider} · {integration.status === IntegrationStatus.Error ? 'connection error' : integration.status === IntegrationStatus.NeedsReauth ? 'reauthorization required' : integration.status === IntegrationStatus.Degraded ? 'provider degraded' : integration.status === IntegrationStatus.Authorized ? 'ready to enable' : 'authorization pending'}</span></span><AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden="true" /></Link>
+  return <Link to="/organization/integrations/$integrationId" params={{ integrationId: integration.id }} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><PlugZap className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{integration.name}</span><span className="block truncate text-xs text-muted-foreground">{integration.provider} · {integration.status === IntegrationStatus.Error ? 'connection error' : integration.status === IntegrationStatus.NeedsReauth ? 'reauthorization required' : integration.status === IntegrationStatus.Degraded ? 'provider degraded' : integration.status === IntegrationStatus.Authorized ? 'ready to enable' : 'authorization pending'}</span></span><AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden="true" /></Link>
 }
 
 function WorkflowPlanReviewRow({ plan, blueprints, busy, onApprove, onApply }: { plan: WorkflowPlanRecord; blueprints: readonly WorkflowBlueprintProjection[]; busy: boolean; onApprove: (planId: string) => void; onApply: (planId: string) => void }) {

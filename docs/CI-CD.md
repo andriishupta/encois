@@ -117,6 +117,12 @@ the dashboard image. CI also starts the dashboard image and checks `/dashboard/`
 an emitted `/dashboard/assets/*` JavaScript file, and a client-side route so a
 path-prefix regression cannot pass as a successful container build.
 
+Self-hosted deployments can set `VITE_PRODUCT_NAME`, `VITE_WORKSPACE_NAME`,
+`VITE_PRODUCT_LOGO_URL`, `VITE_PRODUCT_FAVICON_URL`, `VITE_SUPPORT_URL`, and
+`VITE_POWERED_BY_VISIBLE` to control the public product brand. Once a user is
+authenticated, the organization name returned by the control plane remains the
+primary workspace identity.
+
 The local synthetic execution smoke command is `pnpm smoke:release`; it is
 opt-in and expects Temporal, Agent Gateway, and the Go Runtime to be started
 separately. `pnpm smoke:approval` exercises the generic approval Signal path.

@@ -16,38 +16,39 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as WaitlistRouteImport } from './routes/waitlist'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppContextRouteImport } from './routes/_app/context'
-import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
-import { Route as AppInvestigationsRouteImport } from './routes/_app/investigations'
-import { Route as AppMemoryRouteImport } from './routes/_app/memory'
 import { Route as AppOrganizationRouteImport } from './routes/_app/organization'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppReviewRouteImport } from './routes/_app/review'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
-import { Route as AppSourcesRouteImport } from './routes/_app/sources'
 import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as OnboardingIndexRouteImport } from './routes/onboarding/index'
 import { Route as OnboardingCoordinationRouteImport } from './routes/onboarding/coordination'
 import { Route as OnboardingMemoryRouteImport } from './routes/onboarding/memory'
 import { Route as OnboardingWorkflowsRouteImport } from './routes/onboarding/workflows'
 import { Route as OnboardingWorkspaceRouteImport } from './routes/onboarding/workspace'
-import { Route as AppIntegrationsIndexRouteImport } from './routes/_app/integrations/index'
-import { Route as AppIntegrationsIntegrationIdRouteImport } from './routes/_app/integrations/$integrationId'
-import { Route as AppIntegrationsNewRouteImport } from './routes/_app/integrations/new'
 import { Route as AppOrganizationIndexRouteImport } from './routes/_app/organization/index'
+import { Route as AppOrganizationAccessRouteImport } from './routes/_app/organization/access'
+import { Route as AppOrganizationIntegrationsRouteImport } from './routes/_app/organization/integrations'
+import { Route as AppOrganizationInvestigationsRouteImport } from './routes/_app/organization/investigations'
+import { Route as AppOrganizationMemoryRouteImport } from './routes/_app/organization/memory'
 import { Route as AppOrganizationPermissionsRouteImport } from './routes/_app/organization/permissions'
+import { Route as AppOrganizationSourcesRouteImport } from './routes/_app/organization/sources'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
-import { Route as AppSettingsAccessRouteImport } from './routes/_app/settings/access'
 import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsWorkspaceRouteImport } from './routes/_app/settings/workspace'
-import { Route as AppSourcesIndexRouteImport } from './routes/_app/sources/index'
-import { Route as AppSourcesSourceIdRouteImport } from './routes/_app/sources/$sourceId'
-import { Route as AppSourcesNewRouteImport } from './routes/_app/sources/new'
 import { Route as AppWorkflowsIndexRouteImport } from './routes/_app/workflows/index'
 import { Route as AppWorkflowsWorkflowIdRouteImport } from './routes/_app/workflows/$workflowId'
 import { Route as AppWorkflowsBlueprintsRouteImport } from './routes/_app/workflows/blueprints'
+import { Route as AppWorkflowsMemoryRouteImport } from './routes/_app/workflows/memory'
 import { Route as AppWorkflowsNewRouteImport } from './routes/_app/workflows/new'
+import { Route as AppWorkflowsRunsRouteImport } from './routes/_app/workflows/runs'
 import { Route as AppWorkflowsTemplatesRouteImport } from './routes/_app/workflows/templates'
+import { Route as AppOrganizationIntegrationsIndexRouteImport } from './routes/_app/organization/integrations/index'
+import { Route as AppOrganizationIntegrationsIntegrationIdRouteImport } from './routes/_app/organization/integrations/$integrationId'
+import { Route as AppOrganizationIntegrationsNewRouteImport } from './routes/_app/organization/integrations/new'
+import { Route as AppOrganizationSourcesIndexRouteImport } from './routes/_app/organization/sources/index'
+import { Route as AppOrganizationSourcesSourceIdRouteImport } from './routes/_app/organization/sources/$sourceId'
+import { Route as AppOrganizationSourcesNewRouteImport } from './routes/_app/organization/sources/new'
 import { Route as AppWorkflowsBlueprintsBlueprintIdRouteImport } from './routes/_app/workflows/blueprints/$blueprintId'
 
 const AppRoute = AppRouteImport.update({
@@ -84,26 +85,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppContextRoute = AppContextRouteImport.update({
-  id: '/context',
-  path: '/context',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
-  id: '/integrations',
-  path: '/integrations',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppInvestigationsRoute = AppInvestigationsRouteImport.update({
-  id: '/investigations',
-  path: '/investigations',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMemoryRoute = AppMemoryRouteImport.update({
-  id: '/memory',
-  path: '/memory',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppOrganizationRoute = AppOrganizationRouteImport.update({
   id: '/organization',
   path: '/organization',
@@ -122,11 +103,6 @@ const AppReviewRoute = AppReviewRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSourcesRoute = AppSourcesRouteImport.update({
-  id: '/sources',
-  path: '/sources',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWorkflowsRoute = AppWorkflowsRouteImport.update({
@@ -159,25 +135,31 @@ const OnboardingWorkspaceRoute = OnboardingWorkspaceRouteImport.update({
   path: '/workspace',
   getParentRoute: () => OnboardingRoute,
 } as any)
-const AppIntegrationsIndexRoute = AppIntegrationsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppIntegrationsRoute,
-} as any)
-const AppIntegrationsIntegrationIdRoute =
-  AppIntegrationsIntegrationIdRouteImport.update({
-    id: '/$integrationId',
-    path: '/$integrationId',
-    getParentRoute: () => AppIntegrationsRoute,
-  } as any)
-const AppIntegrationsNewRoute = AppIntegrationsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppIntegrationsRoute,
-} as any)
 const AppOrganizationIndexRoute = AppOrganizationIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppOrganizationRoute,
+} as any)
+const AppOrganizationAccessRoute = AppOrganizationAccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => AppOrganizationRoute,
+} as any)
+const AppOrganizationIntegrationsRoute =
+  AppOrganizationIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => AppOrganizationRoute,
+  } as any)
+const AppOrganizationInvestigationsRoute =
+  AppOrganizationInvestigationsRouteImport.update({
+    id: '/investigations',
+    path: '/investigations',
+    getParentRoute: () => AppOrganizationRoute,
+  } as any)
+const AppOrganizationMemoryRoute = AppOrganizationMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => AppOrganizationRoute,
 } as any)
 const AppOrganizationPermissionsRoute =
@@ -186,14 +168,14 @@ const AppOrganizationPermissionsRoute =
     path: '/permissions',
     getParentRoute: () => AppOrganizationRoute,
   } as any)
+const AppOrganizationSourcesRoute = AppOrganizationSourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => AppOrganizationRoute,
+} as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppSettingsRoute,
-} as any)
-const AppSettingsAccessRoute = AppSettingsAccessRouteImport.update({
-  id: '/access',
-  path: '/access',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsNotificationsRoute =
@@ -206,21 +188,6 @@ const AppSettingsWorkspaceRoute = AppSettingsWorkspaceRouteImport.update({
   id: '/workspace',
   path: '/workspace',
   getParentRoute: () => AppSettingsRoute,
-} as any)
-const AppSourcesIndexRoute = AppSourcesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppSourcesRoute,
-} as any)
-const AppSourcesSourceIdRoute = AppSourcesSourceIdRouteImport.update({
-  id: '/$sourceId',
-  path: '/$sourceId',
-  getParentRoute: () => AppSourcesRoute,
-} as any)
-const AppSourcesNewRoute = AppSourcesNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppSourcesRoute,
 } as any)
 const AppWorkflowsIndexRoute = AppWorkflowsIndexRouteImport.update({
   id: '/',
@@ -237,9 +204,19 @@ const AppWorkflowsBlueprintsRoute = AppWorkflowsBlueprintsRouteImport.update({
   path: '/blueprints',
   getParentRoute: () => AppWorkflowsRoute,
 } as any)
+const AppWorkflowsMemoryRoute = AppWorkflowsMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => AppWorkflowsRoute,
+} as any)
 const AppWorkflowsNewRoute = AppWorkflowsNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AppWorkflowsRoute,
+} as any)
+const AppWorkflowsRunsRoute = AppWorkflowsRunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
   getParentRoute: () => AppWorkflowsRoute,
 } as any)
 const AppWorkflowsTemplatesRoute = AppWorkflowsTemplatesRouteImport.update({
@@ -247,6 +224,42 @@ const AppWorkflowsTemplatesRoute = AppWorkflowsTemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => AppWorkflowsRoute,
 } as any)
+const AppOrganizationIntegrationsIndexRoute =
+  AppOrganizationIntegrationsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppOrganizationIntegrationsRoute,
+  } as any)
+const AppOrganizationIntegrationsIntegrationIdRoute =
+  AppOrganizationIntegrationsIntegrationIdRouteImport.update({
+    id: '/$integrationId',
+    path: '/$integrationId',
+    getParentRoute: () => AppOrganizationIntegrationsRoute,
+  } as any)
+const AppOrganizationIntegrationsNewRoute =
+  AppOrganizationIntegrationsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AppOrganizationIntegrationsRoute,
+  } as any)
+const AppOrganizationSourcesIndexRoute =
+  AppOrganizationSourcesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppOrganizationSourcesRoute,
+  } as any)
+const AppOrganizationSourcesSourceIdRoute =
+  AppOrganizationSourcesSourceIdRouteImport.update({
+    id: '/$sourceId',
+    path: '/$sourceId',
+    getParentRoute: () => AppOrganizationSourcesRoute,
+  } as any)
+const AppOrganizationSourcesNewRoute =
+  AppOrganizationSourcesNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AppOrganizationSourcesRoute,
+  } as any)
 const AppWorkflowsBlueprintsBlueprintIdRoute =
   AppWorkflowsBlueprintsBlueprintIdRouteImport.update({
     id: '/$blueprintId',
@@ -261,48 +274,46 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
   '/waitlist': typeof WaitlistRoute
-  '/context': typeof AppContextRoute
-  '/integrations': typeof AppIntegrationsRouteWithChildren
-  '/investigations': typeof AppInvestigationsRoute
-  '/memory': typeof AppMemoryRoute
   '/organization': typeof AppOrganizationRouteWithChildren
   '/profile': typeof AppProfileRoute
   '/review': typeof AppReviewRoute
   '/settings': typeof AppSettingsRouteWithChildren
-  '/sources': typeof AppSourcesRouteWithChildren
   '/workflows': typeof AppWorkflowsRouteWithChildren
   '/onboarding/coordination': typeof OnboardingCoordinationRoute
   '/onboarding/memory': typeof OnboardingMemoryRoute
   '/onboarding/workflows': typeof OnboardingWorkflowsRoute
   '/onboarding/workspace': typeof OnboardingWorkspaceRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/integrations/$integrationId': typeof AppIntegrationsIntegrationIdRoute
-  '/integrations/new': typeof AppIntegrationsNewRoute
+  '/organization/access': typeof AppOrganizationAccessRoute
+  '/organization/integrations': typeof AppOrganizationIntegrationsRouteWithChildren
+  '/organization/investigations': typeof AppOrganizationInvestigationsRoute
+  '/organization/memory': typeof AppOrganizationMemoryRoute
   '/organization/permissions': typeof AppOrganizationPermissionsRoute
-  '/settings/access': typeof AppSettingsAccessRoute
+  '/organization/sources': typeof AppOrganizationSourcesRouteWithChildren
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/workspace': typeof AppSettingsWorkspaceRoute
-  '/sources/$sourceId': typeof AppSourcesSourceIdRoute
-  '/sources/new': typeof AppSourcesNewRoute
   '/workflows/$workflowId': typeof AppWorkflowsWorkflowIdRoute
   '/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
+  '/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/workflows/new': typeof AppWorkflowsNewRoute
+  '/workflows/runs': typeof AppWorkflowsRunsRoute
   '/workflows/templates': typeof AppWorkflowsTemplatesRoute
-  '/integrations/': typeof AppIntegrationsIndexRoute
   '/organization/': typeof AppOrganizationIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
-  '/sources/': typeof AppSourcesIndexRoute
   '/workflows/': typeof AppWorkflowsIndexRoute
+  '/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
+  '/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
+  '/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/workflows/blueprints/$blueprintId': typeof AppWorkflowsBlueprintsBlueprintIdRoute
+  '/organization/integrations/': typeof AppOrganizationIntegrationsIndexRoute
+  '/organization/sources/': typeof AppOrganizationSourcesIndexRoute
 }
 export interface FileRoutesByTo {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/sign-up': typeof SignUpRoute
   '/waitlist': typeof WaitlistRoute
-  '/context': typeof AppContextRoute
-  '/investigations': typeof AppInvestigationsRoute
-  '/memory': typeof AppMemoryRoute
   '/profile': typeof AppProfileRoute
   '/review': typeof AppReviewRoute
   '/onboarding/coordination': typeof OnboardingCoordinationRoute
@@ -311,24 +322,28 @@ export interface FileRoutesByTo {
   '/onboarding/workspace': typeof OnboardingWorkspaceRoute
   '/': typeof AppIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
-  '/integrations/$integrationId': typeof AppIntegrationsIntegrationIdRoute
-  '/integrations/new': typeof AppIntegrationsNewRoute
+  '/organization/access': typeof AppOrganizationAccessRoute
+  '/organization/investigations': typeof AppOrganizationInvestigationsRoute
+  '/organization/memory': typeof AppOrganizationMemoryRoute
   '/organization/permissions': typeof AppOrganizationPermissionsRoute
-  '/settings/access': typeof AppSettingsAccessRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/workspace': typeof AppSettingsWorkspaceRoute
-  '/sources/$sourceId': typeof AppSourcesSourceIdRoute
-  '/sources/new': typeof AppSourcesNewRoute
   '/workflows/$workflowId': typeof AppWorkflowsWorkflowIdRoute
   '/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
+  '/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/workflows/new': typeof AppWorkflowsNewRoute
+  '/workflows/runs': typeof AppWorkflowsRunsRoute
   '/workflows/templates': typeof AppWorkflowsTemplatesRoute
-  '/integrations': typeof AppIntegrationsIndexRoute
   '/organization': typeof AppOrganizationIndexRoute
   '/settings': typeof AppSettingsIndexRoute
-  '/sources': typeof AppSourcesIndexRoute
   '/workflows': typeof AppWorkflowsIndexRoute
+  '/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
+  '/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
+  '/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/workflows/blueprints/$blueprintId': typeof AppWorkflowsBlueprintsBlueprintIdRoute
+  '/organization/integrations': typeof AppOrganizationIntegrationsIndexRoute
+  '/organization/sources': typeof AppOrganizationSourcesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -338,15 +353,10 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/sign-up': typeof SignUpRoute
   '/waitlist': typeof WaitlistRoute
-  '/_app/context': typeof AppContextRoute
-  '/_app/integrations': typeof AppIntegrationsRouteWithChildren
-  '/_app/investigations': typeof AppInvestigationsRoute
-  '/_app/memory': typeof AppMemoryRoute
   '/_app/organization': typeof AppOrganizationRouteWithChildren
   '/_app/profile': typeof AppProfileRoute
   '/_app/review': typeof AppReviewRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
-  '/_app/sources': typeof AppSourcesRouteWithChildren
   '/_app/workflows': typeof AppWorkflowsRouteWithChildren
   '/onboarding/coordination': typeof OnboardingCoordinationRoute
   '/onboarding/memory': typeof OnboardingMemoryRoute
@@ -354,24 +364,30 @@ export interface FileRoutesById {
   '/onboarding/workspace': typeof OnboardingWorkspaceRoute
   '/_app/': typeof AppIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
-  '/_app/integrations/$integrationId': typeof AppIntegrationsIntegrationIdRoute
-  '/_app/integrations/new': typeof AppIntegrationsNewRoute
+  '/_app/organization/access': typeof AppOrganizationAccessRoute
+  '/_app/organization/integrations': typeof AppOrganizationIntegrationsRouteWithChildren
+  '/_app/organization/investigations': typeof AppOrganizationInvestigationsRoute
+  '/_app/organization/memory': typeof AppOrganizationMemoryRoute
   '/_app/organization/permissions': typeof AppOrganizationPermissionsRoute
-  '/_app/settings/access': typeof AppSettingsAccessRoute
+  '/_app/organization/sources': typeof AppOrganizationSourcesRouteWithChildren
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/workspace': typeof AppSettingsWorkspaceRoute
-  '/_app/sources/$sourceId': typeof AppSourcesSourceIdRoute
-  '/_app/sources/new': typeof AppSourcesNewRoute
   '/_app/workflows/$workflowId': typeof AppWorkflowsWorkflowIdRoute
   '/_app/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
+  '/_app/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/_app/workflows/new': typeof AppWorkflowsNewRoute
+  '/_app/workflows/runs': typeof AppWorkflowsRunsRoute
   '/_app/workflows/templates': typeof AppWorkflowsTemplatesRoute
-  '/_app/integrations/': typeof AppIntegrationsIndexRoute
   '/_app/organization/': typeof AppOrganizationIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
-  '/_app/sources/': typeof AppSourcesIndexRoute
   '/_app/workflows/': typeof AppWorkflowsIndexRoute
+  '/_app/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
+  '/_app/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/_app/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
+  '/_app/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/_app/workflows/blueprints/$blueprintId': typeof AppWorkflowsBlueprintsBlueprintIdRoute
+  '/_app/organization/integrations/': typeof AppOrganizationIntegrationsIndexRoute
+  '/_app/organization/sources/': typeof AppOrganizationSourcesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -382,48 +398,46 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/sign-up'
     | '/waitlist'
-    | '/context'
-    | '/integrations'
-    | '/investigations'
-    | '/memory'
     | '/organization'
     | '/profile'
     | '/review'
     | '/settings'
-    | '/sources'
     | '/workflows'
     | '/onboarding/coordination'
     | '/onboarding/memory'
     | '/onboarding/workflows'
     | '/onboarding/workspace'
     | '/onboarding/'
-    | '/integrations/$integrationId'
-    | '/integrations/new'
+    | '/organization/access'
+    | '/organization/integrations'
+    | '/organization/investigations'
+    | '/organization/memory'
     | '/organization/permissions'
-    | '/settings/access'
+    | '/organization/sources'
     | '/settings/notifications'
     | '/settings/workspace'
-    | '/sources/$sourceId'
-    | '/sources/new'
     | '/workflows/$workflowId'
     | '/workflows/blueprints'
+    | '/workflows/memory'
     | '/workflows/new'
+    | '/workflows/runs'
     | '/workflows/templates'
-    | '/integrations/'
     | '/organization/'
     | '/settings/'
-    | '/sources/'
     | '/workflows/'
+    | '/organization/integrations/$integrationId'
+    | '/organization/integrations/new'
+    | '/organization/sources/$sourceId'
+    | '/organization/sources/new'
     | '/workflows/blueprints/$blueprintId'
+    | '/organization/integrations/'
+    | '/organization/sources/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forbidden'
     | '/login'
     | '/sign-up'
     | '/waitlist'
-    | '/context'
-    | '/investigations'
-    | '/memory'
     | '/profile'
     | '/review'
     | '/onboarding/coordination'
@@ -432,24 +446,28 @@ export interface FileRouteTypes {
     | '/onboarding/workspace'
     | '/'
     | '/onboarding'
-    | '/integrations/$integrationId'
-    | '/integrations/new'
+    | '/organization/access'
+    | '/organization/investigations'
+    | '/organization/memory'
     | '/organization/permissions'
-    | '/settings/access'
     | '/settings/notifications'
     | '/settings/workspace'
-    | '/sources/$sourceId'
-    | '/sources/new'
     | '/workflows/$workflowId'
     | '/workflows/blueprints'
+    | '/workflows/memory'
     | '/workflows/new'
+    | '/workflows/runs'
     | '/workflows/templates'
-    | '/integrations'
     | '/organization'
     | '/settings'
-    | '/sources'
     | '/workflows'
+    | '/organization/integrations/$integrationId'
+    | '/organization/integrations/new'
+    | '/organization/sources/$sourceId'
+    | '/organization/sources/new'
     | '/workflows/blueprints/$blueprintId'
+    | '/organization/integrations'
+    | '/organization/sources'
   id:
     | '__root__'
     | '/_app'
@@ -458,15 +476,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/sign-up'
     | '/waitlist'
-    | '/_app/context'
-    | '/_app/integrations'
-    | '/_app/investigations'
-    | '/_app/memory'
     | '/_app/organization'
     | '/_app/profile'
     | '/_app/review'
     | '/_app/settings'
-    | '/_app/sources'
     | '/_app/workflows'
     | '/onboarding/coordination'
     | '/onboarding/memory'
@@ -474,24 +487,30 @@ export interface FileRouteTypes {
     | '/onboarding/workspace'
     | '/_app/'
     | '/onboarding/'
-    | '/_app/integrations/$integrationId'
-    | '/_app/integrations/new'
+    | '/_app/organization/access'
+    | '/_app/organization/integrations'
+    | '/_app/organization/investigations'
+    | '/_app/organization/memory'
     | '/_app/organization/permissions'
-    | '/_app/settings/access'
+    | '/_app/organization/sources'
     | '/_app/settings/notifications'
     | '/_app/settings/workspace'
-    | '/_app/sources/$sourceId'
-    | '/_app/sources/new'
     | '/_app/workflows/$workflowId'
     | '/_app/workflows/blueprints'
+    | '/_app/workflows/memory'
     | '/_app/workflows/new'
+    | '/_app/workflows/runs'
     | '/_app/workflows/templates'
-    | '/_app/integrations/'
     | '/_app/organization/'
     | '/_app/settings/'
-    | '/_app/sources/'
     | '/_app/workflows/'
+    | '/_app/organization/integrations/$integrationId'
+    | '/_app/organization/integrations/new'
+    | '/_app/organization/sources/$sourceId'
+    | '/_app/organization/sources/new'
     | '/_app/workflows/blueprints/$blueprintId'
+    | '/_app/organization/integrations/'
+    | '/_app/organization/sources/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -554,34 +573,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/context': {
-      id: '/_app/context'
-      path: '/context'
-      fullPath: '/context'
-      preLoaderRoute: typeof AppContextRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/integrations': {
-      id: '/_app/integrations'
-      path: '/integrations'
-      fullPath: '/integrations'
-      preLoaderRoute: typeof AppIntegrationsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/investigations': {
-      id: '/_app/investigations'
-      path: '/investigations'
-      fullPath: '/investigations'
-      preLoaderRoute: typeof AppInvestigationsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/memory': {
-      id: '/_app/memory'
-      path: '/memory'
-      fullPath: '/memory'
-      preLoaderRoute: typeof AppMemoryRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/organization': {
       id: '/_app/organization'
       path: '/organization'
@@ -608,13 +599,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/sources': {
-      id: '/_app/sources'
-      path: '/sources'
-      fullPath: '/sources'
-      preLoaderRoute: typeof AppSourcesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/workflows': {
@@ -659,32 +643,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingWorkspaceRouteImport
       parentRoute: typeof OnboardingRoute
     }
-    '/_app/integrations/': {
-      id: '/_app/integrations/'
-      path: '/'
-      fullPath: '/integrations/'
-      preLoaderRoute: typeof AppIntegrationsIndexRouteImport
-      parentRoute: typeof AppIntegrationsRoute
-    }
-    '/_app/integrations/$integrationId': {
-      id: '/_app/integrations/$integrationId'
-      path: '/$integrationId'
-      fullPath: '/integrations/$integrationId'
-      preLoaderRoute: typeof AppIntegrationsIntegrationIdRouteImport
-      parentRoute: typeof AppIntegrationsRoute
-    }
-    '/_app/integrations/new': {
-      id: '/_app/integrations/new'
-      path: '/new'
-      fullPath: '/integrations/new'
-      preLoaderRoute: typeof AppIntegrationsNewRouteImport
-      parentRoute: typeof AppIntegrationsRoute
-    }
     '/_app/organization/': {
       id: '/_app/organization/'
       path: '/'
       fullPath: '/organization/'
       preLoaderRoute: typeof AppOrganizationIndexRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
+    '/_app/organization/access': {
+      id: '/_app/organization/access'
+      path: '/access'
+      fullPath: '/organization/access'
+      preLoaderRoute: typeof AppOrganizationAccessRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
+    '/_app/organization/integrations': {
+      id: '/_app/organization/integrations'
+      path: '/integrations'
+      fullPath: '/organization/integrations'
+      preLoaderRoute: typeof AppOrganizationIntegrationsRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
+    '/_app/organization/investigations': {
+      id: '/_app/organization/investigations'
+      path: '/investigations'
+      fullPath: '/organization/investigations'
+      preLoaderRoute: typeof AppOrganizationInvestigationsRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
+    '/_app/organization/memory': {
+      id: '/_app/organization/memory'
+      path: '/memory'
+      fullPath: '/organization/memory'
+      preLoaderRoute: typeof AppOrganizationMemoryRouteImport
       parentRoute: typeof AppOrganizationRoute
     }
     '/_app/organization/permissions': {
@@ -694,18 +685,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrganizationPermissionsRouteImport
       parentRoute: typeof AppOrganizationRoute
     }
+    '/_app/organization/sources': {
+      id: '/_app/organization/sources'
+      path: '/sources'
+      fullPath: '/organization/sources'
+      preLoaderRoute: typeof AppOrganizationSourcesRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
     '/_app/settings/': {
       id: '/_app/settings/'
       path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AppSettingsIndexRouteImport
-      parentRoute: typeof AppSettingsRoute
-    }
-    '/_app/settings/access': {
-      id: '/_app/settings/access'
-      path: '/access'
-      fullPath: '/settings/access'
-      preLoaderRoute: typeof AppSettingsAccessRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/_app/settings/notifications': {
@@ -721,27 +712,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/workspace'
       preLoaderRoute: typeof AppSettingsWorkspaceRouteImport
       parentRoute: typeof AppSettingsRoute
-    }
-    '/_app/sources/': {
-      id: '/_app/sources/'
-      path: '/'
-      fullPath: '/sources/'
-      preLoaderRoute: typeof AppSourcesIndexRouteImport
-      parentRoute: typeof AppSourcesRoute
-    }
-    '/_app/sources/$sourceId': {
-      id: '/_app/sources/$sourceId'
-      path: '/$sourceId'
-      fullPath: '/sources/$sourceId'
-      preLoaderRoute: typeof AppSourcesSourceIdRouteImport
-      parentRoute: typeof AppSourcesRoute
-    }
-    '/_app/sources/new': {
-      id: '/_app/sources/new'
-      path: '/new'
-      fullPath: '/sources/new'
-      preLoaderRoute: typeof AppSourcesNewRouteImport
-      parentRoute: typeof AppSourcesRoute
     }
     '/_app/workflows/': {
       id: '/_app/workflows/'
@@ -764,11 +734,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWorkflowsBlueprintsRouteImport
       parentRoute: typeof AppWorkflowsRoute
     }
+    '/_app/workflows/memory': {
+      id: '/_app/workflows/memory'
+      path: '/memory'
+      fullPath: '/workflows/memory'
+      preLoaderRoute: typeof AppWorkflowsMemoryRouteImport
+      parentRoute: typeof AppWorkflowsRoute
+    }
     '/_app/workflows/new': {
       id: '/_app/workflows/new'
       path: '/new'
       fullPath: '/workflows/new'
       preLoaderRoute: typeof AppWorkflowsNewRouteImport
+      parentRoute: typeof AppWorkflowsRoute
+    }
+    '/_app/workflows/runs': {
+      id: '/_app/workflows/runs'
+      path: '/runs'
+      fullPath: '/workflows/runs'
+      preLoaderRoute: typeof AppWorkflowsRunsRouteImport
       parentRoute: typeof AppWorkflowsRoute
     }
     '/_app/workflows/templates': {
@@ -777,6 +761,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/workflows/templates'
       preLoaderRoute: typeof AppWorkflowsTemplatesRouteImport
       parentRoute: typeof AppWorkflowsRoute
+    }
+    '/_app/organization/integrations/': {
+      id: '/_app/organization/integrations/'
+      path: '/'
+      fullPath: '/organization/integrations/'
+      preLoaderRoute: typeof AppOrganizationIntegrationsIndexRouteImport
+      parentRoute: typeof AppOrganizationIntegrationsRoute
+    }
+    '/_app/organization/integrations/$integrationId': {
+      id: '/_app/organization/integrations/$integrationId'
+      path: '/$integrationId'
+      fullPath: '/organization/integrations/$integrationId'
+      preLoaderRoute: typeof AppOrganizationIntegrationsIntegrationIdRouteImport
+      parentRoute: typeof AppOrganizationIntegrationsRoute
+    }
+    '/_app/organization/integrations/new': {
+      id: '/_app/organization/integrations/new'
+      path: '/new'
+      fullPath: '/organization/integrations/new'
+      preLoaderRoute: typeof AppOrganizationIntegrationsNewRouteImport
+      parentRoute: typeof AppOrganizationIntegrationsRoute
+    }
+    '/_app/organization/sources/': {
+      id: '/_app/organization/sources/'
+      path: '/'
+      fullPath: '/organization/sources/'
+      preLoaderRoute: typeof AppOrganizationSourcesIndexRouteImport
+      parentRoute: typeof AppOrganizationSourcesRoute
+    }
+    '/_app/organization/sources/$sourceId': {
+      id: '/_app/organization/sources/$sourceId'
+      path: '/$sourceId'
+      fullPath: '/organization/sources/$sourceId'
+      preLoaderRoute: typeof AppOrganizationSourcesSourceIdRouteImport
+      parentRoute: typeof AppOrganizationSourcesRoute
+    }
+    '/_app/organization/sources/new': {
+      id: '/_app/organization/sources/new'
+      path: '/new'
+      fullPath: '/organization/sources/new'
+      preLoaderRoute: typeof AppOrganizationSourcesNewRouteImport
+      parentRoute: typeof AppOrganizationSourcesRoute
     }
     '/_app/workflows/blueprints/$blueprintId': {
       id: '/_app/workflows/blueprints/$blueprintId'
@@ -788,29 +814,62 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AppIntegrationsRouteChildren {
-  AppIntegrationsIntegrationIdRoute: typeof AppIntegrationsIntegrationIdRoute
-  AppIntegrationsNewRoute: typeof AppIntegrationsNewRoute
-  AppIntegrationsIndexRoute: typeof AppIntegrationsIndexRoute
+interface AppOrganizationIntegrationsRouteChildren {
+  AppOrganizationIntegrationsIntegrationIdRoute: typeof AppOrganizationIntegrationsIntegrationIdRoute
+  AppOrganizationIntegrationsNewRoute: typeof AppOrganizationIntegrationsNewRoute
+  AppOrganizationIntegrationsIndexRoute: typeof AppOrganizationIntegrationsIndexRoute
 }
 
-const AppIntegrationsRouteChildren: AppIntegrationsRouteChildren = {
-  AppIntegrationsIntegrationIdRoute: AppIntegrationsIntegrationIdRoute,
-  AppIntegrationsNewRoute: AppIntegrationsNewRoute,
-  AppIntegrationsIndexRoute: AppIntegrationsIndexRoute,
+const AppOrganizationIntegrationsRouteChildren: AppOrganizationIntegrationsRouteChildren =
+  {
+    AppOrganizationIntegrationsIntegrationIdRoute:
+      AppOrganizationIntegrationsIntegrationIdRoute,
+    AppOrganizationIntegrationsNewRoute: AppOrganizationIntegrationsNewRoute,
+    AppOrganizationIntegrationsIndexRoute:
+      AppOrganizationIntegrationsIndexRoute,
+  }
+
+const AppOrganizationIntegrationsRouteWithChildren =
+  AppOrganizationIntegrationsRoute._addFileChildren(
+    AppOrganizationIntegrationsRouteChildren,
+  )
+
+interface AppOrganizationSourcesRouteChildren {
+  AppOrganizationSourcesSourceIdRoute: typeof AppOrganizationSourcesSourceIdRoute
+  AppOrganizationSourcesNewRoute: typeof AppOrganizationSourcesNewRoute
+  AppOrganizationSourcesIndexRoute: typeof AppOrganizationSourcesIndexRoute
 }
 
-const AppIntegrationsRouteWithChildren = AppIntegrationsRoute._addFileChildren(
-  AppIntegrationsRouteChildren,
-)
+const AppOrganizationSourcesRouteChildren: AppOrganizationSourcesRouteChildren =
+  {
+    AppOrganizationSourcesSourceIdRoute: AppOrganizationSourcesSourceIdRoute,
+    AppOrganizationSourcesNewRoute: AppOrganizationSourcesNewRoute,
+    AppOrganizationSourcesIndexRoute: AppOrganizationSourcesIndexRoute,
+  }
+
+const AppOrganizationSourcesRouteWithChildren =
+  AppOrganizationSourcesRoute._addFileChildren(
+    AppOrganizationSourcesRouteChildren,
+  )
 
 interface AppOrganizationRouteChildren {
+  AppOrganizationAccessRoute: typeof AppOrganizationAccessRoute
+  AppOrganizationIntegrationsRoute: typeof AppOrganizationIntegrationsRouteWithChildren
+  AppOrganizationInvestigationsRoute: typeof AppOrganizationInvestigationsRoute
+  AppOrganizationMemoryRoute: typeof AppOrganizationMemoryRoute
   AppOrganizationPermissionsRoute: typeof AppOrganizationPermissionsRoute
+  AppOrganizationSourcesRoute: typeof AppOrganizationSourcesRouteWithChildren
   AppOrganizationIndexRoute: typeof AppOrganizationIndexRoute
 }
 
 const AppOrganizationRouteChildren: AppOrganizationRouteChildren = {
+  AppOrganizationAccessRoute: AppOrganizationAccessRoute,
+  AppOrganizationIntegrationsRoute:
+    AppOrganizationIntegrationsRouteWithChildren,
+  AppOrganizationInvestigationsRoute: AppOrganizationInvestigationsRoute,
+  AppOrganizationMemoryRoute: AppOrganizationMemoryRoute,
   AppOrganizationPermissionsRoute: AppOrganizationPermissionsRoute,
+  AppOrganizationSourcesRoute: AppOrganizationSourcesRouteWithChildren,
   AppOrganizationIndexRoute: AppOrganizationIndexRoute,
 }
 
@@ -819,14 +878,12 @@ const AppOrganizationRouteWithChildren = AppOrganizationRoute._addFileChildren(
 )
 
 interface AppSettingsRouteChildren {
-  AppSettingsAccessRoute: typeof AppSettingsAccessRoute
   AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsWorkspaceRoute: typeof AppSettingsWorkspaceRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
-  AppSettingsAccessRoute: AppSettingsAccessRoute,
   AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsWorkspaceRoute: AppSettingsWorkspaceRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
@@ -834,22 +891,6 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
 
 const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
   AppSettingsRouteChildren,
-)
-
-interface AppSourcesRouteChildren {
-  AppSourcesSourceIdRoute: typeof AppSourcesSourceIdRoute
-  AppSourcesNewRoute: typeof AppSourcesNewRoute
-  AppSourcesIndexRoute: typeof AppSourcesIndexRoute
-}
-
-const AppSourcesRouteChildren: AppSourcesRouteChildren = {
-  AppSourcesSourceIdRoute: AppSourcesSourceIdRoute,
-  AppSourcesNewRoute: AppSourcesNewRoute,
-  AppSourcesIndexRoute: AppSourcesIndexRoute,
-}
-
-const AppSourcesRouteWithChildren = AppSourcesRoute._addFileChildren(
-  AppSourcesRouteChildren,
 )
 
 interface AppWorkflowsBlueprintsRouteChildren {
@@ -870,7 +911,9 @@ const AppWorkflowsBlueprintsRouteWithChildren =
 interface AppWorkflowsRouteChildren {
   AppWorkflowsWorkflowIdRoute: typeof AppWorkflowsWorkflowIdRoute
   AppWorkflowsBlueprintsRoute: typeof AppWorkflowsBlueprintsRouteWithChildren
+  AppWorkflowsMemoryRoute: typeof AppWorkflowsMemoryRoute
   AppWorkflowsNewRoute: typeof AppWorkflowsNewRoute
+  AppWorkflowsRunsRoute: typeof AppWorkflowsRunsRoute
   AppWorkflowsTemplatesRoute: typeof AppWorkflowsTemplatesRoute
   AppWorkflowsIndexRoute: typeof AppWorkflowsIndexRoute
 }
@@ -878,7 +921,9 @@ interface AppWorkflowsRouteChildren {
 const AppWorkflowsRouteChildren: AppWorkflowsRouteChildren = {
   AppWorkflowsWorkflowIdRoute: AppWorkflowsWorkflowIdRoute,
   AppWorkflowsBlueprintsRoute: AppWorkflowsBlueprintsRouteWithChildren,
+  AppWorkflowsMemoryRoute: AppWorkflowsMemoryRoute,
   AppWorkflowsNewRoute: AppWorkflowsNewRoute,
+  AppWorkflowsRunsRoute: AppWorkflowsRunsRoute,
   AppWorkflowsTemplatesRoute: AppWorkflowsTemplatesRoute,
   AppWorkflowsIndexRoute: AppWorkflowsIndexRoute,
 }
@@ -888,29 +933,19 @@ const AppWorkflowsRouteWithChildren = AppWorkflowsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
-  AppContextRoute: typeof AppContextRoute
-  AppIntegrationsRoute: typeof AppIntegrationsRouteWithChildren
-  AppInvestigationsRoute: typeof AppInvestigationsRoute
-  AppMemoryRoute: typeof AppMemoryRoute
   AppOrganizationRoute: typeof AppOrganizationRouteWithChildren
   AppProfileRoute: typeof AppProfileRoute
   AppReviewRoute: typeof AppReviewRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
-  AppSourcesRoute: typeof AppSourcesRouteWithChildren
   AppWorkflowsRoute: typeof AppWorkflowsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppContextRoute: AppContextRoute,
-  AppIntegrationsRoute: AppIntegrationsRouteWithChildren,
-  AppInvestigationsRoute: AppInvestigationsRoute,
-  AppMemoryRoute: AppMemoryRoute,
   AppOrganizationRoute: AppOrganizationRouteWithChildren,
   AppProfileRoute: AppProfileRoute,
   AppReviewRoute: AppReviewRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
-  AppSourcesRoute: AppSourcesRouteWithChildren,
   AppWorkflowsRoute: AppWorkflowsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }

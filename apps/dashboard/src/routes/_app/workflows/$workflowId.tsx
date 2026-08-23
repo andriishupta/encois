@@ -98,7 +98,7 @@ function WorkflowDetailPage() {
   const traceRows = eventRows.filter((event) => Boolean(event.trace || event.agentRunId || event.evidence?.length || event.evidenceRef))
 
   if (workflow.isLoading) return <p className="text-sm text-muted-foreground">Loading workflow run…</p>
-  if (workflow.isError || !workflow.data) return <div className="flex flex-col gap-6"><PageHeader title="Workflow run unavailable" description="The run could not be loaded in the current organization scope." /><Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">{workflow.error?.message ?? 'Encois returned no workflow projection.'}</p></CardContent></Card></div>
+  if (workflow.isError || !workflow.data) return <div className="flex flex-col gap-6"><PageHeader title="Workflow run unavailable" description="The run could not be loaded in the current organization scope." /><Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">{workflow.error?.message ?? 'No workflow projection was returned.'}</p></CardContent></Card></div>
   const status = workflow.data.status
   const isRefreshing = workflow.isFetching || events.isFetching
 
@@ -197,7 +197,7 @@ function EvidenceRow({ event, reference, units }: { event: WorkflowEventProjecti
   const transformationVersion = typeof provenance.transformationVersion === 'string' ? provenance.transformationVersion : undefined
   const confidence = projection?.confidence ?? (typeof rawProvenance?.confidence === 'number' ? rawProvenance.confidence : undefined)
   const freshness = projection?.freshness
-  const visibilityScope = Array.isArray(provenance.visibilityScope) ? provenance.visibilityScope.map((id) => formatUnitPath(units, id) || id).join(', ') : 'Scope enforced by Encois'
+  const visibilityScope = Array.isArray(provenance.visibilityScope) ? provenance.visibilityScope.map((id) => formatUnitPath(units, id) || id).join(', ') : 'Scope enforced by current access policy'
   const freshnessLabel = freshness ? `${freshness.status}${freshness.expiresAt ? ` · until ${formatDate(freshness.expiresAt)}` : ''}` : 'Not reported'
   return <div className="rounded-lg border p-3 text-sm"><div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4"><div className="min-w-0"><p className="break-all font-mono text-xs">{reference}</p><p className="mt-1 text-xs text-muted-foreground">Produced by {event.activityName ?? event.eventType} · {formatDate(event.occurredAt)}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${confidence === undefined ? 'bg-muted text-muted-foreground' : 'bg-secondary'}`}>Confidence {formatConfidence(confidence)}</span></div><dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2"><div><dt className="text-muted-foreground">Source</dt><dd className="font-medium">{source}</dd></div><div><dt className="text-muted-foreground">Source record</dt><dd className="font-mono">{sourceRecordId ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground">Observed</dt><dd>{formatDate(observedAt)}</dd></div><div><dt className="text-muted-foreground">Ingested</dt><dd>{formatDate(ingestedAt)}</dd></div><div><dt className="text-muted-foreground">Transformation</dt><dd>{transformationVersion ?? 'Not reported'}</dd></div><div><dt className="text-muted-foreground"><ProductTerm term="freshness" /></dt><dd>{freshnessLabel}</dd></div><div><dt className="text-muted-foreground">Scope</dt><dd>{visibilityScope}</dd></div></dl></div>
 }

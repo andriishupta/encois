@@ -494,7 +494,7 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
   try {
     response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
   } catch {
-    throw createApiError(0, 'Encois could not be reached.', 'API_UNAVAILABLE')
+    throw createApiError(0, 'The workspace could not be reached.', 'API_UNAVAILABLE')
   }
 
   const body: unknown = await response.json().catch(() => null)

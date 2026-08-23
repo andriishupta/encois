@@ -11,13 +11,11 @@ COPY apps/api-gateway apps/api-gateway
 COPY packages/contracts packages/contracts
 COPY packages/persistence packages/persistence
 RUN pnpm --filter @encois/api-gateway... build
-RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out
-RUN cp -R apps/api-gateway/dist /out/dist
-
-FROM build AS local-seed-build
-
+RUN cp -R apps/api-gateway/dist /server-dist
 RUN pnpm --filter @encois/api-gateway build:scripts
-RUN cp -R apps/api-gateway/dist/scripts /out/dist/scripts
+RUN cp -R apps/api-gateway/dist/scripts /local-seed-scripts
+RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out
+RUN rm -rf /out/dist && cp -R /server-dist /out/dist
 
 FROM node:22-bookworm-slim AS runtime
 
@@ -34,7 +32,7 @@ EXPOSE 8080
 
 FROM runtime AS local-seed
 
-COPY --from=local-seed-build /out/dist/scripts /app/dist/scripts
+COPY --from=build /local-seed-scripts /app/dist/scripts
 CMD ["node", "dist/scripts/seed-local.js"]
 
 FROM runtime AS production

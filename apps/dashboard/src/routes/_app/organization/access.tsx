@@ -15,9 +15,9 @@ import { usePermissions } from '@/lib/permissions'
 import { queryKeys } from '@/lib/query-keys'
 import { Permission } from '@encois/contracts'
 
-export const Route = createFileRoute('/_app/settings/access')({
+export const Route = createFileRoute('/_app/organization/access')({
   beforeLoad: () => {
-    if (!hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+    if (!hasPermission(getAuthSession(), Permission.OrganizationRead)) throw redirect({ to: '/forbidden' })
   },
   component: AccessSettingsPage,
 })
@@ -72,7 +72,7 @@ function AccessSettingsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Access" description="Live organization membership and information boundaries." actions={can(Permission.OrganizationManage) ? <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><LockKeyhole data-icon="inline-start" />Open permission board</Link></Button> : null} />
+      <PageHeader title="Organization access" description="Live organization membership and information boundaries." actions={can(Permission.OrganizationManage) ? <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><LockKeyhole data-icon="inline-start" />Open permission board</Link></Button> : null} />
 
       {error ? <div role="alert" className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"><CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Organization access could not be loaded: {error}</span></div> : null}
       {isLoading ? <p className="text-sm text-muted-foreground">Loading live access state…</p> : null}

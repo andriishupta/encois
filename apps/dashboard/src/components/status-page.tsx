@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getAuthIdentity, getAuthSession } from '@/lib/auth'
+import { getPublicWorkspaceTitle } from '@/lib/branding'
 
 type StatusCode = 403 | 404 | 500
 
@@ -23,7 +24,7 @@ const statusContent: Record<StatusCode, { icon: typeof Home; label: string; titl
     icon: ServerCrash,
     label: 'Server error',
     title: 'Something went wrong',
-    description: 'Encois could not complete this request. Please return to a safe starting point and try again later.',
+    description: 'The workspace could not complete this request. Please return to a safe starting point and try again later.',
   },
 }
 
@@ -40,7 +41,7 @@ export function StatusPage({ code }: { code: StatusCode }) {
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-xl border bg-background px-4 py-3 shadow-sm sm:px-5">
         <Link to="/" className="flex items-center gap-2 font-semibold">
           <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"><Activity className="size-4" aria-hidden="true" /></span>
-          Encois
+          {getPublicWorkspaceTitle()}
         </Link>
         {authenticated ? <Link to="/profile" className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><UserRound className="size-4 shrink-0" aria-hidden="true" /><span className="max-w-48 truncate">{identity.displayName ?? identity.email ?? 'Account'}</span></Link> : <Button variant="outline" size="sm" asChild><Link to="/login"><LogIn data-icon="inline-start" />Sign in</Link></Button>}
       </header>
