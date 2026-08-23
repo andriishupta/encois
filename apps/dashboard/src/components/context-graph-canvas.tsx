@@ -33,7 +33,7 @@ export function ContextGraphCanvas({ graph, onSelect }: { graph: GraphInspection
     <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.25 }} nodesDraggable nodesConnectable={false} deleteKeyCode={null} proOptions={{ hideAttribution: true }} minZoom={0.25} maxZoom={1.3}>
       <Background color="var(--border)" gap={22} size={1} />
       <Controls showInteractive={false} />
-      <InteractiveMiniMap nodeColor="var(--muted-foreground)" />
+      <InteractiveMiniMap />
       <Panel position="top-left"><div className="rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur"><span className="font-medium">Context projection</span><span className="ml-2 text-muted-foreground">{graph.nodes.length} nodes · {graph.edges.length} edges</span></div></Panel>
     </ReactFlow>
   </div>

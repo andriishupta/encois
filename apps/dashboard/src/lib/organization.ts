@@ -80,6 +80,14 @@ export function formatUnitPath(units: readonly OrganizationUnit[], unitId: strin
   return getUnitPath(units, unitId).map((unit) => unit.name).join(' / ')
 }
 
+export function formatUnitParentPath(units: readonly OrganizationUnit[], unitId: string): string {
+  return getUnitPath(units, unitId)
+    .filter((unit) => unit.id !== unitId && unit.type !== 'organization')
+    .reverse()
+    .map((unit) => unit.name)
+    .join(' / ')
+}
+
 export function getEffectiveUnitIds(units: readonly OrganizationUnit[], permissions: readonly UnitPermission[], memberId: string): string[] {
   const visible = new Set<string>()
 

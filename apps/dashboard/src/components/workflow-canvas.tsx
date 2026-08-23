@@ -15,7 +15,7 @@ import '@xyflow/react/dist/style.css'
 import { CircleDashed, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { WorkflowEventProjection, WorkflowExecutionStatus } from '@encois/contracts'
-import { InteractiveMiniMap } from '@/components/interactive-minimap'
+import { InteractiveMiniMap, miniMapColors } from '@/components/interactive-minimap'
 import { WorkflowStatusIndicator } from '@/components/workflow-status'
 import { getWorkflowCanvasStages, type WorkflowNodeStatus } from '@/lib/workflow-canvas-model'
 
@@ -77,7 +77,16 @@ function WorkflowStepNode({ data }: NodeProps<WorkflowNode>) {
 }
 
 const nodeIcon = { blueprint: GitBranch, evidence: CircleDashed, provider: GitBranch, synthesis: Sparkles }
-const statusColors: Record<WorkflowNodeStatus, string> = { completed: 'var(--muted-foreground)', running: 'var(--primary)', pending: 'var(--muted-foreground)', waiting: 'var(--foreground)', paused: 'var(--foreground)', partial: 'var(--foreground)', failed: 'var(--destructive)', cancelled: 'var(--muted-foreground)' }
+const statusColors: Record<WorkflowNodeStatus, string> = {
+  completed: miniMapColors.default,
+  running: miniMapColors.running,
+  pending: miniMapColors.pending,
+  waiting: miniMapColors.waiting,
+  paused: miniMapColors.waiting,
+  partial: miniMapColors.partial,
+  failed: miniMapColors.failed,
+  cancelled: miniMapColors.pending,
+}
 
 export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runStatus }: { refreshCount: number; lastPolledAt: Date | null; events?: readonly WorkflowEventProjection[]; runStatus?: WorkflowExecutionStatus }) {
   const [isCompact, setIsCompact] = useState(false)

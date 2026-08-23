@@ -29,7 +29,7 @@ import {
 import { cn } from '@/lib/utils'
 import { authSessionEventName, clearAuthSession, getAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { flattenUnitOptions, formatUnitPath, getOrganizationUnit } from '@/lib/organization'
+import { flattenUnitOptions, formatUnitParentPath, getOrganizationUnit } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 import { usePermissions } from '@/lib/permissions'
 import { getAccountSummary } from '@/lib/account'
@@ -81,12 +81,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const { organizationName, units, members, currentUnitId, setCurrentUnitId } = useOrganization()
   const { can } = usePermissions()
-  const branding = getBranding(organizationName)
+  const branding = getBranding(organizationName ?? undefined)
   const workspaceName = branding.workspaceName
   const account = getAccountSummary(members)
   const organizationUnitOptions = flattenUnitOptions(units)
   const currentUnit = getOrganizationUnit(units, currentUnitId)?.canView ? getOrganizationUnit(units, currentUnitId) : units.find((unit) => unit.canView)
-  const currentScopeLabel = currentUnit ? currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id) : 'Organization scope unavailable'
+  const currentUnitLabel = currentUnit?.name ?? workspaceName
+  const currentUnitPath = currentUnit ? formatUnitParentPath(units, currentUnit.id) || 'All organization units' : 'Organization scope unavailable'
 
   useEffect(() => {
     const handleSessionChange = () => {
@@ -122,14 +123,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside className={cn('fixed inset-y-0 left-0 z-50 flex h-svh max-h-svh w-72 flex-col overflow-hidden border-r bg-background transition-transform duration-200 lg:fixed lg:z-50 lg:w-64 lg:shrink-0 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0')}>
         <div className="flex h-16 items-center justify-between border-b px-5">
-          <Link to="/" className="min-w-0 truncate font-semibold" onClick={closeNavigation}>{branding.productName}</Link>
+          <Link to="/" aria-label={`${branding.productName} | ${workspaceName}`} className="flex min-w-0 items-center gap-2 truncate" onClick={closeNavigation}>
+            <span className="shrink-0 font-semibold">{branding.productName}</span>
+            <span className="text-muted-foreground" aria-hidden="true">|</span>
+            <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">{workspaceName}</span>
+          </Link>
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={closeNavigation} aria-label="Close navigation"><X /></Button>
         </div>
 
         <div className="relative border-b px-3 py-3">
           <button type="button" aria-expanded={organizationOpen} onClick={() => setOrganizationOpen((value) => !value)} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent">
             <span className="flex size-8 items-center justify-center rounded-md border bg-background"><CircleGauge className="size-4 text-muted-foreground" aria-hidden="true" /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate font-medium">{workspaceName}</span><span className="block truncate text-xs text-muted-foreground">{currentScopeLabel}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{currentUnitLabel}</span><span className="block truncate text-xs text-muted-foreground">{currentUnitPath}</span></span>
             <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
           </button>
           {organizationOpen ? <div className="absolute inset-x-3 top-[calc(100%-0.5rem)] z-10 rounded-lg border bg-background p-1 shadow-lg">
