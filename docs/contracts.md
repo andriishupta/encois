@@ -81,6 +81,22 @@ revision without `start` does not start an execution. Pending starts remain in
 Coordinator state until the idempotent start Activity succeeds. Scheduler
 invocation and hosted delivery remain deployment work.
 
+The organization projection includes the tenant-scoped `organization_onboarding`
+record. `PATCH /api/v1/organization/onboarding` is limited to
+`onboarding:manage` and persists the selected coordination mode and workflow
+catalog references. The Gateway accepts only published Template keys or current
+approved organization Blueprints and rejects unknown selections before changing
+state. `POST /api/v1/organization/onboarding/start` starts the stable
+organization Coordinator Workflow through the existing Gateway WorkflowClient,
+persists the Coordinator run projection, and enqueues a
+`reconcile-requested` `coordinator-event.v1` in the durable outbox. The browser
+never supplies a Coordinator or Workflow runtime ID. The selected coordination
+mode and catalog references are included in the Coordinator start contract and
+persisted run business input. The persisted Coordinator
+run is a control-plane record, not a user Run: ordinary workflow list/detail,
+event, and control routes exclude it, while onboarding and future admin
+surfaces address it through their own permission boundary.
+
 ## Repository layout
 
 ```text
@@ -146,9 +162,12 @@ application contract will receive a new version only after a stable release
 requires compatibility.
 
 Tool, graph, memory, and artifact results carry optional freshness, provenance,
-retention, or redaction metadata. This keeps the data-quality and privacy
-boundaries explicit even while Graph, Memory Bank, and Cloud Storage remain
-deferred adapters.
+retention, or redaction metadata. Generic Blueprint step results additionally
+carry optional bounded confidence and redacted runtime trace attributes
+(duration, attempt, outcome, provider, model, and budget when known). This keeps
+the data-quality, observability, and privacy boundaries explicit. Graph and
+Memory Bank have typed local/GCP adapter boundaries; Cloud Storage and hosted
+provider wiring still require deployment configuration and smoke verification.
 
 ## Generic workflow model
 
@@ -444,11 +463,15 @@ LinkedIn URL. It stores only that bounded contact context and never creates an
 account or grants access. Work-email validation is a heuristic; mailbox
 ownership verification is a later step.
 
-The Dashboard currently consumes workflow list/detail/start and integration
-list/update. Overview counters are derived from those projections. Workflow
-events, activity/evidence history, provider freshness, organization hierarchy,
-agent activity, graph paths, and query endpoints remain target contracts and
-must not be represented as static API data in the UI.
+The Dashboard currently consumes authenticated workflow list/start/detail/events,
+integration/source, overview/review, organization-permission, graph, memory,
+and investigation projections. Activity/evidence history and runtime trace
+attributes are projected from persisted events or terminal Blueprint results;
+missing provider/model/budget metadata must remain explicitly unavailable rather
+than being synthesized in the UI. Common graph filters are pushed down at the
+Agent Gateway boundary; visibility-array indexing, multi-hop graph paths,
+question/query execution, and distributed live event streaming remain target
+extensions.
 
 For the generic workflow, the start request may carry an inline validated
 Blueprint or reference an approved registry snapshot:

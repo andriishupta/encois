@@ -91,6 +91,8 @@ type ToolInvocationResponse struct {
 	Status          string                      `json:"status"`
 	Data            map[string]any              `json:"data,omitempty"`
 	EvidenceRefs    []string                    `json:"evidenceRefs,omitempty"`
+	Provenance      *contracts.DataProvenance   `json:"provenance,omitempty"`
+	Confidence      *float64                    `json:"confidence,omitempty"`
 	Freshness       []contracts.SourceFreshness `json:"freshness,omitempty"`
 }
 

@@ -1,7 +1,9 @@
 import {
 	boolean,
-	foreignKey,
+  foreignKey,
+  index,
   jsonb,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -70,6 +72,33 @@ export const workflowChangePlans = pgTable(
   (table) => [
     uniqueIndex("workflow_change_plans_organization_plan_idx").on(table.organizationId, table.planId),
     uniqueIndex("workflow_change_plans_id_organization_idx").on(table.id, table.organizationId),
+  ],
+);
+
+/** Distinct planner/schema/prompt fingerprints observed on persisted plans. Raw prompts are never stored here. */
+export const workflowPlannerVersions = pgTable(
+  "workflow_planner_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    plannerName: text("planner_name"),
+    plannerVersion: text("planner_version"),
+    sourceSchemaVersion: text("source_schema_version"),
+    promptVersion: text("prompt_version"),
+    promptHash: text("prompt_hash"),
+    versionHash: text("version_hash").notNull(),
+    firstPlanId: text("first_plan_id").notNull(),
+    lastPlanId: text("last_plan_id").notNull(),
+    usageCount: integer("usage_count").notNull().default(1),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("workflow_planner_versions_org_hash_idx").on(table.organizationId, table.versionHash),
+    index("workflow_planner_versions_org_last_seen_idx").on(table.organizationId, table.lastSeenAt),
+    uniqueIndex("workflow_planner_versions_id_organization_idx").on(table.id, table.organizationId),
   ],
 );
 

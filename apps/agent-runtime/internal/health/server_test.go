@@ -72,4 +72,35 @@ func TestMemoryQueryRequiresServiceAuthAndIsReadOnly(t *testing.T) {
 	if validResponse.Code != http.StatusOK {
 		t.Fatalf("valid status = %d, want %d", validResponse.Code, http.StatusOK)
 	}
+
+	mutation := payload
+	mutation.Operation = "delete"
+	mutation.TargetMemoryID = "fixture-memory-1"
+	mutation.Query = ""
+	mutationEncoded, _ := json.Marshal(mutation)
+	mutationRequest := httptest.NewRequest(http.MethodPost, "/v1/memory/mutate", bytes.NewReader(mutationEncoded))
+	mutationRequest.Header.Set("X-Encois-Service-Token", "runtime-token")
+	mutationResponse := httptest.NewRecorder()
+	handler.ServeHTTP(mutationResponse, mutationRequest)
+	if mutationResponse.Code != http.StatusOK {
+		t.Fatalf("mutation status = %d, want %d", mutationResponse.Code, http.StatusOK)
+	}
+
+	addition := payload
+	addition.Operation = "distill"
+	addition.Query = ""
+	addition.TargetMemoryID = ""
+	addition.Distillation = &memory.Distillation{
+		Summary:      "An approved operator note.",
+		EvidenceRefs: []string{"source:source-1:revision-1"},
+		ObservedAt:   "2026-08-20T16:00:00Z",
+	}
+	additionEncoded, _ := json.Marshal(addition)
+	additionRequest := httptest.NewRequest(http.MethodPost, "/v1/memory/mutate", bytes.NewReader(additionEncoded))
+	additionRequest.Header.Set("X-Encois-Service-Token", "runtime-token")
+	additionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(additionResponse, additionRequest)
+	if additionResponse.Code != http.StatusOK {
+		t.Fatalf("addition status = %d, want %d", additionResponse.Code, http.StatusOK)
+	}
 }

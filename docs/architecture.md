@@ -530,7 +530,7 @@ read/write boundary backed by selectable mock/GCP adapters. Agent-specific Memor
 separate typed Runtime Activity boundary, not a public Gateway data source.
 Knowledge Source registration remains in the Gateway API control plane; the
 Agent Gateway only brokers source acquisition, artifact access, provider
-tools, and future Graph projection under the Runtime execution context.
+tools, and scoped Graph projection under the Runtime execution context.
 Catalog
 entries include a version, input/output schemas, behavior annotations,
 availability, approval metadata, and required scope fields; invocation checks

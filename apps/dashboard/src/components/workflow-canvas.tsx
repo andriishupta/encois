@@ -13,39 +13,23 @@ import {
 import '@xyflow/react/dist/style.css'
 import { CircleDashed, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { WorkflowEventProjection } from '@encois/contracts'
+import type { WorkflowEventProjection, WorkflowExecutionStatus } from '@encois/contracts'
 import { InteractiveMiniMap } from '@/components/interactive-minimap'
+import { getWorkflowCanvasStages, type WorkflowNodeStatus } from '@/lib/workflow-canvas-model'
 
 type WorkflowNodeData = {
   label: string
   description: string
-  status: 'completed' | 'running' | 'pending'
+  status: WorkflowNodeStatus
   icon: 'blueprint' | 'evidence' | 'provider' | 'synthesis'
 }
 
 type WorkflowNode = Node<WorkflowNodeData, 'workflow'>
 
-const nodeTypes = { workflow: WorkflowStepNode }
+const terminalRunStatuses: ReadonlySet<WorkflowExecutionStatus> = new Set(['completed', 'failed', 'partial', 'cancelled'])
 
-function normalizeStatus(value: string | undefined, fallback: WorkflowNodeData['status']): WorkflowNodeData['status'] {
-  const status = value?.toLowerCase()
-  if (status?.includes('running') || status?.includes('started')) return 'running'
-  if (status?.includes('complete') || status?.includes('success') || status?.includes('succeed')) return 'completed'
-  return fallback
-}
-
-function graphFromEvents(events: readonly WorkflowEventProjection[]): { nodes: WorkflowNode[]; edges: Edge[] } {
-  const activityEvents = events.filter((event) => event.activityName)
-  const uniqueActivities = [...new Map(activityEvents.map((event) => [event.activityName as string, event])).values()]
-  const stages = uniqueActivities.length > 0
-    ? uniqueActivities.map((event, index) => ({
-        id: `activity-${index}`,
-        label: event.activityName as string,
-        description: typeof event.metadata.provider === 'string' ? event.metadata.provider : 'Activity event',
-        status: normalizeStatus(event.status, index === uniqueActivities.length - 1 ? 'running' : 'completed'),
-        icon: index === uniqueActivities.length - 1 ? 'synthesis' as const : 'evidence' as const,
-      }))
-    : [{ id: 'activity-0', label: 'Awaiting activity data', description: 'The run has not emitted step events yet', status: 'pending' as const, icon: 'evidence' as const }]
+function graphFromEvents(events: readonly WorkflowEventProjection[], runStatus?: WorkflowExecutionStatus): { nodes: WorkflowNode[]; edges: Edge[] } {
+  const stages = getWorkflowCanvasStages(events, runStatus)
 
   const nodes: WorkflowNode[] = [
     {
@@ -92,11 +76,14 @@ function WorkflowStepNode({ data }: NodeProps<WorkflowNode>) {
 }
 
 const nodeIcon = { blueprint: GitBranch, evidence: CircleDashed, provider: GitBranch, synthesis: Sparkles }
-const statusLabels = { completed: 'Completed', running: 'Running now', pending: 'Pending' }
+const statusLabels: Record<WorkflowNodeStatus, string> = { completed: 'Completed', running: 'Running now', pending: 'Pending', waiting: 'Waiting for approval', paused: 'Paused', partial: 'Partial', failed: 'Failed', cancelled: 'Cancelled' }
+const statusColors: Record<WorkflowNodeStatus, string> = { completed: 'var(--muted-foreground)', running: 'var(--primary)', pending: 'var(--muted-foreground)', waiting: 'var(--foreground)', paused: 'var(--foreground)', partial: 'var(--foreground)', failed: 'var(--destructive)', cancelled: 'var(--muted-foreground)' }
 
-export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [] }: { refreshCount: number; lastPolledAt: Date | null; events?: readonly WorkflowEventProjection[] }) {
+export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runStatus }: { refreshCount: number; lastPolledAt: Date | null; events?: readonly WorkflowEventProjection[]; runStatus?: WorkflowExecutionStatus }) {
   const [isCompact, setIsCompact] = useState(false)
-  const graph = useMemo(() => graphFromEvents(events), [events])
+  const graph = useMemo(() => graphFromEvents(events, runStatus), [events, runStatus])
+  const nodeTypes = useMemo(() => ({ workflow: WorkflowStepNode }), [])
+  const isLive = !runStatus || !terminalRunStatuses.has(runStatus)
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 640px)')
@@ -129,11 +116,11 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [] }: { re
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
-        <InteractiveMiniMap nodeColor={(node) => (node.data as WorkflowNodeData).status === 'running' ? 'var(--primary)' : 'var(--muted-foreground)'} />
+        <InteractiveMiniMap nodeColor={(node) => statusColors[(node.data as WorkflowNodeData).status]} />
         <Panel position="top-left">
           <div className="flex flex-col gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
-            <div className="flex items-center gap-2"><span className="workflow-live-dot" aria-hidden="true" /><span className="font-medium">Live run topology</span><span className="text-muted-foreground">{lastPolledAt ? `Polled ${lastPolledAt.toLocaleTimeString()}` : 'Waiting for status'}</span></div>
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground"><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-pending" />Pending</span></div>
+            <div className="flex items-center gap-2"><span className={isLive ? 'workflow-live-dot' : 'workflow-status-dot'} aria-hidden="true" /><span className="font-medium">{isLive ? 'Live run topology' : 'Run topology'}</span><span className="text-muted-foreground">{lastPolledAt ? `Polled ${lastPolledAt.toLocaleTimeString()}` : 'Waiting for status'}</span></div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-running" />Running</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-waiting" />Waiting</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-failed" />Failed</span><span className="flex items-center gap-1.5"><span className="workflow-legend-dot workflow-legend-pending" />Pending</span></div>
           </div>
         </Panel>
       </ReactFlow>

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, Database, Network, Save, ShieldCheck, Trash2 } from 'lucide-react'
-import { KnowledgeSourceStatus, WorkflowExecutionStatus, type GraphInspectionParams, type GraphInspectorQueryName, type GraphNode, type KnowledgeSource, type WorkflowExecutionProjection } from '@encois/contracts'
+import { CircleAlert, Database, Network, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import { KnowledgeSourceStatus, WorkflowExecutionStatus, type ExecutionScope, type GraphInspectionParams, type GraphInspectorQueryName, type GraphNode, type KnowledgeSource, type SavedInvestigation, type WorkflowExecutionProjection } from '@encois/contracts'
 import { ContextGraphCanvas } from '@/components/context-graph-canvas'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
@@ -16,6 +16,9 @@ import { Permission } from '@encois/contracts'
 import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/context')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    savedId: typeof search.savedId === 'string' ? search.savedId : undefined,
+  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.ContextRead)) throw redirect({ to: '/forbidden' })
   },
@@ -31,16 +34,18 @@ const queryOptions: readonly { value: GraphInspectorQueryName; label: string; de
 
 function ContextGraphPage() {
   const { units } = useOrganization()
+  const { savedId } = Route.useSearch()
   const queryClient = useQueryClient()
   const canViewSources = useCan(Permission.KnowledgeRead)
   const canViewWorkflows = useCan(Permission.WorkflowsRead)
   const [query, setQuery] = useState<GraphInspectorQueryName>('all_context')
   const [scope, setScope] = useState('all')
+  const [savedScope, setSavedScope] = useState<ExecutionScope | undefined>()
   const [projectId, setProjectId] = useState('')
   const [nodeType, setNodeType] = useState('')
   const [relationship, setRelationship] = useState('')
   const [selected, setSelected] = useState<GraphNode | null>(null)
-  const selectedScope = scope === 'all' ? undefined : { ids: [scope] }
+  const selectedScope = scope === 'all' ? undefined : scope === 'saved' ? savedScope : { ids: [scope] }
   const graphParams: GraphInspectionParams = {
     ...(query === 'project.related_entities' && projectId.trim() ? { projectId: projectId.trim() } : {}),
     ...(nodeType.trim() ? { nodeType: nodeType.trim() } : {}),
@@ -59,10 +64,41 @@ function ContextGraphPage() {
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
   const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows })
   const selectedQuery = useMemo(() => queryOptions.find((option) => option.value === query), [query])
+  const loadSavedInvestigation = useCallback((item: SavedInvestigation) => {
+    if (item.kind !== 'graph') return
+    const nextQuery = queryOptions.some((option) => option.value === item.query) ? item.query as GraphInspectorQueryName : 'all_context'
+    const stringParam = (key: string) => typeof item.params[key] === 'string' ? item.params[key] as string : ''
+    setQuery(nextQuery)
+    setProjectId(nextQuery === 'project.related_entities' ? stringParam('projectId') : '')
+    setNodeType(stringParam('nodeType'))
+    setRelationship(stringParam('relationship'))
+    setSavedScope(item.scope)
+    setScope(item.scope.ids.length === 1 && units.some((unit) => unit.id === item.scope.ids[0]) ? item.scope.ids[0] : 'saved')
+    setSelected(null)
+  }, [units])
+  const [loadedSavedId, setLoadedSavedId] = useState<string>()
+  useEffect(() => {
+    if (!savedId || loadedSavedId === savedId || !saved.data) return
+    const item = saved.data.find((candidate) => candidate.id === savedId)
+    if (item) loadSavedInvestigation(item)
+    setLoadedSavedId(savedId)
+  }, [loadSavedInvestigation, loadedSavedId, saved.data, savedId])
 
   return <div className="flex flex-col gap-8">
     <PageHeader title="Project context" description="Inspect the scoped relationships and evidence that power investigations. This surface is read-only and keeps provenance visible." actions={<span className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground"><ShieldCheck className="size-3.5" />Restricted surface</span>} />
-    <ContextReadiness sources={sources.data} workflows={workflows.data} graph={graph.data} canViewSources={canViewSources} canViewWorkflows={canViewWorkflows} unavailable={sources.isError || workflows.isError || graph.isError} loading={sources.isLoading || workflows.isLoading || graph.isLoading} />
+    <ContextReadiness
+      sources={sources.data}
+      workflows={workflows.data}
+      graph={graph.data}
+      canViewSources={canViewSources}
+      canViewWorkflows={canViewWorkflows}
+      sourceUnavailable={sources.isError}
+      workflowUnavailable={workflows.isError}
+      graphUnavailable={graph.isError}
+      sourceLoading={sources.isLoading}
+      workflowLoading={workflows.isLoading}
+      graphLoading={graph.isLoading}
+    />
     <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm"><Database className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><p className="text-muted-foreground"><span className="font-medium text-foreground">Data source boundary.</span> Queries are allowlisted by Encois and scoped to the selected organization unit. Provider credentials never reach the browser.</p></div>
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <Card className="min-w-0">
@@ -70,9 +106,9 @@ function ContextGraphPage() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-end">
             <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Query<select value={query} onChange={(event) => { setQuery(event.target.value as GraphInspectorQueryName); setSelected(null) }} className="h-9 rounded-md border bg-background px-3 text-sm font-normal"><option value="all_context">All context</option><option value="release.blockers">Release blockers</option><option value="source.facts">Source facts</option><option value="project.related_entities">Project neighborhood</option></select></label>
-            <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Scope<select value={scope} onChange={(event) => { setScope(event.target.value); setSelected(null) }} className="h-9 rounded-md border bg-background px-3 text-sm font-normal"><option value="all">All available units</option>{units.filter((unit) => unit.id !== 'organization').map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
+            <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Scope<select value={scope} onChange={(event) => { const value = event.target.value; setScope(value); if (value !== 'saved') setSavedScope(undefined); setSelected(null) }} className="h-9 rounded-md border bg-background px-3 text-sm font-normal"><option value="all">All available units</option>{scope === 'saved' && savedScope ? <option value="saved">Saved scope ({savedScope.ids.length} units)</option> : null}{units.filter((unit) => unit.id !== 'organization').map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
             {query === 'project.related_entities' ? <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Project key<input value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="Project id" maxLength={160} className="h-9 rounded-md border bg-background px-3 text-sm font-normal" /></label> : null}
-            <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Node type <span className="font-normal text-muted-foreground">Optional</span><input value={nodeType} onChange={(event) => setNodeType(event.target.value)} placeholder="e.g. service" maxLength={80} className="h-9 rounded-md border bg-background px-3 text-sm font-normal" /></label>
+            <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Start node type <span className="font-normal text-muted-foreground">Optional · linked endpoints stay visible</span><input value={nodeType} onChange={(event) => setNodeType(event.target.value)} placeholder="e.g. service" maxLength={80} className="h-9 rounded-md border bg-background px-3 text-sm font-normal" /></label>
             <label className="flex flex-1 flex-col gap-1.5 text-xs font-medium">Relationship <span className="font-normal text-muted-foreground">Optional</span><input value={relationship} onChange={(event) => setRelationship(event.target.value)} placeholder="e.g. depends_on" maxLength={120} className="h-9 rounded-md border bg-background px-3 text-sm font-normal" /></label>
             <Button type="button" variant="outline" onClick={() => void graph.refetch()} disabled={graph.isFetching || (query === 'project.related_entities' && !projectId.trim())}>Refresh</Button>
           </div>
@@ -85,7 +121,7 @@ function ContextGraphPage() {
           <div className="flex flex-col gap-4">
         <Card><CardHeader><CardTitle>Selected entity</CardTitle><CardDescription>Inspect normalized properties and provenance.</CardDescription></CardHeader><CardContent>{selected ? <NodeInspector node={selected} /> : <p className="text-sm text-muted-foreground">Select a node in the graph to inspect it.</p>}</CardContent></Card>
         <Card><CardHeader><CardTitle>Freshness</CardTitle><CardDescription>Data freshness returned by the graph boundary.</CardDescription></CardHeader><CardContent>{graph.data?.freshness?.length ? <div className="flex flex-col gap-2">{graph.data.freshness.map((item) => <div key={`${item.source}-${item.observedAt}`} className="flex items-center justify-between gap-3 text-sm"><span>{item.source}</span><span className="text-xs text-muted-foreground">{item.status}</span></div>)}</div> : <p className="text-sm text-muted-foreground">No freshness metadata returned.</p>}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Saved investigations</CardTitle><CardDescription>Save this bounded graph query for repeatable review. Scope stays attached to the saved record.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3"><div className="flex gap-2"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="e.g. Release blockers" maxLength={120} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" /><Button type="button" onClick={() => saveInvestigation.mutate()} disabled={!savedName.trim() || saveInvestigation.isPending}>{saveInvestigation.isPending ? 'Saving…' : <><Save data-icon="inline-start" />Save</>}</Button></div>{saveInvestigation.isError ? <p role="alert" className="text-xs text-destructive">Could not save: {saveInvestigation.error.message}</p> : null}{saved.isError ? <p className="text-xs text-muted-foreground">Saved investigations are unavailable: {saved.error.message}</p> : null}{saved.data?.length ? <div className="flex flex-col gap-2">{saved.data.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-md border p-2 text-xs"><Link className="min-w-0 flex-1 truncate underline-offset-2 hover:underline" to="/context">{item.name}</Link><span className="text-muted-foreground">{item.query}</span><Button type="button" variant="ghost" size="icon" aria-label={`Delete ${item.name}`} onClick={() => removeInvestigation.mutate(item.id)} disabled={removeInvestigation.isPending}><Trash2 className="size-3.5" /></Button></div>)}</div> : null}</CardContent></Card>
+          <Card><CardHeader><CardTitle>Saved investigations</CardTitle><CardDescription>Save this bounded graph query for repeatable review. Scope stays attached to the saved record.</CardDescription></CardHeader><CardContent className="flex flex-col gap-3"><div className="flex gap-2"><input value={savedName} onChange={(event) => setSavedName(event.target.value)} placeholder="e.g. Release blockers" maxLength={120} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" /><Button type="button" onClick={() => saveInvestigation.mutate()} disabled={!savedName.trim() || saveInvestigation.isPending}>{saveInvestigation.isPending ? 'Saving…' : <><Save data-icon="inline-start" />Save</>}</Button></div>{saveInvestigation.isError ? <p role="alert" className="text-xs text-destructive">Could not save: {saveInvestigation.error.message}</p> : null}{saved.isError ? <div className="flex flex-col gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"><span>Saved investigations are unavailable: {saved.error.message}</span><Button type="button" variant="outline" size="sm" className="self-start" onClick={() => void saved.refetch()} disabled={saved.isFetching}><RefreshCw data-icon="inline-start" />Retry saved investigations</Button></div> : null}{removeInvestigation.isError ? <p role="alert" className="text-xs text-destructive">Could not delete the saved investigation: {removeInvestigation.error.message}</p> : null}{saved.data?.length ? <div className="flex flex-col gap-2">{saved.data.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-md border p-2 text-xs"><Button type="button" variant="ghost" className="min-w-0 flex-1 justify-start truncate px-1 text-left" onClick={() => loadSavedInvestigation(item)} disabled={item.kind !== 'graph'}>{item.name}</Button><span className="text-muted-foreground">{item.query}</span><Button type="button" variant="ghost" size="icon" aria-label={`Delete ${item.name}`} onClick={() => { if (window.confirm(`Delete saved investigation “${item.name}”? This cannot be undone.`)) removeInvestigation.mutate(item.id) }} disabled={removeInvestigation.isPending}><Trash2 className="size-3.5" /></Button></div>)}</div> : null}</CardContent></Card>
       </div>
     </div>
   </div>
@@ -97,23 +133,32 @@ function ContextReadiness({
   graph,
   canViewSources,
   canViewWorkflows,
-  unavailable,
-  loading,
+  sourceUnavailable,
+  workflowUnavailable,
+  graphUnavailable,
+  sourceLoading,
+  workflowLoading,
+  graphLoading,
 }: {
   sources?: readonly KnowledgeSource[]
   workflows?: readonly WorkflowExecutionProjection[]
   graph?: { nodes: readonly GraphNode[] }
   canViewSources: boolean
   canViewWorkflows: boolean
-  unavailable: boolean
-  loading: boolean
+  sourceUnavailable: boolean
+  workflowUnavailable: boolean
+  graphUnavailable: boolean
+  sourceLoading: boolean
+  workflowLoading: boolean
+  graphLoading: boolean
 }) {
   const activeSources = sources?.filter((source) => source.status === KnowledgeSourceStatus.Active).length
   const staleSources = sources?.filter((source) => source.freshness?.status === 'stale' || source.status === KnowledgeSourceStatus.Degraded || source.status === KnowledgeSourceStatus.Failed).length
   const blockedRuns = workflows?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting || workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length
-  const metric = (visible: boolean, value: number | undefined) => !visible || unavailable ? '—' : loading ? '…' : value === undefined ? '—' : String(value)
+  const metric = (visible: boolean, value: number | undefined, unavailable: boolean, loading: boolean) => !visible || unavailable ? '—' : loading ? '…' : value === undefined ? '—' : String(value)
+  const anyUnavailable = sourceUnavailable || workflowUnavailable || graphUnavailable
 
-  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Context readiness</CardTitle><CardDescription>Coverage and blockers for the current organization scope. A dash means the underlying permission or query did not provide that metric.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadinessMetric label="Sources" value={metric(canViewSources, sources?.length)} detail={canViewSources && activeSources !== undefined ? `${activeSources} active` : 'Access restricted'} /><ReadinessMetric label="Stale or degraded" value={metric(canViewSources, staleSources)} detail="Needs source review" /><ReadinessMetric label="Blocked Runs" value={metric(canViewWorkflows, blockedRuns)} detail="Waiting, failed, or partial" /><ReadinessMetric label="Visible entities" value={metric(true, graph?.nodes.length)} detail="Current graph query" /></div><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="font-medium text-foreground">Recommended review:</span>{!canViewSources ? <span className="rounded-full bg-secondary px-2 py-1">Knowledge Source access required</span> : sources?.length === 0 ? <Link to="/sources/new" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Add a Knowledge Source</Link> : staleSources ? <Link to="/sources" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Review stale Sources</Link> : null}{canViewWorkflows && blockedRuns ? <Link to="/review" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Review blocked Runs</Link> : null}{unavailable ? <span className="rounded-full bg-destructive/10 px-2 py-1 text-destructive">Readiness data unavailable · retry below</span> : null}{!unavailable && canViewSources && sources?.length && !staleSources && !blockedRuns ? <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700">No current readiness blockers</span> : null}</div></CardContent></Card>
+  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Context readiness</CardTitle><CardDescription>Coverage and blockers for the current organization scope. A dash means the underlying permission or query did not provide that metric.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><ReadinessMetric label="Sources" value={metric(canViewSources, sources?.length, sourceUnavailable, sourceLoading)} detail={canViewSources && activeSources !== undefined ? `${activeSources} active` : sourceUnavailable ? 'Unavailable · retry Sources' : 'Access restricted'} /><ReadinessMetric label="Stale or degraded" value={metric(canViewSources, staleSources, sourceUnavailable, sourceLoading)} detail={sourceUnavailable ? 'Unavailable · retry Sources' : 'Needs source review'} /><ReadinessMetric label="Blocked Runs" value={metric(canViewWorkflows, blockedRuns, workflowUnavailable, workflowLoading)} detail={workflowUnavailable ? 'Unavailable · retry Review' : 'Waiting, failed, or partial'} /><ReadinessMetric label="Visible entities" value={metric(true, graph?.nodes.length, graphUnavailable, graphLoading)} detail={graphUnavailable ? 'Unavailable · retry graph' : 'Current graph query'} /></div><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="font-medium text-foreground">Recommended review:</span>{!canViewSources ? <span className="rounded-full bg-secondary px-2 py-1">Knowledge Source access required</span> : sourceUnavailable ? <span className="rounded-full bg-destructive/10 px-2 py-1 text-destructive">Source readiness unavailable · retry Sources</span> : sources?.length === 0 ? <Link to="/sources/new" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Add a Knowledge Source</Link> : staleSources ? <Link to="/sources" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Review stale Sources</Link> : null}{canViewWorkflows && workflowUnavailable ? <span className="rounded-full bg-destructive/10 px-2 py-1 text-destructive">Run readiness unavailable · retry Review</span> : canViewWorkflows && blockedRuns ? <Link to="/review" className="rounded-full bg-secondary px-2 py-1 underline-offset-2 hover:underline">Review blocked Runs</Link> : null}{graphUnavailable ? <span className="rounded-full bg-destructive/10 px-2 py-1 text-destructive">Graph entity count unavailable · retry graph below</span> : null}{!anyUnavailable && canViewSources && sources?.length && !staleSources && !blockedRuns ? <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-700">No current readiness blockers</span> : null}</div></CardContent></Card>
 }
 
 function ReadinessMetric({ label, value, detail }: { label: string; value: string; detail: string }) {

@@ -106,6 +106,48 @@
       "when": 1787424768350,
       "tag": "0014_enforce-current-workflow-blueprint",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787429824167,
+      "tag": "0015_memory-change-governance",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787432331766,
+      "tag": "0016_organization-access-requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787433874595,
+      "tag": "0017_add-memory-governance",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787435699583,
+      "tag": "0018_add-coordinator-recommendations",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787437474422,
+      "tag": "0019_add-workflow-planner-version-history",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787448841960,
+      "tag": "0020_add-organization-onboarding",
+      "breakpoints": true
     }
   ]
 }

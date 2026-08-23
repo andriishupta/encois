@@ -136,6 +136,14 @@ export type InternalServiceAuthenticatorOptions = {
   serviceUserId?: string;
 };
 
+export function canonicalOrganizationUnitIds(
+  units: readonly { id: string }[],
+  resolvedUnitIds: readonly string[],
+): readonly string[] {
+  const resolved = new Set(resolvedUnitIds);
+  return units.filter((unit) => resolved.has(unit.id)).map((unit) => unit.id);
+}
+
 async function resolveOrganizationScope(
   db: PersistenceTransaction,
   organizationId: string,
@@ -163,8 +171,10 @@ async function resolveOrganizationScope(
     })),
     directUnitIds: directScopes.map((scope) => scope.unitId),
   });
-  const resolved = new Set(effective.resolvedUnitIds);
-  return units.filter((unit) => resolved.has(unit.id)).flatMap((unit) => [unit.id, unit.slug]);
+  // Principal scope is a backend authorization value. Keep only canonical
+  // organization-unit UUIDs here; slugs belong in the organization projection
+  // and must never reach UUID-typed SQL predicates or runtime scope payloads.
+  return canonicalOrganizationUnitIds(units, effective.resolvedUnitIds);
 }
 
 async function resolveRolePermissions(

@@ -3,6 +3,7 @@ import {
   ContractVersion,
   TemporalWorkflowType,
   type CoordinatorEvent,
+  type CoordinationMode,
   type ExecutionScope,
   type KnowledgeSourceScope,
   type JsonObject,
@@ -16,7 +17,7 @@ export type WorkflowStartCommand = {
   workflowId: string;
   taskQueue: string;
   input: {
-    contractVersion: typeof ContractVersion.WorkflowBlueprint | typeof ContractVersion.SourceIngestion;
+    contractVersion: typeof ContractVersion.WorkflowBlueprint | typeof ContractVersion.SourceIngestion | typeof ContractVersion.Coordinator;
     actorId: string;
     organizationId: string;
     requestId: string;
@@ -42,6 +43,21 @@ export type WorkflowStartCommand = {
     trigger?: string;
     readScope?: KnowledgeSourceScope;
     visibilityScope?: KnowledgeSourceScope;
+    coordinatorId?: string;
+    coordinationMode?: CoordinationMode;
+    selectedWorkflowRefs?: readonly string[];
+    scopeType?: "organization" | "project";
+    state?: {
+      status: "ONBOARDING" | "BOOTSTRAPPING" | "READY" | "RECONCILING" | "WAITING" | "SUSPENDED";
+      version: number;
+      onboardingComplete: boolean;
+      connectedIntegrationIds?: readonly string[];
+      activeWorkflowIds?: readonly string[];
+      pendingPlanIds?: readonly string[];
+      processedEventIds?: readonly string[];
+      lastEvent?: string;
+      reconciliationCount: number;
+    };
   };
   requestHash: string;
 };

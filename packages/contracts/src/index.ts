@@ -15,6 +15,11 @@ import {
   MemoryRedactionStatus,
   OrganizationUnitType,
   OrganizationMembershipStatus,
+  OrganizationAccessRequestStatus,
+  OrganizationOnboardingStatus,
+  CoordinationMode,
+  RecommendationStatus,
+  RecommendationTarget,
   ScopeRuleMode,
   ToolResultStatus,
   ToolSideEffects,
@@ -53,6 +58,11 @@ export {
   MemoryRedactionStatus,
   OrganizationUnitType,
   OrganizationMembershipStatus,
+  OrganizationAccessRequestStatus,
+  OrganizationOnboardingStatus,
+  CoordinationMode,
+  RecommendationStatus,
+  RecommendationTarget,
   ScopeRuleMode,
   ToolResultStatus,
   ToolSideEffects,
@@ -232,6 +242,27 @@ export type NotificationPreferences = {
   evidenceReady: boolean;
   weeklyDigest: boolean;
   updatedAt?: string;
+};
+
+export type RecommendationProjection = {
+  id: string;
+  organizationId: string;
+  recommendationKey: string;
+  kind: string;
+  severity: "info" | "attention";
+  title: string;
+  description: string;
+  target: RecommendationTarget;
+  actionLabel: string;
+  status: RecommendationStatus;
+  scope: ExecutionScope;
+  metadata: JsonObject;
+  createdAt: string;
+  updatedAt: string;
+  observedAt: string;
+  acceptedAt?: string;
+  dismissedAt?: string;
+  resolvedAt?: string;
 };
 
 export type SourceRevisionCreateRequest = {
@@ -425,6 +456,22 @@ export type WorkflowPlanRecord = {
   appliedAt?: string;
 };
 
+export type WorkflowPlannerVersionProjection = {
+  id: string;
+  organizationId: string;
+  plannerName?: string;
+  plannerVersion?: string;
+  sourceSchemaVersion?: string;
+  promptVersion?: string;
+  promptHash?: string;
+  versionHash: string;
+  firstPlanId: string;
+  lastPlanId: string;
+  usageCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
 export type WorkflowPlanMetadata = {
   planner: {
     name: string;
@@ -539,7 +586,8 @@ export type IntegrationCreateRequest = {
 
 export type IntegrationUpdateRequest = {
   displayName?: string;
-  status?: IntegrationStatus;
+  /** Only disabling is a human-controlled lifecycle transition. */
+  status?: Extract<IntegrationStatus, "disabled">;
 };
 
 export type OrganizationUnitProjection = {
@@ -574,6 +622,17 @@ export type OrganizationPermissionProjection = {
   propagateToChildren: true;
 };
 
+export type OrganizationOnboardingProjection = {
+  organizationId: string;
+  status: OrganizationOnboardingStatus;
+  coordinatorId: string;
+  coordinationMode: CoordinationMode;
+  selectedWorkflows: readonly string[];
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type OrganizationProjection = {
   organization: {
     id: string;
@@ -583,6 +642,12 @@ export type OrganizationProjection = {
   units: readonly OrganizationUnitProjection[];
   members: readonly OrganizationMemberProjection[];
   permissions: readonly OrganizationPermissionProjection[];
+  onboarding: OrganizationOnboardingProjection;
+};
+
+export type OrganizationOnboardingUpdateRequest = {
+  coordinationMode?: CoordinationMode;
+  selectedWorkflows?: readonly string[];
 };
 
 export type OrganizationUnitCreateRequest = {
@@ -600,6 +665,31 @@ export type OrganizationPermissionCreateRequest = {
 
 export type OrganizationPermissionUpdateRequest = {
   access: AccessLevel;
+};
+
+export type OrganizationAccessRequestCreateRequest = {
+  unitId: string;
+  access: Exclude<AccessLevel, "admin">;
+  reason: string;
+};
+
+export type OrganizationAccessRequestRecord = {
+  id: string;
+  organizationId: string;
+  requestedByUserId: string;
+  requesterName: string;
+  requesterEmail?: string;
+  unitId: string;
+  unitName: string;
+  access: Exclude<AccessLevel, "admin">;
+  reason: string;
+  status: OrganizationAccessRequestStatus;
+  reviewedByUserId?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+  appliedAt?: string;
 };
 
 export type AuthStatusResponse =
@@ -635,7 +725,19 @@ export type BlueprintWorkflowResult = {
   contractVersion: typeof ContractVersion.WorkflowResult;
   status: WorkflowResultStatus;
   statusReason?: WorkflowStatusReason;
-  steps: readonly JsonObject[];
+  steps: readonly BlueprintWorkflowStepResult[];
+};
+
+export type BlueprintWorkflowStepResult = {
+  stepId: string;
+  status: string;
+  statusReason?: WorkflowStatusReason;
+  data?: JsonObject;
+  evidenceRefs?: readonly string[];
+  provenance?: DataProvenance;
+  confidence?: number;
+  trace?: WorkflowTraceProjection;
+  freshness?: readonly SourceFreshness[];
 };
 
 export type WorkflowSignalRequest =
@@ -731,6 +833,8 @@ export type ToolResult = {
   status: ToolResultStatus;
   data?: JsonObject;
   evidenceRefs?: readonly string[];
+  provenance?: DataProvenance;
+  confidence?: number;
   freshness?: readonly SourceFreshness[];
 };
 
@@ -837,6 +941,8 @@ export type AgentMemoryRequest = ExecutionEnvelope & {
     projectId?: string;
     userId?: string;
   };
+  targetMemoryId?: string;
+  replacementSummary?: string;
   query?: string;
   maxResults?: number;
   distillation?: {
@@ -851,6 +957,8 @@ export type AgentMemoryRequest = ExecutionEnvelope & {
 export type AgentMemoryRecord = {
   id: string;
   agentDefinition: string;
+  projectId?: string;
+  userId?: string;
   summary: string;
   evidenceRefs: readonly string[];
   observedAt: string;
@@ -879,9 +987,40 @@ export type MemoryInspectionQueryRequest = {
 export type MemoryInspectionProjection = {
   agentDefinition: string;
   query: string;
+  scope: ExecutionScope;
+  projectId?: string;
   status: AgentMemoryStatus;
   memories: readonly AgentMemoryRecord[];
   generatedAt: string;
+};
+
+export type MemoryChangeAction = "add" | "correct" | "delete";
+export type MemoryChangeStatus = "proposed" | "approved" | "rejected" | "applied" | "failed";
+
+export type MemoryChangeRequest = {
+  memoryId?: string;
+  agentDefinition: string;
+  projectId?: string;
+  userId?: string;
+  scope: ExecutionScope;
+  action: MemoryChangeAction;
+  replacementSummary?: string;
+  evidenceRefs?: readonly string[];
+};
+
+export type MemoryChangeRecord = MemoryChangeRequest & {
+  id: string;
+  organizationId: string;
+  status: MemoryChangeStatus;
+  requestedByUserId?: string;
+  approvedByUserId?: string;
+  runtimeRequestId?: string;
+  providerOperationName?: string;
+  failureReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  appliedAt?: string;
 };
 
 export type ToolAnnotations = {

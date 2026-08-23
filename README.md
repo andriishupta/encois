@@ -110,7 +110,8 @@ temporal server start-dev --headless --log-level error
 ```
 
 In separate terminals, start `apps/agent-gateway` with explicit local mock
-mode and `AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
+mode, `AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret`, and
+`AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
 `apps/agent-runtime` with explicit `AGENT_AI_MODE=mock` and
 `AGENT_MEMORY_MODE=mock`, then run:
 
@@ -127,7 +128,11 @@ hosted Temporal/Cloud Run smoke is still a deployment step.
 
 With the Temporal CLI installed, `pnpm smoke:release:local` starts the Temporal
 dev server and both Go services automatically, waits for readiness, executes
-the release and approval smokes, and cleans up the child processes.
+the release and approval smokes, and cleans up the child processes. It defaults
+to ports `7234`, `8081`, and `8091` so it can run beside the containerized
+local stack; override them with `ENCOIS_SMOKE_TEMPORAL_PORT`,
+`ENCOIS_SMOKE_AGENT_GATEWAY_PORT`, and `ENCOIS_SMOKE_AGENT_RUNTIME_PORT` when
+those ports are occupied.
 
 For the full containerized local stack, run:
 

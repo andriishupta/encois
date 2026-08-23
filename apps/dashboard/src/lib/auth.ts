@@ -16,6 +16,7 @@ import {
 export type AuthSession = {
   /** Only populated for the local development fixture. Production uses Firebase SDK token acquisition. */
   accessToken: string
+  userId?: string
   organizationId?: string
   permissions: readonly PermissionKey[]
 }
@@ -133,6 +134,7 @@ export function getAuthSession(): AuthSession | null {
       const permissions = parsePermissions(value.permissions)
       return {
         accessToken: value.accessToken,
+        ...(typeof value.userId === 'string' && value.userId.trim().length > 0 ? { userId: value.userId } : {}),
         ...(typeof value.organizationId === 'string' && value.organizationId.trim().length > 0
           ? { organizationId: value.organizationId }
           : {}),
@@ -147,6 +149,7 @@ export function getAuthSession(): AuthSession | null {
   return currentFirebaseUser && organizationId
     ? {
         accessToken: FIREBASE_AUTH_SENTINEL,
+        userId: currentFirebaseUser.uid,
         organizationId,
         permissions: storedPermissions(),
       }
@@ -191,11 +194,17 @@ export function setAuthSession(session: AuthSession): void {
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
 }
 
-export function setAuthOrganizationId(organizationId: string, permissions: readonly PermissionKey[] = []): void {
+export function setAuthOrganizationId(organizationId: string, permissions: readonly PermissionKey[] = [], userId?: string): void {
   if (typeof window === 'undefined') return
 
   window.sessionStorage.setItem(AUTH_ORGANIZATION_KEY, organizationId)
   window.sessionStorage.setItem(AUTH_PERMISSIONS_KEY, JSON.stringify(permissions))
+  window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+    accessToken: FIREBASE_AUTH_SENTINEL,
+    ...(userId?.trim() ? { userId: userId.trim() } : currentFirebaseUser?.uid ? { userId: currentFirebaseUser.uid } : {}),
+    organizationId,
+    permissions,
+  }))
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
 }
 

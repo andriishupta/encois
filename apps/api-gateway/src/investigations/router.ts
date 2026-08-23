@@ -3,10 +3,12 @@ import { isJsonObject } from "@encois/contracts";
 import type { GatewayEnv } from "../middleware/aos.js";
 import { createSavedInvestigation, deleteSavedInvestigation, isInvestigationServiceError, listSavedInvestigations } from "./investigations.service.js";
 import { getNotificationPreferences, isNotificationServiceError, listNotifications, markNotificationRead, updateNotificationPreferences } from "./notifications.service.js";
+import { isRecommendationServiceError, listRecommendations, updateRecommendation } from "./recommendations.service.js";
+import type { WorkflowServiceOptions } from "../workflows/services/workflow.service.js";
 
-function statusFor(code: string): 400 | 403 | 404 | 409 | 503 { if (code === "FORBIDDEN") return 403; if (code === "PERSISTENCE_UNAVAILABLE") return 503; if (code === "INVESTIGATION_NOT_FOUND" || code === "NOTIFICATION_NOT_FOUND") return 404; if (code === "DUPLICATE_INVESTIGATION") return 409; return 400; }
+function statusFor(code: string): 400 | 403 | 404 | 409 | 503 { if (code === "FORBIDDEN" || code === "IDENTITY_NOT_RESOLVED") return 403; if (code === "PERSISTENCE_UNAVAILABLE") return 503; if (code === "INVESTIGATION_NOT_FOUND" || code === "NOTIFICATION_NOT_FOUND" || code === "RECOMMENDATION_NOT_FOUND") return 404; if (code === "DUPLICATE_INVESTIGATION") return 409; return 400; }
 
-export function createInvestigationsRouter(): Hono<GatewayEnv> {
+export function createInvestigationsRouter(options: Pick<WorkflowServiceOptions, "workflowClient" | "namespace" | "policyVersion" | "taskQueue" | "capabilitySecret" | "capabilityTtlMs" | "workflowRunRetentionDays">): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
   router.get("/", async (context) => {
     try { return context.json({ data: await listSavedInvestigations(context.get("principal")) }); }
@@ -21,6 +23,19 @@ export function createInvestigationsRouter(): Hono<GatewayEnv> {
   router.delete("/:investigationId", async (context) => {
     try { const deleted = await deleteSavedInvestigation(context.get("principal"), context.req.param("investigationId") ?? ""); if (!deleted) return context.json({ error: { code: "INVESTIGATION_NOT_FOUND", message: "Saved investigation not found." } }, 404); return context.json({ data: { deleted: true } }); }
     catch (cause) { if (isInvestigationServiceError(cause)) return context.json({ error: { code: cause.code, message: cause.message } }, statusFor(cause.code)); throw cause; }
+  });
+  router.get("/recommendations", async (context) => {
+    try { return context.json({ data: await listRecommendations(context.get("principal"), options) }); }
+    catch (cause) { if (isRecommendationServiceError(cause)) return context.json({ error: { code: cause.code, message: cause.message } }, statusFor(cause.code)); throw cause; }
+  });
+  router.post("/recommendations/:recommendationId/:action", async (context) => {
+    const action = context.req.param("action");
+    if (action !== "accept" && action !== "dismiss") return context.json({ error: { code: "INVALID_RECOMMENDATION_ACTION", message: "Recommendation action must be accept or dismiss." } }, 400);
+    try {
+      const recommendation = await updateRecommendation(context.get("principal"), context.req.param("recommendationId") ?? "", action);
+      if (!recommendation) return context.json({ error: { code: "RECOMMENDATION_NOT_FOUND", message: "Recommendation not found in the current organization scope." } }, 404);
+      return context.json({ data: recommendation });
+    } catch (cause) { if (isRecommendationServiceError(cause)) return context.json({ error: { code: cause.code, message: cause.message } }, statusFor(cause.code)); throw cause; }
   });
   return router;
 }

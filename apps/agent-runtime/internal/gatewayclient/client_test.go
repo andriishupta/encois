@@ -35,7 +35,7 @@ func TestInvokeSendsScopedAuthenticatedToolRequest(t *testing.T) {
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"contractVersion":"tool-result.v1","requestId":"request-test","tool":"jira.project_tasks","status":"mocked","data":{"ok":true}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"contractVersion":"tool-result.v1","requestId":"request-test","tool":"jira.project_tasks","status":"mocked","data":{"ok":true},"provenance":{"source":"jira","sourceRecordId":"checkout","observedAt":"2026-08-22T10:00:00Z"},"confidence":0.88}`)),
 			Header:     make(http.Header),
 		}, nil
 	})
@@ -58,5 +58,11 @@ func TestInvokeSendsScopedAuthenticatedToolRequest(t *testing.T) {
 	}
 	if result.Status != "mocked" {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+	if result.Provenance == nil || result.Provenance.Source != "jira" || result.Provenance.SourceRecordID != "checkout" {
+		t.Fatalf("expected Jira provenance, got %+v", result.Provenance)
+	}
+	if result.Confidence == nil || *result.Confidence != 0.88 {
+		t.Fatalf("expected tool confidence, got %+v", result.Confidence)
 	}
 }

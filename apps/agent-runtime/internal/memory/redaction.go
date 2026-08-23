@@ -31,19 +31,22 @@ func RedactSensitiveText(value string) (string, bool) {
 // conservative: regexes cover obvious PII/secrets now; provider-specific and
 // semantic detection remains a later policy/model adapter.
 func SanitizeRequest(request Request) Request {
-	if request.Distillation == nil {
-		return request
+	if request.Distillation != nil {
+		distillation := *request.Distillation
+		redacted, changed := RedactSensitiveText(distillation.Summary)
+		distillation.Summary = strings.TrimSpace(redacted)
+		distillation.RedactionVersion = RedactionVersion
+		if changed {
+			distillation.RedactionStatus = contracts.RedactionApplied
+		} else {
+			distillation.RedactionStatus = contracts.RedactionNoMatch
+		}
+		request.Distillation = &distillation
 	}
-	distillation := *request.Distillation
-	redacted, changed := RedactSensitiveText(distillation.Summary)
-	distillation.Summary = strings.TrimSpace(redacted)
-	distillation.RedactionVersion = RedactionVersion
-	if changed {
-		distillation.RedactionStatus = contracts.RedactionApplied
-	} else {
-		distillation.RedactionStatus = contracts.RedactionNoMatch
+	if request.ReplacementSummary != "" {
+		request.ReplacementSummary, _ = RedactSensitiveText(request.ReplacementSummary)
+		request.ReplacementSummary = strings.TrimSpace(request.ReplacementSummary)
 	}
-	request.Distillation = &distillation
 	return request
 }
 

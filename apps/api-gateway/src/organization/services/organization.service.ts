@@ -1,19 +1,31 @@
-import { and, asc, eq } from "drizzle-orm";
-import { permissionIncludes, resolveEffectiveScope, AccessLevel, OrganizationMembershipStatus, OrganizationUnitType, Permission, type OrganizationProjection, type OrganizationPermissionCreateRequest, type OrganizationPermissionUpdateRequest, type OrganizationUnitCreateRequest, type OrganizationUnitProjection, type OrganizationMemberProjection, type OrganizationPermissionProjection, type PermissionKey } from "@encois/contracts";
+import { createHash } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { ContractVersion, CoordinatorEventType, CoordinationMode, permissionIncludes, resolveEffectiveScope, AccessLevel, OrganizationAccessRequestStatus, OrganizationMembershipStatus, OrganizationOnboardingStatus, OrganizationUnitType, Permission, TemporalWorkflowType, type CoordinatorEvent, type OrganizationAccessRequestCreateRequest, type OrganizationAccessRequestRecord, type OrganizationOnboardingProjection, type OrganizationOnboardingUpdateRequest, type OrganizationProjection, type OrganizationPermissionCreateRequest, type OrganizationPermissionUpdateRequest, type OrganizationUnitCreateRequest, type OrganizationUnitProjection, type OrganizationMemberProjection, type OrganizationPermissionProjection, type PermissionKey } from "@encois/contracts";
 import {
   auditEvents,
+  coordinatorEventOutbox,
   membershipScopes,
+  organizationAccessRequests,
   organizationMemberships,
+  organizationOnboarding,
   organizationUnits,
   organizations,
   roles,
   users,
+  workflowDefinitions,
+  workflowEvents,
+  workflowRuns,
+  workflowBlueprints,
+  workflowTemplateVersions,
+  workflowTemplates,
   withOrganizationContext,
   type PersistenceTransaction,
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
 import { getGrantedPermissions } from "../../auth/authorization.js";
+import type { WorkflowClient } from "../../workflows/temporal-client.js";
+import { buildCoordinatorWorkflowId, type WorkflowStartCommand } from "../../workflows/types.js";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -24,11 +36,25 @@ export type OrganizationServiceErrorCode =
   | "ORGANIZATION_UNIT_NOT_FOUND"
   | "ORGANIZATION_MEMBER_NOT_FOUND"
   | "ORGANIZATION_PERMISSION_NOT_FOUND"
+  | "ORGANIZATION_ACCESS_REQUEST_NOT_FOUND"
+  | "ORGANIZATION_ACCESS_REQUEST_CONFLICT"
+  | "ORGANIZATION_ACCESS_REQUEST_NOT_DECIDABLE"
+  | "ORGANIZATION_ACCESS_REQUEST_NOT_APPLICABLE"
+  | "ORGANIZATION_ONBOARDING_NOT_FOUND"
+  | "ORGANIZATION_ONBOARDING_CONFLICT"
+  | "ONBOARDING_START_FAILED"
   | "INVALID_PARENT"
   | "INVALID_REQUEST"
   | "DUPLICATE_ORGANIZATION_UNIT";
 
 export type OrganizationServiceError = Error & { code: OrganizationServiceErrorCode };
+
+export type OrganizationOnboardingServiceOptions = {
+  workflowClient: WorkflowClient;
+  namespace: string;
+  taskQueue: string;
+  policyVersion: string;
+};
 
 function organizationError(code: OrganizationServiceErrorCode, message: string): OrganizationServiceError {
   const error = new Error(message) as OrganizationServiceError;
@@ -77,8 +103,11 @@ type ScopeRow = {
   access: AccessLevel;
 };
 
+type OnboardingRow = typeof organizationOnboarding.$inferSelect;
+
 type OrganizationContext = {
   organization: { id: string; slug: string; name: string };
+  onboarding: OnboardingRow;
   units: UnitRow[];
   members: MemberRow[];
   scopes: ScopeRow[];
@@ -136,11 +165,16 @@ async function loadContext(
   principal: AosPrincipal,
 ): Promise<OrganizationContext> {
   const userId = localUserId(principal);
-  const [organization, units, members, scopes] = await Promise.all([
+  const [organization, onboarding, units, members, scopes] = await Promise.all([
     db
       .select({ id: organizations.id, slug: organizations.slug, name: organizations.name })
       .from(organizations)
       .where(eq(organizations.id, principal.organizationId))
+      .limit(1),
+    db
+      .select()
+      .from(organizationOnboarding)
+      .where(eq(organizationOnboarding.organizationId, principal.organizationId))
       .limit(1),
     db
       .select({
@@ -190,6 +224,8 @@ async function loadContext(
 
   const organizationRow = organization[0];
   if (!organizationRow) throw organizationError("ORGANIZATION_NOT_FOUND", "Organization not found.");
+  const onboardingRow = onboarding[0];
+  if (!onboardingRow) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found. Apply the current control-plane migration.");
   const actor = members.find((member) => member.userId === userId && member.status === OrganizationMembershipStatus.Active);
   if (!actor) throw organizationError("FORBIDDEN", "The current user has no active organization membership.");
   const actorPermissions = new Set(await getGrantedPermissions(db, principal));
@@ -213,6 +249,7 @@ async function loadContext(
 
   return {
     organization: organizationRow,
+    onboarding: onboardingRow,
     units,
     members,
     scopes,
@@ -277,7 +314,7 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
     });
 
   const permissions: OrganizationPermissionProjection[] = context.scopes
-    .filter((scope) => visibleMemberIds.has(scope.userId) && (context.isAdministrator || context.managedUnitIds.has(scope.unitId)))
+    .filter((scope) => visibleMemberIds.has(scope.userId) && (context.isAdministrator || scope.userId === context.actor.userId || context.managedUnitIds.has(scope.unitId)))
     .map((scope) => ({
       id: scope.id,
       memberId: scope.userId,
@@ -286,7 +323,26 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
       propagateToChildren: true,
     }));
 
-  return { organization: context.organization, units, members, permissions };
+  return {
+    organization: context.organization,
+    units,
+    members,
+    permissions,
+    onboarding: projectOnboarding(context.onboarding),
+  };
+}
+
+function projectOnboarding(row: OnboardingRow): OrganizationOnboardingProjection {
+  return {
+    organizationId: row.organizationId,
+    status: row.status,
+    coordinatorId: row.coordinatorId,
+    coordinationMode: row.coordinationMode,
+    selectedWorkflows: row.selectedWorkflows,
+    ...(row.lastError ? { lastError: row.lastError } : {}),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 async function withContext<T>(principal: AosPrincipal, callback: (context: OrganizationContext, db: PersistenceTransaction) => Promise<T>): Promise<T> {
@@ -307,6 +363,243 @@ export async function getOrganizationForPrincipal(principal: AosPrincipal): Prom
   });
 }
 
+function onboardingRequestHash(request: OrganizationOnboardingUpdateRequest, organizationId: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ organizationId, coordinationMode: request.coordinationMode, selectedWorkflows: request.selectedWorkflows }))
+    .digest("hex");
+}
+
+function normalizedSelectedWorkflows(value: readonly string[] | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (value.length > 50) throw organizationError("INVALID_REQUEST", "At most 50 workflow selections can be saved.");
+  const normalized = [...new Set(value.map((item) => item.normalize("NFKC").trim()).filter(Boolean))];
+  if (normalized.some((item) => item.length > 128)) throw organizationError("INVALID_REQUEST", "Workflow selections must be 128 characters or fewer.");
+  return normalized;
+}
+
+async function validateWorkflowCatalogSelections(
+  db: PersistenceTransaction,
+  organizationId: string,
+  selectedWorkflows: readonly string[],
+): Promise<void> {
+  if (selectedWorkflows.length === 0) return;
+
+  const [templates, blueprints] = await Promise.all([
+    db
+      .select({ key: workflowTemplates.key })
+      .from(workflowTemplates)
+      .innerJoin(workflowTemplateVersions, eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id))
+      .where(and(
+        inArray(workflowTemplates.key, selectedWorkflows),
+        eq(workflowTemplates.status, "published"),
+        eq(workflowTemplateVersions.status, "published"),
+        eq(workflowTemplateVersions.version, workflowTemplates.publishedVersion!),
+        or(
+          and(isNull(workflowTemplateVersions.organizationId), isNull(workflowTemplates.organizationId)),
+          eq(workflowTemplateVersions.organizationId, workflowTemplates.organizationId),
+        ),
+      )),
+    db
+      .select({ blueprintId: workflowBlueprints.blueprintId })
+      .from(workflowBlueprints)
+      .where(and(
+        eq(workflowBlueprints.organizationId, organizationId),
+        eq(workflowBlueprints.status, "approved"),
+        eq(workflowBlueprints.isCurrent, true),
+        inArray(workflowBlueprints.blueprintId, selectedWorkflows),
+      )),
+  ]);
+
+  const available = new Set([...templates.map((row) => row.key), ...blueprints.map((row) => row.blueprintId)]);
+  const missing = selectedWorkflows.filter((selection) => !available.has(selection));
+  if (missing.length > 0) {
+    const visible = missing.slice(0, 3).join(", ");
+    const suffix = missing.length > 3 ? ` and ${missing.length - 3} more` : "";
+    throw organizationError("INVALID_REQUEST", `Selected workflow catalog entries are not available in this organization: ${visible}${suffix}.`);
+  }
+}
+
+export async function updateOrganizationOnboardingForPrincipal(
+  principal: AosPrincipal,
+  request: OrganizationOnboardingUpdateRequest,
+): Promise<OrganizationOnboardingProjection> {
+  const selectedWorkflows = normalizedSelectedWorkflows(request.selectedWorkflows);
+  if (request.coordinationMode !== undefined && !Object.values(CoordinationMode).includes(request.coordinationMode)) {
+    throw organizationError("INVALID_REQUEST", "The coordination mode is invalid.");
+  }
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OnboardingManage);
+    if (context.onboarding.status === OrganizationOnboardingStatus.Initializing) {
+      throw organizationError("ORGANIZATION_ONBOARDING_CONFLICT", "Onboarding is already initializing.");
+    }
+    if (selectedWorkflows) await validateWorkflowCatalogSelections(db, principal.organizationId, selectedWorkflows);
+    const [updated] = await db
+      .update(organizationOnboarding)
+      .set({
+        ...(request.coordinationMode ? { coordinationMode: request.coordinationMode } : {}),
+        ...(selectedWorkflows ? { selectedWorkflows } : {}),
+        status: OrganizationOnboardingStatus.Pending,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(organizationOnboarding.organizationId, principal.organizationId))
+      .returning();
+    if (!updated) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found.");
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.onboarding.updated",
+      outcome: "accepted",
+      resourceType: "organization_onboarding",
+      resourceId: principal.organizationId,
+      scope: { organizationId: principal.organizationId },
+      metadata: { requestHash: onboardingRequestHash(request, principal.organizationId) },
+    });
+    return projectOnboarding(updated);
+  });
+}
+
+function coordinatorStartCommand(
+  principal: AosPrincipal,
+  onboarding: OnboardingRow,
+  requestId: string,
+  options: OrganizationOnboardingServiceOptions,
+): WorkflowStartCommand {
+  const workflowId = buildCoordinatorWorkflowId(principal.organizationId, onboarding.coordinatorId);
+  return {
+    workflowType: TemporalWorkflowType.Coordinator,
+    workflowId,
+    taskQueue: options.taskQueue,
+    input: {
+      contractVersion: ContractVersion.Coordinator,
+      actorId: principal.actorId,
+      organizationId: principal.organizationId,
+      requestId,
+      workflowId,
+      policyVersion: options.policyVersion,
+      scope: { ids: principal.scope.length > 0 ? [...principal.scope] : ["*"] },
+      capability: "coordinator-bootstrap",
+      userId: principal.userId,
+      coordinatorId: onboarding.coordinatorId,
+      coordinationMode: onboarding.coordinationMode,
+      selectedWorkflowRefs: [...onboarding.selectedWorkflows],
+      scopeType: "organization",
+      state: {
+        status: "ONBOARDING",
+        version: 0,
+        onboardingComplete: false,
+        reconciliationCount: 0,
+      },
+    },
+    requestHash: createHash("sha256").update(JSON.stringify({ workflowId, selectedWorkflows: onboarding.selectedWorkflows, coordinationMode: onboarding.coordinationMode })).digest("hex"),
+  };
+}
+
+export async function startOrganizationOnboardingForPrincipal(
+  principal: AosPrincipal,
+  requestId: string,
+  options: OrganizationOnboardingServiceOptions,
+): Promise<OrganizationOnboardingProjection> {
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OnboardingManage);
+    if (context.onboarding.status === OrganizationOnboardingStatus.Ready) return projectOnboarding(context.onboarding);
+    await validateWorkflowCatalogSelections(db, principal.organizationId, context.onboarding.selectedWorkflows);
+
+    const command = coordinatorStartCommand(principal, context.onboarding, requestId, options);
+    const event: CoordinatorEvent = {
+      contractVersion: ContractVersion.CoordinatorEvent,
+      eventId: `onboarding-reconcile:${principal.organizationId}:${requestId}`,
+      eventType: CoordinatorEventType.ReconcileRequested,
+      coordinatorId: context.onboarding.coordinatorId,
+      organizationId: principal.organizationId,
+      actorId: principal.actorId,
+      reason: "Initial organization onboarding reconciliation.",
+    };
+
+    await db
+      .update(organizationOnboarding)
+      .set({ status: OrganizationOnboardingStatus.Initializing, lastError: null, updatedAt: new Date() })
+      .where(eq(organizationOnboarding.organizationId, principal.organizationId));
+
+    try {
+      const projection = await options.workflowClient.start(command, options.namespace);
+      const [definition] = await db
+        .select({ id: workflowDefinitions.id })
+        .from(workflowDefinitions)
+        .where(and(
+          eq(workflowDefinitions.organizationId, principal.organizationId),
+          eq(workflowDefinitions.key, TemporalWorkflowType.Coordinator),
+          eq(workflowDefinitions.version, "v1"),
+        ))
+        .limit(1);
+      const definitionRow = definition ?? (await db.insert(workflowDefinitions).values({
+        organizationId: principal.organizationId,
+        key: TemporalWorkflowType.Coordinator,
+        version: "v1",
+        status: "approved",
+        inputSchemaRef: "contract://coordinator.v1",
+        outputSchemaRef: "contract://coordinator-state.v1",
+      }).returning({ id: workflowDefinitions.id }))[0];
+      if (!definitionRow) throw new Error("Coordinator workflow definition could not be persisted.");
+
+      const [workflowRun] = await db.insert(workflowRuns).values({
+        organizationId: principal.organizationId,
+        definitionId: definitionRow.id,
+        actorUserId: context.actor.userId,
+        temporalNamespace: projection.namespace,
+        temporalTaskQueue: projection.taskQueue,
+        temporalWorkflowId: projection.workflowId,
+        temporalRunId: projection.runId,
+        trigger: "onboarding",
+        status: projection.status,
+        scope: command.input.scope,
+        businessInput: {
+          coordinationMode: context.onboarding.coordinationMode,
+          selectedWorkflowRefs: [...context.onboarding.selectedWorkflows],
+        },
+      }).onConflictDoNothing().returning({ id: workflowRuns.id });
+      if (workflowRun) {
+        await db.insert(workflowEvents).values({
+          organizationId: principal.organizationId,
+          workflowRunId: workflowRun.id,
+          eventType: "coordinator_started",
+          status: projection.status,
+          metadata: { requestId, coordinatorId: context.onboarding.coordinatorId },
+        });
+      }
+      await db.insert(coordinatorEventOutbox).values({
+        organizationId: principal.organizationId,
+        eventId: event.eventId,
+        coordinatorId: event.coordinatorId,
+        eventType: event.eventType,
+        payload: event as unknown as Record<string, unknown>,
+      }).onConflictDoNothing();
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: context.actor.userId,
+        action: "organization.onboarding.started",
+        outcome: "accepted",
+        resourceType: "organization_onboarding",
+        resourceId: principal.organizationId,
+        scope: { organizationId: principal.organizationId },
+        metadata: {
+          requestId,
+          coordinatorId: context.onboarding.coordinatorId,
+          workflowId: projection.workflowId,
+          eventId: event.eventId,
+        },
+      });
+      const [updated] = await db.update(organizationOnboarding).set({ status: OrganizationOnboardingStatus.Ready, lastError: null, updatedAt: new Date() }).where(eq(organizationOnboarding.organizationId, principal.organizationId)).returning();
+      if (!updated) throw organizationError("ORGANIZATION_ONBOARDING_NOT_FOUND", "Organization onboarding state not found.");
+      return projectOnboarding(updated);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Coordinator could not be started.";
+      await db.update(organizationOnboarding).set({ status: OrganizationOnboardingStatus.Failed, lastError: message.slice(0, 1000), updatedAt: new Date() }).where(eq(organizationOnboarding.organizationId, principal.organizationId));
+      throw organizationError("ONBOARDING_START_FAILED", message);
+    }
+  });
+}
+
 export async function listOrganizationUnitsForPrincipal(principal: AosPrincipal): Promise<readonly OrganizationUnitProjection[]> {
   return withContext(principal, async (context) => {
     requirePermission(context, Permission.OrganizationRead);
@@ -318,6 +611,203 @@ export async function listOrganizationMembersForPrincipal(principal: AosPrincipa
   return withContext(principal, async (context) => {
     requirePermission(context, Permission.OrganizationRead);
     return projectContext(context).members;
+  });
+}
+
+function accessRequestRecord(
+  row: typeof organizationAccessRequests.$inferSelect,
+  context: OrganizationContext,
+): OrganizationAccessRequestRecord {
+  const requester = context.members.find((member) => member.userId === row.requestedByUserId);
+  const unit = context.units.find((candidate) => candidate.id === row.organizationUnitId);
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    requestedByUserId: row.requestedByUserId,
+    requesterName: displayName(requester ?? { name: null, email: null } as MemberRow),
+    ...(requester?.email ? { requesterEmail: requester.email } : {}),
+    unitId: row.organizationUnitId,
+    unitName: unit?.name ?? "Organization unit",
+    access: nonAdminAccess(row.requestedAccess),
+    reason: row.reason,
+    status: row.status,
+    ...(row.reviewedByUserId ? { reviewedByUserId: row.reviewedByUserId } : {}),
+    ...(row.rejectionReason ? { rejectionReason: row.rejectionReason } : {}),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    ...(row.reviewedAt ? { reviewedAt: row.reviewedAt.toISOString() } : {}),
+    ...(row.appliedAt ? { appliedAt: row.appliedAt.toISOString() } : {}),
+  };
+}
+
+function nonAdminAccess(access: AccessLevel): Exclude<AccessLevel, "admin"> {
+  if (access === AccessLevel.Admin) throw organizationError("INVALID_REQUEST", "Administrator access requests are not supported.");
+  return access;
+}
+
+function requireOrganizationAdministrator(context: OrganizationContext): void {
+  if (!context.isAdministrator) throw organizationError("FORBIDDEN", "Only an organization administrator can decide access requests.");
+}
+
+function accessRank(access: AccessLevel): number {
+  return { [AccessLevel.Viewer]: 1, [AccessLevel.Contributor]: 2, [AccessLevel.Manager]: 3, [AccessLevel.Admin]: 4 }[access];
+}
+
+export async function listOrganizationAccessRequestsForPrincipal(principal: AosPrincipal): Promise<readonly OrganizationAccessRequestRecord[]> {
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationRead);
+    const rows = await db
+      .select()
+      .from(organizationAccessRequests)
+      .where(eq(organizationAccessRequests.organizationId, principal.organizationId))
+      .orderBy(desc(organizationAccessRequests.updatedAt))
+      .limit(100);
+    return rows
+      .filter((row) => context.isAdministrator || row.requestedByUserId === context.actor.userId)
+      .map((row) => accessRequestRecord(row, context));
+  });
+}
+
+export async function createOrganizationAccessRequestForPrincipal(
+  principal: AosPrincipal,
+  request: OrganizationAccessRequestCreateRequest,
+): Promise<OrganizationAccessRequestRecord> {
+  requireUuid(request.unitId, "unitId");
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OrganizationRead);
+    nonAdminAccess(request.access as AccessLevel);
+    const reason = request.reason.normalize("NFKC").trim();
+    if (reason.length < 5 || reason.length > 2_000) throw organizationError("INVALID_REQUEST", "Explain the access need in 5–2,000 characters.");
+    const unit = context.units.find((candidate) => candidate.id === request.unitId);
+    if (!unit || (!context.isAdministrator && !context.actorScopeIds.has(unit.id))) {
+      throw organizationError("FORBIDDEN", "The requested organization unit is outside the visible scope.");
+    }
+    const existing = await db
+      .select({ id: organizationAccessRequests.id })
+      .from(organizationAccessRequests)
+      .where(and(
+        eq(organizationAccessRequests.organizationId, principal.organizationId),
+        eq(organizationAccessRequests.requestedByUserId, context.actor.userId),
+        eq(organizationAccessRequests.organizationUnitId, request.unitId),
+        inArray(organizationAccessRequests.status, [OrganizationAccessRequestStatus.Proposed, OrganizationAccessRequestStatus.Approved]),
+      ))
+      .limit(1);
+    if (existing[0]) throw organizationError("ORGANIZATION_ACCESS_REQUEST_CONFLICT", "An open access request already exists for this organization unit.");
+    const [created] = await db.insert(organizationAccessRequests).values({
+      organizationId: principal.organizationId,
+      requestedByUserId: context.actor.userId,
+      organizationUnitId: request.unitId,
+      requestedAccess: request.access,
+      reason,
+      status: "proposed",
+    }).returning();
+    if (!created) throw organizationError("ORGANIZATION_ACCESS_REQUEST_NOT_FOUND", "The access request could not be created.");
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.access_request.submitted",
+      outcome: "accepted",
+      resourceType: "organization_access_request",
+      resourceId: created.id,
+      scope: { unitId: request.unitId },
+      metadata: { requestedAccess: request.access },
+    });
+    return accessRequestRecord(created, context);
+  });
+}
+
+async function getOrganizationAccessRequest(
+  principal: AosPrincipal,
+  context: OrganizationContext,
+  db: PersistenceTransaction,
+  requestId: string,
+): Promise<typeof organizationAccessRequests.$inferSelect> {
+  requireUuid(requestId, "requestId");
+  const [row] = await db.select().from(organizationAccessRequests).where(and(
+    eq(organizationAccessRequests.id, requestId),
+    eq(organizationAccessRequests.organizationId, principal.organizationId),
+  )).limit(1);
+  if (!row || (!context.isAdministrator && row.requestedByUserId !== context.actor.userId)) {
+    throw organizationError("ORGANIZATION_ACCESS_REQUEST_NOT_FOUND", "Organization access request not found.");
+  }
+  return row;
+}
+
+export async function decideOrganizationAccessRequestForPrincipal(
+  principal: AosPrincipal,
+  requestId: string,
+  decision: "approved" | "rejected",
+): Promise<OrganizationAccessRequestRecord> {
+  requireUuid(requestId, "requestId");
+  return withContext(principal, async (context, db) => {
+    requireOrganizationAdministrator(context);
+    const row = await getOrganizationAccessRequest(principal, context, db, requestId);
+    if (row.requestedByUserId === context.actor.userId) throw organizationError("FORBIDDEN", "An access request must be decided by a different organization administrator.");
+    if (row.status !== OrganizationAccessRequestStatus.Proposed) throw organizationError("ORGANIZATION_ACCESS_REQUEST_NOT_DECIDABLE", `The access request is already ${row.status}.`);
+    const now = new Date();
+    const [updated] = await db.update(organizationAccessRequests).set({
+      status: decision,
+      reviewedByUserId: context.actor.userId,
+      reviewedAt: now,
+      updatedAt: now,
+      ...(decision === OrganizationAccessRequestStatus.Rejected ? { rejectionReason: "Declined by an organization administrator." } : {}),
+    }).where(and(
+      eq(organizationAccessRequests.id, requestId),
+      eq(organizationAccessRequests.organizationId, principal.organizationId),
+      eq(organizationAccessRequests.status, OrganizationAccessRequestStatus.Proposed),
+    )).returning();
+    if (!updated) throw organizationError("ORGANIZATION_ACCESS_REQUEST_CONFLICT", "The access request changed concurrently.");
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: `organization.access_request.${decision}`,
+      outcome: "accepted",
+      resourceType: "organization_access_request",
+      resourceId: requestId,
+      scope: { unitId: row.organizationUnitId },
+      metadata: { requestedAccess: row.requestedAccess },
+    });
+    return accessRequestRecord(updated, context);
+  });
+}
+
+export async function applyOrganizationAccessRequestForPrincipal(
+  principal: AosPrincipal,
+  requestId: string,
+): Promise<OrganizationAccessRequestRecord> {
+  requireUuid(requestId, "requestId");
+  return withContext(principal, async (context, db) => {
+    requireOrganizationAdministrator(context);
+    const row = await getOrganizationAccessRequest(principal, context, db, requestId);
+    if (row.status === OrganizationAccessRequestStatus.Applied) return accessRequestRecord(row, context);
+    if (row.status !== OrganizationAccessRequestStatus.Approved) throw organizationError("ORGANIZATION_ACCESS_REQUEST_NOT_APPLICABLE", `The access request is ${row.status}.`);
+    const member = context.members.find((candidate) => candidate.userId === row.requestedByUserId && candidate.status === OrganizationMembershipStatus.Active);
+    if (!member) throw organizationError("ORGANIZATION_MEMBER_NOT_FOUND", "The requesting member is no longer active.");
+    const existing = context.scopes.find((scope) => scope.userId === row.requestedByUserId && scope.unitId === row.organizationUnitId);
+    const effectiveAccess = existing && accessRank(existing.access) > accessRank(row.requestedAccess) ? existing.access : row.requestedAccess;
+    if (existing) {
+      await db.update(membershipScopes).set({ access: effectiveAccess }).where(eq(membershipScopes.id, existing.id));
+    } else {
+      await db.insert(membershipScopes).values({ organizationId: principal.organizationId, membershipId: member.membershipId, organizationUnitId: row.organizationUnitId, access: effectiveAccess });
+    }
+    const now = new Date();
+    const [updated] = await db.update(organizationAccessRequests).set({ status: OrganizationAccessRequestStatus.Applied, appliedAt: now, updatedAt: now }).where(and(
+      eq(organizationAccessRequests.id, requestId),
+      eq(organizationAccessRequests.organizationId, principal.organizationId),
+      eq(organizationAccessRequests.status, OrganizationAccessRequestStatus.Approved),
+    )).returning();
+    if (!updated) throw organizationError("ORGANIZATION_ACCESS_REQUEST_CONFLICT", "The access request changed concurrently.");
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.access_request.applied",
+      outcome: "accepted",
+      resourceType: "organization_access_request",
+      resourceId: requestId,
+      scope: { unitId: row.organizationUnitId, memberId: row.requestedByUserId },
+      metadata: { requestedAccess: row.requestedAccess, effectiveAccess },
+    });
+    return accessRequestRecord(updated, context);
   });
 }
 

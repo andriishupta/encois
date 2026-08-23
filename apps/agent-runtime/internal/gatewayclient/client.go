@@ -44,6 +44,8 @@ type ToolResponse struct {
 	Status          string                            `json:"status"`
 	Data            map[string]any                    `json:"data,omitempty"`
 	EvidenceRefs    []string                          `json:"evidenceRefs,omitempty"`
+	Provenance      *contractschemas.DataProvenance   `json:"provenance,omitempty"`
+	Confidence      *float64                          `json:"confidence,omitempty"`
 	Freshness       []contractschemas.SourceFreshness `json:"freshness,omitempty"`
 }
 

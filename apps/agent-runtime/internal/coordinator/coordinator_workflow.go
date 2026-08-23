@@ -153,14 +153,16 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 		if workflow.GetInfo(ctx).GetContinueAsNewSuggested() || state.ReconciliationCount >= 30 {
 			state.ReconciliationCount = 0
 			return workflow.NewContinueAsNewError(ctx, CoordinatorWorkflow, CoordinatorStartInput{
-				ContractVersion: input.ContractVersion,
-				CoordinatorID:   input.CoordinatorID,
-				OrganizationID:  input.OrganizationID,
-				ProjectID:       input.ProjectID,
-				ScopeType:       input.ScopeType,
-				ActorID:         input.ActorID,
-				PolicyVersion:   input.PolicyVersion,
-				State:           state,
+				ContractVersion:      input.ContractVersion,
+				CoordinatorID:        input.CoordinatorID,
+				OrganizationID:       input.OrganizationID,
+				ProjectID:            input.ProjectID,
+				ScopeType:            input.ScopeType,
+				ActorID:              input.ActorID,
+				PolicyVersion:        input.PolicyVersion,
+				CoordinationMode:     input.CoordinationMode,
+				SelectedWorkflowRefs: append([]string(nil), input.SelectedWorkflowRefs...),
+				State:                state,
 			})
 		}
 	}

@@ -40,6 +40,7 @@ import { createGraphGatewayClient, type GraphGatewayClient } from "./context/gra
 import { queryGraphRoute } from "./context/routes/query-graph.route.js";
 import { createMemoryRuntimeClient } from "./context/memory-client.js";
 import { queryMemoryRoute } from "./context/routes/query-memory.route.js";
+import { createMemoryChangesRouter } from "./context/memory-changes.router.js";
 import { createInvestigationsRouter, createNotificationPreferencesRouter, createNotificationsRouter } from "./investigations/router.js";
 import type { IntegrationAuthorizationAdapter } from "./integrations/authorization-adapter.js";
 import { createOAuthIntegrationAuthorizationAdapter } from "./integrations/oauth-authorization-adapter.js";
@@ -202,7 +203,16 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   const v1Router = new Hono<GatewayEnv>();
   v1Router.use("*", aosMiddleware({ authenticate }));
   v1Router.route("/integrations", createIntegrationsRouter({ authorizationAdapter: integrationAuthorizationAdapter, webhookEndpoint: webhookEndpointOptions }));
-  v1Router.route("/investigations", createInvestigationsRouter());
+  const workflowServiceOptions = {
+    namespace: config.temporalNamespace,
+    taskQueue: config.temporalTaskQueue,
+    policyVersion: config.agentGatewayPolicyVersion,
+    capabilitySecret: config.agentGatewayCapabilitySecret,
+    capabilityTtlMs: config.executionCapabilityTtlMs,
+    workflowRunRetentionDays: config.workflowRunRetentionDays,
+    workflowClient,
+  };
+  v1Router.route("/investigations", createInvestigationsRouter(workflowServiceOptions));
   v1Router.route("/notifications", createNotificationsRouter());
   v1Router.route("/settings/notifications", createNotificationPreferencesRouter());
   v1Router.route("/internal/integrations", createInternalIntegrationsRouter({
@@ -229,7 +239,12 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
       }),
     }),
   );
-  v1Router.route("/organization", createOrganizationRouter());
+  v1Router.route("/organization", createOrganizationRouter({
+    namespace: config.temporalNamespace,
+    taskQueue: config.temporalTaskQueue,
+    policyVersion: config.agentGatewayPolicyVersion,
+    workflowClient,
+  }));
   v1Router.post(
     "/context/graph/query",
     queryGraphRoute({
@@ -242,6 +257,15 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   v1Router.post(
     "/context/memory/query",
     queryMemoryRoute({
+      client: memoryClient,
+      policyVersion: config.agentGatewayPolicyVersion,
+      capabilitySecret: config.agentGatewayCapabilitySecret,
+      capabilityTtlMs: config.executionCapabilityTtlMs,
+    }),
+  );
+  v1Router.route(
+    "/context/memory",
+    createMemoryChangesRouter({
       client: memoryClient,
       policyVersion: config.agentGatewayPolicyVersion,
       capabilitySecret: config.agentGatewayCapabilitySecret,

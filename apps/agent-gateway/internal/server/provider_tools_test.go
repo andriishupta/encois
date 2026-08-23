@@ -123,6 +123,9 @@ func TestGCPProviderToolRegistryReadsGitHubWithoutReturningCredential(t *testing
 	if result.EvidenceRefs[0] != "github://acme/checkout" {
 		t.Fatalf("unexpected evidence reference: %+v", result.EvidenceRefs)
 	}
+	if result.Provenance == nil || result.Provenance.Source != "github" || result.Provenance.SourceRecordID != "acme/checkout" {
+		t.Fatalf("expected GitHub provenance, got %+v", result.Provenance)
+	}
 	if reporter.organizationID != "org-1" || reporter.integrationID != "integration-1" || reporter.status != ProviderHealthActive {
 		t.Fatalf("expected active provider health report, got %+v", reporter)
 	}

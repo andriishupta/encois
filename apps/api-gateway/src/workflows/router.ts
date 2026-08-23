@@ -20,6 +20,7 @@ import { cancelWorkflowRoute } from "./routes/cancel-workflow.route.js";
 import { rerunWorkflowRoute } from "./routes/rerun-workflow.route.js";
 import { retryWorkflowRoute } from "./routes/retry-workflow.route.js";
 import { listWorkflowPlansRoute } from "./routes/list-workflow-plans.route.js";
+import { listWorkflowPlannerVersionsRoute } from "./routes/list-workflow-planner-versions.route.js";
 import { createBlueprintLifecyclePlanRoute } from "./routes/create-blueprint-lifecycle-plan.route.js";
 import type { AppConfig } from "../config.js";
 
@@ -42,6 +43,7 @@ export function createWorkflowsRouter(
   router.post("/plans/preview", previewWorkflowCreationRoute);
   router.post("/plans/from-intent", submitWorkflowCreationRoute);
   router.get("/plans", listWorkflowPlansRoute);
+  router.get("/planner-versions", listWorkflowPlannerVersionsRoute);
   router.post("/plans", submitWorkflowPlanRoute());
   router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());

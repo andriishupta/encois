@@ -161,9 +161,17 @@ direct membership descendants
 
 The current API computes inherited descendants from the organization-unit tree
 and enforces role-aware direct membership permission mutations in the Gateway.
+Access requests do not mutate permissions directly: they are tenant-scoped,
+audited proposals with administrator-only approval, separate apply semantics,
+and a different-administrator check for separation of duties. The request path
+can only create a non-admin membership scope for the requesting active user;
+role permissions and administrator grants remain outside that path.
 Explicit grant/restriction persistence is intentionally deferred, but the
 contract boundary already models it so the Dashboard cannot replace the
 authorization algorithm with client or model logic.
+The authenticated principal carries only canonical organization-unit UUIDs in
+its effective scope; unit slugs are presentation metadata and must never enter
+UUID-backed SQL predicates or runtime authorization payloads.
 
 ## 5. Database and persistence security
 

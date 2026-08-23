@@ -2,8 +2,11 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import {
   AccessLevel,
+  CoordinationMode,
   isJsonObject,
+  type OrganizationOnboardingUpdateRequest,
   OrganizationUnitType,
+  type OrganizationAccessRequestCreateRequest,
   type OrganizationPermissionCreateRequest,
   type OrganizationPermissionUpdateRequest,
   type OrganizationUnitCreateRequest,
@@ -11,13 +14,20 @@ import {
 import type { GatewayEnv } from "../middleware/aos.js";
 import {
   createOrganizationPermissionForPrincipal,
+  applyOrganizationAccessRequestForPrincipal,
+  createOrganizationAccessRequestForPrincipal,
   createOrganizationUnitForPrincipal,
+  decideOrganizationAccessRequestForPrincipal,
   deleteOrganizationPermissionForPrincipal,
   getOrganizationForPrincipal,
   isOrganizationServiceError,
   listOrganizationMembersForPrincipal,
+  listOrganizationAccessRequestsForPrincipal,
   listOrganizationPermissionsForPrincipal,
   listOrganizationUnitsForPrincipal,
+  startOrganizationOnboardingForPrincipal,
+  updateOrganizationOnboardingForPrincipal,
+  type OrganizationOnboardingServiceOptions,
   updateOrganizationPermissionForPrincipal,
 } from "./services/organization.service.js";
 
@@ -51,11 +61,31 @@ function parsePermissionUpdate(value: unknown): OrganizationPermissionUpdateRequ
   return { access: value.access as AccessLevel };
 }
 
+function parseAccessRequestCreate(value: unknown): OrganizationAccessRequestCreateRequest | null {
+  if (!isJsonObject(value) || typeof value.unitId !== "string" || typeof value.access !== "string" || typeof value.reason !== "string") return null;
+  if (!Object.values(AccessLevel).includes(value.access as AccessLevel) || value.access === AccessLevel.Admin) return null;
+  return { unitId: value.unitId.trim(), access: value.access as Exclude<AccessLevel, "admin">, reason: value.reason };
+}
+
+function parseOnboardingUpdate(value: unknown): OrganizationOnboardingUpdateRequest | null {
+  if (!isJsonObject(value)) return null;
+  const hasCoordinationMode = value.coordinationMode !== undefined;
+  const hasSelectedWorkflows = value.selectedWorkflows !== undefined;
+  if (!hasCoordinationMode && !hasSelectedWorkflows) return null;
+  if (value.coordinationMode !== undefined && (typeof value.coordinationMode !== "string" || !Object.values(CoordinationMode).includes(value.coordinationMode as CoordinationMode))) return null;
+  if (value.selectedWorkflows !== undefined && (!Array.isArray(value.selectedWorkflows) || value.selectedWorkflows.some((item) => typeof item !== "string"))) return null;
+  return {
+    ...(typeof value.coordinationMode === "string" ? { coordinationMode: value.coordinationMode as CoordinationMode } : {}),
+    ...(Array.isArray(value.selectedWorkflows) ? { selectedWorkflows: value.selectedWorkflows } : {}),
+  };
+}
+
 function statusForError(code: string): 400 | 403 | 404 | 409 | 503 {
   if (code === "PERSISTENCE_UNAVAILABLE") return 503;
   if (code === "FORBIDDEN") return 403;
+  if (code === "ONBOARDING_START_FAILED") return 503;
   if (code.endsWith("_NOT_FOUND")) return 404;
-  if (code === "DUPLICATE_ORGANIZATION_UNIT") return 409;
+  if (code.endsWith("_CONFLICT") || code.endsWith("_NOT_DECIDABLE") || code.endsWith("_NOT_APPLICABLE") || code === "DUPLICATE_ORGANIZATION_UNIT") return 409;
   return 400;
 }
 
@@ -64,12 +94,31 @@ function errorResponse(context: Context<GatewayEnv>, error: unknown) {
   return context.json({ error: { code: error.code, message: error.message } }, statusForError(error.code));
 }
 
-export function createOrganizationRouter(): Hono<GatewayEnv> {
+export function createOrganizationRouter(options?: OrganizationOnboardingServiceOptions): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
 
   router.get("/", async (context) => {
     try {
       return context.json({ data: await getOrganizationForPrincipal(context.get("principal")) });
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  router.patch("/onboarding", async (context) => {
+    const request = parseOnboardingUpdate(await context.req.json().catch(() => null));
+    if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid onboarding configuration is required." } }, 400);
+    try {
+      return context.json({ data: await updateOrganizationOnboardingForPrincipal(context.get("principal"), request) });
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  router.post("/onboarding/start", async (context) => {
+    if (!options) return context.json({ error: { code: "PERSISTENCE_UNAVAILABLE", message: "Coordinator onboarding is not configured." } }, 503);
+    try {
+      return context.json({ data: await startOrganizationOnboardingForPrincipal(context.get("principal"), context.get("requestId"), options) });
     } catch (error) {
       return errorResponse(context, error);
     }
@@ -133,6 +182,46 @@ export function createOrganizationRouter(): Hono<GatewayEnv> {
     try {
       await deleteOrganizationPermissionForPrincipal(context.get("principal"), context.req.param("permissionId"));
       return context.json({ data: { deleted: true } });
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  router.get("/access-requests", async (context) => {
+    try {
+      return context.json({ data: await listOrganizationAccessRequestsForPrincipal(context.get("principal")) });
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  router.post("/access-requests", async (context) => {
+    const request = parseAccessRequestCreate(await context.req.json().catch(() => null));
+    if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A visible organization unit, non-admin access level, and reason are required." } }, 400);
+    try {
+      return context.json({ data: await createOrganizationAccessRequestForPrincipal(context.get("principal"), request) }, 201);
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  for (const decision of ["approve", "reject"] as const) {
+    router.post(`/access-requests/:requestId/${decision}`, async (context) => {
+      const requestId = context.req.param("requestId")?.trim();
+      if (!requestId) return context.json({ error: { code: "INVALID_REQUEST", message: "Access request id is required." } }, 400);
+      try {
+        return context.json({ data: await decideOrganizationAccessRequestForPrincipal(context.get("principal"), requestId, decision === "approve" ? "approved" : "rejected") });
+      } catch (error) {
+        return errorResponse(context, error);
+      }
+    });
+  }
+
+  router.post("/access-requests/:requestId/apply", async (context) => {
+    const requestId = context.req.param("requestId")?.trim();
+    if (!requestId) return context.json({ error: { code: "INVALID_REQUEST", message: "Access request id is required." } }, 400);
+    try {
+      return context.json({ data: await applyOrganizationAccessRequestForPrincipal(context.get("principal"), requestId) });
     } catch (error) {
       return errorResponse(context, error);
     }

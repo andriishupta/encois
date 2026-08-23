@@ -4,6 +4,7 @@ import type { AppConfig } from "./config.js";
 import type { WorkflowClient } from "./workflows/temporal-client.js";
 import type { WorkflowExecutionProjection } from "./workflows/types.js";
 import type { WebhookPayloadStore } from "./webhooks/payload-store.js";
+import { checkDatabase } from "./health/router.js";
 
 const testConfig: AppConfig = {
   bodyLimitBytes: 1_048_576,
@@ -43,6 +44,11 @@ const noOpWorkflowClient: WorkflowClient = {
 };
 
 describe("API Gateway", () => {
+  it("does not report database readiness before the current schema marker exists", async () => {
+    await expect(checkDatabase(async () => false)).resolves.toBe("failed");
+    await expect(checkDatabase(async () => true)).resolves.toBe("ok");
+  });
+
   it("fails closed when production capability signing is not configured", () => {
     expect(() =>
       createApp({
@@ -103,6 +109,76 @@ describe("API Gateway", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "AUTHENTICATION_UNAVAILABLE" },
     });
+  });
+
+  it("keeps integration health lifecycle states server-managed", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "00000000-0000-4000-8000-000000000001", organizationId: "00000000-0000-4000-8000-000000000002", scope: ["root"], permissions: ["integrations:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    for (const status of ["active", "degraded", "needs_reauth", "error"]) {
+      const response = await app.request("/api/v1/integrations/integration-1", {
+        method: "POST",
+        body: JSON.stringify({ status }),
+        headers: { "content-type": "application/json" },
+      });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
+    }
+  });
+
+  it("mounts the Memory governance boundary and rejects incomplete proposals", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "00000000-0000-4000-8000-000000000001", organizationId: "00000000-0000-4000-8000-000000000002", scope: ["root"], permissions: ["memory:read", "memory:manage"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const response = await app.request("/api/v1/context/memory/changes", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
+  });
+
+  it("requires a project key for project-neighborhood graph queries", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "00000000-0000-4000-8000-000000000001", organizationId: "00000000-0000-4000-8000-000000000002", scope: ["root"], permissions: ["context:read"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const response = await app.request("/api/v1/context/graph/query", {
+      method: "POST",
+      body: JSON.stringify({ query: "project.related_entities" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
+  });
+
+  it("does not fabricate recommendations when persistence is unavailable", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: { actorId: "00000000-0000-4000-8000-000000000001", organizationId: "00000000-0000-4000-8000-000000000002", scope: ["root"], permissions: ["workflows:read"] },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+
+    const response = await app.request("/api/v1/investigations/recommendations");
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
   });
 
   it("keeps webhook receipt public while validating its signed boundary", async () => {
@@ -360,11 +436,29 @@ describe("API Gateway", () => {
     expect(organization.status).toBe(503);
     await expect(organization.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
 
-    for (const path of ["/api/v1/organization/units", "/api/v1/organization/members", "/api/v1/organization/permissions"]) {
+    for (const path of ["/api/v1/organization/units", "/api/v1/organization/members", "/api/v1/organization/permissions", "/api/v1/organization/access-requests"]) {
       const response = await app.request(path);
       expect(response.status).toBe(503);
       await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
     }
+
+    const invalidOnboarding = await app.request("/api/v1/organization/onboarding", {
+      method: "PATCH",
+      body: JSON.stringify({ coordinationMode: "unknown" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalidOnboarding.status).toBe(400);
+
+    const emptyOnboarding = await app.request("/api/v1/organization/onboarding", {
+      method: "PATCH",
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" },
+    });
+    expect(emptyOnboarding.status).toBe(400);
+
+    const onboardingStart = await app.request("/api/v1/organization/onboarding/start", { method: "POST" });
+    expect(onboardingStart.status).toBe(503);
+    await expect(onboardingStart.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
 
     const invalidPermission = await app.request("/api/v1/organization/permissions", {
       method: "POST",
@@ -382,6 +476,16 @@ describe("API Gateway", () => {
 
     const invalidDelete = await app.request("/api/v1/organization/permissions/not-a-uuid", { method: "DELETE" });
     expect(invalidDelete.status).toBe(400);
+
+    const invalidAccessRequest = await app.request("/api/v1/organization/access-requests", {
+      method: "POST",
+      body: JSON.stringify({ unitId: "not-a-uuid", access: "admin", reason: "grant me access" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(invalidAccessRequest.status).toBe(400);
+
+    const invalidAccessRequestAction = await app.request("/api/v1/organization/access-requests/not-a-uuid/approve", { method: "POST" });
+    expect(invalidAccessRequestAction.status).toBe(400);
   });
 
   it("mounts tenant-protected Knowledge Source routes and rejects non-PDF uploads at the boundary", async () => {
@@ -851,6 +955,14 @@ describe("API Gateway", () => {
     const list = await app.request("/api/v1/workflows/plans");
     expect(list.status).toBe(503);
     await expect(list.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
+    const plannerVersions = await app.request("/api/v1/workflows/planner-versions");
+    expect(plannerVersions.status).toBe(503);
+    await expect(plannerVersions.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
+
+    const invalidPlannerVersionLimit = await app.request("/api/v1/workflows/planner-versions?limit=0");
+    expect(invalidPlannerVersionLimit.status).toBe(400);
+    await expect(invalidPlannerVersionLimit.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
 
     const approve = await app.request("/api/v1/workflows/plans/plan-persistence-unavailable/approve", {
       headers: { "content-type": "application/json" },

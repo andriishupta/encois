@@ -13,6 +13,8 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { queryKeys } from '@/lib/query-keys'
 import { humanizeKey } from '@/lib/formatters'
+import { formatUnitPath } from '@/lib/organization'
+import { useOrganization } from '@/lib/organization-context'
 
 export const Route = createFileRoute('/_app/sources/')({
   beforeLoad: () => {
@@ -22,6 +24,7 @@ export const Route = createFileRoute('/_app/sources/')({
 })
 
 function SourcesPage() {
+  const { units } = useOrganization()
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources })
   const canManageKnowledgeSources = hasPermission(getAuthSession(), Permission.KnowledgeManage)
   const [query, setQuery] = useState('')
@@ -31,7 +34,7 @@ function SourcesPage() {
   const [scope, setScope] = useState('all')
   const [freshness, setFreshness] = useState('all')
   const providerOptions = [...new Set((sources.data ?? []).map((source) => source.provider).filter((value): value is string => Boolean(value)))].sort()
-  const scopeOptions = [...new Set((sources.data ?? []).flatMap((source) => source.readScope.ids))].sort()
+  const scopeOptions = [...new Set((sources.data ?? []).flatMap((source) => source.readScope.ids))].sort().map((value) => ({ value, label: formatUnitPath(units, value) || value }))
   const freshnessOptions = [...new Set((sources.data ?? []).map((source) => source.freshness?.status).filter((value): value is NonNullable<typeof value> => Boolean(value)))].sort()
   const filteredSources = (sources.data ?? []).filter((source) => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -56,7 +59,7 @@ function SourcesPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <select value={provider} onChange={(event) => setProvider(event.target.value)} aria-label="Filter sources by provider" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All providers</option>{providerOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
             <select value={kind} onChange={(event) => setKind(event.target.value as KnowledgeSourceKind | 'all')} aria-label="Filter sources by type" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All types</option>{Object.values(KnowledgeSourceKind).map((value) => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}</select>
-            <select value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Filter sources by scope" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All scopes</option>{scopeOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+            <select value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Filter sources by scope" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All scopes</option>{scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
             <select value={freshness} onChange={(event) => setFreshness(event.target.value)} aria-label="Filter sources by freshness" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All freshness</option>{freshnessOptions.map((value) => <option key={value} value={value}>{humanizeKey(value)}</option>)}</select>
             <select value={status} onChange={(event) => setStatus(event.target.value as KnowledgeSourceStatus | 'all')} aria-label="Filter sources by status" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All statuses</option>{Object.values(KnowledgeSourceStatus).map((value) => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}</select>
           </div>

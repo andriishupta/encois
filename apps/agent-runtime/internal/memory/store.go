@@ -30,27 +30,31 @@ type Distillation struct {
 }
 
 type Request struct {
-	ContractVersion string        `json:"contractVersion"`
-	RequestID       string        `json:"requestId"`
-	TraceID         string        `json:"traceId,omitempty"`
-	WorkflowID      string        `json:"workflowId"`
-	RunID           string        `json:"runId,omitempty"`
-	OrganizationID  string        `json:"organizationId"`
-	ActorID         string        `json:"actorId"`
-	Scope           Scope         `json:"scope"`
-	PolicyVersion   string        `json:"policyVersion"`
-	Capability      string        `json:"capability"`
-	AgentDefinition string        `json:"agentDefinition"`
-	Operation       string        `json:"operation"`
-	MemoryScope     MemoryScope   `json:"memoryScope"`
-	Query           string        `json:"query,omitempty"`
-	MaxResults      int           `json:"maxResults,omitempty"`
-	Distillation    *Distillation `json:"distillation,omitempty"`
+	ContractVersion    string        `json:"contractVersion"`
+	RequestID          string        `json:"requestId"`
+	TraceID            string        `json:"traceId,omitempty"`
+	WorkflowID         string        `json:"workflowId"`
+	RunID              string        `json:"runId,omitempty"`
+	OrganizationID     string        `json:"organizationId"`
+	ActorID            string        `json:"actorId"`
+	Scope              Scope         `json:"scope"`
+	PolicyVersion      string        `json:"policyVersion"`
+	Capability         string        `json:"capability"`
+	AgentDefinition    string        `json:"agentDefinition"`
+	Operation          string        `json:"operation"`
+	MemoryScope        MemoryScope   `json:"memoryScope"`
+	TargetMemoryID     string        `json:"targetMemoryId,omitempty"`
+	ReplacementSummary string        `json:"replacementSummary,omitempty"`
+	Query              string        `json:"query,omitempty"`
+	MaxResults         int           `json:"maxResults,omitempty"`
+	Distillation       *Distillation `json:"distillation,omitempty"`
 }
 
 type Record struct {
 	ID              string                           `json:"id"`
 	AgentDefinition string                           `json:"agentDefinition"`
+	ProjectID       string                           `json:"projectId,omitempty"`
+	UserID          string                           `json:"userId,omitempty"`
 	Summary         string                           `json:"summary"`
 	EvidenceRefs    []string                         `json:"evidenceRefs"`
 	ObservedAt      string                           `json:"observedAt"`
@@ -94,20 +98,24 @@ func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.fixture && request.Operation != "distill" && len(s.records[key]) == 0 {
-			s.records[key] = []Record{{
-				ID:              fmt.Sprintf("fixture-memory-%s", safeMemoryID(request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID)),
-				AgentDefinition: request.MemoryScope.AgentDefinition,
-				Summary:         fmt.Sprintf("Local memory fixture for organization %s, scoped to %s. Release context is available for review.", request.OrganizationID, strings.Join(request.Scope.IDs, ", ")),
-				EvidenceRefs:    []string{fmt.Sprintf("memory://local/%s/%s", request.OrganizationID, request.MemoryScope.AgentDefinition)},
-				ObservedAt:      time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339),
-				WorkflowID:      request.WorkflowID,
-				RunID:           request.RunID,
-			}}
+		s.records[key] = []Record{{
+			ID:              fmt.Sprintf("fixture-memory-%s", safeMemoryID(request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID)),
+			AgentDefinition: request.MemoryScope.AgentDefinition,
+			ProjectID:       request.MemoryScope.ProjectID,
+			UserID:          request.MemoryScope.UserID,
+			Summary:         "Local memory fixture for the selected organization scope. Release context is available for review.",
+			EvidenceRefs:    []string{fmt.Sprintf("memory://local/%s/%s", request.OrganizationID, request.MemoryScope.AgentDefinition)},
+			ObservedAt:      time.Now().Add(-15 * time.Minute).UTC().Format(time.RFC3339),
+			WorkflowID:      request.WorkflowID,
+			RunID:           request.RunID,
+		}}
 	}
 	if request.Operation == "distill" && request.Distillation != nil {
 		record := Record{
 			ID:              fmt.Sprintf("mock-memory-%d", time.Now().UnixNano()),
 			AgentDefinition: request.MemoryScope.AgentDefinition,
+			ProjectID:       request.MemoryScope.ProjectID,
+			UserID:          request.MemoryScope.UserID,
 			Summary:         request.Distillation.Summary,
 			EvidenceRefs:    append([]string(nil), request.Distillation.EvidenceRefs...),
 			ObservedAt:      request.Distillation.ObservedAt,
@@ -116,6 +124,36 @@ func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) 
 		}
 		s.records[key] = append(s.records[key], record)
 		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{record}}, nil
+	}
+	if request.Operation == "correct" {
+		if request.TargetMemoryID == "" || strings.TrimSpace(request.ReplacementSummary) == "" {
+			return Result{}, fmt.Errorf("target memory id and replacement summary are required")
+		}
+		for index := range s.records[key] {
+			if s.records[key][index].ID != request.TargetMemoryID {
+				continue
+			}
+			s.records[key][index].Summary = request.ReplacementSummary
+			s.records[key][index].ObservedAt = time.Now().UTC().Format(time.RFC3339)
+			return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{s.records[key][index]}}, nil
+		}
+		return Result{}, fmt.Errorf("memory %q was not found in the requested scope", request.TargetMemoryID)
+	}
+	if request.Operation == "delete" {
+		if request.TargetMemoryID == "" {
+			return Result{}, fmt.Errorf("target memory id is required")
+		}
+		filtered := s.records[key][:0]
+		for _, record := range s.records[key] {
+			if record.ID != request.TargetMemoryID {
+				filtered = append(filtered, record)
+			}
+		}
+		s.records[key] = filtered
+		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{}}, nil
+	}
+	if request.Operation != "retrieve" {
+		return Result{}, fmt.Errorf("unsupported memory operation %q", request.Operation)
 	}
 	records := append([]Record(nil), s.records[key]...)
 	if request.Query != "" {

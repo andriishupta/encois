@@ -75,7 +75,7 @@ function IntegrationDetailPage() {
   })
 
   if (integrations.isLoading) return <p className="text-sm text-muted-foreground">Loading integration…</p>
-  if (integrations.isError) return <Card><CardContent className="pt-6 text-sm text-destructive">Could not load integration: {integrations.error.message}</CardContent></Card>
+  if (integrations.isError) return <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load integration: {integrations.error.message}</p><Button type="button" variant="outline" onClick={() => void integrations.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card>
   if (!integration) return <Card><CardContent className="pt-6"><EmptyPanel icon={PlugZap} title="Integration not found" description="This integration is not visible in the current organization scope." /></CardContent></Card>
 
   const Icon = integration.provider.toLowerCase() === 'github' ? Github : PlugZap
@@ -85,12 +85,14 @@ function IntegrationDetailPage() {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const displayName = String(form.get('displayName') ?? '').trim()
-    const status = String(form.get('status') ?? '')
-    const input: IntegrationUpdateRequest = {
-      ...(displayName ? { displayName } : {}),
-      ...(Object.values(IntegrationStatus).includes(status as IntegrationStatus) ? { status: status as IntegrationStatus } : {}),
-    }
+    const input: IntegrationUpdateRequest = displayName ? { displayName } : {}
     if (Object.keys(input).length > 0) mutation.mutate(input)
+  }
+
+  function disableIntegration() {
+    if (!canManage || integration?.status === IntegrationStatus.Disabled) return
+    if (!window.confirm('Disable this Integration? Existing Sources will stop receiving provider updates until it is authorized again.')) return
+    mutation.mutate({ status: IntegrationStatus.Disabled })
   }
 
   return (
@@ -121,10 +123,10 @@ function IntegrationDetailPage() {
               </label>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-status">
                 Status
-                <select id="integration-status" name="status" defaultValue={integration.status} disabled={!canManage} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60">
-                  {[IntegrationStatus.Pending, ...(integration.credentialConfigured ? [IntegrationStatus.Authorized] : []), IntegrationStatus.Disabled, integration.status].filter((status, index, values) => values.indexOf(status) === index).map((status) => <option key={status} value={status}>{humanizeKey(status)}</option>)}
-                </select>
-                <p className="text-xs font-normal text-muted-foreground">Active is server-managed after provider authorization or a health check. Authorization is completed by the provider adapter and never by entering a secret here.</p>
+                <div id="integration-status" aria-live="polite" className="flex min-h-9 items-center rounded-md border border-input bg-muted/30 px-3 text-sm">
+                  {humanizeKey(integration.status)}
+                </div>
+                <p className="text-xs font-normal text-muted-foreground">Authorization, health, degradation, and reauthorization states are server-managed. The only manual lifecycle action is disabling this connection.</p>
               </label>
               <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
                 <div className="flex items-start gap-3">
@@ -154,10 +156,13 @@ function IntegrationDetailPage() {
               {mutation.isSuccess ? <p className="text-sm text-muted-foreground">Changes saved.</p> : null}
               <div className="flex items-center justify-between gap-4 border-t pt-5">
                 {!canManage ? <span className="text-xs text-muted-foreground">Read-only access</span> : <span />}
-                <Button type="submit" disabled={!canManage || mutation.isPending}>
-                  <Save data-icon="inline-start" />
-                  {mutation.isPending ? 'Saving…' : 'Save changes'}
-                </Button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {canManage && integration.status !== IntegrationStatus.Disabled ? <Button type="button" variant="outline" onClick={disableIntegration} disabled={mutation.isPending}><Power data-icon="inline-start" />Disable integration</Button> : null}
+                  <Button type="submit" disabled={!canManage || mutation.isPending}>
+                    <Save data-icon="inline-start" />
+                    {mutation.isPending ? 'Saving…' : 'Save changes'}
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>
@@ -201,11 +206,14 @@ function IntegrationDetailPage() {
         revealedSecret={revealedWebhookSecret}
         onDismissSecret={() => setRevealedWebhookSecret(null)}
         onProvision={(endpointKey) => webhookProvisionMutation.mutate(endpointKey)}
-        onRotate={() => webhookRotateMutation.mutate()}
+        onRotate={() => {
+          if (window.confirm('Rotate this webhook secret? The current provider secret will stop working immediately.')) webhookRotateMutation.mutate()
+        }}
         onSetStatus={(status) => {
           if (status === 'disabled' && !window.confirm('Disable this webhook endpoint? Provider deliveries will receive a not-found response.')) return
           webhookStatusMutation.mutate(status)
         }}
+        onRetry={() => void webhookEndpoint.refetch()}
         isMutating={webhookProvisionMutation.isPending || webhookRotateMutation.isPending || webhookStatusMutation.isPending}
         mutationError={webhookProvisionMutation.error ?? webhookRotateMutation.error ?? webhookStatusMutation.error}
       />
@@ -221,7 +229,7 @@ function IntegrationDetailPage() {
           </div>
           {!canViewSources ? <EmptyPanel icon={PlugZap} title="Source history is restricted" description="Knowledge source visibility is not included in the current permissions." /> : null}
           {canViewSources && (sources.isLoading || sourceDetailQueries.some((query) => query.isLoading)) ? <p className="text-sm text-muted-foreground">Loading sync history…</p> : null}
-          {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <p className="text-sm text-destructive">Some source history is unavailable. Open the source directly to retry its detailed run history.</p> : null}
+          {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Some source history is unavailable.</p><Button type="button" variant="outline" onClick={() => { void sources.refetch(); for (const query of sourceDetailQueries) void query.refetch() }}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
           {canViewSources && !sources.isLoading && !sourceDetailQueries.some((query) => query.isLoading) && !syncHistory.length ? <EmptyPanel icon={Clock3} title="No ingestion runs yet" description={integrationSources.length ? 'Connected Sources have not recorded an ingestion run in this scope.' : 'Create a Knowledge Source after this Integration becomes active.'} /> : null}
           {syncHistory.map(({ source, run }) => <div key={run.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link to="/sources/$sourceId" params={{ sourceId: source.id }} className="block truncate text-sm font-medium hover:underline">{source.name}</Link><p className="text-xs text-muted-foreground">{humanizeKey(run.trigger)} · {humanizeKey(run.status)} · {run.factsCount} facts</p></div><div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right"><p>{formatDate(run.updatedAt)}</p>{run.error ? <p className="max-w-64 truncate text-destructive">{run.error}</p> : null}</div></div>)}
         </CardContent>
@@ -231,7 +239,7 @@ function IntegrationDetailPage() {
         <CardHeader><CardTitle>Knowledge Sources</CardTitle><CardDescription>Sources currently referencing this Integration in your visible scope.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-2">
           {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading Sources…</p> : null}
-          {sources.isError ? <p className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p> : null}
+          {sources.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p><Button type="button" variant="outline" onClick={() => void sources.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
           {!sources.isLoading && !sources.isError && !integrationSources.length ? <EmptyPanel icon={PlugZap} title="No Sources use this Integration" description="Create a Knowledge Source after the connection is authorized and active." /> : null}
           {integrationSources.map((source) => <Link key={source.id} to="/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><span className="min-w-0"><span className="block truncate font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.status.replace('_', ' ')} · {source.currentRevisionId ? 'revision available' : 'no revision yet'}</span></span><span className="text-xs text-muted-foreground">Open</span></Link>)}
         </CardContent>
@@ -297,6 +305,7 @@ function WebhookIngressCard({
   onProvision,
   onRotate,
   onSetStatus,
+  onRetry,
   isMutating,
   mutationError,
 }: {
@@ -309,6 +318,7 @@ function WebhookIngressCard({
   onProvision: (endpointKey?: string) => void
   onRotate: () => void
   onSetStatus: (status: 'active' | 'disabled') => void
+  onRetry: () => void
   isMutating: boolean
   mutationError: Error | null
 }) {
@@ -347,7 +357,7 @@ function WebhookIngressCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {query.isLoading ? <p className="text-sm text-muted-foreground">Loading webhook endpoint…</p> : null}
-        {query.isError ? <p className="text-sm text-destructive">Could not load webhook endpoint: {query.error?.message ?? 'Unknown error'}</p> : null}
+        {query.isError ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load webhook endpoint: {query.error?.message ?? 'Unknown error'}</p><Button type="button" variant="outline" onClick={onRetry}><RefreshCw data-icon="inline-start" />Retry</Button></div> : null}
 
         {!query.isLoading && !query.isError && !endpoint ? <div className="flex flex-col gap-3 rounded-lg border border-dashed bg-muted/20 p-4">
           <div>

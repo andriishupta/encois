@@ -76,7 +76,7 @@ function SourceDetailPage() {
   }
 
   if (source.isLoading) return <p className="text-sm text-muted-foreground">Loading source…</p>
-  if (source.isError) return <Card><CardContent className="pt-6 text-sm text-destructive">Could not load source: {source.error.message}</CardContent></Card>
+  if (source.isError) return <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load source: {source.error.message}</p><Button type="button" variant="outline" onClick={() => void source.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card>
   if (!source.data) return <Card><CardContent className="pt-6"><EmptyPanel icon={Waypoints} title="Source not found" description="This source is not visible in the current organization scope." /></CardContent></Card>
 
   const latestRevision = source.data.revisions[source.data.revisions.length - 1]
@@ -85,27 +85,27 @@ function SourceDetailPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={source.data.source.name} description={`${source.data.source.provider ?? source.data.source.contentType ?? source.data.source.kind} · ${source.data.source.status.replace('_', ' ')}`} actions={<Button variant="outline" asChild><Link to="/sources"><ArrowLeft data-icon="inline-start" />All sources</Link></Button>} />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><FreshnessCard label="Freshness" value={source.data.source.freshness ? humanizeKey(source.data.source.freshness.status) : 'Unavailable'} detail={source.data.source.freshness?.expiresAt ? `Expires ${formatDate(source.data.source.freshness.expiresAt)}` : 'Provider timestamp is not available'} /><FreshnessCard label="Latest revision" value={latestRevision ? latestRevision.revision : 'No revision'} detail={latestRevision ? formatDate(latestRevision.createdAt) : 'Awaiting acquisition'} /><FreshnessCard label="Observed" value={latestRevision?.observedAt ? formatDate(latestRevision.observedAt) : 'Not reported'} detail="Provider observation time" /><FreshnessCard label="Ingested" value={latestRevision?.ingestedAt ? formatDate(latestRevision.ingestedAt) : 'Not ingested'} detail="Normalized into context" /></div>
-      <Card>
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4"><FreshnessCard label="Freshness" value={source.data.source.freshness ? humanizeKey(source.data.source.freshness.status) : 'Unavailable'} detail={source.data.source.freshness?.expiresAt ? `Expires ${formatDate(source.data.source.freshness.expiresAt)}` : 'Provider timestamp is not available'} /><FreshnessCard label="Latest revision" value={latestRevision ? latestRevision.revision : 'No revision'} detail={latestRevision ? formatDate(latestRevision.createdAt) : 'Awaiting acquisition'} /><FreshnessCard label="Observed" value={latestRevision?.observedAt ? formatDate(latestRevision.observedAt) : 'Not reported'} detail="Provider observation time" /><FreshnessCard label="Ingested" value={latestRevision?.ingestedAt ? formatDate(latestRevision.ingestedAt) : 'Not ingested'} detail="Normalized into context" /></div>
+      <Card className="min-w-0">
         <CardHeader><CardTitle>Scope and provenance</CardTitle><CardDescription>Encois keeps access scope separate from provider configuration and immutable revision content.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><ScopeValue label="Provider" value={source.data.source.provider ?? 'Uploaded document'} /><ScopeValue label="Integration" value={source.data.source.integrationId ? <Link className="underline underline-offset-2" to="/integrations/$integrationId" params={{ integrationId: source.data.source.integrationId }}>Open Integration</Link> : 'Not applicable'} /><ScopeValue label="Read scope" value={source.data.source.readScope.ids.join(', ')} /><ScopeValue label="Visibility scope" value={source.data.source.visibilityScope.ids.join(', ')} /></CardContent>
       </Card>
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <Card>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <Card className="min-w-0">
           <CardHeader><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-md border bg-muted/30"><Icon className="size-5 text-muted-foreground" aria-hidden="true" /></span><div><CardTitle><ProductTerm term="revision" plural /></CardTitle><CardDescription>Immutable snapshots retained with provenance metadata.</CardDescription></div></div></CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          <CardContent className="flex min-w-0 flex-col gap-3">
             {source.data.revisions.length ? source.data.revisions.map((revision) => <RevisionRow key={revision.id} revision={revision} onIngest={() => ingest.mutate(revision.id)} busy={ingest.isPending} />) : <EmptyPanel icon={FileText} title={<>No <ProductTerm term="revision" plural /></>} description={<>This source has not produced a <ProductTerm term="revision" /> yet.</>} />}
             {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
             {source.data.revisions.length > 1 ? <div className="mt-2 rounded-lg border bg-muted/20 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium" htmlFor="compare-source-revision">Compare latest with<select id="compare-source-revision" value={comparisonRevision?.id ?? ''} onChange={(event) => setCompareRevisionId(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="">Select a revision</option>{source.data.revisions.filter((revision) => revision.id !== latestRevision?.id).map((revision) => <option key={revision.id} value={revision.id}>{revision.revision} · {revision.status}</option>)}</select></label><span className="text-xs text-muted-foreground">History is immutable; compare shows stored provenance metadata.</span></div>{comparisonRevision && latestRevision ? <RevisionComparison current={latestRevision} previous={comparisonRevision} /> : null}</div> : null}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader><CardTitle><ProductTerm term="ingestion" /> activity</CardTitle><CardDescription>Processing activity for this source.</CardDescription></CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          <CardContent className="flex min-w-0 flex-col gap-3">
             {source.data.ingestionRuns.length ? source.data.ingestionRuns.map((run) => <div key={run.id} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-medium">{run.status}</span><span className="text-xs text-muted-foreground">{run.trigger}</span></div><p className="mt-2 text-xs text-muted-foreground">{run.currentStage ?? 'Queued for acquisition'} · {run.factsCount} facts</p>{run.error ? <p className="mt-2 text-xs text-destructive">{run.error}</p> : null}</div>) : <EmptyPanel icon={RefreshCw} title="No ingestion runs" description={latestRevision ? 'Start ingestion for the latest revision.' : 'Upload a revision first.'} />}
           </CardContent>
         </Card>
-        {canManageKnowledge ? <Card className="lg:col-span-2">
+        {canManageKnowledge ? <Card className="min-w-0 lg:col-span-2">
           <CardHeader><CardTitle>Register a new revision</CardTitle><CardDescription>Add a provider-backed immutable snapshot. Existing revisions are never overwritten.</CardDescription></CardHeader>
           <CardContent>
             <form className="flex flex-col gap-4" onSubmit={handleRegisterRevision}>
@@ -141,11 +141,11 @@ function RevisionComparison({ current, previous }: { current: SourceRevision; pr
 
 function RevisionRow({ revision, onIngest, busy }: { revision: SourceRevision; onIngest: () => void; busy: boolean }) {
   const fileName = typeof revision.metadata?.fileName === 'string' ? revision.metadata.fileName : undefined
-  return <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><FileText className="size-4 text-muted-foreground" aria-hidden="true" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{fileName ?? revision.revision}</p><p className="mt-1 truncate text-xs text-muted-foreground">{revision.contentType ?? 'Unknown type'} · observed {revision.observedAt ? formatDate(revision.observedAt) : 'unknown'} · ingested {revision.ingestedAt ? formatDate(revision.ingestedAt) : 'pending'}</p></div><span className="text-xs text-muted-foreground">{revision.status}</span><Button size="sm" variant="outline" onClick={onIngest} disabled={busy || revision.status === SourceRevisionStatus.Ingesting}>{busy ? <LoaderCircle className="animate-spin" /> : <Play />}<span className="hidden sm:inline">Ingest</span></Button></div>
+  return <div className="flex min-w-0 flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><FileText className="size-4 text-muted-foreground" aria-hidden="true" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{fileName ?? revision.revision}</p><p className="mt-1 truncate text-xs text-muted-foreground">{revision.contentType ?? 'Unknown type'} · observed {revision.observedAt ? formatDate(revision.observedAt) : 'unknown'} · ingested {revision.ingestedAt ? formatDate(revision.ingestedAt) : 'pending'}</p></div><span className="shrink-0 text-xs text-muted-foreground">{revision.status}</span><Button className="shrink-0" size="sm" variant="outline" onClick={onIngest} disabled={busy || revision.status === SourceRevisionStatus.Ingesting}>{busy ? <LoaderCircle className="animate-spin" /> : <Play />}<span className="hidden sm:inline">Ingest</span></Button></div>
 }
 
 function FreshnessCard({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <Card><CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle><RefreshCw className="size-4 text-muted-foreground" aria-hidden="true" /></CardHeader><CardContent><p className="truncate text-sm font-medium">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
+  return <Card className="min-w-0"><CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0"><CardTitle className="min-w-0 text-sm font-medium text-muted-foreground">{label}</CardTitle><RefreshCw className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></CardHeader><CardContent className="min-w-0"><p className="truncate text-sm font-medium">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
 }
 
 function ScopeValue({ label, value }: { label: string; value: ReactNode }) {

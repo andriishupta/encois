@@ -15,6 +15,8 @@ import {
 import { queryKeys } from '@/lib/query-keys'
 
 type OrganizationContextValue = {
+  organizationName: string | null
+  onboarding: OrganizationProjection['onboarding'] | null
   units: OrganizationUnit[]
   setUnits: Dispatch<SetStateAction<OrganizationUnit[]>>
   members: OrganizationMember[]
@@ -52,6 +54,7 @@ function toMember(member: OrganizationProjection['members'][number]): Organizati
     name: member.name,
     email: member.email ?? 'No email available',
     role: member.role,
+    roleKey: member.roleKey,
     homeUnitId: member.homeUnitId ?? '',
     status: member.status.charAt(0).toUpperCase() + member.status.slice(1),
   }
@@ -109,6 +112,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.organization() })
 
     return {
+      organizationName: query.data?.organization.name ?? (mockMode ? units.find((unit) => unit.parentId === null)?.name ?? null : null),
+      onboarding: query.data?.onboarding ?? null,
       units,
       setUnits,
       members,

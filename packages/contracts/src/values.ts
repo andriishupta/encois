@@ -131,6 +131,8 @@ export type GraphQueryStatus = (typeof GraphQueryStatus)[keyof typeof GraphQuery
 export const AgentMemoryOperation = {
   Retrieve: "retrieve",
   Distill: "distill",
+  Correct: "correct",
+  Delete: "delete",
 } as const;
 export type AgentMemoryOperation = (typeof AgentMemoryOperation)[keyof typeof AgentMemoryOperation];
 
@@ -169,6 +171,25 @@ export const CoordinatorEventType = {
   ProviderChanged: "provider-changed",
 } as const;
 export type CoordinatorEventType = (typeof CoordinatorEventType)[keyof typeof CoordinatorEventType];
+
+export const RecommendationStatus = {
+  Open: "open",
+  Accepted: "accepted",
+  Dismissed: "dismissed",
+  Resolved: "resolved",
+} as const;
+export type RecommendationStatus = (typeof RecommendationStatus)[keyof typeof RecommendationStatus];
+
+export const RecommendationTarget = {
+  Integrations: "integrations",
+  Sources: "sources",
+  NewSource: "sources_new",
+  Workflows: "workflows",
+  NewWorkflow: "workflows_new",
+  Review: "review",
+  Context: "context",
+} as const;
+export type RecommendationTarget = (typeof RecommendationTarget)[keyof typeof RecommendationTarget];
 
 export const WorkflowChangeKind = {
   Create: "create",
@@ -209,6 +230,28 @@ export const OrganizationMembershipStatus = {
   Suspended: "suspended",
 } as const;
 export type OrganizationMembershipStatus = (typeof OrganizationMembershipStatus)[keyof typeof OrganizationMembershipStatus];
+
+export const OrganizationAccessRequestStatus = {
+  Proposed: "proposed",
+  Approved: "approved",
+  Rejected: "rejected",
+  Applied: "applied",
+} as const;
+export type OrganizationAccessRequestStatus = (typeof OrganizationAccessRequestStatus)[keyof typeof OrganizationAccessRequestStatus];
+
+export const OrganizationOnboardingStatus = {
+  Pending: "pending",
+  Initializing: "initializing",
+  Ready: "ready",
+  Failed: "failed",
+} as const;
+export type OrganizationOnboardingStatus = (typeof OrganizationOnboardingStatus)[keyof typeof OrganizationOnboardingStatus];
+
+export const CoordinationMode = {
+  StartCoordinator: "start-coordinator",
+  ConnectOnly: "connect-only",
+} as const;
+export type CoordinationMode = (typeof CoordinationMode)[keyof typeof CoordinationMode];
 
 export const ScopeRuleMode = {
   Grant: "grant",

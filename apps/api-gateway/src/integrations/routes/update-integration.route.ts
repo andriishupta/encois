@@ -1,15 +1,10 @@
 import type { Handler } from "hono";
-import { isJsonObject } from "@encois/contracts";
-import { integrationStatus, type IntegrationStatus } from "@encois/persistence";
+import { IntegrationStatus, isJsonObject } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   updateIntegrationForPrincipal,
   type IntegrationUpdate,
 } from "../services/integrations.service.js";
-
-function isIntegrationStatus(value: unknown): value is IntegrationStatus {
-  return typeof value === "string" && integrationStatus.enumValues.includes(value as IntegrationStatus);
-}
 
 function parseUpdate(value: unknown): IntegrationUpdate | null {
   if (!isJsonObject(value)) return null;
@@ -20,8 +15,8 @@ function parseUpdate(value: unknown): IntegrationUpdate | null {
     update.displayName = value.displayName.trim();
   }
   if (value.status !== undefined) {
-    if (!isIntegrationStatus(value.status)) return null;
-    update.status = value.status;
+    if (value.status !== IntegrationStatus.Disabled) return null;
+    update.status = IntegrationStatus.Disabled;
   }
 
   return Object.keys(update).length > 0 ? update : null;
@@ -51,18 +46,6 @@ export const updateIntegrationRoute: Handler<GatewayEnv> = async (context) => {
         ? context.json({ data: integration })
         : context.json({ error: { code: "INTEGRATION_NOT_FOUND", message: "Integration not found." } }, 404);
     } catch (error) {
-      if (error instanceof Error && error.message === "INTEGRATION_CREDENTIAL_REQUIRED") {
-        return context.json(
-          { error: { code: error.message, message: "The Integration cannot become authorized or active until provider credentials are configured." } },
-          409,
-        );
-      }
-      if (error instanceof Error && error.message === "INTEGRATION_HEALTH_CHECK_REQUIRED") {
-        return context.json(
-          { error: { code: error.message, message: "The Integration becomes active only after a server-side provider authorization or health check succeeds." } },
-          409,
-        );
-      }
       if (error instanceof Error && error.message === "PERSISTENCE_UNAVAILABLE") {
         return context.json(
           { error: { code: "PERSISTENCE_UNAVAILABLE", message: "Database access is not configured." } },

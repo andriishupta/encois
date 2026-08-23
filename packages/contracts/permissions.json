@@ -11,6 +11,7 @@
     { "key": "knowledge:manage", "implies": ["knowledge:read"] },
     { "key": "context:read", "implies": [] },
     { "key": "memory:read", "implies": [] },
+    { "key": "memory:manage", "implies": ["memory:read"] },
     { "key": "organization:read", "implies": [] },
     { "key": "organization:manage", "implies": ["organization:read"] },
     { "key": "settings:read", "implies": [] },

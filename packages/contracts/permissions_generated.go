@@ -16,6 +16,7 @@ const (
 	PermissionKnowledgeManage Permission = "knowledge:manage"
 	PermissionContextRead Permission = "context:read"
 	PermissionMemoryRead Permission = "memory:read"
+	PermissionMemoryManage Permission = "memory:manage"
 	PermissionOrganizationRead Permission = "organization:read"
 	PermissionOrganizationManage Permission = "organization:manage"
 	PermissionSettingsRead Permission = "settings:read"
@@ -33,6 +34,7 @@ var AllPermissions = []Permission{
 	PermissionKnowledgeManage,
 	PermissionContextRead,
 	PermissionMemoryRead,
+	PermissionMemoryManage,
 	PermissionOrganizationRead,
 	PermissionOrganizationManage,
 	PermissionSettingsRead,

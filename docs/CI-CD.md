@@ -113,7 +113,9 @@ load-balancer path; the local image can keep the default `/` base path. For
 real invite-only Google login, also pass the public Firebase web configuration
 as `VITE_FIREBASE_*` build arguments. These are browser identifiers, not service
 credentials; keep provider secrets and the API runtime configuration outside
-the dashboard image.
+the dashboard image. CI also starts the dashboard image and checks `/dashboard/`,
+an emitted `/dashboard/assets/*` JavaScript file, and a client-side route so a
+path-prefix regression cannot pass as a successful container build.
 
 The local synthetic execution smoke command is `pnpm smoke:release`; it is
 opt-in and expects Temporal, Agent Gateway, and the Go Runtime to be started
@@ -211,6 +213,7 @@ PR checks
   -> GitHub Environment approval
   -> Terraform apply / Cloud Run revision rollout
   -> protected `migrate-production.yml` executes the matching Cloud SQL Job image
+     (the API readiness probe remains 503 until the current schema marker exists)
   -> Cloud Scheduler invokes tenant-scoped retention cleanup on its configured cadence
   -> smoke test public /healthz, dashboard, and API
   -> record revision, image digest, migration, and run evidence

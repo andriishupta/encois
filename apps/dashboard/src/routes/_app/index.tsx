@@ -1,16 +1,16 @@
 import { useState, type ReactNode } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { IntegrationStatus, WorkflowExecutionStatus } from '@encois/contracts'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { IntegrationStatus, RecommendationStatus, RecommendationTarget, WorkflowExecutionStatus, type RecommendationProjection } from '@encois/contracts'
 import { Activity, ArrowRight, ArrowUpRight, CircleDashed, GitBranch, PlugZap, RefreshCw, Sparkles, Timer, TriangleAlert, X } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { listIntegrations, listKnowledgeSources, listWorkflowActivity, listWorkflows } from '@/lib/api'
+import { listIntegrations, listKnowledgeSources, listRecommendations, listWorkflowActivity, listWorkflows, startOrganizationOnboarding, updateRecommendation } from '@/lib/api'
 import { isDashboardMockMode } from '@/lib/auth'
-import { updateMockOnboardingState, type WorkspaceInitializationStatus } from '@/lib/onboarding'
+import { updateMockOnboardingState, type CoordinationMode, type WorkspaceInitializationStatus } from '@/lib/onboarding'
 import { queryKeys } from '@/lib/query-keys'
 import { useWorkspace, workspaceQueryKey } from '@/lib/workspace'
 import { usePermissions } from '@/lib/permissions'
@@ -31,18 +31,30 @@ function DashboardPage() {
   const canManageWorkflows = can(Permission.WorkflowsManage)
   const canManageIntegrations = can(Permission.IntegrationsManage)
   const canManageSources = can(Permission.KnowledgeManage)
-  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows })
-  const activity = useQuery({ queryKey: queryKeys.workflowActivity(), queryFn: listWorkflowActivity, enabled: canViewWorkflows })
+  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows, refetchInterval: (query) => query.state.data?.some((workflow) => isActiveWorkflow(workflow.status)) ? 5_000 : 30_000 })
+  const activity = useQuery({ queryKey: queryKeys.workflowActivity(), queryFn: listWorkflowActivity, enabled: canViewWorkflows, refetchInterval: 10_000 })
   const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
   const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations, enabled: canViewIntegrations })
+  const recommendations = useQuery({ queryKey: queryKeys.recommendations(), queryFn: listRecommendations, enabled: !isDashboardMockMode(), retry: 1, refetchInterval: 30_000 })
+  const recommendationAction = useMutation({
+    mutationFn: ({ recommendationId, action }: { recommendationId: string; action: 'accept' | 'dismiss' }) => updateRecommendation(recommendationId, action),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations() }),
+  })
+  const onboardingStart = useMutation({
+    mutationFn: startOrganizationOnboarding,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.organization() }),
+  })
   const [startingInitialization, setStartingInitialization] = useState(false)
-  const activeWorkflows = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
-  const runningWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
-  const waitingWorkflows = activeWorkflows.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
-  const attentionWorkflows = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
+  const activeRuns = workflows.data?.filter((workflow) => isActiveWorkflow(workflow.status)) ?? []
+  const runningRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Running).length
+  const waitingRuns = activeRuns.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting).length
+  const attentionRuns = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial).length ?? 0
 
   function startInitialization() {
-    if (!isDashboardMockMode()) return
+    if (!isDashboardMockMode()) {
+      onboardingStart.mutate()
+      return
+    }
     setStartingInitialization(true)
     queryClient.setQueryData(workspaceQueryKey(), updateMockOnboardingState({ status: 'initializing' }))
     window.setTimeout(() => {
@@ -60,17 +72,18 @@ function DashboardPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Dashboard"
-        description={<>Current activity for <ProductTerm term="scope" /> <span className="font-medium text-foreground">{workspace?.workspaceName ?? 'this organization'}</span>. Counts and events are limited by your permissions.</>}
+        description={<>Current activity for <ProductTerm term="scope" /> <span className="font-medium text-foreground">{workspace?.workspaceName ?? 'this organization'}</span>. Counts and events are limited by your permissions; active Runs refresh automatically.</>}
         actions={<div className="flex flex-wrap items-center gap-2">{canManageIntegrations ? <Button variant="outline" asChild><Link to="/integrations"><PlugZap data-icon="inline-start" />Connect integration</Link></Button> : null}{canManageWorkflows ? <Button asChild><Link to="/workflows/new"><GitBranch data-icon="inline-start" />New workflow</Link></Button> : null}</div>}
       />
 
-      {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization} /> : null}
+      {workspace && !(workspace.status === 'ready' && workspace.initializationBannerDismissed) ? <InitializationCard status={workspace.status} workspaceName={workspace.workspaceName} coordinationMode={workspace.coordinationMode} selectedWorkflows={workspace.selectedWorkflows.length} onStart={startInitialization} onDismiss={dismissReadyBanner} starting={startingInitialization || onboardingStart.isPending} /> : null}
+      {onboardingStart.isError ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not start the Coordinator: {onboardingStart.error.message}</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewCard icon={Activity} label="Active workflows" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, activeWorkflows.length)} detail={!canViewWorkflows ? 'Access restricted' : workflows.isError ? 'Unavailable' : `${runningWorkflows} running · ${waitingWorkflows} waiting`} />
+        <OverviewCard icon={Activity} label="Active runs" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, activeRuns.length)} detail={!canViewWorkflows ? 'Access restricted' : workflows.isError ? 'Unavailable' : `${runningRuns} running · ${waitingRuns} waiting`} />
         <OverviewCard icon={PlugZap} label="Knowledge sources" value={metricValue(canViewSources, sources.isLoading, sources.isError, sources.data?.length ?? 0)} detail={!canViewSources ? 'Access restricted' : sources.isError ? 'Unavailable' : `${sources.data?.filter((source) => source.status === 'active').length ?? 0} active in scope`} />
         <OverviewCard icon={GitBranch} label="Recent activity" value={metricValue(canViewWorkflows, activity.isLoading, activity.isError, activity.data?.length ?? 0)} detail={activity.isError ? 'Unavailable' : 'Events in the current scope'} />
-        <OverviewCard icon={TriangleAlert} label="Needs attention" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, attentionWorkflows)} detail={workflows.isError ? 'Unavailable' : 'Failed or partial runs'} />
+        <OverviewCard icon={TriangleAlert} label="Needs attention" value={metricValue(canViewWorkflows, workflows.isLoading, workflows.isError, attentionRuns)} detail={workflows.isError ? 'Unavailable' : 'Failed or partial runs'} />
       </div>
 
       <ActionCenter
@@ -83,19 +96,25 @@ function DashboardPage() {
         canManageWorkflows={canManageWorkflows}
         canManageSources={canManageSources}
         canManageIntegrations={canManageIntegrations}
-        loading={workflows.isLoading || sources.isLoading || integrations.isLoading}
-        unavailable={workflows.isError || sources.isError || integrations.isError}
+        recommendations={recommendations.data}
+        recommendationsLoading={recommendations.isLoading}
+        recommendationsUnavailable={recommendations.isError}
+        onRecommendationAction={(recommendationId, action) => recommendationAction.mutate({ recommendationId, action })}
+        recommendationActionPending={recommendationAction.isPending}
+        recommendationActionError={recommendationAction.error?.message}
+        loading={workflows.isLoading || sources.isLoading || integrations.isLoading || recommendations.isLoading}
+        unavailable={workflows.isError || sources.isError || integrations.isError || recommendations.isError}
       />
 
       {canViewWorkflows && canViewSources && workflows.isSuccess && sources.isSuccess && (!workflows.data.length || !sources.data.length) ? <SetupNextStepCard hasWorkflows={Boolean(workflows.data.length)} hasSources={Boolean(sources.data.length)} canManageWorkflows={canManageWorkflows} canManageIntegrations={canManageIntegrations} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <Card className="min-w-0">
           <CardHeader>
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col gap-1.5">
-                <CardTitle><ProductTerm term="workflow" plural /></CardTitle>
-                <CardDescription>Investigations that need attention.</CardDescription>
+                <CardTitle>Recent <ProductTerm term="run" plural /></CardTitle>
+                <CardDescription>Open a Run to inspect status, evidence, and recovery actions.</CardDescription>
               </div>
               <Link to="/workflows" aria-label="View all workflows" className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link>
             </div>
@@ -108,7 +127,7 @@ function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
             <CardDescription><ProductTerm term="evidence" /> and system events from your workspace.</CardDescription>
@@ -165,9 +184,20 @@ type Action = {
   key: string
   title: string
   description: string
-  to: '/integrations' | '/sources/new' | '/workflows' | '/workflows/new' | '/context'
+  to: '/integrations' | '/sources' | '/sources/new' | '/workflows' | '/workflows/new' | '/context' | '/review'
   label: string
   tone?: 'attention' | 'default'
+  recommendationId?: string
+}
+
+const recommendationTargets: Record<RecommendationTarget, Action['to']> = {
+  [RecommendationTarget.Integrations]: '/integrations',
+  [RecommendationTarget.Sources]: '/sources',
+  [RecommendationTarget.NewSource]: '/sources/new',
+  [RecommendationTarget.Workflows]: '/workflows',
+  [RecommendationTarget.NewWorkflow]: '/workflows/new',
+  [RecommendationTarget.Review]: '/review',
+  [RecommendationTarget.Context]: '/context',
 }
 
 function ActionCenter({
@@ -180,6 +210,12 @@ function ActionCenter({
   canManageWorkflows,
   canManageSources,
   canManageIntegrations,
+  recommendations,
+  recommendationsLoading,
+  recommendationsUnavailable,
+  onRecommendationAction,
+  recommendationActionPending,
+  recommendationActionError,
   loading,
   unavailable,
 }: {
@@ -192,35 +228,51 @@ function ActionCenter({
   canManageWorkflows: boolean
   canManageSources: boolean
   canManageIntegrations: boolean
+  recommendations?: readonly RecommendationProjection[]
+  recommendationsLoading: boolean
+  recommendationsUnavailable: boolean
+  onRecommendationAction: (recommendationId: string, action: 'accept' | 'dismiss') => void
+  recommendationActionPending: boolean
+  recommendationActionError?: string
   loading: boolean
   unavailable: boolean
 }) {
-  const actions: Action[] = []
+  const actions: Action[] = (recommendations ? recommendations.filter((recommendation) => recommendation.status === RecommendationStatus.Open).map((recommendation) => ({
+    key: recommendation.id,
+    title: recommendation.title,
+    description: recommendation.description,
+    to: recommendationTargets[recommendation.target],
+    label: recommendation.actionLabel,
+    tone: recommendation.severity === 'attention' ? 'attention' : 'default',
+    recommendationId: recommendation.id,
+  })) : [])
   const activeIntegrations = integrations?.filter((item) => item.status === IntegrationStatus.Active) ?? []
   const needsRunReview = workflows?.some((item) => item.status === WorkflowExecutionStatus.Waiting || item.status === WorkflowExecutionStatus.Failed || item.status === WorkflowExecutionStatus.Partial)
 
-  if (canViewIntegrations && canManageIntegrations && integrations && activeIntegrations.length === 0) {
+  if (!recommendations && canViewIntegrations && canManageIntegrations && integrations && activeIntegrations.length === 0) {
     actions.push({ key: 'integration', title: 'Connect a provider', description: 'Authorize a read-only provider before creating a workflow that needs external evidence.', to: '/integrations', label: 'Open integrations' })
   }
-  if (canViewSources && canManageSources && sources && sources.length === 0) {
+  if (!recommendations && canViewSources && canManageSources && sources && sources.length === 0) {
     actions.push({ key: 'source', title: 'Add a Knowledge Source', description: 'Upload context or bind an authorized integration to make evidence available to runs.', to: '/sources/new', label: 'Add Source' })
   }
-  if (canViewWorkflows && canManageWorkflows && workflows && workflows.length === 0) {
+  if (!recommendations && canViewWorkflows && canManageWorkflows && workflows && workflows.length === 0) {
     actions.push({ key: 'workflow', title: 'Create the first workflow', description: 'Choose a published Template, an approved Blueprint, or describe a GitHub/Jira investigation.', to: '/workflows/new', label: 'Create workflow' })
   }
-  if (canViewWorkflows && needsRunReview) {
-    actions.push({ key: 'review', title: 'Review workflow attention', description: 'Waiting, failed, or partial Runs need an explicit human decision before they can progress.', to: '/workflows', label: 'Review Runs', tone: 'attention' })
+  if (!recommendations && canViewWorkflows && needsRunReview) {
+    actions.push({ key: 'review', title: 'Review workflow attention', description: 'Waiting, failed, or partial Runs need an explicit human decision before they can progress.', to: '/review', label: 'Review Runs', tone: 'attention' })
   }
-  if (canViewSources && canViewWorkflows && sources && workflows && sources.length > 0 && workflows.length > 0) {
+  if (!recommendations && canViewSources && canViewWorkflows && sources && workflows && sources.length > 0 && workflows.length > 0) {
     actions.push({ key: 'context', title: 'Check project context', description: 'Inspect the scoped graph and freshness before trusting a new investigation.', to: '/context', label: 'Open context' })
   }
 
-  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Next actions</CardTitle><CardDescription>{unavailable ? 'Some recommendations are unavailable because a scoped data source failed to load.' : loading ? 'Checking the current workspace state…' : actions.length ? 'Recommended actions based on the data and permissions visible in this scope.' : 'No immediate setup action is required in the current scope.'}</CardDescription></CardHeader><CardContent>{unavailable ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Retry the affected panel below to refresh recommendations.</p><Link to="/review" className="text-sm font-medium underline underline-offset-4">Open review</Link></div> : loading ? <p className="text-sm text-muted-foreground">Loading recommendations…</p> : actions.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{actions.slice(0, 6).map((action) => <div key={action.key} className={`flex flex-col gap-3 rounded-lg border p-4 ${action.tone === 'attention' ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'bg-background'}`}><div className="flex-1"><p className="text-sm font-medium">{action.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p></div><Button variant={action.tone === 'attention' ? 'default' : 'outline'} size="sm" className="self-start" asChild><Link to={action.to}>{action.label}<ArrowRight data-icon="inline-end" /></Link></Button></div>)}</div> : <div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />Workspace foundations and active review queues are in place.</div>}</CardContent></Card>
+  const handledCount = recommendations?.filter((recommendation) => recommendation.status !== RecommendationStatus.Open).length ?? 0
+  return <Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle>Next actions</CardTitle><CardDescription>{unavailable || recommendationsUnavailable ? 'Some recommendations are unavailable because a scoped data source failed to load.' : loading || recommendationsLoading ? 'Checking the current workspace state…' : actions.length ? recommendations ? 'Persisted recommendations based on the data and permissions visible in this scope.' : 'Recommended actions based on the data and permissions visible in this scope.' : handledCount ? `${handledCount} recommendation${handledCount === 1 ? '' : 's'} already acknowledged in this scope.` : 'No immediate setup action is required in the current scope.'}</CardDescription></CardHeader><CardContent>{recommendationActionError ? <p role="alert" className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the recommendation: {recommendationActionError}</p> : null}{unavailable || recommendationsUnavailable ? <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">Retry the affected panel below to refresh recommendations.</p><Link to="/review" className="text-sm font-medium underline underline-offset-4">Open review</Link></div> : loading || recommendationsLoading ? <p className="text-sm text-muted-foreground">Loading recommendations…</p> : actions.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{actions.slice(0, 6).map((action) => <div key={action.key} className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 ${action.tone === 'attention' ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'bg-background'}`}><div className="min-w-0 flex-1"><p className="text-sm font-medium">{action.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{action.description}</p></div><div className="flex flex-wrap gap-2"><Button variant={action.tone === 'attention' ? 'default' : 'outline'} size="sm" asChild><Link to={action.to}>{action.label}<ArrowRight data-icon="inline-end" /></Link></Button>{action.recommendationId ? <><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'accept')}>Mark accepted</Button><Button type="button" variant="ghost" size="sm" disabled={recommendationActionPending} onClick={() => onRecommendationAction(action.recommendationId ?? '', 'dismiss')}>Dismiss</Button></> : null}</div></div>)}</div> : <div className="flex items-center gap-3 text-sm text-muted-foreground"><span className="size-2 rounded-full bg-emerald-500" />Workspace foundations and active review queues are in place.</div>}</CardContent></Card>
 }
 
 function InitializationCard({
   status,
   workspaceName,
+  coordinationMode,
   selectedWorkflows,
   onStart,
   onDismiss,
@@ -228,6 +280,7 @@ function InitializationCard({
 }: {
   status: WorkspaceInitializationStatus
   workspaceName?: string
+  coordinationMode?: CoordinationMode
   selectedWorkflows: number
   onStart: () => void
   onDismiss: () => void
@@ -235,6 +288,7 @@ function InitializationCard({
 }) {
   const isReady = status === 'ready'
   const isInitializing = status === 'initializing'
+  const isConnectOnly = coordinationMode === 'connect-only'
 
   return (
     <Card className={isReady ? 'border-primary/30' : 'border-primary/30 bg-primary/[0.025]'}>
@@ -243,11 +297,11 @@ function InitializationCard({
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-5" aria-hidden="true" /></span>
           <div>
             <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{isReady ? 'Workspace is ready' : isInitializing ? <><ProductTerm term="coordinator" /> is initializing</> : 'Workspace pending initialization'}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">{selectedWorkflows} <ProductTerm term="workflow" plural /> selected</span></div>
-            <p className="mt-1 text-sm text-muted-foreground">{workspaceName ? `${workspaceName} has the context needed to begin.` : <>Your <ProductTerm term="coordinator" /> is ready to prepare the first workspace context.</>}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{isConnectOnly && !isReady ? 'Sources are connected. Start the Coordinator when you are ready.' : workspaceName ? `${workspaceName} has the context needed to begin.` : <>Your <ProductTerm term="coordinator" /> is ready to prepare the first workspace context.</>}</p>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          {!isReady ? <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? <>Starting <ProductTerm term="coordinator" />…</> : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button> : <span className="text-sm font-medium text-primary"><ProductTerm term="coordinator" /> ready</span>}
+          {!isReady ? <Button type="button" onClick={onStart} disabled={starting}>{isInitializing ? <>Starting <ProductTerm term="coordinator" />…</> : isConnectOnly ? <>Start <ProductTerm term="coordinator" /></> : 'Initialize workspace'}<ArrowRight data-icon="inline-end" /></Button> : <span className="text-sm font-medium text-primary"><ProductTerm term="coordinator" /> ready</span>}
           {!isReady ? <Link to="/onboarding/workflows" className="text-center text-xs text-muted-foreground underline underline-offset-4 sm:text-right">Review workflow selection</Link> : null}
         </div>
         {isReady ? <Button type="button" variant="ghost" size="icon" aria-label="Dismiss workspace ready message" onClick={onDismiss}><X /></Button> : null}

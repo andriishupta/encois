@@ -31,6 +31,7 @@ func (s *Server) Handler() http.Handler {
 		writeStatus(writer, http.StatusOK, "ready")
 	})
 	mux.HandleFunc("/v1/memory/query", s.queryMemory)
+	mux.HandleFunc("/v1/memory/mutate", s.mutateMemory)
 	return mux
 }
 
@@ -70,6 +71,53 @@ func (s *Server) queryMemory(writer http.ResponseWriter, request *http.Request) 
 	result, err := s.MemoryStore.Execute(request.Context(), input)
 	if err != nil {
 		writeError(writer, http.StatusBadGateway, "memory_query_failed", err.Error())
+		return
+	}
+	result = memory.SanitizeResult(result)
+	if err := memory.ValidateResult(result); err != nil {
+		writeError(writer, http.StatusInternalServerError, "invalid_memory_result", err.Error())
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(writer).Encode(result)
+}
+
+func (s *Server) mutateMemory(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeError(writer, http.StatusMethodNotAllowed, "method_not_allowed", "memory mutation requires POST")
+		return
+	}
+	if s.RuntimeServiceToken == "" {
+		writeError(writer, http.StatusServiceUnavailable, "service_auth_not_configured", "Agent Runtime service authentication is not configured")
+		return
+	}
+	if !validServiceToken(request, s.RuntimeServiceToken) {
+		writeError(writer, http.StatusUnauthorized, "service_unauthenticated", "Agent Runtime service authentication is required")
+		return
+	}
+	if s.MemoryStore == nil {
+		writeError(writer, http.StatusServiceUnavailable, "memory_not_configured", "Agent memory is not configured")
+		return
+	}
+	var input memory.Request
+	decoder := json.NewDecoder(io.LimitReader(request.Body, 256<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_json", err.Error())
+		return
+	}
+	if input.Operation != "distill" && input.Operation != "correct" && input.Operation != "delete" {
+		writeError(writer, http.StatusBadRequest, "write_operation_not_allowed", "memory mutation only supports add, correct, and delete")
+		return
+	}
+	input = memory.SanitizeRequest(input)
+	if err := memory.ValidateRequest(input); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid_memory_request", err.Error())
+		return
+	}
+	result, err := s.MemoryStore.Execute(request.Context(), input)
+	if err != nil {
+		writeError(writer, http.StatusBadGateway, "memory_mutation_failed", err.Error())
 		return
 	}
 	result = memory.SanitizeResult(result)

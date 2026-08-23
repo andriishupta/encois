@@ -394,15 +394,38 @@ async function ensureWorkflowFixture(tx: PersistenceTransaction, organization: F
     : (await tx.insert(workflowRuns).values(values).returning({ id: workflowRuns.id }))[0];
   if (!run) throw new Error(`Workflow ${fixture.key} was not created.`);
 
-  const [hasEvents] = await tx.select({ id: workflowEvents.id }).from(workflowEvents).where(and(eq(workflowEvents.organizationId, organization.id), eq(workflowEvents.workflowRunId, run.id))).limit(1);
-  if (!hasEvents) {
+  const source = fixture.activity.toLowerCase().includes("jira") ? "jira" : "github";
+  const observedAt = new Date(Date.now() - 12 * 60 * 1000).toISOString();
+  const ingestedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const evidenceRef = `evidence://local/${organization.slug}/${fixture.key}/collector`;
+  const evidenceMetadata = {
+    evidenceRefs: [evidenceRef],
+    provenance: {
+      source,
+      sourceId: `local-source:${organization.id}:${source}`,
+      sourceRecordId: `${source}:${fixture.key}`,
+      observedAt,
+      ingestedAt,
+      transformationVersion: "local-fixture-normalizer.v1",
+      visibilityScope: [unit.id],
+    },
+    freshness: { source, observedAt, ingestedAt, status: "fresh" },
+  };
+  const existingEvents = await tx.select({ id: workflowEvents.id, activityName: workflowEvents.activityName, metadata: workflowEvents.metadata }).from(workflowEvents).where(and(eq(workflowEvents.organizationId, organization.id), eq(workflowEvents.workflowRunId, run.id)));
+  if (existingEvents.length === 0) {
     const events = [
       { eventType: "workflow_started", status: fixture.status, metadata: { fixture: true, title: fixture.name, shard: "bootstrap" } },
-      { eventType: "activity_started", status: "running", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef: `evidence://local/${organization.slug}/${fixture.key}/collector`, metadata: { fixture: true, shard: "collector", attempt: 1, durationMs: 840 } },
-      { eventType: fixture.status === "failed" ? "activity_failed" : "activity_completed", status: fixture.status === "failed" ? "failed" : "completed", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef: `evidence://local/${organization.slug}/${fixture.key}/collector`, metadata: { fixture: true, shard: "collector", attempt: fixture.status === "failed" ? 3 : 1, durationMs: fixture.status === "failed" ? 4800 : 1240, ...(fixture.issue ? { issue: fixture.issue } : {}) } },
+      { eventType: "activity_started", status: "running", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef, metadata: { fixture: true, shard: "collector", attempt: 1, durationMs: 840, ...evidenceMetadata } },
+      { eventType: fixture.status === "failed" ? "activity_failed" : "activity_completed", status: fixture.status === "failed" ? "failed" : "completed", activityName: fixture.activity, agentRunId: `agent-run:${organization.slug}:${fixture.key}:collector`, evidenceRef, metadata: { fixture: true, shard: "collector", attempt: fixture.status === "failed" ? 3 : 1, durationMs: fixture.status === "failed" ? 4800 : 1240, ...(fixture.issue ? { issue: fixture.issue } : {}), ...evidenceMetadata } },
       { eventType: "workflow_status_updated", status: fixture.status, metadata: { fixture: true, shard: "summary", ...(fixture.issue ? { issue: fixture.issue } : {}) } },
     ];
     await tx.insert(workflowEvents).values(events.map((event, index) => ({ organizationId: organization.id, workflowRunId: run.id, ...event, occurredAt: new Date(Date.now() - (10 - index) * 60 * 1000) })));
+  } else {
+    for (const event of existingEvents) {
+      if (event.activityName !== fixture.activity) continue;
+      const currentMetadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata) ? event.metadata : {};
+      await tx.update(workflowEvents).set({ evidenceRef, metadata: { ...currentMetadata, ...evidenceMetadata } }).where(eq(workflowEvents.id, event.id));
+    }
   }
 }
 

@@ -312,3 +312,36 @@ jobs:
             --file "${{ matrix.file }}" \
             --tag "encois/${{ matrix.name }}:${{ steps.version.outputs.version }}" \
             .
+
+      - name: Smoke hosted dashboard path
+        if: ${{ matrix.name == 'dashboard' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="encois/dashboard:${{ steps.version.outputs.version }}"
+          container="encois-dashboard-smoke"
+          trap 'docker rm --force "$container" >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name "$container" --publish 18080:8080 "$image" >/dev/null
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+
+          index_html="$(curl --fail --silent http://127.0.0.1:18080/dashboard/)"
+          asset_path="$(printf '%s' "$index_html" | grep -oE '/dashboard/assets/[^" ]+\.js' | head -n 1 || true)"
+          test -n "$asset_path"
+          asset_body="$(curl --fail --silent "http://127.0.0.1:18080${asset_path}")"
+          case "$asset_body" in
+            '<!doctype html>'*|'<!DOCTYPE html>'*)
+              echo "The dashboard asset route returned the SPA document instead of JavaScript." >&2
+              exit 1
+              ;;
+          esac
+
+          curl --fail --silent http://127.0.0.1:18080/dashboard/workflows >/dev/null

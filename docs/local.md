@@ -61,9 +61,12 @@ open instead of the waitlist. They are intentionally separate from the main
 active users so onboarding can be tested repeatedly without changing the
 full-access fixture. Their passwords are `local-onboarding-1` through
 `local-onboarding-5`.
-The dashboard stores mock onboarding state by organization and Firebase user,
-so switching between these accounts in one browser does not reuse another
-account's progress.
+When `VITE_DASHBOARD_MOCK_MODE=true`, the dashboard stores mock onboarding state
+by organization and Firebase user, so switching between these accounts in one
+browser does not reuse another account's progress. Hosted and non-mock builds
+read onboarding from the API's tenant-scoped `organization_onboarding` state;
+the Start Coordinator action therefore exercises the control-plane workflow
+boundary instead of a browser timer.
 
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
@@ -133,6 +136,11 @@ The same checks are available from the repository root:
 pnpm run verify:local
 pnpm run verify:local:api
 ```
+
+The repository runners remove only disposable migration containers left in a
+`Created` or failed state before starting a seed or verification command. This
+keeps an interrupted Compose bootstrap from blocking the next local check;
+Postgres volumes and application containers are not removed.
 
 The second command signs in through the Firebase Auth Emulator and verifies
 owner and Avengers-owner visibility, restricted `test@local.test` hierarchy

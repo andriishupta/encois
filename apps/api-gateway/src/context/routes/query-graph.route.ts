@@ -14,10 +14,11 @@ function parseRequest(value: unknown): GraphInspectionQueryRequest | null {
     || (value.params.relationship !== undefined && typeof value.params.relationship !== "string")
     || (value.params.limit !== undefined && (typeof value.params.limit !== "number" || !Number.isInteger(value.params.limit)))
   )) return null;
-  const projectId = typeof value.params?.projectId === "string" ? value.params.projectId : undefined;
+  const projectId = typeof value.params?.projectId === "string" ? value.params.projectId.trim() || undefined : undefined;
   const nodeType = typeof value.params?.nodeType === "string" ? value.params.nodeType : undefined;
   const relationship = typeof value.params?.relationship === "string" ? value.params.relationship : undefined;
   const limit = typeof value.params?.limit === "number" ? value.params.limit : undefined;
+  if (value.query === "project.related_entities" && !projectId?.trim()) return null;
   if (projectId && projectId.length > 160) return null;
   if (nodeType && (nodeType.length < 1 || nodeType.length > 80)) return null;
   if (relationship && (relationship.length < 1 || relationship.length > 120)) return null;

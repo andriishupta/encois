@@ -88,6 +88,8 @@ type ProviderToolRegistry interface {
 type ProviderToolResult struct {
 	Data         map[string]any
 	EvidenceRefs []string
+	Provenance   *contractschemas.DataProvenance
+	Confidence   *float64
 	Freshness    []contractschemas.SourceFreshness
 }
 
@@ -98,7 +100,7 @@ func (mockProviderToolRegistry) Invoke(_ context.Context, request domain.ToolInv
 	if !ok {
 		return ProviderToolResult{}, ErrProviderToolUnavailable
 	}
-	return ProviderToolResult{Data: data, EvidenceRefs: evidenceRefs, Freshness: freshness}, nil
+	return ProviderToolResult{Data: data, EvidenceRefs: evidenceRefs, Provenance: mockToolProvenance(request.Tool, request.OrganizationID, data), Freshness: freshness}, nil
 }
 
 func (mockProviderToolRegistry) Status() string { return "mock-in-memory" }
@@ -544,6 +546,7 @@ func (r *gcpProviderToolRegistry) githubActivity(ctx context.Context, request do
 			"observedAt":         now,
 		},
 		EvidenceRefs: []string{"github://" + repository},
+		Provenance:   &contractschemas.DataProvenance{Source: "github", SourceRecordID: repository, ObservedAt: now, TransformationVersion: "github-provider-adapter.v1"},
 		Freshness:    []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}},
 	}, nil
 }
@@ -601,6 +604,7 @@ func (r *gcpProviderToolRegistry) jiraProjectTasks(ctx context.Context, request 
 			"observedAt":     now,
 		},
 		EvidenceRefs: []string{"jira://project/" + url.PathEscape(projectKey)},
+		Provenance:   &contractschemas.DataProvenance{Source: "jira", SourceRecordID: projectKey, ObservedAt: now, TransformationVersion: "jira-provider-adapter.v1"},
 		Freshness:    []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}},
 	}, nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	aiplatform "google.golang.org/api/aiplatform/v1beta1"
 )
 
 func TestSanitizeRequestRedactsObviousPIIAndSecrets(t *testing.T) {
@@ -54,6 +56,40 @@ func TestMockStoreDistillsAndRetrievesScopedMemory(t *testing.T) {
 	}
 }
 
+func TestMockStoreAppliesApprovedMemoryOperationsWithinScope(t *testing.T) {
+	store := NewMockStore()
+	request := Request{
+		ContractVersion: "agent-memory.v1", RequestID: "memory-mutation-seed", WorkflowID: "workflow:org-1:release-1",
+		OrganizationID: "org-1", ActorID: "actor-1", Scope: Scope{IDs: []string{"team-1"}}, PolicyVersion: "policy-1", Capability: "test-capability",
+		AgentDefinition: "context.synthesizer@1", Operation: "distill", MemoryScope: MemoryScope{AgentDefinition: "context.synthesizer@1"},
+		Distillation: &Distillation{Summary: "Original fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
+	}
+	created, err := store.Execute(context.Background(), request)
+	if err != nil || len(created.Memories) != 1 {
+		t.Fatalf("seed failed: result=%+v err=%v", created, err)
+	}
+
+	correction := request
+	correction.RequestID = "memory-mutation-correct"
+	correction.Operation = "correct"
+	correction.Distillation = nil
+	correction.TargetMemoryID = created.Memories[0].ID
+	correction.ReplacementSummary = "Corrected fact."
+	corrected, err := store.Execute(context.Background(), correction)
+	if err != nil || len(corrected.Memories) != 1 || corrected.Memories[0].Summary != "Corrected fact." {
+		t.Fatalf("correction failed: result=%+v err=%v", corrected, err)
+	}
+
+	deletion := correction
+	deletion.RequestID = "memory-mutation-delete"
+	deletion.Operation = "delete"
+	deletion.ReplacementSummary = ""
+	deleted, err := store.Execute(context.Background(), deletion)
+	if err != nil || len(deleted.Memories) != 0 {
+		t.Fatalf("deletion failed: result=%+v err=%v", deleted, err)
+	}
+}
+
 func TestFixtureMockStoreKeepsOrganizationsIsolated(t *testing.T) {
 	store := newFixtureMockStore()
 	request := Request{
@@ -83,6 +119,9 @@ func TestFixtureMockStoreKeepsOrganizationsIsolated(t *testing.T) {
 	}
 	if first.Memories[0].ID == second.Memories[0].ID || strings.Contains(second.Memories[0].Summary, "org-test") {
 		t.Fatalf("fixture memory crossed organization boundary: first=%+v second=%+v", first.Memories[0], second.Memories[0])
+	}
+	if strings.Contains(first.Memories[0].Summary, "org-test") || strings.Contains(second.Memories[0].Summary, "org-avengers") {
+		t.Fatalf("fixture memory summary leaked an organization identifier: first=%q second=%q", first.Memories[0].Summary, second.Memories[0].Summary)
 	}
 }
 
@@ -117,5 +156,35 @@ func TestMemoryContractsValidateAtTheRuntimeBoundary(t *testing.T) {
 	}
 	if err := ValidateResult(result); err != nil {
 		t.Fatalf("expected memory result to validate: %v", err)
+	}
+}
+
+func TestGeneratedRecordsUseProviderMemoryNames(t *testing.T) {
+	request := Request{
+		RequestID:      "memory-gcp-1",
+		OrganizationID: "org-1",
+		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1", ProjectID: "project-1"},
+		Distillation:   &Distillation{Summary: "Fallback fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
+	}
+	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-1","fact":"Provider fact.","scope":{"organization_id":"org-1","agent_definition":"context.synthesizer@1","project_id":"project-1"},"updateTime":"2026-08-20T17:00:00Z"}}]}`)}
+	records, err := generatedRecords(operation, request, "projects/demo/locations/us-central1/reasoningEngines/engine-1")
+	if err != nil || len(records) != 1 {
+		t.Fatalf("expected one generated memory, records=%+v err=%v", records, err)
+	}
+	if records[0].ID != "projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-1" || records[0].Summary != "Provider fact." || records[0].ObservedAt != "2026-08-20T17:00:00Z" {
+		t.Fatalf("provider memory identity was not preserved: %+v", records[0])
+	}
+}
+
+func TestGeneratedRecordsRejectOutOfScopeProviderMemory(t *testing.T) {
+	request := Request{
+		RequestID:      "memory-gcp-2",
+		OrganizationID: "org-1",
+		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1"},
+		Distillation:   &Distillation{Summary: "Fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
+	}
+	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-2","fact":"Fact.","scope":{"organization_id":"other-org","agent_definition":"context.synthesizer@1"}}}]}`)}
+	if _, err := generatedRecords(operation, request, "projects/demo/locations/us-central1/reasoningEngines/engine-1"); err == nil {
+		t.Fatal("expected generated memory scope mismatch to fail")
 	}
 }

@@ -10,4 +10,7 @@ export * from "./organizations.js";
 export * from "./workflow-templates.js";
 export * from "./knowledge-sources.js";
 export * from "./workflows.js";
+export * from "./memory-changes.js";
+export * from "./organization-access-requests.js";
+export * from "./organization-onboarding.js";
 export * from "./investigations.js";

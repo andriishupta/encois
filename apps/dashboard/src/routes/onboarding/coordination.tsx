@@ -34,8 +34,8 @@ function CoordinationSetupPage() {
           <p className="mt-2 text-muted-foreground">Your first <ProductTerm term="coordinator" /> run will inspect the context you selected and prepare a safe starting point for your workspace.</p>
         </div>
         <div className="flex flex-col gap-3">
-          <ModeCard selected={mode === 'start-coordinator'} onClick={() => setMode('start-coordinator')} icon={Sparkles} title={<>Start the first <ProductTerm term="coordinator" /> run</>} description="Recommended. Prepare context and propose workflows from the sources you connected." />
-          <ModeCard selected={mode === 'connect-only'} onClick={() => setMode('connect-only')} icon={Radio} title="Connect sources only" description="Leave initialization pending and review the workspace before the first Coordinator run." />
+          <ModeCard selected={mode === 'start-coordinator'} onClick={() => setMode('start-coordinator')} icon={Sparkles} title={<>Start the first <ProductTerm term="coordinator" /> run</>} description="Recommended. Start the Coordinator after you review the workflow selection." />
+          <ModeCard selected={mode === 'connect-only'} onClick={() => setMode('connect-only')} icon={Radio} title="Connect sources only" description="Finish setup without starting the Coordinator, then review the workspace first." />
         </div>
         <div className="flex justify-end">
           <Button type="button" onClick={handleContinue}>
@@ -48,7 +48,7 @@ function CoordinationSetupPage() {
       <Card className="h-fit">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Bot className="size-4 text-muted-foreground" aria-hidden="true" /> <ProductTerm term="coordinator" /> bootstrap</CardTitle>
-          <CardDescription>The first run stays read-only and creates a reviewable plan.</CardDescription>
+          <CardDescription>The selected mode is applied from the dashboard after you review workflow selection.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {['Read the selected project context', 'Check available integration capabilities', 'Propose standard workflows for review'].map((item) => (

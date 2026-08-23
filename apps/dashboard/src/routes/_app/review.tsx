@@ -1,23 +1,24 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, CircleDashed, ClipboardCheck, Clock3, GitBranch, PlugZap, RefreshCw, Waypoints } from 'lucide-react'
-import { IntegrationStatus, KnowledgeSourceStatus, Permission, WorkflowExecutionStatus, type IntegrationProjection, type KnowledgeSource, type WorkflowBlueprintProjection, type WorkflowExecutionProjection, type WorkflowPlanRecord, type WorkflowStep } from '@encois/contracts'
+import { AlertTriangle, BrainCircuit, CheckCircle2, CircleDashed, ClipboardCheck, Clock3, GitBranch, PlugZap, RefreshCw, UserRound, Waypoints } from 'lucide-react'
+import { IntegrationStatus, KnowledgeSourceStatus, Permission, WorkflowExecutionStatus, type IntegrationProjection, type KnowledgeSource, type MemoryChangeRecord, type OrganizationAccessRequestRecord, type WorkflowBlueprintProjection, type WorkflowExecutionProjection, type WorkflowPlanRecord, type WorkflowPlannerVersionProjection, type WorkflowStep } from '@encois/contracts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { approveWorkflowPlan, applyWorkflowPlan, listIntegrations, listKnowledgeSources, listWorkflowBlueprints, listWorkflowPlans, listWorkflows } from '@/lib/api'
-import { getAuthSession, hasPermission } from '@/lib/auth'
+import { applyMemoryChange, applyOrganizationAccessRequest, approveMemoryChange, approveOrganizationAccessRequest, approveWorkflowPlan, applyWorkflowPlan, listIntegrations, listKnowledgeSources, listMemoryChanges, listOrganizationAccessRequests, listWorkflowBlueprints, listWorkflowPlans, listWorkflowPlannerVersions, listWorkflows, rejectMemoryChange, rejectOrganizationAccessRequest } from '@/lib/api'
+import { getAuthIdentity, getAuthSession, hasPermission } from '@/lib/auth'
 import { usePermissions } from '@/lib/permissions'
+import { useOrganization } from '@/lib/organization-context'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
 
 export const Route = createFileRoute('/_app/review')({
   beforeLoad: () => {
     const session = getAuthSession()
-    const canReview = [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead].some((permission) => hasPermission(session, permission))
+    const canReview = [Permission.WorkflowsRead, Permission.IntegrationsRead, Permission.KnowledgeRead, Permission.MemoryRead].some((permission) => hasPermission(session, permission))
     if (!canReview) throw redirect({ to: '/forbidden' })
   },
   component: ReviewQueuePage,
@@ -26,14 +27,24 @@ export const Route = createFileRoute('/_app/review')({
 function ReviewQueuePage() {
   const queryClient = useQueryClient()
   const { can } = usePermissions()
+  const { members } = useOrganization()
+  const identity = getAuthIdentity()
+  const session = getAuthSession()
+  const currentMember = members.find((member) => member.id === session?.userId || (identity.email && member.email.toLowerCase() === identity.email.toLowerCase()))
+  const isOrganizationAdministrator = currentMember?.roleKey === 'organization_admin'
   const canViewWorkflows = can(Permission.WorkflowsRead)
   const canManageWorkflows = can(Permission.WorkflowsManage)
   const canViewSources = can(Permission.KnowledgeRead)
   const canViewIntegrations = can(Permission.IntegrationsRead)
-  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows })
-  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources })
-  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations, enabled: canViewIntegrations })
-  const plans = useQuery({ queryKey: queryKeys.workflowPlans(), queryFn: () => listWorkflowPlans(), enabled: canManageWorkflows })
+  const canManageMemory = can(Permission.MemoryManage)
+  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, enabled: canViewWorkflows, refetchInterval: (query) => query.state.data?.some((workflow) => workflow.status === WorkflowExecutionStatus.Queued || workflow.status === WorkflowExecutionStatus.Running || workflow.status === WorkflowExecutionStatus.Waiting || workflow.status === WorkflowExecutionStatus.Paused) ? 5_000 : 30_000 })
+  const sources = useQuery({ queryKey: queryKeys.sources(), queryFn: listKnowledgeSources, enabled: canViewSources, refetchInterval: 30_000 })
+  const integrations = useQuery({ queryKey: queryKeys.integrations(), queryFn: listIntegrations, enabled: canViewIntegrations, refetchInterval: 30_000 })
+  const plans = useQuery({ queryKey: queryKeys.workflowPlans(), queryFn: () => listWorkflowPlans(), enabled: canManageWorkflows, refetchInterval: 15_000 })
+  const plannerVersions = useQuery({ queryKey: queryKeys.workflowPlannerVersions(), queryFn: () => listWorkflowPlannerVersions(), enabled: canManageWorkflows, refetchInterval: 30_000 })
+  const memoryChanges = useQuery({ queryKey: queryKeys.memoryChanges(), queryFn: () => listMemoryChanges(), enabled: canManageMemory, refetchInterval: 15_000 })
+  const canViewOrganization = can(Permission.OrganizationRead)
+  const accessRequests = useQuery({ queryKey: queryKeys.organizationAccessRequests(), queryFn: listOrganizationAccessRequests, enabled: canViewOrganization, refetchInterval: 15_000 })
   const blueprints = useQuery({ queryKey: queryKeys.workflowBlueprints(), queryFn: listWorkflowBlueprints, enabled: canManageWorkflows, staleTime: 30_000 })
   const [planActionError, setPlanActionError] = useState<string | null>(null)
   const approvePlan = useMutation({
@@ -46,14 +57,42 @@ function ReviewQueuePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlans() }),
     onError: (error) => setPlanActionError(error.message),
   })
+  const [memoryActionError, setMemoryActionError] = useState<string | null>(null)
+  const approveMemoryChangeMutation = useMutation({
+    mutationFn: approveMemoryChange,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.memoryChanges() }),
+    onError: (error) => setMemoryActionError(error.message),
+  })
+  const rejectMemoryChangeMutation = useMutation({
+    mutationFn: rejectMemoryChange,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.memoryChanges() }),
+    onError: (error) => setMemoryActionError(error.message),
+  })
+  const applyMemoryChangeMutation = useMutation({
+    mutationFn: applyMemoryChange,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.memoryChanges() }),
+    onError: (error) => setMemoryActionError(error.message),
+  })
+  const [accessRequestActionError, setAccessRequestActionError] = useState<string | null>(null)
+  const accessRequestMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'reject' | 'apply' }) => {
+      if (action === 'approve') return approveOrganizationAccessRequest(id)
+      if (action === 'reject') return rejectOrganizationAccessRequest(id)
+      return applyOrganizationAccessRequest(id)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.organizationAccessRequests() }),
+    onError: (error) => setAccessRequestActionError(error.message),
+  })
 
   const waitingRuns = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Waiting) ?? []
   const failedRuns = workflows.data?.filter((workflow) => workflow.status === WorkflowExecutionStatus.Failed || workflow.status === WorkflowExecutionStatus.Partial) ?? []
   const unhealthySources = sources.data?.filter((source) => new Set<KnowledgeSourceStatus>([KnowledgeSourceStatus.Degraded, KnowledgeSourceStatus.NeedsReauth, KnowledgeSourceStatus.Failed]).has(source.status)) ?? []
   const pendingIntegrations = integrations.data?.filter((integration) => !new Set<IntegrationStatus>([IntegrationStatus.Active, IntegrationStatus.Disabled]).has(integration.status)) ?? []
   const pendingPlans = plans.data?.filter((plan) => plan.status === 'proposed' || plan.status === 'approved') ?? []
-  const attentionCount = waitingRuns.length + failedRuns.length + unhealthySources.length + pendingIntegrations.length + pendingPlans.length
-  const reviewQueries = [workflows, sources, integrations, ...(canManageWorkflows ? [plans] : [])]
+  const pendingMemoryChanges = memoryChanges.data?.filter((change) => change.status === 'proposed' || change.status === 'approved') ?? []
+  const pendingAccessRequests = accessRequests.data?.filter((request) => request.status === 'proposed' || request.status === 'approved') ?? []
+  const attentionCount = waitingRuns.length + failedRuns.length + unhealthySources.length + pendingIntegrations.length + pendingPlans.length + pendingMemoryChanges.length + pendingAccessRequests.length
+  const reviewQueries = [workflows, sources, integrations, ...(canManageWorkflows ? [plans, plannerVersions, blueprints] : []), ...(canManageMemory ? [memoryChanges] : []), ...(canViewOrganization ? [accessRequests] : [])]
   const reviewUnavailable = reviewQueries.some((query) => query.isError)
   const reviewLoading = reviewQueries.some((query) => query.isLoading)
 
@@ -65,21 +104,23 @@ function ReviewQueuePage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Review queue"
-        description="Operational items that need a human decision or follow-up in the current scope. Each item links to the product surface that owns it."
+        description="Operational items that need a human decision or follow-up in the current scope. Each item links to the product surface that owns it; active Runs refresh automatically."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <QueueSummary icon={Clock3} label="Waiting approvals" value={queueMetric(workflows, waitingRuns.length)} detail="Workflow runs paused for a decision" />
         <QueueSummary icon={AlertTriangle} label="Run attention" value={queueMetric(workflows, failedRuns.length)} detail="Failed or partial investigations" />
         <QueueSummary icon={Waypoints} label="Source attention" value={queueMetric(sources, unhealthySources.length)} detail="Degraded, failed, or reauth required" />
         <QueueSummary icon={PlugZap} label="Integration setup" value={queueMetric(integrations, pendingIntegrations.length)} detail="Pending authorization or error" />
         <QueueSummary icon={ClipboardCheck} label="Workflow plans" value={canManageWorkflows ? queueMetric(plans, pendingPlans.length) : '—'} detail={canManageWorkflows ? 'Proposals awaiting approval or apply' : 'Access restricted'} />
+        <QueueSummary icon={BrainCircuit} label="Memory changes" value={canManageMemory ? queueMetric(memoryChanges, pendingMemoryChanges.length) : '—'} detail={canManageMemory ? 'Additions, corrections, or deletions awaiting review' : 'Access restricted'} />
+        <QueueSummary icon={UserRound} label="Access requests" value={canViewOrganization ? queueMetric(accessRequests, pendingAccessRequests.length) : '—'} detail={canViewOrganization ? 'Membership scopes awaiting decision' : 'Access restricted'} />
       </div>
 
       {reviewUnavailable ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 text-destructive" /><div><p className="font-medium">Review queue unavailable</p><p className="mt-1 text-sm text-muted-foreground">Some operational data could not be loaded, so the queue is not marked clear.</p></div></div><Button type="button" variant="outline" onClick={retryReviewQueue}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
       {!reviewUnavailable && !reviewLoading && attentionCount === 0 ? <Card className="border-emerald-500/30 bg-emerald-500/5"><CardContent className="flex items-start gap-3 p-5"><CheckCircle2 className="mt-0.5 size-5 text-emerald-600" /><div><p className="font-medium">Nothing needs attention</p><p className="mt-1 text-sm text-muted-foreground">No waiting approvals, failing runs, unhealthy Sources, or incomplete Integrations are visible in this scope.</p></div></CardContent></Card> : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
         <ReviewCard title="Waiting approvals" description="Runs paused at an explicit human approval boundary." icon={Clock3} loading={workflows.isLoading} error={workflows.error} empty="No workflow run is waiting for approval." hasItems={waitingRuns.length > 0}>
           {waitingRuns.map((workflow) => <WorkflowReviewRow key={workflow.workflowId} workflow={workflow} />)}
         </ReviewCard>
@@ -92,17 +133,28 @@ function ReviewQueuePage() {
         <ReviewCard title="Integration setup" description="Connections that still need authorization or recovery." icon={PlugZap} loading={integrations.isLoading} error={integrations.error} empty="All visible Integrations are active or disabled intentionally." hasItems={pendingIntegrations.length > 0}>
           {pendingIntegrations.map((integration) => <IntegrationReviewRow key={integration.id} integration={integration} />)}
         </ReviewCard>
-        <ReviewCard title="Workflow plans" description="Persisted proposals are filtered by organization and execution scope before they reach this inbox." icon={ClipboardCheck} loading={plans.isLoading} error={plans.error} empty="No workflow plan is waiting for approval or apply." hasItems={pendingPlans.length > 0}>
+        <ReviewCard title="Workflow plans" description="Persisted proposals are filtered by organization and execution scope before they reach this inbox." icon={ClipboardCheck} loading={plans.isLoading || blueprints.isLoading} error={plans.error ?? blueprints.error} empty="No workflow plan is waiting for approval or apply." hasItems={pendingPlans.length > 0}>
           {planActionError ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the workflow plan: {planActionError}</p> : null}
           {pendingPlans.map((plan) => <WorkflowPlanReviewRow key={plan.planId} plan={plan} blueprints={blueprints.data ?? []} busy={approvePlan.isPending || applyPlan.isPending} onApprove={(planId) => { setPlanActionError(null); approvePlan.mutate(planId) }} onApply={(planId) => { setPlanActionError(null); applyPlan.mutate(planId) }} />)}
         </ReviewCard>
+        {canManageWorkflows ? <ReviewCard title="Planner history" description="Persisted planner, source-schema, and prompt fingerprints used by workflow plans. Raw prompt text is never shown." icon={ClipboardCheck} loading={plannerVersions.isLoading} error={plannerVersions.error} empty="No planner version has been observed yet." hasItems={Boolean(plannerVersions.data?.length)}>
+          {(plannerVersions.data ?? []).map((version) => <PlannerVersionReviewRow key={version.id} version={version} />)}
+        </ReviewCard> : null}
+        {canManageMemory ? <ReviewCard title="Memory changes" description="Provider memory is never changed from a browser click. Review the proposal, then explicitly approve and apply it." icon={BrainCircuit} loading={memoryChanges.isLoading} error={memoryChanges.error} empty="No memory addition, correction, or deletion is waiting for review." hasItems={pendingMemoryChanges.length > 0}>
+          {memoryActionError ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the memory change: {memoryActionError}</p> : null}
+          {pendingMemoryChanges.map((change) => <MemoryChangeReviewRow key={change.id} change={change} busy={approveMemoryChangeMutation.isPending || rejectMemoryChangeMutation.isPending || applyMemoryChangeMutation.isPending} onApprove={(id) => approveMemoryChangeMutation.mutate(id)} onReject={(id) => rejectMemoryChangeMutation.mutate(id)} onApply={(id) => applyMemoryChangeMutation.mutate(id)} />)}
+        </ReviewCard> : null}
+        {canViewOrganization ? <ReviewCard title="Access requests" description="Approval changes only the requesting member's organization scope; role permissions remain unchanged." icon={UserRound} loading={accessRequests.isLoading} error={accessRequests.error} empty="No access request is waiting for review." hasItems={pendingAccessRequests.length > 0}>
+          {accessRequestActionError ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the access request: {accessRequestActionError}</p> : null}
+          {pendingAccessRequests.map((request) => <AccessRequestReviewRow key={request.id} request={request} canDecide={Boolean(isOrganizationAdministrator && request.requestedByUserId !== currentMember?.id)} isOwn={request.requestedByUserId === currentMember?.id} busy={accessRequestMutation.isPending} onAction={(action) => { setAccessRequestActionError(null); accessRequestMutation.mutate({ id: request.id, action }) }} />)}
+        </ReviewCard> : null}
       </div>
     </div>
   )
 }
 
 function QueueSummary({ icon: Icon, label, value, detail }: { icon: typeof Clock3; label: string; value: number | string; detail: string }) {
-  return <Card><CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle><Icon className="size-4 text-muted-foreground" aria-hidden="true" /></CardHeader><CardContent><p className="text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
+  return <Card className="min-w-0"><CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0"><CardTitle className="min-w-0 text-sm font-medium text-muted-foreground">{label}</CardTitle><Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /></CardHeader><CardContent><p className="text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
 }
 
 function queueMetric(query: { isLoading: boolean; isError: boolean }, value: number): number | string {
@@ -112,7 +164,7 @@ function queueMetric(query: { isLoading: boolean; isError: boolean }, value: num
 }
 
 function ReviewCard({ title, description, icon: Icon, loading, error, empty, hasItems, children }: { title: string; description: string; icon: typeof Clock3; loading: boolean; error: Error | null; empty: string; hasItems: boolean; children: React.ReactNode }) {
-  return <Card><CardHeader><CardTitle className="flex items-center gap-2"><Icon className="size-4 text-muted-foreground" aria-hidden="true" />{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent className="flex flex-col gap-2">{loading ? <p className="text-sm text-muted-foreground">Loading review items…</p> : error ? <p className="text-sm text-destructive">Could not load this queue: {error.message}</p> : hasItems ? children : <EmptyPanel icon={CircleDashed} title="Queue clear" description={empty} />}</CardContent></Card>
+  return <Card className="min-w-0"><CardHeader><CardTitle className="flex min-w-0 items-center gap-2"><Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent className="flex min-w-0 flex-col gap-2">{loading ? <p className="text-sm text-muted-foreground">Loading review items…</p> : error ? <p className="text-sm text-destructive">Could not load this queue: {error.message}</p> : hasItems ? children : <EmptyPanel icon={CircleDashed} title="Queue clear" description={empty} />}</CardContent></Card>
 }
 
 function WorkflowReviewRow({ workflow }: { workflow: WorkflowExecutionProjection }) {
@@ -132,6 +184,20 @@ function WorkflowPlanReviewRow({ plan, blueprints, busy, onApprove, onApply }: {
   const label = change?.blueprint?.name ?? change?.reason ?? 'Workflow change proposal'
   const detail = `${change?.kind ?? 'change'} · ${plan.status === 'proposed' ? 'awaiting approval' : 'ready to apply'} · ${formatDate(plan.updatedAt)}`
   return <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><ClipboardCheck className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{label}</span><span className="block truncate text-xs text-muted-foreground">{detail}</span><PlanDiff plan={plan} blueprints={blueprints} /><details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">Technical details</summary><code className="mt-1 block break-all">{plan.planId}</code></details></span><span className="flex shrink-0 gap-2">{plan.status === 'proposed' ? <Button size="sm" variant="outline" disabled={busy} onClick={() => onApprove(plan.planId)}>Approve</Button> : <Button size="sm" disabled={busy} onClick={() => onApply(plan.planId)}>Apply</Button>}</span></div>
+}
+
+function PlannerVersionReviewRow({ version }: { version: WorkflowPlannerVersionProjection }) {
+  const planner = [version.plannerName, version.plannerVersion].filter(Boolean).join('@') || 'Planner metadata unavailable'
+  return <div className="flex min-w-0 flex-col gap-2 rounded-lg border p-3"><div className="flex min-w-0 items-start gap-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><ClipboardCheck className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{planner}</span><span className="block text-xs text-muted-foreground">{version.usageCount} plan{version.usageCount === 1 ? '' : 's'} · last observed {formatDate(version.lastSeenAt)}</span></span></div><div className="flex flex-wrap gap-1.5 text-xs"><span className="rounded-full bg-secondary px-2 py-1">Schema {version.sourceSchemaVersion ?? 'Not reported'}</span>{version.promptVersion ? <span className="rounded-full bg-secondary px-2 py-1">Prompt {version.promptVersion}</span> : null}<span className="rounded-full bg-secondary px-2 py-1">Fingerprint {version.versionHash.slice(0, 12)}</span></div><details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Version history details</summary><div className="mt-2 flex flex-col gap-1"><span>First observed: {formatDate(version.firstSeenAt)}</span><span>First plan: {version.firstPlanId}</span><span>Latest plan: {version.lastPlanId}</span>{version.promptHash ? <span>Prompt hash: {version.promptHash}</span> : <span>Prompt hash: Not reported</span>}</div></details></div>
+}
+
+function MemoryChangeReviewRow({ change, busy, onApprove, onReject, onApply }: { change: MemoryChangeRecord; busy: boolean; onApprove: (id: string) => void; onReject: (id: string) => void; onApply: (id: string) => void }) {
+  const label = change.action === 'add' ? 'Addition' : change.action === 'correct' ? 'Correction' : 'Deletion'
+  return <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><BrainCircuit className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{label} · {change.agentDefinition}</span><span className="block text-xs text-muted-foreground">{change.status} · {formatDate(change.updatedAt)} · Scope {change.scope.ids.length}</span>{change.action === 'add' || change.action === 'correct' ? <p className="mt-2 rounded-md bg-muted/30 p-2 text-xs leading-5">{change.replacementSummary}</p> : <p className="mt-2 text-xs text-muted-foreground">The provider memory will be deleted after approval and runtime confirmation.</p>}{change.evidenceRefs?.length ? <p className="mt-2 text-xs text-muted-foreground">Evidence references: {change.evidenceRefs.length}</p> : null}<details className="mt-2 text-xs text-muted-foreground"><summary className="cursor-pointer">Technical details</summary><code className="mt-1 block break-all">Request {change.id}{change.memoryId ? <><br />Memory {change.memoryId}</> : null}</code></details></span><span className="flex shrink-0 flex-wrap gap-2">{change.status === 'proposed' ? <><Button size="sm" variant="outline" disabled={busy} onClick={() => onReject(change.id)}>Reject</Button><Button size="sm" disabled={busy} onClick={() => onApprove(change.id)}>Approve</Button></> : <Button size="sm" disabled={busy} onClick={() => onApply(change.id)}>Apply</Button>}</span></div>
+}
+
+function AccessRequestReviewRow({ request, canDecide, isOwn, busy, onAction }: { request: OrganizationAccessRequestRecord; canDecide: boolean; isOwn: boolean; busy: boolean; onAction: (action: 'approve' | 'reject' | 'apply') => void }) {
+  return <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{request.requesterName} · {request.unitName} · {request.access}</span><span className="block text-xs text-muted-foreground">{request.status} · {request.reason} · {formatDate(request.updatedAt)}</span></span>{canDecide && request.status === 'proposed' ? <span className="flex shrink-0 gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => onAction('reject')}>Reject</Button><Button size="sm" disabled={busy} onClick={() => onAction('approve')}>Approve</Button></span> : null}{canDecide && request.status === 'approved' ? <Button size="sm" disabled={busy} onClick={() => onAction('apply')}>Apply scope</Button> : null}{isOwn && request.status === 'proposed' ? <span className="text-xs text-muted-foreground">Awaiting another administrator</span> : null}</div>
 }
 
 function PlanDiff({ plan, blueprints }: { plan: WorkflowPlanRecord; blueprints: readonly WorkflowBlueprintProjection[] }) {

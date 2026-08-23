@@ -11,6 +11,13 @@ smoke_tmp_dir="$(mktemp -d)"
 temporal_pid=""
 gateway_pid=""
 runtime_pid=""
+temporal_port="${ENCOIS_SMOKE_TEMPORAL_PORT:-7234}"
+temporal_address="127.0.0.1:${temporal_port}"
+temporal_ui_port=$((temporal_port + 1000))
+gateway_port="${ENCOIS_SMOKE_AGENT_GATEWAY_PORT:-8081}"
+gateway_address="http://127.0.0.1:${gateway_port}"
+runtime_port="${ENCOIS_SMOKE_AGENT_RUNTIME_PORT:-8091}"
+runtime_address="http://127.0.0.1:${runtime_port}"
 
 cleanup() {
   set +e
@@ -64,54 +71,55 @@ assert_http_status() {
   fi
 }
 
-temporal server start-dev --headless --log-level error >"$smoke_tmp_dir/temporal.log" 2>&1 &
+temporal server start-dev --headless --log-level error --ip 127.0.0.1 --port "$temporal_port" --ui-port "$temporal_ui_port" >"$smoke_tmp_dir/temporal.log" 2>&1 &
 temporal_pid=$!
-wait_for_port 127.0.0.1 7233
+wait_for_port 127.0.0.1 "$temporal_port"
 
 (
   cd apps/agent-gateway
-  AGENT_GATEWAY_HTTP_ADDR=:8080 \
+  AGENT_GATEWAY_HTTP_ADDR=":${gateway_port}" \
   AGENT_GATEWAY_POLICY_VERSION=policy-read-only-fixture-v1 \
   AGENT_GATEWAY_DATA_MODE=mock \
+  AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret \
   AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
   go run ./cmd/agent-gateway
 ) >"$smoke_tmp_dir/agent-gateway.log" 2>&1 &
 gateway_pid=$!
-wait_for_http http://127.0.0.1:8080/health/ready
+wait_for_http "${gateway_address}/health/ready"
 
 # Verify the private boundary before starting the positive execution path.
 assert_http_status 401 \
   --request GET \
-  http://127.0.0.1:8080/v1/tools
+  "${gateway_address}/v1/tools"
 assert_http_status 403 \
   --request POST \
   --header 'Content-Type: application/json' \
   --header 'Authorization: Bearer local-agent-runtime-token' \
-  --data '{"contractVersion":"tool-request.v1","requestId":"smoke-denied","workflowId":"workflow:smoke-org:denied","organizationId":"smoke-org","actorId":"smoke-user","policyVersion":"policy-read-only-fixture-v1","scope":{"ids":["team-smoke"]},"tool":"unknown.tool","arguments":{}}' \
-  http://127.0.0.1:8080/v1/tools/invoke
+  --data '{"contractVersion":"tool-request.v1","requestId":"smoke-denied","workflowId":"workflow:smoke-org:denied","organizationId":"smoke-org","actorId":"smoke-user","policyVersion":"policy-read-only-fixture-v1","scope":{"ids":["team-smoke"]},"capability":"invalid","tool":"unknown.tool","arguments":{}}' \
+  "${gateway_address}/v1/tools/invoke"
 
 (
   cd apps/agent-runtime
-  AGENT_RUNTIME_HTTP_ADDR=:8090 \
-  TEMPORAL_HOST_PORT=127.0.0.1:7233 \
+  AGENT_RUNTIME_HTTP_ADDR=":${runtime_port}" \
+  TEMPORAL_HOST_PORT="$temporal_address" \
   TEMPORAL_NAMESPACE=default \
   TEMPORAL_TASK_QUEUE=encois-agent-runtime \
   AGENT_AI_MODE=mock \
   AGENT_MEMORY_MODE=mock \
-  AGENT_GATEWAY_URL=http://127.0.0.1:8080 \
+  AGENT_GATEWAY_URL="${gateway_address}" \
   AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
   go run ./cmd/agent-runtime
 ) >"$smoke_tmp_dir/agent-runtime.log" 2>&1 &
 runtime_pid=$!
-wait_for_http http://127.0.0.1:8090/health/ready
+wait_for_http "${runtime_address}/health/ready"
 
-TEMPORAL_ADDRESS=127.0.0.1:7233 \
+TEMPORAL_ADDRESS="$temporal_address" \
 TEMPORAL_NAMESPACE=default \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
 pnpm smoke:release
 
-TEMPORAL_ADDRESS=127.0.0.1:7233 \
+TEMPORAL_ADDRESS="$temporal_address" \
 TEMPORAL_NAMESPACE=default \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \

@@ -10,6 +10,8 @@ const database = createDatabase({ url: databaseUrl });
 
 type AuthResponse = { idToken: string };
 type Workflow = { workflowId: string; status: string };
+type Recommendation = { id: string; recommendationKey: string; status: string };
+type PlannerVersion = { id: string; versionHash: string; usageCount: number; firstPlanId: string; lastPlanId: string };
 
 async function signIn(email: string, password: string): Promise<AuthResponse> {
   const response = await fetch(`http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=local`, {
@@ -61,11 +63,13 @@ async function verify(): Promise<void> {
   const organizationId = ownerAuth.data.organizationId;
   if (!organizationId) throw new Error("Owner authentication did not return an organization.");
 
-  const [workflows, activity, integrations, sources] = await Promise.all([
+  const [workflows, activity, integrations, sources, recommendations, plannerVersions] = await Promise.all([
     apiRequest<Workflow[]>("/workflows", owner.idToken, organizationId),
     apiRequest<unknown[]>("/workflows/activity", owner.idToken, organizationId),
     apiRequest<unknown[]>("/integrations", owner.idToken, organizationId),
     apiRequest<unknown[]>("/sources", owner.idToken, organizationId),
+    apiRequest<Recommendation[]>("/investigations/recommendations", owner.idToken, organizationId),
+    apiRequest<PlannerVersion[]>("/workflows/planner-versions", owner.idToken, organizationId),
   ]);
   assert(workflows.status === 200 && Array.isArray(workflows.data) && workflows.data.length >= 6, "Owner cannot see the seeded workflows.");
   const statuses = new Set(workflows.data.map((workflow) => workflow.status));
@@ -75,6 +79,10 @@ async function verify(): Promise<void> {
   assert(activity.status === 200 && Array.isArray(activity.data) && activity.data.length > 0, "Owner cannot see workflow activity.");
   assert(integrations.status === 200 && Array.isArray(integrations.data) && integrations.data.length >= 3, "Owner cannot see seeded integrations.");
   assert(sources.status === 200 && Array.isArray(sources.data) && sources.data.length >= 4, "Owner cannot see seeded Knowledge Sources.");
+  assert(recommendations.status === 200 && Array.isArray(recommendations.data) && recommendations.data.length > 0, "Owner cannot see scoped persisted recommendations.");
+  assert(recommendations.data.every((recommendation) => recommendation.id.length > 0 && recommendation.recommendationKey.length > 0 && new Set(["open", "accepted", "dismissed"]).has(recommendation.status)), "Recommendation response contains an invalid recommendation state.");
+  assert(plannerVersions.status === 200 && Array.isArray(plannerVersions.data), "Owner cannot read planner version history.");
+  assert(plannerVersions.data.every((version) => version.id.length > 0 && version.versionHash.length === 64 && Number.isInteger(version.usageCount) && version.usageCount > 0 && version.firstPlanId.length > 0 && version.lastPlanId.length > 0), "Planner version history contains an invalid fingerprint projection.");
 
   const firstWorkflow = workflows.data[0];
   if (!firstWorkflow) throw new Error("Owner workflow response is unexpectedly empty.");
@@ -85,10 +93,19 @@ async function verify(): Promise<void> {
   const onboardingAuth = await apiRequest<{ status: string; permissions?: string[] }>("/auth/me", onboarding.idToken);
   assert(onboardingAuth.status === 200 && onboardingAuth.data?.status === "active", "Onboarding fixture did not become active after invite acceptance.");
   assert(onboardingAuth.data.permissions?.includes("onboarding:manage") === true, "Onboarding fixture lacks onboarding management permission.");
+  const invalidOnboardingSelection = await apiRequest<unknown>(
+    "/organization/onboarding",
+    onboarding.idToken,
+    organizationId,
+    { method: "PATCH", body: { selectedWorkflows: ["missing-catalog-selection-local"] } },
+  );
+  assert(invalidOnboardingSelection.status === 400, "Onboarding accepted a workflow selection outside the published catalog.");
 
   const restricted = await signIn("test@local.test", "local-test-1234");
   const restrictedWorkflows = await apiRequest<Workflow[]>("/workflows", restricted.idToken, organizationId);
+  const restrictedPlannerVersions = await apiRequest<unknown[]>("/workflows/planner-versions", restricted.idToken, organizationId);
   assert(restrictedWorkflows.status === 200 && Array.isArray(restrictedWorkflows.data), "Restricted user cannot read its authorized workflow scope.");
+  assert(restrictedPlannerVersions.status === 403, "Restricted user can read planner history without workflows:manage permission.");
   assert(restrictedWorkflows.data.length > 0, "Restricted user has no scoped workflow fixture.");
   assert(restrictedWorkflows.data.every((workflow) => workflow.workflowId.includes(":automation-tests")), "Restricted user received a workflow outside the Checkout fixture scope.");
   const restrictedWorkflow = restrictedWorkflows.data[0];

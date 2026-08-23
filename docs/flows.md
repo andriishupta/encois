@@ -106,8 +106,12 @@ sequenceDiagram
 
     User->>API: create organization/project
     API->>API: create scope, onboarding state, idempotency key
-    API->>Temporal: start CoordinatorWorkflow
-    API-->>User: onboarding_required + coordinatorId
+    User->>API: PATCH /organization/onboarding
+    API-->>User: onboarding state + coordinatorId
+    User->>API: POST /organization/onboarding/start
+    API->>Temporal: start CoordinatorWorkflow (tenant-scoped, idempotent)
+    API->>Outbox: enqueue reconcile-requested event
+    API-->>User: onboarding initializing/ready + coordinatorId
     Runtime-->>Temporal: poll CoordinatorWorkflow
 
     User->>API: connect Jira/GitHub or upload documents
@@ -215,6 +219,13 @@ Temporal start:
   workflowType = encois.user-blueprint.v1
   input        = validated blueprint + execution context
 ```
+
+Every persisted workflow plan also records a tenant-scoped planner history
+fingerprint. The record contains planner name/version, source-schema version,
+prompt version/hash, first and latest plan IDs, usage count, and observation
+timestamps. The raw prompt is never stored. Authorized workflow managers can
+read this history from the Review queue to compare which planning inputs were
+used over time without exposing implementation-only IDs in the creation form.
 
 The Agent Gateway exposes the corresponding private validation and
 fixture-level MCP-shaped catalog endpoints, but it intentionally does not
@@ -473,7 +484,7 @@ User
   -> API starts or queries a generic Temporal Workflow
   -> Go Agent Runtime Worker polls and executes the Workflow
   -> ADK agent step uses permitted tools through Agent Gateway
-  -> Activities persist evidence references; Graph/Memory are optional later stores
+  -> Activities return bounded evidence and redacted trace references; Graph/Memory are optional later stores
   -> Gemini produces structured answer
   -> API returns answer + graph path + evidence + freshness
   -> React renders the answer and workflow progress
@@ -594,7 +605,53 @@ exposes Gateway-backed organization-unit and direct membership permission
 administration. Persisted grant/restriction rules remain a later control-plane
 extension; direct membership scopes are the current durable input.
 
-## 10. Canvas and observability flow
+Access escalation is a separate, self-service request flow: an active member
+can request viewer, contributor, or manager access for a unit already visible
+in their effective scope. The Gateway persists the request and audit event;
+only a different organization administrator can approve or reject it, and a
+second explicit apply step writes the membership scope. Administrator role
+permissions are never granted by this flow, and hidden units remain an
+administrator-assisted path rather than a client-discoverable enumeration.
+
+### Memory governance flow
+
+```text
+Authorized user opens Memory
+  -> API loads only agent memories within the effective organization scope
+  -> user proposes an addition, correction, or deletion
+  -> API validates agent, project/user scope, evidence references, and redaction boundary
+  -> Review queue records the proposed change and audit event
+  -> a separately authorized reviewer approves or rejects it
+  -> an explicit apply step re-checks scope and policy
+  -> Agent Runtime executes the bounded Memory Bank operation
+  -> API records provider operation, resulting memory ID, status, and failure reason
+```
+
+Memory additions are distillations of user-supplied facts plus evidence
+references; they do not create a reusable Template or modify a Workflow.
+The dashboard deliberately exposes governed add/correct/delete operations,
+while provider-specific actions such as reindexing, pinning, and bulk export
+remain deferred until their authorization and retention contracts exist.
+
+## 10. Coordinator recommendation lifecycle
+
+```text
+Dashboard requests /investigations/recommendations
+  -> Gateway resolves the caller, organization, permissions, and scope
+  -> Gateway derives candidates from scoped Integrations, Sources, and Workflows
+  -> current candidates are upserted as user-scoped recommendation projections
+  -> disappeared candidates become RESOLVED; returning candidates reopen
+  -> Dashboard shows only OPEN items as Next actions
+  -> user follows the allowlisted target and may Accept or Dismiss
+  -> Gateway persists the state transition and writes an audit event
+```
+
+Recommendation generation is deterministic and permission-aware. It must not
+invent counts outside the caller's scope or turn an unavailable dependency
+into a false "no action" state. Generated change plans and Coordinator-owned
+execution remain a separate contract boundary.
+
+## 11. Canvas and observability flow
 
 The canvas is a projection of Temporal execution, Spanner Graph relationships, and safe telemetry. It is not a second execution engine.
 
@@ -617,7 +674,7 @@ The first canvas may show a release-readiness Blueprint and its tool/agent
 steps. A full free-form graph editor is deferred; the initial goal is
 operational understanding.
 
-## 11. Failure, retry, and recovery
+## 12. Failure, retry, and recovery
 
 ```text
 Activity fails
@@ -635,7 +692,7 @@ Activity fails
 
 Activities that call external systems must be idempotent. Large payloads and sensitive data should be stored outside Temporal history and referenced by ID.
 
-## 12. First UI contract
+## 13. First UI contract
 
 The first vertical slice needs these API-level projections:
 
@@ -659,7 +716,7 @@ history, freshness, agent activity, organization hierarchy, graph paths, and
 query routes remain future projections; the Dashboard must show an explicit
 unavailable state until their Gateway contracts exist.
 
-## 13. Product boundary for the MVP
+## 14. Product boundary for the MVP
 
 Included:
 

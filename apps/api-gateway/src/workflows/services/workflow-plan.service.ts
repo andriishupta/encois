@@ -1,11 +1,12 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { ContractVersion, CoordinatorEventType, Permission, type CoordinatorEvent } from "@encois/contracts";
+import { ContractVersion, CoordinatorEventType, Permission, type CoordinatorEvent, type WorkflowPlannerVersionProjection } from "@encois/contracts";
 import {
 	auditEvents,
 	coordinatorEventOutbox,
 	type PersistenceTransaction,
   workflowChangePlans,
+  workflowPlannerVersions,
   workflowBlueprints,
   workflowDefinitions,
   type WorkflowPlanStatus,
@@ -67,6 +68,58 @@ function planMetadata(plan: WorkflowChangePlanInput): {
     ...(metadata?.sourceSchemaVersion ? { sourceSchemaVersion: metadata.sourceSchemaVersion } : {}),
     ...(metadata?.promptVersion ? { promptVersion: metadata.promptVersion } : {}),
     ...(metadata?.promptHash ? { promptHash: metadata.promptHash } : {}),
+  };
+}
+
+function plannerVersionHash(metadata: ReturnType<typeof planMetadata>): string {
+  return createHash("sha256").update(stableSerialize(metadata)).digest("hex");
+}
+
+async function recordPlannerVersion(
+  db: PersistenceTransaction,
+  organizationId: string,
+  planId: string,
+  plan: WorkflowChangePlanInput,
+  observedAt: Date,
+): Promise<void> {
+  const metadata = planMetadata(plan);
+  const versionHash = plannerVersionHash(metadata);
+  await db
+    .insert(workflowPlannerVersions)
+    .values({
+      organizationId,
+      ...metadata,
+      versionHash,
+      firstPlanId: planId,
+      lastPlanId: planId,
+      firstSeenAt: observedAt,
+      lastSeenAt: observedAt,
+    })
+    .onConflictDoUpdate({
+      target: [workflowPlannerVersions.organizationId, workflowPlannerVersions.versionHash],
+      set: {
+        lastPlanId: planId,
+        lastSeenAt: observedAt,
+        usageCount: sql<number>`${workflowPlannerVersions.usageCount} + 1`,
+      },
+    });
+}
+
+function plannerVersionFromRow(row: typeof workflowPlannerVersions.$inferSelect): WorkflowPlannerVersionProjection {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    ...(row.plannerName ? { plannerName: row.plannerName } : {}),
+    ...(row.plannerVersion ? { plannerVersion: row.plannerVersion } : {}),
+    ...(row.sourceSchemaVersion ? { sourceSchemaVersion: row.sourceSchemaVersion } : {}),
+    ...(row.promptVersion ? { promptVersion: row.promptVersion } : {}),
+    ...(row.promptHash ? { promptHash: row.promptHash } : {}),
+    versionHash: row.versionHash,
+    firstPlanId: row.firstPlanId,
+    lastPlanId: row.lastPlanId,
+    usageCount: row.usageCount,
+    firstSeenAt: row.firstSeenAt.toISOString(),
+    lastSeenAt: row.lastSeenAt.toISOString(),
   };
 }
 
@@ -193,6 +246,7 @@ export async function submitWorkflowPlan(
       scope: { ids: principal.scope },
       metadata: { changeCount: plan.changes.length, approvalRequired: validation.approvalRequired },
     });
+    await recordPlannerVersion(db, principal.organizationId, plan.planId, plan, new Date());
     return recordFromRow(created);
   });
 }
@@ -258,6 +312,23 @@ export async function listWorkflowPlans(
     }
   }
   return visible;
+}
+
+export async function listWorkflowPlannerVersions(
+  principal: AosPrincipal,
+  limit = 100,
+): Promise<readonly WorkflowPlannerVersionProjection[]> {
+  if (!database) return persistenceUnavailable();
+  await requirePlanManager(principal);
+  return withOrganizationContext(database, principal.organizationId, async (db) => {
+    const rows = await db
+      .select()
+      .from(workflowPlannerVersions)
+      .where(eq(workflowPlannerVersions.organizationId, principal.organizationId))
+      .orderBy(desc(workflowPlannerVersions.lastSeenAt))
+      .limit(Math.max(1, Math.min(limit, 100)));
+    return rows.map(plannerVersionFromRow);
+  });
 }
 
 export async function approveWorkflowPlan(principal: AosPrincipal, planId: string): Promise<WorkflowPlanRecord> {

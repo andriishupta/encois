@@ -94,6 +94,8 @@ type AgentMemoryOperation string
 const (
 	MemoryOperationRetrieve AgentMemoryOperation = "retrieve"
 	MemoryOperationDistill  AgentMemoryOperation = "distill"
+	MemoryOperationCorrect  AgentMemoryOperation = "correct"
+	MemoryOperationDelete   AgentMemoryOperation = "delete"
 )
 
 type AgentMemoryStatus string
@@ -165,6 +167,19 @@ const (
 )
 
 type FreshnessStatus string
+
+// WorkflowTrace carries bounded, non-sensitive execution attributes from a
+// runtime step to the control plane. It deliberately excludes prompts,
+// model reasoning, and raw provider payloads.
+type WorkflowTrace struct {
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	DurationMs int64  `json:"durationMs,omitempty"`
+	Attempt    int32  `json:"attempt,omitempty"`
+	Budget     string `json:"budget,omitempty"`
+	Outcome    string `json:"outcome,omitempty"`
+	Redacted   bool   `json:"redacted,omitempty"`
+}
 
 const (
 	FreshnessFresh   FreshnessStatus = "fresh"

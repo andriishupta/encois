@@ -68,7 +68,7 @@ export async function queryMemoryForPrincipal(
 
   try {
     const result = await options.client.query(request);
-    return { agentDefinition, query, status: result.status, memories: result.memories, generatedAt: new Date().toISOString() };
+    return { agentDefinition, query, scope, ...(input.projectId?.trim() ? { projectId: input.projectId.trim() } : {}), status: result.status, memories: result.memories, generatedAt: new Date().toISOString() };
   } catch (error) {
     if (error instanceof MemoryRuntimeClientError) {
       throw new GraphServiceError(error.code === "MEMORY_RUNTIME_TIMEOUT" ? "MEMORY_TIMEOUT" : "MEMORY_RUNTIME_ERROR", error.message);

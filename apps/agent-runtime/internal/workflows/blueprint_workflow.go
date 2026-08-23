@@ -41,6 +41,9 @@ type BlueprintStepResult struct {
 	StatusReason contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
 	Data         map[string]any                 `json:"data,omitempty"`
 	EvidenceRefs []string                       `json:"evidenceRefs,omitempty"`
+	Provenance   *contracts.DataProvenance      `json:"provenance,omitempty"`
+	Confidence   *float64                       `json:"confidence,omitempty"`
+	Trace        *contracts.WorkflowTrace       `json:"trace,omitempty"`
 	Freshness    []contracts.SourceFreshness    `json:"freshness,omitempty"`
 }
 

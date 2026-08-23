@@ -50,21 +50,21 @@ function BlueprintRevisionPage() {
     <PageHeader title={selected?.name ?? 'Blueprint revisions'} description="Review immutable Blueprint versions and inspect what changed before using a revision for a new Run." actions={<ButtonLink to="/workflows/blueprints"><ArrowLeft data-icon="inline-start" />Back to Blueprints</ButtonLink>} />
     <WorkflowSurfaceNav />
     {blueprints.isLoading ? <p className="text-sm text-muted-foreground">Loading revision history…</p> : null}
-    {blueprints.isError ? <Card><CardContent className="pt-6 text-sm text-destructive">Could not load revisions: {blueprints.error.message}</CardContent></Card> : null}
+    {blueprints.isError ? <Card><CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Could not load revisions: {blueprints.error.message}</p><Button type="button" variant="outline" onClick={() => void blueprints.refetch()}><RefreshCw data-icon="inline-start" />Retry</Button></CardContent></Card> : null}
     {!blueprints.isLoading && !blueprints.isError && versions.length === 0 ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="Blueprint not found" description="This Blueprint is not available in the current organization or scope." /></CardContent></Card> : null}
     {selected ? <>
-      <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-        <Card>
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <Card className="min-w-0">
           <CardHeader><CardTitle>Revision timeline</CardTitle><CardDescription>Each revision is an immutable execution snapshot.</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-2">{versions.map((version) => <button key={version.version} type="button" onClick={() => setSelectedVersion(version.version)} className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${version.version === selected.version ? 'border-foreground/40 bg-accent/50' : ''}`}><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><GitBranch className="size-4 text-muted-foreground" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">v{version.version}{version.isCurrent ? ' · current' : ''}</span><span className="block truncate text-xs text-muted-foreground">{version.status} · {formatDate(version.updatedAt)}</span></span><span className="text-xs text-muted-foreground">{version.steps.length} steps</span></button>)}</CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader><CardTitle>Compare revisions</CardTitle><CardDescription>Differences are computed from the stored Blueprint snapshots.</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-4"><div className="grid gap-3 sm:grid-cols-2"><label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">Current revision<select value={selected.version} onChange={(event) => setSelectedVersion(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground">{versions.map((version) => <option key={version.version} value={version.version}>v{version.version}</option>)}</select></label><label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">Compare with<select value={comparison?.version ?? ''} onChange={(event) => setCompareVersion(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"><option value="">No comparison</option>{versions.filter((version) => version.version !== selected.version).map((version) => <option key={version.version} value={version.version}>v{version.version}</option>)}</select></label></div>{comparison ? <BlueprintDiff current={selected} previous={comparison} /> : <p className="text-sm text-muted-foreground">Select another revision to see changed metadata, steps, tools, and agents.</p>}</CardContent>
         </Card>
       </div>
-      <Card><CardHeader><CardTitle>Revision details</CardTitle><CardDescription>{selected.purpose}</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-3"><Detail label="Status" value={selected.status} /><Detail label="Current" value={selected.isCurrent ? 'Yes — used by new workflow creation' : 'No'} /><Detail label="Steps" value={String(selected.steps.length)} /><Detail label="Updated" value={formatDate(selected.updatedAt)} /><Detail label="Approval" value={selected.requiresApproval ? 'Required' : 'Not required'} /><Detail label="Required scope" value={selected.requiredScopes?.length ? selected.requiredScopes.join(', ') : 'Organization scope'} /><Detail label="Source plan" value={selected.sourcePlanId ?? 'Not recorded'} /></CardContent></Card>
-      <Card>
+      <Card className="min-w-0"><CardHeader><CardTitle>Revision details</CardTitle><CardDescription>{selected.purpose}</CardDescription></CardHeader><CardContent className="grid min-w-0 gap-3 text-sm sm:grid-cols-3"><Detail label="Status" value={selected.status} /><Detail label="Current" value={selected.isCurrent ? 'Yes — used by new workflow creation' : 'No'} /><Detail label="Steps" value={String(selected.steps.length)} /><Detail label="Updated" value={formatDate(selected.updatedAt)} /><Detail label="Approval" value={selected.requiresApproval ? 'Required' : 'Not required'} /><Detail label="Required scope" value={selected.requiredScopes?.length ? selected.requiredScopes.join(', ') : 'Organization scope'} /><Detail label="Source plan" value={selected.sourcePlanId ?? 'Not recorded'} /></CardContent></Card>
+      <Card className="min-w-0">
         <CardHeader><CardTitle>Blueprint lifecycle</CardTitle><CardDescription>Propose an immutable revision change. The registry changes only after a separate approval and apply step.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-4">
           {!canManage ? <p className="text-sm text-muted-foreground">Read-only access. A user with workflow management permission must submit lifecycle proposals.</p> : selected.status === 'retired' ? <>
@@ -123,7 +123,7 @@ function ChangeIcon({ kind }: { kind: 'added' | 'removed' | 'changed' }) {
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate font-medium" title={value}>{value}</p></div>
+  return <div className="min-w-0"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 truncate font-medium" title={value}>{value}</p></div>
 }
 
 function ButtonLink({ to, children }: { to: '/workflows/blueprints'; children: ReactNode }) {

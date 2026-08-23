@@ -10,7 +10,7 @@ import {
   validateContract,
 } from "./dist/src/index.js";
 
-assert.equal(allPermissions.length, 14);
+assert.equal(allPermissions.length, 15);
 assert.equal(permissionIncludes([Permission.WorkflowsManage], Permission.WorkflowsRead), true);
 assert.equal(permissionIncludes([Permission.IntegrationsRead], Permission.IntegrationsManage), false);
 assert.equal(permissionIncludes([Permission.ContextRead], Permission.ContextRead), true);
@@ -305,6 +305,34 @@ assert.equal(
   validateContract("workflowBlueprint", {
     ...blueprint,
     steps: [{ id: "bad-tool", kind: "tool" }],
+  }).valid,
+  false,
+);
+assert.equal(
+  validateContract("toolResult", {
+    contractVersion: ContractVersion.ToolResult,
+    requestId: "tool-1",
+    tool: "jira.project_tasks",
+    status: "completed",
+    evidenceRefs: ["jira://project/checkout"],
+    provenance: { source: "jira", sourceRecordId: "checkout", observedAt: "2026-08-20T16:00:00.000Z" },
+    confidence: 0.88,
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowResult", {
+    contractVersion: ContractVersion.WorkflowResult,
+    status: "completed",
+    steps: [{ stepId: "collect", status: "completed", confidence: 0.88, trace: { provider: "github", durationMs: 420, attempt: 1, outcome: "completed", redacted: true } }],
+  }).valid,
+  true,
+);
+assert.equal(
+  validateContract("workflowResult", {
+    contractVersion: ContractVersion.WorkflowResult,
+    status: "completed",
+    steps: [{ stepId: "collect", status: "completed", confidence: 1.01 }],
   }).valid,
   false,
 );

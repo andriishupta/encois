@@ -9,6 +9,10 @@ import type {
   OrganizationPermissionCreateRequest,
   OrganizationPermissionProjection,
   OrganizationPermissionUpdateRequest,
+  OrganizationAccessRequestCreateRequest,
+  OrganizationAccessRequestRecord,
+  OrganizationOnboardingProjection,
+  OrganizationOnboardingUpdateRequest,
   OrganizationProjection,
   OrganizationUnitCreateRequest,
   OrganizationUnitProjection,
@@ -25,6 +29,7 @@ import type {
   WorkflowCreationPreview,
   WorkflowRecentActivityProjection,
   WorkflowPlanRecord,
+  WorkflowPlannerVersionProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
   WorkflowTemplateProjection,
@@ -33,14 +38,17 @@ import type {
   GraphInspectionQueryRequest,
   MemoryInspectionProjection,
   MemoryInspectionQueryRequest,
+  MemoryChangeRecord,
+  MemoryChangeRequest,
   KnowledgeSourceCreateRequest,
   SourceRevisionCreateRequest,
   SavedInvestigation,
   SavedInvestigationCreateRequest,
   NotificationProjection,
   NotificationPreferences,
+  RecommendationProjection,
 } from '@encois/contracts'
-import { AccessLevel, ContractVersion, IntegrationStatus, isJsonObject, isPermission, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason, WorkflowStepKind } from '@encois/contracts'
+import { AccessLevel, ContractVersion, CoordinationMode, IntegrationStatus, isJsonObject, isPermission, KnowledgeSourceKind, KnowledgeSourceStatus, OrganizationMembershipStatus, OrganizationOnboardingStatus, RecommendationStatus, RecommendationTarget, SourceIngestionTrigger, SourceRevisionStatus, validateWaitlistRequest, WorkflowExecutionStatus, WorkflowStatusReason, WorkflowStepKind } from '@encois/contracts'
 import { clearAuthSession, getAuthSessionToken, isDashboardMockMode, setAuthOrganizationId } from '@/lib/auth'
 
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
@@ -165,6 +173,23 @@ function isWorkflowPlanRecord(value: unknown): value is WorkflowPlanRecord {
     && typeof value.updatedAt === 'string'
 }
 
+function isWorkflowPlannerVersion(value: unknown): value is WorkflowPlannerVersionProjection {
+  return isJsonObject(value)
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && (value.plannerName === undefined || typeof value.plannerName === 'string')
+    && (value.plannerVersion === undefined || typeof value.plannerVersion === 'string')
+    && (value.sourceSchemaVersion === undefined || typeof value.sourceSchemaVersion === 'string')
+    && (value.promptVersion === undefined || typeof value.promptVersion === 'string')
+    && (value.promptHash === undefined || typeof value.promptHash === 'string')
+    && typeof value.versionHash === 'string'
+    && typeof value.firstPlanId === 'string'
+    && typeof value.lastPlanId === 'string'
+    && typeof value.usageCount === 'number'
+    && typeof value.firstSeenAt === 'string'
+    && typeof value.lastSeenAt === 'string'
+}
+
 function isWorkflowCreationPreview(value: unknown): value is WorkflowCreationPreview {
   return isJsonObject(value)
     && isJsonObject(value.intent)
@@ -276,6 +301,26 @@ function isNotificationPreferences(value: unknown): value is NotificationPrefere
   return isJsonObject(value) && ['emailEnabled', 'pushEnabled', 'workflowUpdates', 'evidenceReady', 'weeklyDigest'].every((key) => typeof value[key] === 'boolean')
 }
 
+function isRecommendation(value: unknown): value is RecommendationProjection {
+  return isJsonObject(value)
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && typeof value.recommendationKey === 'string'
+    && typeof value.kind === 'string'
+    && ['info', 'attention'].includes(value.severity as string)
+    && typeof value.title === 'string'
+    && typeof value.description === 'string'
+    && Object.values(RecommendationTarget).includes(value.target as RecommendationProjection['target'])
+    && typeof value.actionLabel === 'string'
+    && Object.values(RecommendationStatus).includes(value.status as RecommendationProjection['status'])
+    && isJsonObject(value.scope)
+    && Array.isArray(value.scope.ids)
+    && isJsonObject(value.metadata)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+    && typeof value.observedAt === 'string'
+}
+
 function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourceDetail {
   return isJsonObject(value)
     && isKnowledgeSource(value.source)
@@ -332,6 +377,36 @@ function isOrganizationPermissionProjection(value: unknown): value is Organizati
     && value.propagateToChildren === true
 }
 
+function isOrganizationOnboardingProjection(value: unknown): value is OrganizationOnboardingProjection {
+  return isJsonObject(value)
+    && typeof value.organizationId === 'string'
+    && typeof value.coordinatorId === 'string'
+    && typeof value.status === 'string'
+    && Object.values(OrganizationOnboardingStatus).includes(value.status as OrganizationOnboardingStatus)
+    && typeof value.coordinationMode === 'string'
+    && Object.values(CoordinationMode).includes(value.coordinationMode as CoordinationMode)
+    && Array.isArray(value.selectedWorkflows)
+    && value.selectedWorkflows.every((item) => typeof item === 'string')
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+    && (value.lastError === undefined || typeof value.lastError === 'string')
+}
+
+function isOrganizationAccessRequestRecord(value: unknown): value is OrganizationAccessRequestRecord {
+  return isJsonObject(value)
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && typeof value.requestedByUserId === 'string'
+    && typeof value.requesterName === 'string'
+    && typeof value.unitId === 'string'
+    && typeof value.unitName === 'string'
+    && ['viewer', 'contributor', 'manager'].includes(value.access as string)
+    && typeof value.reason === 'string'
+    && ['proposed', 'approved', 'rejected', 'applied'].includes(value.status as string)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+}
+
 function isOrganizationProjection(value: unknown): value is OrganizationProjection {
   if (!isJsonObject(value) || !isJsonObject(value.organization)) return false
   return typeof value.organization.id === 'string'
@@ -343,6 +418,7 @@ function isOrganizationProjection(value: unknown): value is OrganizationProjecti
     && value.members.every(isOrganizationMemberProjection)
     && Array.isArray(value.permissions)
     && value.permissions.every(isOrganizationPermissionProjection)
+    && isOrganizationOnboardingProjection(value.onboarding)
 }
 
 function isGraphInspectionProjection(value: unknown): value is GraphInspectionProjection {
@@ -363,11 +439,30 @@ function isMemoryInspectionProjection(value: unknown): value is MemoryInspection
   return isJsonObject(value)
     && typeof value.agentDefinition === 'string'
     && typeof value.query === 'string'
+    && isJsonObject(value.scope)
+    && Array.isArray(value.scope.ids)
+    && value.scope.ids.every((id) => typeof id === 'string')
     && typeof value.status === 'string'
     && ['completed', 'deferred', 'failed'].includes(value.status)
     && Array.isArray(value.memories)
     && value.memories.every((memory) => isJsonObject(memory) && typeof memory.id === 'string' && typeof memory.agentDefinition === 'string' && typeof memory.summary === 'string' && Array.isArray(memory.evidenceRefs) && memory.evidenceRefs.every((ref) => typeof ref === 'string') && typeof memory.observedAt === 'string')
     && typeof value.generatedAt === 'string'
+}
+
+function isMemoryChangeRecord(value: unknown): value is MemoryChangeRecord {
+  return isJsonObject(value)
+    && typeof value.id === 'string'
+    && typeof value.organizationId === 'string'
+    && (value.memoryId === undefined || typeof value.memoryId === 'string')
+    && typeof value.agentDefinition === 'string'
+    && isJsonObject(value.scope)
+    && Array.isArray(value.scope.ids)
+    && value.scope.ids.every((id) => typeof id === 'string')
+    && ['add', 'correct', 'delete'].includes(value.action as string)
+    && (value.evidenceRefs === undefined || (Array.isArray(value.evidenceRefs) && value.evidenceRefs.every((ref) => typeof ref === 'string')))
+    && ['proposed', 'approved', 'rejected', 'applied', 'failed'].includes(value.status as string)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
 }
 
 function parseList<T>(value: unknown, guard: (item: unknown) => item is T, name: string): readonly T[] {
@@ -464,6 +559,11 @@ export function listWorkflowPlans(limit = 100): Promise<readonly WorkflowPlanRec
   return request<unknown>(`/workflows/plans?limit=${boundedLimit}`).then((value) => parseList(value, isWorkflowPlanRecord, 'workflow plan list'))
 }
 
+export function listWorkflowPlannerVersions(limit = 100): Promise<readonly WorkflowPlannerVersionProjection[]> {
+  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100))
+  return request<unknown>(`/workflows/planner-versions?limit=${boundedLimit}`).then((value) => parseList(value, isWorkflowPlannerVersion, 'workflow planner version list'))
+}
+
 export async function approveWorkflowPlan(planId: string): Promise<WorkflowPlanRecord> {
   const value = await request<unknown>(`/workflows/plans/${encodeURIComponent(planId)}/approve`, { method: 'POST' })
   if (!isWorkflowPlanRecord(value)) throw createApiError(200, 'The service returned an invalid approved workflow plan.', 'INVALID_RESPONSE')
@@ -485,7 +585,7 @@ export async function getAuthStatus(): Promise<AuthStatusResponse> {
   if (typeof value.userId !== 'string' || typeof value.organizationId !== 'string' || !Array.isArray(value.permissions) || !value.permissions.every(isPermission)) {
     throw createApiError(200, 'The service returned an invalid active authentication status.', 'INVALID_RESPONSE')
   }
-  setAuthOrganizationId(value.organizationId, value.permissions)
+  setAuthOrganizationId(value.organizationId, value.permissions, value.userId)
   return {
     status: 'active',
     userId: value.userId,
@@ -678,6 +778,21 @@ export async function getOrganization(): Promise<OrganizationProjection> {
   return value
 }
 
+export async function updateOrganizationOnboarding(input: OrganizationOnboardingUpdateRequest): Promise<OrganizationOnboardingProjection> {
+  const value = await request<unknown>('/organization/onboarding', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+  if (!isOrganizationOnboardingProjection(value)) throw createApiError(200, 'The service returned an invalid onboarding response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export async function startOrganizationOnboarding(): Promise<OrganizationOnboardingProjection> {
+  const value = await request<unknown>('/organization/onboarding/start', { method: 'POST' })
+  if (!isOrganizationOnboardingProjection(value)) throw createApiError(200, 'The service returned an invalid onboarding response.', 'INVALID_RESPONSE')
+  return value
+}
+
 export async function createOrganizationUnit(input: OrganizationUnitCreateRequest): Promise<OrganizationUnitProjection> {
   const value = await request<unknown>('/organization/units', {
     method: 'POST',
@@ -710,6 +825,34 @@ export async function deleteOrganizationPermission(permissionId: string): Promis
   if (!isJsonObject(value) || value.deleted !== true) throw createApiError(200, 'The service returned an invalid organization permission response.', 'INVALID_RESPONSE')
 }
 
+export function listOrganizationAccessRequests(): Promise<readonly OrganizationAccessRequestRecord[]> {
+  return request<unknown>('/organization/access-requests').then((value) => parseList(value, isOrganizationAccessRequestRecord, 'organization access request list'))
+}
+
+export async function createOrganizationAccessRequest(input: OrganizationAccessRequestCreateRequest): Promise<OrganizationAccessRequestRecord> {
+  const value = await request<unknown>('/organization/access-requests', { method: 'POST', body: JSON.stringify(input) })
+  if (!isOrganizationAccessRequestRecord(value)) throw createApiError(200, 'The service returned an invalid access request response.', 'INVALID_RESPONSE')
+  return value
+}
+
+async function decideOrganizationAccessRequest(requestId: string, action: 'approve' | 'reject' | 'apply'): Promise<OrganizationAccessRequestRecord> {
+  const value = await request<unknown>(`/organization/access-requests/${encodeURIComponent(requestId)}/${action}`, { method: 'POST' })
+  if (!isOrganizationAccessRequestRecord(value)) throw createApiError(200, 'The service returned an invalid access request response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export function approveOrganizationAccessRequest(requestId: string): Promise<OrganizationAccessRequestRecord> {
+  return decideOrganizationAccessRequest(requestId, 'approve')
+}
+
+export function rejectOrganizationAccessRequest(requestId: string): Promise<OrganizationAccessRequestRecord> {
+  return decideOrganizationAccessRequest(requestId, 'reject')
+}
+
+export function applyOrganizationAccessRequest(requestId: string): Promise<OrganizationAccessRequestRecord> {
+  return decideOrganizationAccessRequest(requestId, 'apply')
+}
+
 export async function queryContextGraph(input: GraphInspectionQueryRequest): Promise<GraphInspectionProjection> {
   const value = await request<unknown>('/context/graph/query', { method: 'POST', body: JSON.stringify(input) })
   if (!isGraphInspectionProjection(value)) throw createApiError(200, 'The service returned an invalid context graph response.', 'INVALID_RESPONSE')
@@ -720,6 +863,35 @@ export async function queryAgentMemory(input: MemoryInspectionQueryRequest): Pro
   const value = await request<unknown>('/context/memory/query', { method: 'POST', body: JSON.stringify(input) })
   if (!isMemoryInspectionProjection(value)) throw createApiError(200, 'The service returned an invalid agent memory response.', 'INVALID_RESPONSE')
   return value
+}
+
+export function listMemoryChanges(limit = 100): Promise<readonly MemoryChangeRecord[]> {
+  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100))
+  return request<unknown>(`/context/memory/changes?limit=${boundedLimit}`).then((value) => parseList(value, isMemoryChangeRecord, 'memory change list'))
+}
+
+export async function createMemoryChange(input: MemoryChangeRequest): Promise<MemoryChangeRecord> {
+  const value = await request<unknown>('/context/memory/changes', { method: 'POST', body: JSON.stringify(input) })
+  if (!isMemoryChangeRecord(value)) throw createApiError(200, 'The service returned an invalid memory change response.', 'INVALID_RESPONSE')
+  return value
+}
+
+async function decideMemoryChange(changeId: string, action: 'approve' | 'reject' | 'apply'): Promise<MemoryChangeRecord> {
+  const value = await request<unknown>(`/context/memory/changes/${encodeURIComponent(changeId)}/${action}`, { method: 'POST' })
+  if (!isMemoryChangeRecord(value)) throw createApiError(200, 'The service returned an invalid memory change response.', 'INVALID_RESPONSE')
+  return value
+}
+
+export function approveMemoryChange(changeId: string): Promise<MemoryChangeRecord> {
+  return decideMemoryChange(changeId, 'approve')
+}
+
+export function rejectMemoryChange(changeId: string): Promise<MemoryChangeRecord> {
+  return decideMemoryChange(changeId, 'reject')
+}
+
+export function applyMemoryChange(changeId: string): Promise<MemoryChangeRecord> {
+  return decideMemoryChange(changeId, 'apply')
 }
 
 export function listSavedInvestigations(): Promise<readonly SavedInvestigation[]> {
@@ -740,6 +912,16 @@ export async function deleteSavedInvestigation(investigationId: string): Promise
 
 export function listNotifications(): Promise<readonly NotificationProjection[]> {
   return request<unknown>('/notifications').then((value) => parseList(value, isNotification, 'notification list'))
+}
+
+export function listRecommendations(): Promise<readonly RecommendationProjection[]> {
+  return request<unknown>('/investigations/recommendations').then((value) => parseList(value, isRecommendation, 'recommendation list'))
+}
+
+export async function updateRecommendation(recommendationId: string, action: 'accept' | 'dismiss'): Promise<RecommendationProjection> {
+  const value = await request<unknown>(`/investigations/recommendations/${encodeURIComponent(recommendationId)}/${action}`, { method: 'POST' })
+  if (!isRecommendation(value)) throw createApiError(200, 'The service returned an invalid recommendation response.', 'INVALID_RESPONSE')
+  return value
 }
 
 export async function markNotificationRead(notificationId: string): Promise<{ read: true }> {

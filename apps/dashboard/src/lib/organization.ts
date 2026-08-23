@@ -17,6 +17,7 @@ export type OrganizationMember = {
   name: string
   email: string
   role: string
+  roleKey?: string
   homeUnitId: string
   status: string
 }

@@ -64,9 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { workspace } = useWorkspace()
-  const { units, currentUnitId, setCurrentUnitId } = useOrganization()
+  const { organizationName, units, currentUnitId, setCurrentUnitId } = useOrganization()
   const { can } = usePermissions()
-  const workspaceName = workspace?.workspaceName ?? 'Encois'
+  const workspaceName = workspace?.workspaceName ?? organizationName ?? 'Encois'
   const organizationUnitOptions = flattenUnitOptions(units)
   const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
   const currentScopeLabel = currentUnit ? currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id) : 'Organization scope unavailable'

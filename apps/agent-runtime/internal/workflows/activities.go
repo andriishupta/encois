@@ -3,10 +3,13 @@ package workflows
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
 	contractschemas "github.com/andriishupta/encois/packages/contracts"
+	"go.temporal.io/sdk/activity"
 )
 
 type Activities struct {
@@ -67,6 +70,7 @@ func NewActivities(agentBundle *agents.Bundle, agentGatewayURL string, serviceTo
 }
 
 func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintStepInput) (BlueprintStepResult, error) {
+	startedAt := time.Now()
 	switch input.Step.Kind {
 	case "tool":
 		if a.agentGateway == nil {
@@ -94,7 +98,7 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 		if err != nil {
 			return BlueprintStepResult{}, err
 		}
-		return BlueprintStepResult{StepID: input.Step.ID, Status: result.Status, Data: result.Data, EvidenceRefs: result.EvidenceRefs, Freshness: result.Freshness}, nil
+		return BlueprintStepResult{StepID: input.Step.ID, Status: result.Status, Data: result.Data, EvidenceRefs: result.EvidenceRefs, Provenance: result.Provenance, Confidence: result.Confidence, Trace: executionTrace(ctx, startedAt, result.Status, input.Step.Tool, result.Provenance, ""), Freshness: result.Freshness}, nil
 	case "agent":
 		if a.agentBundle == nil || !a.agentBundle.Enabled || (a.agentBundle.Mode != agents.ModeMock && a.agentBundle.AgentModel == nil) {
 			return BlueprintStepResult{
@@ -113,8 +117,46 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 		return BlueprintStepResult{StepID: input.Step.ID, Status: "model-generated", Data: map[string]any{
 			"summary":         summary,
 			"agentDefinition": input.Step.AgentDefinition,
-		}}, nil
+		}, Trace: executionTrace(ctx, startedAt, "model-generated", "", nil, agentModelName(a.agentBundle))}, nil
 	default:
 		return BlueprintStepResult{}, fmt.Errorf("step kind %q is handled by the workflow, not an activity", input.Step.Kind)
 	}
+}
+
+func executionTrace(ctx context.Context, startedAt time.Time, outcome, tool string, provenance *contractschemas.DataProvenance, model string) *contractschemas.WorkflowTrace {
+	attempt := int32(1)
+	if activity.IsActivity(ctx) {
+		attempt = activity.GetInfo(ctx).Attempt
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	provider := ""
+	if provenance != nil {
+		provider = provenance.Source
+	}
+	if provider == "" && tool != "" {
+		if separator := strings.IndexByte(tool, '.'); separator > 0 {
+			provider = tool[:separator]
+		}
+	}
+	durationMs := time.Since(startedAt).Milliseconds()
+	if durationMs < 0 {
+		durationMs = 0
+	}
+	return &contractschemas.WorkflowTrace{
+		Provider:   provider,
+		Model:      model,
+		DurationMs: durationMs,
+		Attempt:    attempt,
+		Outcome:    outcome,
+		Redacted:   true,
+	}
+}
+
+func agentModelName(bundle *agents.Bundle) string {
+	if bundle == nil || bundle.Mode == agents.ModeMock {
+		return ""
+	}
+	return bundle.ModelName
 }

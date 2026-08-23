@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { Check, ChevronRight, LockKeyhole, Plus, ShieldCheck, UserRound, X } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, LockKeyhole, Plus, ShieldCheck, UserRound, X } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,10 +33,15 @@ function OrganizationPermissionsPage() {
   const { units, members, permissions, createPermission, updatePermission, removePermission, currentUnitId, isLoading, error } = useOrganization()
   const focusedUnit = getOrganizationUnit(units, currentUnitId)
   const focusedManager = members.find((member) => member.name === focusedUnit?.manager)
+  const actor = members.find((member) => member.id === getAuthSession()?.userId)
+  const canAssignAdministrator = actor?.roleKey === 'organization_admin' || actor?.roleKey === 'admin'
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [addPermissionOpen, setAddPermissionOpen] = useState(false)
   const [newUnitId, setNewUnitId] = useState(currentUnitId)
   const [newAccess, setNewAccess] = useState<AccessLevel>('viewer')
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
   useEffect(() => {
     if (members.some((member) => member.id === selectedMemberId)) return
     setSelectedMemberId(focusedManager?.id ?? members[0]?.id ?? '')
@@ -60,6 +65,32 @@ function OrganizationPermissionsPage() {
     setAddPermissionOpen(false)
   }
 
+  async function runMutation(action: string, mutation: () => Promise<void>): Promise<void> {
+    setMutationError(null)
+    setPendingAction(action)
+    try {
+      await mutation()
+    } catch (mutationFailure) {
+      setMutationError(mutationFailure instanceof Error ? mutationFailure.message : 'The permission change could not be saved.')
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  function handleAddPermission() {
+    void runMutation(`add:${selectedMember.id}:${newUnitId}`, addPermission)
+  }
+
+  function handleRemovePermission(permissionId: string) {
+    if (pendingRemovalId !== permissionId) {
+      setPendingRemovalId(permissionId)
+      setMutationError(null)
+      return
+    }
+    setPendingRemovalId(null)
+    void runMutation(`remove:${permissionId}`, async () => removePermission(permissionId))
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -74,6 +105,7 @@ function OrganizationPermissionsPage() {
       </div>
       {isLoading ? <p className="text-sm text-muted-foreground">Loading organization permissions…</p> : null}
       {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}
+      {mutationError ? <div role="alert" className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"><CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>{mutationError} No permission change was applied.</span></div> : null}
 
       {focusedUnit ? <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
         <div className="min-w-0"><p className="font-medium">Permission focus</p><p className="truncate text-xs text-muted-foreground">{formatUnitPath(units, focusedUnit.id)} · new scopes default to this unit</p></div>
@@ -129,10 +161,10 @@ function OrganizationPermissionsPage() {
                 <Button type="button" variant="outline" size="sm" onClick={() => setAddPermissionOpen((value) => !value)}><Plus data-icon="inline-start" />Add scope</Button>
               </div>
 
-              {memberPermissions.length ? memberPermissions.map((permission) => <PermissionRow key={permission.id} permission={permission} units={units} onAccessChange={(access) => { void updatePermission(permission.id, access) }} onRemove={() => { void removePermission(permission.id) }} />) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct permissions assigned.</p>}
+              {memberPermissions.length ? memberPermissions.map((permission) => <PermissionRow key={permission.id} permission={permission} units={units} canAssignAdministrator={canAssignAdministrator} busy={pendingAction !== null} removalPending={pendingRemovalId === permission.id} onAccessChange={(access) => { void runMutation(`update:${permission.id}`, async () => { await updatePermission(permission.id, access) }) }} onRemove={() => handleRemovePermission(permission.id)} onCancelRemove={() => setPendingRemovalId(null)} />) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct permissions assigned.</p>}
             </div>
 
-            {addPermissionOpen ? <AddPermissionForm unitOptions={unitOptions} unitId={newUnitId} access={newAccess} onUnitChange={setNewUnitId} onAccessChange={setNewAccess} onCancel={() => setAddPermissionOpen(false)} onSubmit={() => { void addPermission() }} /> : null}
+            {addPermissionOpen ? <AddPermissionForm unitOptions={unitOptions} accessLevels={canAssignAdministrator ? accessLevels : accessLevels.filter((level) => level !== 'admin')} unitId={newUnitId} access={newAccess} onUnitChange={setNewUnitId} onAccessChange={setNewAccess} onCancel={() => setAddPermissionOpen(false)} onSubmit={handleAddPermission} busy={pendingAction !== null} /> : null}
 
             <div className="flex flex-col gap-3 border-t pt-5">
               <div>
@@ -162,7 +194,7 @@ function MemberRow({ member, selected, onSelect }: { member: OrganizationMember;
   )
 }
 
-function PermissionRow({ permission, units, onAccessChange, onRemove }: { permission: UnitPermission; units: OrganizationUnit[]; onAccessChange: (access: AccessLevel) => void; onRemove: () => void }) {
+function PermissionRow({ permission, units, canAssignAdministrator, busy, removalPending, onAccessChange, onRemove, onCancelRemove }: { permission: UnitPermission; units: OrganizationUnit[]; canAssignAdministrator: boolean; busy: boolean; removalPending: boolean; onAccessChange: (access: AccessLevel) => void; onRemove: () => void; onCancelRemove: () => void }) {
   const unit = getOrganizationUnit(units, permission.unitId)
   if (!unit) return null
 
@@ -170,22 +202,22 @@ function PermissionRow({ permission, units, onAccessChange, onRemove }: { permis
     <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><LockKeyhole className="size-4 text-muted-foreground" aria-hidden="true" /></span>
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{unit.name}</p><p className="truncate text-xs text-muted-foreground">{formatUnitPath(units, unit.id)}</p></div>
-      <select value={permission.access} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select>
+      <select value={permission.access} disabled={busy} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level} disabled={level === 'admin' && !canAssignAdministrator}>{humanizeAccessLevel(level)}{level === 'admin' && !canAssignAdministrator ? ' (administrator only)' : ''}</option>)}</select>
       <span className="text-xs text-muted-foreground">Includes descendants</span>
-      <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${unit.name} permission`} onClick={onRemove}><X className="size-4" /></Button>
+      {removalPending ? <span className="flex shrink-0 items-center gap-2"><span className="text-xs text-destructive">Remove this scope?</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelRemove}>Cancel</Button><Button type="button" size="sm" variant="destructive" disabled={busy} onClick={onRemove}>Confirm</Button></span> : <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`Remove ${unit.name} permission`} onClick={onRemove}><X className="size-4" /></Button>}
     </div>
   )
 }
 
-function AddPermissionForm({ unitOptions, unitId, access, onUnitChange, onAccessChange, onCancel, onSubmit }: { unitOptions: { unit: OrganizationUnit; depth: number }[]; unitId: string; access: AccessLevel; onUnitChange: (value: string) => void; onAccessChange: (value: AccessLevel) => void; onCancel: () => void; onSubmit: () => void }) {
+function AddPermissionForm({ unitOptions, accessLevels: availableAccessLevels, unitId, access, onUnitChange, onAccessChange, onCancel, onSubmit, busy }: { unitOptions: { unit: OrganizationUnit; depth: number }[]; accessLevels: AccessLevel[]; unitId: string; access: AccessLevel; onUnitChange: (value: string) => void; onAccessChange: (value: AccessLevel) => void; onCancel: () => void; onSubmit: () => void; busy: boolean }) {
   return (
     <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-unit">Organization unit<select id="permission-unit" value={unitId} onChange={(event) => onUnitChange(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{unitOptions.map(({ unit, depth }) => <option key={unit.id} value={unit.id}>{'— '.repeat(depth)}{unit.name}</option>)}</select></label>
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-access">Access level<select id="permission-access" value={access} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-access">Access level<select id="permission-access" value={availableAccessLevels.includes(access) ? access : availableAccessLevels[0]} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{availableAccessLevels.map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select></label>
       </div>
       <p className="text-xs text-muted-foreground">This direct scope includes descendants below the selected unit.</p>
-      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button><Button type="button" onClick={onSubmit}>Add permission</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>Cancel</Button><Button type="button" disabled={busy} onClick={onSubmit}>{busy ? 'Saving…' : 'Add permission'}</Button></div>
     </div>
   )
 }

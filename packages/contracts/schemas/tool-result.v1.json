@@ -3,6 +3,25 @@
   "$id": "https://encois.dev/schemas/tool-result.v1.json",
   "type": "object",
   "required": ["contractVersion", "requestId", "tool", "status"],
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "observedAt"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "sourceRevisionId": { "type": "string", "minLength": 1 },
+        "sourceRecordId": { "type": "string", "minLength": 1 },
+        "artifactRef": { "type": "string", "minLength": 1 },
+        "locator": { "type": "object" },
+        "observedAt": { "type": "string", "minLength": 1 },
+        "ingestedAt": { "type": "string", "minLength": 1 },
+        "transformationVersion": { "type": "string", "minLength": 1 },
+        "visibilityScope": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  },
   "properties": {
     "contractVersion": { "const": "tool-result.v1" },
     "requestId": { "type": "string" },
@@ -10,6 +29,8 @@
     "status": { "enum": ["mocked", "completed", "waiting", "failed"] },
     "data": { "type": "object" },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "freshness": {
       "type": "array",
       "items": {

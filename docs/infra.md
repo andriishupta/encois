@@ -27,7 +27,8 @@ a smoke test against the deployed services. The local multi-process synthetic
 smoke path has already passed.
 
 The API `/health/ready` endpoint is a real production gate: it returns `503`
-until Cloud SQL is reachable and the required Identity Platform, Temporal,
+until Cloud SQL is reachable, the `organization_onboarding` schema marker from
+the latest committed migration exists, and the required Identity Platform, Temporal,
 execution-capability, OAuth, artifact, private-service, and HTTPS CORS settings
 are present. Local and test profiles retain the non-blocking readiness behavior
 needed for the memory-mode development scaffold.
@@ -74,8 +75,11 @@ The React image must be built with `--build-arg VITE_BASE_PATH=/dashboard/` for
 the hosted path. Vite assets and TanStack Router now use the same base path;
 local development keeps `/` by default. Pass the public Firebase web
 configuration as `VITE_FIREBASE_*` build arguments when hosted Google login is
-enabled. Terraform can route the request, but it cannot rewrite SPA asset URLs
-or client-side routes after the image is built.
+enabled. The dashboard nginx image strips the `/dashboard` routing prefix
+before resolving the built files, so `/dashboard/assets/*` and client-side
+routes remain valid after the load balancer forwards the original path.
+Terraform can route the request, but it cannot rewrite SPA asset URLs or
+client-side routes after the image is built.
 
 ## Terraform layout
 

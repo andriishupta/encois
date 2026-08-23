@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, Sparkles, WandSparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, RefreshCw, Sparkles, WandSparkles } from 'lucide-react'
 import type { WorkflowBlueprintProjection, WorkflowCreationIntent, WorkflowPlanRecord, WorkflowTemplateProjection } from '@encois/contracts'
 import { Permission, WorkflowStepKind } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
@@ -139,7 +139,7 @@ function NewWorkflowPage() {
         <StepIndicator number="3" label="Review & apply" active={stage === 3} complete={completed} />
       </div>
 
-      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={templates.error ?? blueprints.error} prompt={prompt} onPromptChange={setPrompt} /> : null}
+      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={mode === 'template' ? templates.error : mode === 'blueprint' ? blueprints.error : null} onRetry={() => { if (mode === 'template') void templates.refetch(); if (mode === 'blueprint') void blueprints.refetch() }} prompt={prompt} onPromptChange={setPrompt} /> : null}
       {stage === 2 ? <ConfigureStage name={name} description={description} mode={mode} sourceTitle={selectedSourceTitle} currentScope={currentScope} prompt={prompt} onNameChange={setName} onDescriptionChange={setDescription} onBack={() => setStage(1)} onPreview={goToPreview} canPreview={canPreview} error={preview.error} /> : null}
       {stage === 3 ? <ReviewStage preview={preview.data} isLoading={preview.isPending} error={preview.error ?? submit.error ?? approve.error ?? apply.error} runAfterApply={runAfterApply} onRunChange={setRunAfterApply} submitted={submitted} approved={approved} completed={completed} onSubmit={() => submit.mutate()} submitting={submit.isPending} onApprove={() => approve.mutate()} approving={approve.isPending} onApply={() => apply.mutate()} applying={apply.isPending} onBack={() => { preview.reset(); setStage(2) }} onOpenWorkflows={() => void navigate({ to: '/workflows' })} /> : null}
       {stage === 1 ? <div className="flex justify-end"><Button type="button" disabled={!canContinueToConfigure} onClick={() => setStage(2)}>Continue <ArrowRight data-icon="inline-end" /></Button></div> : null}
@@ -147,7 +147,7 @@ function NewWorkflowPage() {
   )
 }
 
-function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, prompt, onPromptChange }: {
+function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, onRetry, prompt, onPromptChange }: {
   mode: CreationMode | null
   onModeChange: (mode: CreationMode) => void
   templates: readonly WorkflowTemplateProjection[]
@@ -159,6 +159,7 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
   templatesLoading: boolean
   blueprintsLoading: boolean
   error: Error | null
+  onRetry: () => void
   prompt: string
   onPromptChange: (value: string) => void
 }) {
@@ -171,8 +172,8 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
           return <button key={option.mode} type="button" onClick={() => onModeChange(option.mode)} className={cn('flex min-h-36 flex-col items-start gap-4 rounded-xl border bg-card p-5 text-left transition hover:border-foreground/30 hover:bg-accent/30', mode === option.mode && 'border-foreground bg-accent/50 ring-2 ring-foreground/10')} aria-pressed={mode === option.mode}><span className="flex size-10 items-center justify-center rounded-lg bg-muted"><Icon className="size-5" aria-hidden="true" /></span><span><span className="block font-medium">{option.title}</span><span className="mt-1 block text-sm text-muted-foreground">{option.description}</span></span></button>
         })}
       </div>
-      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
-      {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
+      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} onRetry={onRetry} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
+      {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} onRetry={onRetry} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
       {mode === 'manual' ? <Card className="border-dashed"><CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="size-4" />Describe the outcome</CardTitle><CardDescription>Use plain language. Encois proposes a provider-aware Blueprint for review; nothing is persisted before approval and apply.</CardDescription></CardHeader><CardContent><textarea value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="Example: Check GitHub release readiness for Checkout and highlight blockers, missing evidence, and required approvals." className="min-h-32 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="Workflow description" /><p className="mt-2 text-xs text-muted-foreground">Mention GitHub or Jira when the investigation needs a scoped integration. Other providers can be used through a published Template or approved Blueprint once provider support is enabled.</p></CardContent></Card> : null}
     </div>
   )
@@ -224,23 +225,24 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
   if (!preview) return null
 
   const finalPlan = approved ?? submitted
-  const planStatus = approved?.status ?? submitted?.status
+  const planStatus = completed ? 'applied' : approved?.status ?? submitted?.status
   const missingRequiredProvider = preview.providerBindings.some((binding) => binding.required && binding.status === 'missing')
   return (
     <Card>
       <CardHeader>
         <CardTitle>Review the generated plan</CardTitle>
-        <CardDescription>Submitting stores a reviewable plan. Approval and apply are separate steps; only apply writes the Blueprint registry or starts a run.</CardDescription>
+        <CardDescription>Preview is read-only. Submit stores a reviewable plan, approval records the human decision, and apply writes the Blueprint registry or starts a Run.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {error ? <ErrorCallout message={error.message} /> : null}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <InfoItem label="Source" value={preview.source.title} />
           <InfoItem label="Steps" value={String(preview.blueprint.steps.length)} />
-          <InfoItem label="Approval" value={preview.approvalRequired ? 'Required' : 'Not required'} />
+          <InfoItem label="Blueprint approval" value={preview.approvalRequired ? 'Required' : 'Not required'} />
+          <InfoItem label="Plan state" value={planStatusLabel(planStatus ?? 'preview')} />
         </div>
 
-        <ProviderBindingList bindings={preview.providerBindings} />
+        <ProviderBindingList bindings={preview.providerBindings} completed={completed} />
 
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Execution topology</h3>
@@ -265,7 +267,7 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
           </div>
         </details>
 
-        {preview.warnings.length ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="font-medium">Before you apply</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
+        {preview.warnings.filter((warning) => !completed || !warning.toLowerCase().includes('not persisted until')).length ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="font-medium">{finalPlan ? 'Apply notes' : 'Before you apply'}</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{preview.warnings.filter((warning) => !completed || !warning.toLowerCase().includes('not persisted until')).map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
         {missingRequiredProvider ? <div role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">A required integration is missing</p><p className="mt-1 text-destructive/80">Connect the required provider in the current scope before submitting this plan.</p></div><Button variant="outline" asChild><Link to="/integrations"><PlugZap data-icon="inline-start" />Manage integrations</Link></Button></div> : null}
 
         {!finalPlan ? <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
@@ -274,7 +276,10 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
           <label className="flex cursor-pointer items-start gap-3 text-sm"><input type="radio" checked={runAfterApply} onChange={() => onRunChange(true)} className="mt-0.5" /><span><span className="block font-medium">Run after apply</span><span className="block text-muted-foreground">Start the first investigation after the registry snapshot is applied.</span></span></label>
         </div> : null}
 
-        {completed ? <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"><CheckCircle2 className="mt-0.5 size-5 text-emerald-600" /><div><p className="font-medium">Workflow plan applied</p><p className="mt-1 text-muted-foreground">The immutable Blueprint is now available to the Coordinator. Open Workflows to follow the run.</p></div></div> : null}
+        {planStatus === 'proposed' ? <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"><p className="font-medium">Plan submitted for approval</p><p className="mt-1 text-muted-foreground">A workflow manager must approve this plan before the Blueprint can be persisted.</p></div> : null}
+        {planStatus === 'approved' ? <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"><p className="font-medium">Plan approved</p><p className="mt-1 text-muted-foreground">Apply will persist the immutable Blueprint revision{runAfterApply ? ' and request its first Run' : ''}.</p></div> : null}
+
+        {completed ? <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"><CheckCircle2 className="mt-0.5 size-5 text-emerald-600" /><div><p className="font-medium">Workflow plan applied</p><p className="mt-1 text-muted-foreground">The immutable Blueprint is now available to the Coordinator. {runAfterApply ? 'The first Run is starting; open Workflows to follow it.' : 'Open Workflows when you are ready to start a Run.'}</p></div></div> : null}
 
         <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
           <Button variant="ghost" onClick={onBack} disabled={Boolean(finalPlan)}><ArrowLeft data-icon="inline-start" />Back</Button>
@@ -285,7 +290,7 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
   )
 }
 
-function ProviderBindingList({ bindings }: { bindings: readonly import('@encois/contracts').WorkflowProviderBindingProjection[] }) {
+function ProviderBindingList({ bindings, completed }: { bindings: readonly import('@encois/contracts').WorkflowProviderBindingProjection[]; completed: boolean }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
       <div>
@@ -299,15 +304,15 @@ function ProviderBindingList({ bindings }: { bindings: readonly import('@encois/
             <div><p className="text-sm font-medium">{binding.slotKey}</p><p className="mt-1 text-xs text-muted-foreground">{binding.required ? 'Required' : 'Optional'} · {binding.capabilities.join(', ') || 'No capability constraint'}</p></div>
             <span className={cn('rounded-full px-2 py-1 text-[11px] font-medium', ready ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700')}>{ready ? 'Resolved' : 'Missing'}</span>
           </div>
-          {ready ? <p className="mt-2 text-xs text-muted-foreground">{binding.integrationName ?? binding.provider ?? 'Active integration'}</p> : <p className="mt-2 text-xs text-amber-700">Connect a matching active integration before applying this plan.</p>}
+          {ready ? <p className="mt-2 text-xs text-muted-foreground">{binding.integrationName ?? binding.provider ?? 'Active integration'}</p> : <p className="mt-2 text-xs text-amber-700">{completed ? (binding.required ? 'This required binding was not resolved.' : 'This optional slot will be skipped by the runtime.') : 'Connect a matching active integration before applying this plan.'}</p>}
         </div>
       })}</div> : <p className="text-sm text-muted-foreground">No external provider bindings are required by this source.</p>}
     </div>
   )
 }
 
-function SelectionList<T>({ title, description, loading, error, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
-  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <ErrorCallout message={error.message} /> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
+function SelectionList<T>({ title, description, loading, error, onRetry, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; onRetry: () => void; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><p role="alert">{error.message}</p><Button type="button" size="sm" variant="outline" onClick={onRetry}><RefreshCw data-icon="inline-start" />Retry</Button></div> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
 }
 
 function TemplateOption({ item, selected }: { item: WorkflowTemplateProjection; selected: boolean }) {
@@ -335,4 +340,12 @@ function stepLabel(kind: string, index: number): string {
   if (kind === WorkflowStepKind.Agent) return `Specialist synthesis ${index + 1}`
   if (kind === WorkflowStepKind.Approval) return `Human approval ${index + 1}`
   return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} step ${index + 1}`
+}
+
+function planStatusLabel(status: WorkflowPlanRecord['status'] | 'preview'): string {
+  if (status === 'preview') return 'Preview only'
+  if (status === 'proposed') return 'Awaiting approval'
+  if (status === 'approved') return 'Approved · ready to apply'
+  if (status === 'applied') return 'Applied'
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }

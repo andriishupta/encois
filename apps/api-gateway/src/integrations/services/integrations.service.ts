@@ -317,19 +317,11 @@ export async function updateIntegrationForPrincipal(
       integrationId,
     );
     if (accessible.length === 0) return null;
-    if (update.status === IntegrationStatus.Active && !accessible.some((row) => row.status === IntegrationStatus.Active)) {
-      throw new Error("INTEGRATION_HEALTH_CHECK_REQUIRED");
-    }
-    if ((update.status === "authorized" || update.status === "active") && !accessible.some((row) => Boolean(row.credentialRef))) {
-      throw new Error("INTEGRATION_CREDENTIAL_REQUIRED");
-    }
-
     const [row] = await db
       .update(integrations)
       .set({
         ...(update.displayName === undefined ? {} : { displayName: update.displayName }),
         ...(update.status === undefined ? {} : { status: update.status }),
-        ...(update.status === IntegrationStatus.Active ? { lastError: null } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(integrations.id, integrationId), eq(integrations.organizationId, principal.organizationId)))

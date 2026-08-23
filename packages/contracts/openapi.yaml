@@ -440,6 +440,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrganizationResponse'
+  /api/v1/organization/onboarding:
+    patch:
+      operationId: updateOrganizationOnboarding
+      summary: Update the organization onboarding configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationOnboardingUpdateRequest'
+      responses:
+        '200':
+          description: Onboarding configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOnboardingResponse'
+        '403': { description: onboarding:manage is required }
+  /api/v1/organization/onboarding/start:
+    post:
+      operationId: startOrganizationOnboarding
+      summary: Start the organization Coordinator
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Coordinator accepted and onboarding marked ready for dashboard use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOnboardingResponse'
+        '403': { description: onboarding:manage is required }
+        '503': { description: Coordinator or persistence is unavailable }
   /api/v1/organization/units:
     get:
       operationId: listOrganizationUnits
@@ -1381,6 +1416,12 @@ components:
     OrganizationMembershipStatus:
       type: string
       enum: [invited, active, suspended]
+    OrganizationOnboardingStatus:
+      type: string
+      enum: [pending, initializing, ready, failed]
+    CoordinationMode:
+      type: string
+      enum: [start-coordinator, connect-only]
     OrganizationUnitProjection:
       type: object
       additionalProperties: false
@@ -1421,7 +1462,7 @@ components:
     OrganizationProjection:
       type: object
       additionalProperties: false
-      required: [organization, units, members, permissions]
+      required: [organization, units, members, permissions, onboarding]
       properties:
         organization:
           type: object
@@ -1440,6 +1481,39 @@ components:
         permissions:
           type: array
           items: { $ref: '#/components/schemas/OrganizationPermissionProjection' }
+        onboarding: { $ref: '#/components/schemas/OrganizationOnboardingProjection' }
+    OrganizationOnboardingProjection:
+      type: object
+      additionalProperties: false
+      required: [organizationId, status, coordinatorId, coordinationMode, selectedWorkflows, createdAt, updatedAt]
+      properties:
+        organizationId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/OrganizationOnboardingStatus' }
+        coordinatorId: { type: string }
+        coordinationMode: { $ref: '#/components/schemas/CoordinationMode' }
+        selectedWorkflows:
+          description: Published Template keys or current approved Blueprint ids. Runtime and Temporal ids are never accepted here.
+          type: array
+          maxItems: 50
+          items: { type: string, maxLength: 128 }
+        lastError: { type: string, maxLength: 1000 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OrganizationOnboardingUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        coordinationMode: { $ref: '#/components/schemas/CoordinationMode' }
+        selectedWorkflows:
+          description: Published Template keys or current approved Blueprint ids. The Gateway validates each reference in the organization scope.
+          type: array
+          maxItems: 50
+          items: { type: string, maxLength: 128 }
+    OrganizationOnboardingResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OrganizationOnboardingProjection' }
     OrganizationUnitCreateRequest:
       type: object
       additionalProperties: false

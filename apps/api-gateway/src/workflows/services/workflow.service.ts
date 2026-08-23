@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { ContractVersion, isJsonObject, parseWorkflowBlueprint, Permission, TemporalWorkflowType, WorkflowExecutionStatus } from "@encois/contracts";
 import type {
@@ -28,7 +28,7 @@ import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
 import { hasPermission, hasPrincipalPermission } from "../../auth/authorization.js";
 import { createExecutionCapability } from "../../security/execution-capability.js";
-import type { WorkflowClient } from "../temporal-client.js";
+import type { WorkflowClient, WorkflowResultReader } from "../temporal-client.js";
 import {
   buildWorkflowId,
   type WorkflowExecutionProjection,
@@ -348,6 +348,28 @@ function dataProvenance(value: unknown): DataProvenance | undefined {
   };
 }
 
+function runtimeTrace(value: unknown): WorkflowTraceProjection | undefined {
+  if (!isJsonObject(value)) return undefined;
+  for (const key of ["provider", "model", "budget", "outcome"] as const) {
+    if (value[key] !== undefined && (typeof value[key] !== "string" || !value[key])) return undefined;
+  }
+  const durationMs = typeof value.durationMs === "number" && Number.isFinite(value.durationMs) ? value.durationMs : undefined;
+  const attempt = typeof value.attempt === "number" && Number.isFinite(value.attempt) ? value.attempt : undefined;
+  if (value.durationMs !== undefined && (durationMs === undefined || durationMs < 0)) return undefined;
+  if (value.attempt !== undefined && (attempt === undefined || !Number.isInteger(attempt) || attempt < 1)) return undefined;
+  if (value.redacted !== undefined && typeof value.redacted !== "boolean") return undefined;
+  const trace: WorkflowTraceProjection = {
+    ...(typeof value.provider === "string" && value.provider ? { provider: value.provider } : {}),
+    ...(typeof value.model === "string" && value.model ? { model: value.model } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(attempt !== undefined ? { attempt } : {}),
+    ...(typeof value.budget === "string" && value.budget ? { budget: value.budget } : {}),
+    ...(typeof value.outcome === "string" && value.outcome ? { outcome: value.outcome } : {}),
+    ...(typeof value.redacted === "boolean" ? { redacted: value.redacted } : {}),
+  };
+  return Object.keys(trace).length ? trace : undefined;
+}
+
 function sourceFreshness(value: unknown): SourceFreshness | undefined {
   if (!isJsonObject(value) || typeof value.source !== "string" || typeof value.observedAt !== "string" || !["fresh", "stale", "unknown"].includes(String(value.status))) return undefined;
   return {
@@ -357,6 +379,109 @@ function sourceFreshness(value: unknown): SourceFreshness | undefined {
     ...(typeof value.ingestedAt === "string" ? { ingestedAt: value.ingestedAt } : {}),
     ...(typeof value.expiresAt === "string" ? { expiresAt: value.expiresAt } : {}),
   };
+}
+
+type RuntimeWorkflowStepResult = {
+  stepId: string;
+  status: string;
+  evidenceRefs: readonly string[];
+  provenance?: DataProvenance;
+  confidence?: number;
+  trace?: WorkflowTraceProjection;
+  freshness: readonly SourceFreshness[];
+};
+
+type RuntimeWorkflowResult = {
+  status: string;
+  steps: readonly RuntimeWorkflowStepResult[];
+};
+
+export function parseRuntimeWorkflowResult(value: unknown): RuntimeWorkflowResult | undefined {
+  if (!isJsonObject(value) || value.contractVersion !== ContractVersion.WorkflowResult || !Array.isArray(value.steps)) return undefined;
+  const steps: RuntimeWorkflowStepResult[] = [];
+  for (const rawStep of value.steps) {
+    if (!isJsonObject(rawStep) || typeof rawStep.stepId !== "string" || typeof rawStep.status !== "string") return undefined;
+    if (rawStep.confidence !== undefined && (typeof rawStep.confidence !== "number" || !Number.isFinite(rawStep.confidence) || rawStep.confidence < 0 || rawStep.confidence > 1)) return undefined;
+    if (rawStep.trace !== undefined && !runtimeTrace(rawStep.trace)) return undefined;
+    const evidenceRefs = Array.isArray(rawStep.evidenceRefs) && rawStep.evidenceRefs.every((ref) => typeof ref === "string" && ref.length > 0)
+      ? rawStep.evidenceRefs as string[]
+      : [];
+    const freshness = Array.isArray(rawStep.freshness)
+      ? rawStep.freshness.map(sourceFreshness).filter((entry): entry is SourceFreshness => Boolean(entry))
+      : [];
+    steps.push({
+      stepId: rawStep.stepId,
+      status: rawStep.status,
+      evidenceRefs,
+      ...(dataProvenance(rawStep.provenance) ? { provenance: dataProvenance(rawStep.provenance) } : {}),
+      ...(typeof rawStep.confidence === "number" ? { confidence: rawStep.confidence } : {}),
+      ...(runtimeTrace(rawStep.trace) ? { trace: runtimeTrace(rawStep.trace) } : {}),
+      freshness,
+    });
+  }
+  return typeof value.status === "string" ? { status: value.status, steps } : undefined;
+}
+
+async function projectRuntimeWorkflowResult(
+  principal: AosPrincipal,
+  workflowRunId: string,
+  workflowId: string,
+  options: WorkflowServiceOptions,
+  occurredAt: Date,
+): Promise<void> {
+  if (!database) return;
+  const reader = options.workflowClient as unknown as WorkflowResultReader;
+  if (typeof reader.GetResult !== "function") return;
+  const rawResult = await reader.GetResult(workflowId, principal.organizationId, options.namespace).catch(() => null);
+  const result = parseRuntimeWorkflowResult(rawResult);
+  if (!result) return;
+
+  await withOrganizationContext(database, principal.organizationId, async (db) => {
+    for (const step of result.steps) {
+      const projectionKey = `workflow-result:${workflowRunId}:${step.stepId}`;
+      const [claim] = await db
+        .insert(idempotencyKeys)
+        .values({
+          organizationId: principal.organizationId,
+          key: projectionKey,
+          requestHash: createHash("sha256").update(stableSerialize({ status: result.status, step })).digest("hex"),
+          resourceType: "workflow_event_projection",
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        })
+        .onConflictDoNothing()
+        .returning({ id: idempotencyKeys.id });
+      if (!claim) continue;
+
+      const evidenceRefs = [...step.evidenceRefs];
+      const metadata: JsonObject = {
+        projection: "temporal_result",
+        projectionKey,
+        stepId: step.stepId,
+        runtimeStatus: step.status,
+        ...(evidenceRefs.length ? { evidenceRefs } : {}),
+        ...(step.provenance ? { provenance: step.provenance as unknown as JsonObject } : {}),
+        ...(step.confidence !== undefined ? { confidence: step.confidence } : {}),
+        ...(step.trace?.provider ? { provider: step.trace.provider } : {}),
+        ...(step.trace?.model ? { model: step.trace.model } : {}),
+        ...(step.trace?.durationMs !== undefined ? { durationMs: step.trace.durationMs } : {}),
+        ...(step.trace?.attempt !== undefined ? { attempt: step.trace.attempt } : {}),
+        ...(step.trace?.budget ? { budget: step.trace.budget } : {}),
+        ...(step.trace?.outcome ? { outcome: step.trace.outcome } : {}),
+        ...(step.trace?.redacted !== undefined ? { redacted: step.trace.redacted } : {}),
+        ...(step.freshness[0] ? { freshness: step.freshness[0] as unknown as JsonObject } : {}),
+      };
+      await db.insert(workflowEvents).values({
+        organizationId: principal.organizationId,
+        workflowRunId,
+        eventType: step.status === "failed" ? "activity_failed" : step.status === "waiting" ? "activity_waiting" : "activity_completed",
+        status: step.status,
+        activityName: step.stepId,
+        ...(evidenceRefs[0] ? { evidenceRef: evidenceRefs[0] } : {}),
+        metadata,
+        occurredAt,
+      });
+    }
+  });
 }
 
 export function workflowEventProjection(row: typeof workflowEvents.$inferSelect): WorkflowEventProjection {
@@ -679,6 +804,7 @@ export async function getWorkflow(
     const [row] = await db
       .select({ workflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
+      .leftJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.definitionId))
       .innerJoin(
         organizationMemberships,
         and(
@@ -692,6 +818,7 @@ export async function getWorkflow(
         and(
           eq(workflowRuns.organizationId, principal.organizationId),
           eq(workflowRuns.temporalWorkflowId, workflowId),
+          or(isNull(workflowDefinitions.key), ne(workflowDefinitions.key, TemporalWorkflowType.Coordinator)),
           or(
             eq(workflowRuns.actorUserId, userId),
             eq(rolePermissions.permission, Permission.WorkflowsRead),
@@ -730,8 +857,9 @@ export async function getWorkflowEvents(
       throw workflowServiceError("FORBIDDEN", "The user cannot read workflows.");
     }
     const [row] = await db
-      .select({ runId: workflowRuns.id, scope: workflowRuns.scope })
+      .select({ runId: workflowRuns.id, temporalWorkflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
+      .leftJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.definitionId))
       .innerJoin(
         organizationMemberships,
         and(
@@ -745,6 +873,7 @@ export async function getWorkflowEvents(
         and(
           eq(workflowRuns.organizationId, principal.organizationId),
           eq(workflowRuns.temporalWorkflowId, workflowId),
+          or(isNull(workflowDefinitions.key), ne(workflowDefinitions.key, TemporalWorkflowType.Coordinator)),
           or(
             eq(workflowRuns.actorUserId, userId),
             eq(rolePermissions.permission, Permission.WorkflowsRead),
@@ -757,6 +886,22 @@ export async function getWorkflowEvents(
   });
 
   if (!run) return null;
+
+  const projection = await options.workflowClient.get(workflowId, principal.organizationId, options.namespace).catch(() => null);
+  if (projection && new Set<WorkflowExecutionStatus>([
+    WorkflowExecutionStatus.Completed,
+    WorkflowExecutionStatus.Failed,
+    WorkflowExecutionStatus.Partial,
+    WorkflowExecutionStatus.Cancelled,
+  ]).has(projection.status)) {
+    await projectRuntimeWorkflowResult(
+      principal,
+      run.runId,
+      run.temporalWorkflowId,
+      options,
+      parseDate(projection.updatedAt) ?? new Date(),
+    );
+  }
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     const rows = await db
@@ -832,6 +977,7 @@ export async function listWorkflows(
     const rows = await db
       .select({ workflowId: workflowRuns.temporalWorkflowId, scope: workflowRuns.scope })
       .from(workflowRuns)
+      .leftJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.definitionId))
       .innerJoin(
         organizationMemberships,
         and(
@@ -844,6 +990,7 @@ export async function listWorkflows(
       .where(
         and(
           eq(workflowRuns.organizationId, principal.organizationId),
+          or(isNull(workflowDefinitions.key), ne(workflowDefinitions.key, TemporalWorkflowType.Coordinator)),
           or(
             eq(workflowRuns.actorUserId, userId),
             eq(rolePermissions.permission, Permission.WorkflowsRead),

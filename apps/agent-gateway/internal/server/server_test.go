@@ -12,6 +12,7 @@ import (
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/policy"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
 type recordingArtifactStore struct {
@@ -186,12 +187,49 @@ func TestMemoryGraphStoreCreatesTenantScopedLocalFixtures(t *testing.T) {
 			ExecutionContext: domain.ExecutionContext{OrganizationID: organizationID},
 			Query:            "release.blockers",
 		})
-		if err != nil || len(result.Nodes) != 1 {
-			t.Fatalf("expected one local blocker for %s, result=%+v err=%v", organizationID, result, err)
+		if err != nil || len(result.Nodes) != 2 {
+			t.Fatalf("expected blocker and linked project for %s, result=%+v err=%v", organizationID, result, err)
 		}
-		if result.Nodes[0].Properties["organizationId"] != organizationID {
+		if result.Nodes[0].Type != "blocker" || result.Nodes[0].Properties["organizationId"] != organizationID {
 			t.Fatalf("local graph fixture crossed organization boundary: organization=%s result=%+v", organizationID, result.Nodes)
 		}
+		if len(result.Edges) != 1 || result.Edges[0].TargetID != "mock-blocker-release-risk" {
+			t.Fatalf("expected release blocker relationship in graph result, got %+v", result.Edges)
+		}
+	}
+}
+
+func TestSpannerGraphStatementsPushDownSafeGraphFilters(t *testing.T) {
+	nodeStatement := graphNodesStatement(domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Query:            "release.blockers",
+		Params:           map[string]any{"nodeType": "blocker"},
+	})
+	if !strings.Contains(nodeStatement.SQL, "organization_id = @organization_id") || !strings.Contains(nodeStatement.SQL, "type = @node_type") || !strings.Contains(nodeStatement.SQL, "JSON_VALUE(properties_json") {
+		t.Fatalf("expected node predicates to be pushed down, got %s", nodeStatement.SQL)
+	}
+	if nodeStatement.Params["organization_id"] != "organization-test" || nodeStatement.Params["node_type"] != "blocker" {
+		t.Fatalf("unexpected node statement params: %+v", nodeStatement.Params)
+	}
+
+	edgeStatement := graphEdgesStatement(domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Query:            "project.related_entities",
+		Params:           map[string]any{"projectId": "checkout", "relationship": "depends_on"},
+	})
+	if !strings.Contains(edgeStatement.SQL, "relationship = @relationship") || !strings.Contains(edgeStatement.SQL, "source_id = @project_id") || !strings.Contains(edgeStatement.SQL, "target_id = @project_id") {
+		t.Fatalf("expected edge predicates to be pushed down, got %s", edgeStatement.SQL)
+	}
+	if edgeStatement.Params["project_id"] != "checkout" || edgeStatement.Params["relationship"] != "depends_on" {
+		t.Fatalf("unexpected edge statement params: %+v", edgeStatement.Params)
+	}
+
+	blockerEdgeStatement := graphEdgesStatementForNodes(domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Query:            "release.blockers",
+	}, map[string]struct{}{"mock-blocker-release-risk": {}})
+	if !strings.Contains(blockerEdgeStatement.SQL, "source_id IN UNNEST(@visible_node_ids) AND target_id IN UNNEST(@visible_node_ids)") {
+		t.Fatalf("expected blocker edge endpoint predicate to be pushed down, got %s", blockerEdgeStatement.SQL)
 	}
 }
 
@@ -200,16 +238,55 @@ func TestMemoryGraphStoreAppliesAdministrativeFilters(t *testing.T) {
 	result, err := store.Query(context.Background(), domain.GraphQueryRequest{
 		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
 		Query:            "all_context",
-		Params:           map[string]any{"nodeType": "blocker", "relationship": "has_blocker", "limit": float64(1)},
+		Params:           map[string]any{"nodeType": "blocker", "relationship": "has_blocker", "limit": float64(2)},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Nodes) != 1 || result.Nodes[0].Type != "blocker" {
-		t.Fatalf("expected one filtered blocker node, got %+v", result.Nodes)
+	if len(result.Nodes) != 2 {
+		t.Fatalf("expected the filtered blocker and its visible graph neighbor, got %+v", result.Nodes)
+	}
+	seenTypes := map[string]bool{}
+	for _, node := range result.Nodes {
+		seenTypes[node.Type] = true
+	}
+	if !seenTypes["blocker"] || !seenTypes["project"] {
+		t.Fatalf("expected blocker and project endpoints, got %+v", result.Nodes)
 	}
 	if len(result.Edges) != 1 || result.Edges[0].Relationship != "has_blocker" {
 		t.Fatalf("expected one filtered relationship edge, got %+v", result.Edges)
+	}
+}
+
+func TestMemoryGraphStoreDoesNotReturnEdgesWithHiddenEndpoints(t *testing.T) {
+	store := newMemoryGraphStore()
+	if err := store.Upsert(context.Background(), domain.GraphMutation{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Nodes: []domain.GraphNode{
+			{ID: "blocked", Type: "blocker", Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-visible"}}},
+			{ID: "secret-project", Type: "project", Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-secret"}}},
+		},
+		Edges: []domain.GraphEdge{{
+			ID: "hidden-endpoint-edge", SourceID: "secret-project", TargetID: "blocked", Relationship: "has_blocker",
+			Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-visible"}},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := store.Query(context.Background(), domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test", Scope: domain.Scope{IDs: []string{"team-visible"}}},
+		Query:            "all_context",
+		Params:           map[string]any{"nodeType": "blocker", "relationship": "has_blocker"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Nodes) != 1 || result.Nodes[0].ID != "blocked" {
+		t.Fatalf("expected only the visible blocker node, got %+v", result.Nodes)
+	}
+	if len(result.Edges) != 0 {
+		t.Fatalf("expected no edge with a hidden endpoint, got %+v", result.Edges)
 	}
 }
 

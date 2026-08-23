@@ -239,6 +239,8 @@ func (s *Server) invokeTool(c *gin.Context) {
 		Status:          providerToolStatus(s.providerTools),
 		Data:            result.Data,
 		EvidenceRefs:    result.EvidenceRefs,
+		Provenance:      result.Provenance,
+		Confidence:      result.Confidence,
 		Freshness:       result.Freshness,
 	})
 }
@@ -475,6 +477,23 @@ func mockTool(toolName, organizationID string) (map[string]any, []string, []cont
 		}, []string{"mock://organizations/" + organizationID + "/github/project-checkout"}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
 	default:
 		return nil, nil, nil, false
+	}
+}
+
+func mockToolProvenance(toolName, organizationID string, data map[string]any) *contractschemas.DataProvenance {
+	source, _ := data["source"].(string)
+	observedAt, _ := data["observedAt"].(string)
+	projectID, _ := data["projectId"].(string)
+	if source == "" || observedAt == "" || projectID == "" {
+		return nil
+	}
+	return &contractschemas.DataProvenance{
+		Source:                source,
+		SourceID:              organizationID + ":" + source,
+		SourceRecordID:        projectID,
+		ObservedAt:            observedAt,
+		TransformationVersion: "mock-provider-adapter.v1",
+		Locator:               map[string]any{"tool": toolName},
 	}
 }
 

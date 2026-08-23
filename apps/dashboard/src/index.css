@@ -229,6 +229,22 @@
   color: var(--primary-foreground);
 }
 
+.workflow-node-failed {
+  border-color: color-mix(in oklab, var(--destructive) 58%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 9%, transparent), 0 6px 20px color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+
+.workflow-node-failed .workflow-node-icon {
+  background: var(--destructive);
+  color: var(--background);
+}
+
+.workflow-node-waiting,
+.workflow-node-paused,
+.workflow-node-partial {
+  border-color: color-mix(in oklab, var(--foreground) 35%, var(--border));
+}
+
 .workflow-status-dot,
 .workflow-live-dot,
 .workflow-legend-dot {
@@ -243,6 +259,18 @@
 .workflow-live-dot,
 .workflow-legend-running {
   background: var(--primary);
+}
+
+.workflow-node-failed .workflow-status-dot,
+.workflow-legend-failed {
+  background: var(--destructive);
+}
+
+.workflow-node-waiting .workflow-status-dot,
+.workflow-node-paused .workflow-status-dot,
+.workflow-node-partial .workflow-status-dot,
+.workflow-legend-waiting {
+  background: var(--foreground);
 }
 
 .workflow-live-dot {

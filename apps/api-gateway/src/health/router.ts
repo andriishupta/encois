@@ -12,16 +12,27 @@ type ReadinessCheck = {
 };
 
 export type ReadinessProbe = () => Promise<Readonly<Record<string, ReadinessCheck>>>;
+type DatabaseSchemaProbe = () => Promise<boolean>;
+
+// This marker is created by the latest committed control-plane migration. A
+// connection-only probe would allow a Cloud Run revision to receive traffic
+// before the protected migration Job has applied the schema it imports.
+const currentSchemaMarker = "organization_onboarding";
 
 function configured(value: string | undefined, required: boolean): ReadinessCheck {
   return { state: value ? "ok" : "not_configured", required };
 }
 
-async function checkDatabase(): Promise<ReadinessState> {
-  if (!databaseClient) return "not_configured";
+export async function checkDatabase(schemaProbe?: DatabaseSchemaProbe): Promise<ReadinessState> {
+  const client = databaseClient;
+  if (!client && !schemaProbe) return "not_configured";
   try {
-    await databaseClient`select 1`;
-    return "ok";
+    if (schemaProbe) return (await schemaProbe()) ? "ok" : "failed";
+    if (!client) return "not_configured";
+    const schemaReady = Boolean(
+      (await client.unsafe("select to_regclass($1) as schema_marker", ["public." + currentSchemaMarker]))[0]?.schema_marker,
+    );
+    return schemaReady ? "ok" : "failed";
   } catch {
     return "failed";
   }

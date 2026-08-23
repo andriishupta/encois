@@ -41,14 +41,16 @@ const (
 )
 
 type CoordinatorStartInput struct {
-	ContractVersion string           `json:"contractVersion"`
-	CoordinatorID   string           `json:"coordinatorId"`
-	OrganizationID  string           `json:"organizationId"`
-	ProjectID       string           `json:"projectId,omitempty"`
-	ScopeType       ScopeType        `json:"scopeType"`
-	ActorID         string           `json:"actorId,omitempty"`
-	PolicyVersion   string           `json:"policyVersion"`
-	State           CoordinatorState `json:"state"`
+	ContractVersion      string           `json:"contractVersion"`
+	CoordinatorID        string           `json:"coordinatorId"`
+	OrganizationID       string           `json:"organizationId"`
+	ProjectID            string           `json:"projectId,omitempty"`
+	ScopeType            ScopeType        `json:"scopeType"`
+	ActorID              string           `json:"actorId,omitempty"`
+	PolicyVersion        string           `json:"policyVersion"`
+	CoordinationMode     string           `json:"coordinationMode,omitempty"`
+	SelectedWorkflowRefs []string         `json:"selectedWorkflowRefs,omitempty"`
+	State                CoordinatorState `json:"state"`
 }
 
 type CoordinatorState struct {
