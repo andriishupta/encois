@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
@@ -28,7 +27,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { authSessionEventName, clearAuthSession, getAuthSession } from '@/lib/auth'
+import { clearAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { flattenUnitOptions, formatUnitParentPath, getOrganizationUnit } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
@@ -80,7 +79,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const queryClient = useQueryClient()
   const { organizationName, units, members, currentUnitId, setCurrentUnitId } = useOrganization()
   const { can } = usePermissions()
   const branding = getBranding(organizationName ?? undefined)
@@ -90,17 +88,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const currentUnit = getOrganizationUnit(units, currentUnitId)?.canView ? getOrganizationUnit(units, currentUnitId) : units.find((unit) => unit.canView)
   const currentUnitLabel = currentUnit?.name ?? workspaceName
   const currentUnitPath = currentUnit ? formatUnitParentPath(units, currentUnit.id) || 'All organization units' : 'Organization scope unavailable'
-
-  useEffect(() => {
-    const handleSessionChange = () => {
-      if (!getAuthSession()) {
-        queryClient.clear()
-        window.location.replace('/login')
-      }
-    }
-    window.addEventListener(authSessionEventName(), handleSessionChange)
-    return () => window.removeEventListener(authSessionEventName(), handleSessionChange)
-  }, [queryClient])
 
   useEffect(() => {
     setAccountOpen(false)

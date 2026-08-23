@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { StatusPage } from '@/components/status-page'
 import { getOrganization } from '@/lib/api'
-import { getAuthSession } from '@/lib/auth'
+import { authSessionEventName, getAuthSession } from '@/lib/auth'
 import { getBranding, getPublicWorkspaceTitle } from '@/lib/branding'
 import { queryKeys } from '@/lib/query-keys'
 
@@ -18,11 +18,30 @@ function RootLayout() {
   return (
     <>
       <DocumentTitle />
+      <AuthSessionRedirector />
       <TooltipProvider>
         <Outlet />
       </TooltipProvider>
     </>
   )
+}
+
+function AuthSessionRedirector() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const handleSessionChange = () => {
+      const publicPage = pathname === '/login' || pathname === '/sign-up' || pathname === '/waitlist'
+      if (publicPage || getAuthSession()) return
+      queryClient.clear()
+      window.location.replace('/login')
+    }
+    window.addEventListener(authSessionEventName(), handleSessionChange)
+    return () => window.removeEventListener(authSessionEventName(), handleSessionChange)
+  }, [pathname, queryClient])
+
+  return null
 }
 
 function DocumentTitle() {

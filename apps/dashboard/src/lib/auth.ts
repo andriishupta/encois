@@ -163,7 +163,7 @@ export function getAuthIdentity(): AuthIdentity {
 }
 
 /** Gets a fresh bearer token without exposing Firebase refresh tokens to API code. */
-export async function getAuthSessionToken(): Promise<AuthSession | null> {
+export async function getAuthSessionToken(forceRefresh = false): Promise<AuthSession | null> {
   const localSession = getAuthSession()
   if (localSession && localSession.accessToken !== FIREBASE_AUTH_SENTINEL) return localSession
 
@@ -172,7 +172,7 @@ export async function getAuthSessionToken(): Promise<AuthSession | null> {
 
   const organizationId = storedOrganizationId()
   return {
-    accessToken: await firebaseAuth.currentUser.getIdToken(),
+    accessToken: await firebaseAuth.currentUser.getIdToken(forceRefresh),
     ...(organizationId ? { organizationId } : {}),
     permissions: storedPermissions(),
   }
@@ -209,6 +209,24 @@ export function clearAuthSession(): void {
   window.sessionStorage.removeItem(AUTH_PERMISSIONS_KEY)
   if (firebaseAuth?.currentUser) void signOut(firebaseAuth)
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT))
+}
+
+/** Clears Encois browser state after a stale or invalid authenticated session. */
+export async function clearAuthStorage(): Promise<void> {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (firebaseAuth?.currentUser) await signOut(firebaseAuth)
+  } catch {
+    // The local browser session must still be cleared when Firebase is unavailable.
+  } finally {
+    clearAuthSession()
+    for (const storage of [window.sessionStorage, window.localStorage]) {
+      for (const key of Object.keys(storage)) {
+        if (key.startsWith('encois.')) storage.removeItem(key)
+      }
+    }
+  }
 }
 
 export async function signInWithGoogle(): Promise<User> {

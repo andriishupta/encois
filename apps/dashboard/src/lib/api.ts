@@ -481,40 +481,61 @@ function isUpdateResponse(value: unknown): value is { accepted: true; updateId: 
   return isJsonObject(value) && value.accepted === true && typeof value.updateId === 'string'
 }
 
-async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
-  const session = requiresAuth ? await getAuthSessionToken() : null
-  if (requiresAuth && !session) throw createApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
-
-  const headers = new Headers(init?.headers)
-  headers.set('Accept', 'application/json')
-  if (typeof init?.body === 'string') headers.set('Content-Type', 'application/json')
-  if (session) {
-    headers.set('Authorization', `Bearer ${session.accessToken}`)
-    if (session.organizationId) headers.set('X-Organization-ID', session.organizationId)
-  }
-
-  let response: Response
+async function getSafeAuthSessionToken(forceRefresh = false) {
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
+    return await getAuthSessionToken(forceRefresh)
   } catch {
-    throw createApiError(0, 'The workspace could not be reached.', 'API_UNAVAILABLE')
+    return null
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
+  let session = requiresAuth ? await getSafeAuthSessionToken() : null
+  if (requiresAuth && !session) {
+    clearAuthSession()
+    throw createApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
   }
 
-  const body: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    const payload = errorPayload(body)
-    if (response.status === 401) clearAuthSession()
-    throw createApiError(
-      response.status,
-      payload?.error?.message ?? `API request failed (${response.status})`,
-      payload?.error?.code,
-    )
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const headers = new Headers(init?.headers)
+    headers.set('Accept', 'application/json')
+    if (typeof init?.body === 'string') headers.set('Content-Type', 'application/json')
+    if (session) {
+      headers.set('Authorization', `Bearer ${session.accessToken}`)
+      if (session.organizationId) headers.set('X-Organization-ID', session.organizationId)
+    }
+
+    let response: Response
+    try {
+      response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
+    } catch {
+      throw createApiError(0, 'The workspace could not be reached.', 'API_UNAVAILABLE')
+    }
+
+    const body: unknown = await response.json().catch(() => null)
+    if (response.status === 401 && requiresAuth && attempt === 0) {
+      session = await getSafeAuthSessionToken(true)
+      if (session) continue
+    }
+
+    if (!response.ok) {
+      const payload = errorPayload(body)
+      if (response.status === 401) clearAuthSession()
+      throw createApiError(
+        response.status,
+        payload?.error?.message ?? `API request failed (${response.status})`,
+        payload?.error?.code,
+      )
+    }
+
+    if (typeof body !== 'object' || body === null || Array.isArray(body) || !('data' in body)) {
+      throw createApiError(response.status, 'The service returned an invalid response.', 'INVALID_RESPONSE')
+    }
+    return (body as ApiEnvelope<T>).data
   }
 
-  if (typeof body !== 'object' || body === null || Array.isArray(body) || !('data' in body)) {
-    throw createApiError(response.status, 'The service returned an invalid response.', 'INVALID_RESPONSE')
-  }
-  return (body as ApiEnvelope<T>).data
+  clearAuthSession()
+  throw createApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
 }
 
 export function listWorkflows(): Promise<readonly WorkflowExecutionProjection[]> {

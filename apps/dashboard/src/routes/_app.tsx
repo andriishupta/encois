@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
-import { getAuthSession } from '@/lib/auth'
+import { clearAuthStorage, getAuthSession } from '@/lib/auth'
 import { OrganizationProvider } from '@/lib/organization-context'
 import { useOrganization } from '@/lib/organization-context'
 import { useCan, PermissionProvider } from '@/lib/permissions'
@@ -34,6 +34,13 @@ function OrganizationReadinessGate() {
   const { error, errorCode, isLoading, onboarding } = useOrganization()
   const canManageOnboarding = useCan(Permission.OnboardingManage)
   const queryClient = useQueryClient()
+  const authenticationError = errorCode === 'UNAUTHENTICATED'
+
+  async function recoverClientSession() {
+    queryClient.clear()
+    await clearAuthStorage()
+    window.location.replace('/login')
+  }
 
   if (isLoading) {
     return <ReadinessFrame><LoaderCircle className="size-6 animate-spin text-muted-foreground" aria-label="Loading workspace readiness" /></ReadinessFrame>
@@ -56,7 +63,7 @@ function OrganizationReadinessGate() {
   }
 
   if (error || !onboarding) {
-    return <ReadinessFrame><div className="w-full max-w-lg rounded-xl border bg-background p-6 shadow-sm sm:p-8"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workspace readiness</p><h1 className="mt-3 text-2xl font-semibold tracking-tight">Workspace is unavailable</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">{error ?? 'The organization readiness response was incomplete.'}</p><Button className="mt-6" variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: queryKeys.organization() })}>Check again</Button></div></ReadinessFrame>
+    return <ReadinessFrame><div className="w-full max-w-lg rounded-xl border bg-background p-6 shadow-sm sm:p-8"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workspace readiness</p><h1 className="mt-3 text-2xl font-semibold tracking-tight">Workspace is unavailable</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">{authenticationError ? 'Your sign-in session is missing or expired. Clear the local session and sign in again.' : error ?? 'The organization readiness response was incomplete.'}</p><div className="mt-6 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: queryKeys.organization() })}>Check again</Button>{authenticationError ? <Button type="button" onClick={() => void recoverClientSession()}>Try to fix / clear storage</Button> : null}</div></div></ReadinessFrame>
   }
 
   if (onboarding.status !== OrganizationOnboardingStatus.Ready) {
