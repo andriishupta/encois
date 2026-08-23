@@ -12,7 +12,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Building2, FolderKanban, Layers3, Users } from 'lucide-react'
+import { Building2, FolderKanban, Layers3, LockKeyhole, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { InteractiveMiniMap } from '@/components/interactive-minimap'
 import { humanizeUnitType, type OrganizationUnit, type OrganizationUnitType } from '@/lib/organization'
@@ -79,20 +79,25 @@ const unitIcon: Record<OrganizationUnitType, typeof Building2> = {
 
 function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
   const Icon = unitIcon[data.unit.type]
+  const isRestricted = !data.unit.canView
 
   return (
     <button
       type="button"
+      disabled={isRestricted}
+      aria-label={isRestricted ? `${data.unit.name}, access restricted` : data.unit.name}
+      title={isRestricted ? 'Access restricted' : data.unit.canManage ? 'Editable organization unit' : 'Read-only organization unit'}
       className={cn(
-        'w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors hover:border-foreground/40',
+        'w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border',
         data.selected && 'border-primary ring-2 ring-primary/20',
+        data.unit.canManage && 'border-primary/40',
       )}
-      onClick={(event) => { event.stopPropagation(); data.onSelect(data.unit.id) }}
+      onClick={(event) => { event.stopPropagation(); if (data.unit.canView) data.onSelect(data.unit.id) }}
     >
       <Handle type="target" position={Position.Top} className="!h-0 !w-0 !border-0 !bg-transparent" />
       <div className="flex items-start gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="size-4" aria-hidden="true" />
+          {isRestricted ? <LockKeyhole className="size-4" aria-hidden="true" /> : <Icon className="size-4" aria-hidden="true" />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{data.unit.name}</span>
@@ -100,8 +105,7 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
         </span>
       </div>
       <span className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Users className="size-3.5" aria-hidden="true" />
-        {data.unit.memberCount} members · {data.unit.manager}
+        {isRestricted ? <><LockKeyhole className="size-3.5" aria-hidden="true" />Access restricted</> : <><Users className="size-3.5" aria-hidden="true" />{data.unit.memberCount ?? '—'} members · {data.unit.manager ?? 'Not assigned'}</>}
       </span>
       <Handle type="source" position={Position.Bottom} className="!h-0 !w-0 !border-0 !bg-transparent" />
     </button>
@@ -149,7 +153,7 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
         <InteractiveMiniMap
-          nodeColor={(node) => node.id === selectedUnitId ? 'var(--primary)' : 'var(--muted-foreground)'}
+          nodeColor={(node) => node.id === selectedUnitId ? 'var(--primary)' : node.data?.unit?.canView === false ? 'var(--border)' : 'var(--muted-foreground)'}
         />
         <Panel position="top-left">
           <div className="flex items-center gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">

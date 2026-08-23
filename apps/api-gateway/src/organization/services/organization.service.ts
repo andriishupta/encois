@@ -268,8 +268,6 @@ async function loadContext(
 }
 
 function projectContext(context: OrganizationContext): OrganizationProjection {
-  const visibleUnitIds = context.isAdministrator ? new Set(context.units.map((unit) => unit.id)) : context.actorScopeIds;
-  const visibleUnits = context.units.filter((unit) => visibleUnitIds.has(unit.id));
   const visibleMemberIds = new Set<string>();
   const effectiveByMember = new Map<string, Set<string>>();
   for (const member of context.members) {
@@ -283,12 +281,16 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
     }
   }
 
-  const units: OrganizationUnitProjection[] = visibleUnits.map((unit) => {
-    const scopedMembers = context.members.filter((member) => effectiveByMember.get(member.membershipId)?.has(unit.id));
-    const manager = context.scopes
-      .filter((scope) => scope.unitId === unit.id && (scope.access === AccessLevel.Manager || scope.access === AccessLevel.Admin))
-      .map((scope) => context.members.find((member) => member.userId === scope.userId))
-      .find((member): member is MemberRow => Boolean(member));
+  const units: OrganizationUnitProjection[] = context.units.map((unit) => {
+    const canView = context.isAdministrator || context.actorScopeIds.has(unit.id);
+    const canManage = canManageUnit(context, unit.id);
+    const scopedMembers = canView ? context.members.filter((member) => effectiveByMember.get(member.membershipId)?.has(unit.id)) : [];
+    const manager = canView
+      ? context.scopes
+          .filter((scope) => scope.unitId === unit.id && (scope.access === AccessLevel.Manager || scope.access === AccessLevel.Admin))
+          .map((scope) => context.members.find((member) => member.userId === scope.userId))
+          .find((member): member is MemberRow => Boolean(member))
+      : undefined;
     return {
       id: unit.id,
       organizationId: unit.organizationId,
@@ -297,8 +299,12 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
       slug: unit.slug,
       name: unit.name,
       description: descriptionForUnit(unit.type),
-      manager: manager ? displayName(manager) : "Not assigned",
-      memberCount: new Set(scopedMembers.map((member) => member.userId)).size,
+      canView,
+      canManage,
+      ...(canView ? {
+        manager: manager ? displayName(manager) : "Not assigned",
+        memberCount: new Set(scopedMembers.map((member) => member.userId)).size,
+      } : {}),
     };
   });
 
@@ -924,6 +930,8 @@ export async function createOrganizationUnitForPrincipal(
     return {
       ...created,
       description: descriptionForUnit(created.type),
+      canView: true,
+      canManage: true,
       manager: "Not assigned",
       memberCount: 0,
     };

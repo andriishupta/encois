@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { Check, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -12,14 +12,13 @@ export const Route = createFileRoute('/_app/profile')({
 })
 
 function ProfilePage() {
-  const navigate = useNavigate()
   const session = getAuthSession()
   const { members } = useOrganization()
   const account = getAccountSummary(members)
 
   function signOut() {
     clearAuthSession()
-    void navigate({ to: '/login' })
+    window.location.replace('/login')
   }
 
   return (

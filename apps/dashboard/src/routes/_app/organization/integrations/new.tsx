@@ -23,6 +23,7 @@ function NewIntegrationPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { units, currentUnitId } = useOrganization()
+  const accessibleUnits = units.filter((unit) => unit.canView)
   const [displayName, setDisplayName] = useState('')
   const [provider, setProvider] = useState('github')
   const [organizationUnitId, setOrganizationUnitId] = useState('')
@@ -37,9 +38,9 @@ function NewIntegrationPage() {
 
   useEffect(() => {
     if (organizationUnitId) return
-    const preferred = currentUnitId !== 'organization' ? currentUnitId : units.find((unit) => unit.parentId === null)?.id
+    const preferred = currentUnitId !== 'organization' && accessibleUnits.some((unit) => unit.id === currentUnitId) ? currentUnitId : accessibleUnits.find((unit) => unit.parentId === null)?.id ?? accessibleUnits[0]?.id
     if (preferred) setOrganizationUnitId(preferred)
-  }, [currentUnitId, organizationUnitId, units])
+  }, [accessibleUnits, currentUnitId, organizationUnitId])
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -75,7 +76,7 @@ function NewIntegrationPage() {
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-name">Display name<input id="integration-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="GitHub Engineering" required minLength={2} maxLength={160} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></label>
               <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-provider">Provider<select id="integration-provider" value={provider} onChange={(event) => changeProvider(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="github">GitHub</option><option value="gitlab">GitLab</option><option value="jira">Jira</option><option value="linear">Linear</option><option value="slack">Slack</option><option value="google-drive">Google Drive</option></select></label>
             </div>
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-scope"><ProductTerm term="scope" /><select id="integration-scope" value={organizationUnitId} onChange={(event) => setOrganizationUnitId(event.target.value)} required disabled={units.length === 0} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"><option value="" disabled>Select an organization unit</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select><span className="text-xs font-normal text-muted-foreground">Members can only use this integration where their existing permissions allow access.</span></label>
+            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-scope"><ProductTerm term="scope" /><select id="integration-scope" value={organizationUnitId} onChange={(event) => setOrganizationUnitId(event.target.value)} required disabled={accessibleUnits.length === 0} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"><option value="" disabled>Select an organization unit</option>{accessibleUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select><span className="text-xs font-normal text-muted-foreground">Members can only use this integration where their existing permissions allow access.</span></label>
             <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
               <legend className="px-1 text-sm font-medium">Read capabilities</legend>
               <p className="text-xs text-muted-foreground">These capabilities are recorded on the binding and used by workflow provider preflight. Write capabilities are not available here.</p>

@@ -643,7 +643,7 @@ flowchart LR
     E --> I[Tool invocation policy]
 ```
 
-Example: a Team A manager may see Team A and explicitly shared dependencies. A company-level lead may see Departments A, B, and C. A specialist receives only the intersection of user scope, workflow scope, agent policy, and connector grant.
+Example: a Team A manager may read Team A and explicitly shared dependencies. The organization tree itself is returned as structural metadata so the UI can show the complete hierarchy, but unit details, members, sources, graph facts, and workflow data remain scoped to the caller. A company-level lead may see Departments A, B, and C. A specialist receives only the intersection of user scope, workflow scope, agent policy, and connector grant.
 
 The server computes this scope for every request, graph query, memory retrieval, and tool call. A client-supplied `organizationId`, organization-unit ID, or “admin” flag is never trusted. Authorization uses one canonical organization-unit ID set; team and project are organization-unit types, not separate scope namespaces.
 
@@ -665,8 +665,8 @@ can request viewer, contributor, or manager access for a unit already visible
 in their effective scope. The Gateway persists the request and audit event;
 only a different organization administrator can approve or reject it, and a
 second explicit apply step writes the membership scope. Administrator role
-permissions are never granted by this flow, and hidden units remain an
-administrator-assisted path rather than a client-discoverable enumeration.
+permissions are never granted by this flow. Structural tree visibility does
+not grant access to the unit's data or make it selectable in scoped queries.
 
 ### Memory governance flow
 

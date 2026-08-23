@@ -17,7 +17,6 @@ import {
 import { useOrganization } from '@/lib/organization-context'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
-import { useCan } from '@/lib/permissions'
 
 export const Route = createFileRoute('/_app/organization/')({
   beforeLoad: () => {
@@ -30,17 +29,19 @@ const unitTypes: OrganizationUnitType[] = ['department', 'team', 'project', 'ser
 
 function OrganizationPage() {
   const { units, createUnit, currentUnitId, setCurrentUnitId, isLoading, error } = useOrganization()
-  const canManage = useCan(Permission.OrganizationManage)
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [newUnitName, setNewUnitName] = useState('')
   const [newUnitType, setNewUnitType] = useState<OrganizationUnitType>('team')
   const [newParentId, setNewParentId] = useState('organization')
   const [newRelation, setNewRelation] = useState<'child' | 'sibling'>('child')
 
-  const selectedUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
-  const unitOptions = flattenUnitOptions(units)
+  const selectedUnit = getOrganizationUnit(units, currentUnitId)?.canView ? getOrganizationUnit(units, currentUnitId) : units.find((unit) => unit.canView)
+  const unitOptions = flattenUnitOptions(units).filter(({ unit }) => unit.canManage)
+  const canManageAnyUnit = unitOptions.length > 0
 
   function openAddUnit(unitId = currentUnitId) {
+    const unit = getOrganizationUnit(units, unitId)
+    if (!unit?.canManage) return
     setNewParentId(unitId)
     setNewRelation('child')
     setAddUnitOpen(true)
@@ -51,7 +52,8 @@ function OrganizationPage() {
     if (!name) return
 
     const selectedParent = getOrganizationUnit(units, newParentId)
-    if (newRelation === 'sibling' && selectedParent?.parentId === null) return
+    const siblingParent = selectedParent?.parentId ? getOrganizationUnit(units, selectedParent.parentId) : undefined
+    if (newRelation === 'sibling' && (!siblingParent || !siblingParent.canManage)) return
     const parentId = newRelation === 'sibling' ? selectedParent?.parentId ?? null : newParentId
     const created = await createUnit({ parentId, type: newUnitType, name })
     setCurrentUnitId(created.id)
@@ -59,13 +61,16 @@ function OrganizationPage() {
     setAddUnitOpen(false)
   }
 
+  const selectedPlacementUnit = getOrganizationUnit(units, newParentId)
+  const canPlaceSibling = Boolean(selectedPlacementUnit?.parentId && getOrganizationUnit(units, selectedPlacementUnit.parentId)?.canManage)
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Organization"
         description={<>Explore the organization-owned visibility tree and manage <ProductTerm term="organizationUnit" plural /> within your <ProductTerm term="scope" />.</>}
-        actions={canManage ? (
-          <Button type="button" onClick={() => openAddUnit()}>
+        actions={canManageAnyUnit ? (
+          <Button type="button" onClick={() => openAddUnit(unitOptions[0]?.unit.id)}>
             <Plus data-icon="inline-start" />
             Add unit
           </Button>
@@ -74,7 +79,7 @@ function OrganizationPage() {
 
       <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <p className="text-muted-foreground"><span className="font-medium text-foreground">Organization administrator surface.</span> Units and direct membership permissions are inherited through child units.</p>
+        <p className="text-muted-foreground"><span className="font-medium text-foreground">Organization structure.</span> The complete hierarchy is visible, while unit details and management actions follow your effective scope.</p>
       </div>
       {isLoading ? <p className="text-sm text-muted-foreground">Loading organization scope…</p> : null}
       {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</p> : null}
@@ -100,12 +105,12 @@ function OrganizationPage() {
               <p className="text-sm text-muted-foreground">{selectedUnit.description}</p>
               <div className="grid gap-2 text-sm">
                 <DetailRow label="Unit type" value={humanizeUnitType(selectedUnit.type)} />
-                <DetailRow label="Manager" value={selectedUnit.manager} />
-                <DetailRow label="Members" value={String(selectedUnit.memberCount)} />
+                <DetailRow label="Manager" value={selectedUnit.manager ?? 'Restricted'} />
+                <DetailRow label="Members" value={selectedUnit.memberCount === undefined ? 'Restricted' : String(selectedUnit.memberCount)} />
               </div>
               <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
-                {canManage ? <Button type="button" variant="outline" onClick={() => openAddUnit(selectedUnit.id)}><Plus data-icon="inline-start" />Add related unit</Button> : null}
-                {canManage ? <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button> : null}
+                {selectedUnit.canManage ? <Button type="button" variant="outline" onClick={() => openAddUnit(selectedUnit.id)}><Plus data-icon="inline-start" />Add related unit</Button> : null}
+                {selectedUnit.canManage ? <Button type="button" variant="outline" asChild><Link to="/organization/permissions"><Users data-icon="inline-start" />Manage permissions</Link></Button> : null}
               </div>
             </CardContent>
           </Card> : <Card><CardHeader><CardTitle>Organization scope</CardTitle><CardDescription>Organization structure is not available yet.</CardDescription></CardHeader></Card>}
@@ -152,7 +157,7 @@ function OrganizationPage() {
                 Placement
                 <select id="unit-relation" value={newRelation} onChange={(event) => setNewRelation(event.target.value as 'child' | 'sibling')} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
                   <option value="child">Child of selected unit</option>
-                  <option value="sibling" disabled={newParentId === 'organization'}>Parallel to selected unit</option>
+                  <option value="sibling" disabled={!canPlaceSibling}>Parallel to selected unit</option>
                 </select>
               </label>
             </div>

@@ -353,8 +353,11 @@ function isOrganizationUnitProjection(value: unknown): value is OrganizationUnit
     && typeof value.slug === 'string'
     && typeof value.name === 'string'
     && typeof value.description === 'string'
-    && typeof value.manager === 'string'
-    && typeof value.memberCount === 'number'
+    && typeof value.canView === 'boolean'
+    && typeof value.canManage === 'boolean'
+    && (value.canView
+      ? typeof value.manager === 'string' && typeof value.memberCount === 'number'
+      : value.manager === undefined && value.memberCount === undefined)
 }
 
 function isOrganizationMemberProjection(value: unknown): boolean {

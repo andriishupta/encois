@@ -598,8 +598,14 @@ export type OrganizationUnitProjection = {
   slug: string;
   name: string;
   description: string;
-  manager: string;
-  memberCount: number;
+  /** Whether the caller may select this unit and read its scoped details. */
+  canView: boolean;
+  /** Whether the caller may manage this unit and its direct permissions. */
+  canManage: boolean;
+  /** Scoped details are omitted when canView is false. */
+  manager?: string;
+  /** Scoped details are omitted when canView is false. */
+  memberCount?: number;
 };
 
 export type OrganizationMemberProjection = {

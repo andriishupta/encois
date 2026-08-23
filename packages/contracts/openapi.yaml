@@ -430,12 +430,12 @@ paths:
   /api/v1/organization:
     get:
       operationId: getOrganization
-      summary: Get the organization projection visible to the caller
+      summary: Get the organization structure and scoped details available to the caller
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Organization, visible units, members, and manageable permissions
+          description: Organization structure, scoped unit details, visible members, and manageable permissions
           content:
             application/json:
               schema:
@@ -478,12 +478,12 @@ paths:
   /api/v1/organization/units:
     get:
       operationId: listOrganizationUnits
-      summary: List organization units visible to the caller
+      summary: List the organization structure with caller-specific view and management flags
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Visible organization units
+          description: Organization units with structural metadata; scoped details are returned only for accessible units
           content:
             application/json:
               schema:
@@ -1405,7 +1405,7 @@ components:
     OrganizationUnitProjection:
       type: object
       additionalProperties: false
-      required: [id, organizationId, parentId, type, slug, name, description, manager, memberCount]
+      required: [id, organizationId, parentId, type, slug, name, description, canView, canManage]
       properties:
         id: { type: string, format: uuid }
         organizationId: { type: string, format: uuid }
@@ -1414,8 +1414,10 @@ components:
         slug: { type: string }
         name: { type: string }
         description: { type: string }
-        manager: { type: string }
-        memberCount: { type: integer, minimum: 0 }
+        canView: { type: boolean, description: The caller may select the unit and read its scoped details. }
+        canManage: { type: boolean, description: The caller may manage the unit and its direct permissions. }
+        manager: { type: string, description: Present only when canView is true. }
+        memberCount: { type: integer, minimum: 0, description: Present only when canView is true. }
     OrganizationMemberProjection:
       type: object
       additionalProperties: false

@@ -47,9 +47,9 @@ function OrganizationPermissionsPage() {
     setSelectedMemberId(focusedManager?.id ?? members[0]?.id ?? '')
   }, [focusedManager?.id, members, selectedMemberId])
   useEffect(() => {
-    if (units.some((unit) => unit.id === newUnitId)) return
-    setNewUnitId(currentUnitId || units[0]?.id || '')
-  }, [currentUnitId, newUnitId, units])
+    if (units.some((unit) => unit.id === newUnitId && unit.canManage)) return
+    setNewUnitId(units.find((unit) => unit.canManage)?.id ?? '')
+  }, [newUnitId, units])
 
   const selectedMember = members.find((member) => member.id === selectedMemberId) ?? members[0]
   if (!selectedMember) return <p className="text-sm text-muted-foreground">No organization members are available.</p>
@@ -58,7 +58,7 @@ function OrganizationPermissionsPage() {
   const effectiveUnits = units.filter((unit) => effectiveUnitIds.includes(unit.id))
   const managedUnitIds = getManagedUnitIds(units, permissions, selectedMember.id)
   const managedUnits = units.filter((unit) => managedUnitIds.includes(unit.id))
-  const unitOptions = flattenUnitOptions(units)
+  const unitOptions = flattenUnitOptions(units).filter(({ unit }) => unit.canManage)
 
   async function addPermission() {
     await createPermission({ memberId: selectedMember.id, unitId: newUnitId, access: newAccess })
@@ -158,10 +158,10 @@ function OrganizationPermissionsPage() {
                   <h2 className="text-sm font-semibold">Direct permissions</h2>
                 <p className="text-xs text-muted-foreground">Each direct scope includes all descendant units.</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => setAddPermissionOpen((value) => !value)}><Plus data-icon="inline-start" />Add scope</Button>
+                {unitOptions.length > 0 ? <Button type="button" variant="outline" size="sm" onClick={() => setAddPermissionOpen((value) => !value)}><Plus data-icon="inline-start" />Add scope</Button> : null}
               </div>
 
-              {memberPermissions.length ? memberPermissions.map((permission) => <PermissionRow key={permission.id} permission={permission} units={units} canAssignAdministrator={canAssignAdministrator} busy={pendingAction !== null} removalPending={pendingRemovalId === permission.id} onAccessChange={(access) => { void runMutation(`update:${permission.id}`, async () => { await updatePermission(permission.id, access) }) }} onRemove={() => handleRemovePermission(permission.id)} onCancelRemove={() => setPendingRemovalId(null)} />) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct permissions assigned.</p>}
+              {memberPermissions.length ? memberPermissions.map((permission) => <PermissionRow key={permission.id} permission={permission} units={units} canManage={getOrganizationUnit(units, permission.unitId)?.canManage === true} canAssignAdministrator={canAssignAdministrator} busy={pendingAction !== null} removalPending={pendingRemovalId === permission.id} onAccessChange={(access) => { void runMutation(`update:${permission.id}`, async () => { await updatePermission(permission.id, access) }) }} onRemove={() => handleRemovePermission(permission.id)} onCancelRemove={() => setPendingRemovalId(null)} />) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct permissions assigned.</p>}
             </div>
 
             {addPermissionOpen ? <AddPermissionForm unitOptions={unitOptions} accessLevels={canAssignAdministrator ? accessLevels : accessLevels.filter((level) => level !== 'admin')} unitId={newUnitId} access={newAccess} onUnitChange={setNewUnitId} onAccessChange={setNewAccess} onCancel={() => setAddPermissionOpen(false)} onSubmit={handleAddPermission} busy={pendingAction !== null} /> : null}
@@ -194,7 +194,7 @@ function MemberRow({ member, selected, onSelect }: { member: OrganizationMember;
   )
 }
 
-function PermissionRow({ permission, units, canAssignAdministrator, busy, removalPending, onAccessChange, onRemove, onCancelRemove }: { permission: UnitPermission; units: OrganizationUnit[]; canAssignAdministrator: boolean; busy: boolean; removalPending: boolean; onAccessChange: (access: AccessLevel) => void; onRemove: () => void; onCancelRemove: () => void }) {
+function PermissionRow({ permission, units, canManage, canAssignAdministrator, busy, removalPending, onAccessChange, onRemove, onCancelRemove }: { permission: UnitPermission; units: OrganizationUnit[]; canManage: boolean; canAssignAdministrator: boolean; busy: boolean; removalPending: boolean; onAccessChange: (access: AccessLevel) => void; onRemove: () => void; onCancelRemove: () => void }) {
   const unit = getOrganizationUnit(units, permission.unitId)
   if (!unit) return null
 
@@ -202,9 +202,9 @@ function PermissionRow({ permission, units, canAssignAdministrator, busy, remova
     <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><LockKeyhole className="size-4 text-muted-foreground" aria-hidden="true" /></span>
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{unit.name}</p><p className="truncate text-xs text-muted-foreground">{formatUnitPath(units, unit.id)}</p></div>
-      <select value={permission.access} disabled={busy} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level} disabled={level === 'admin' && !canAssignAdministrator}>{humanizeAccessLevel(level)}{level === 'admin' && !canAssignAdministrator ? ' (administrator only)' : ''}</option>)}</select>
-      <span className="text-xs text-muted-foreground">Includes descendants</span>
-      {removalPending ? <span className="flex shrink-0 items-center gap-2"><span className="text-xs text-destructive">Remove this scope?</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelRemove}>Cancel</Button><Button type="button" size="sm" variant="destructive" disabled={busy} onClick={onRemove}>Confirm</Button></span> : <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`Remove ${unit.name} permission`} onClick={onRemove}><X className="size-4" /></Button>}
+      <select value={permission.access} disabled={busy || !canManage} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level} disabled={level === 'admin' && !canAssignAdministrator}>{humanizeAccessLevel(level)}{level === 'admin' && !canAssignAdministrator ? ' (administrator only)' : ''}</option>)}</select>
+      <span className="text-xs text-muted-foreground">{canManage ? 'Includes descendants' : 'Read-only scope'}</span>
+      {canManage && (removalPending ? <span className="flex shrink-0 items-center gap-2"><span className="text-xs text-destructive">Remove this scope?</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelRemove}>Cancel</Button><Button type="button" size="sm" variant="destructive" disabled={busy} onClick={onRemove}>Confirm</Button></span> : <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`Remove ${unit.name} permission`} onClick={onRemove}><X className="size-4" /></Button>)}
     </div>
   )
 }

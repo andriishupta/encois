@@ -53,7 +53,7 @@ function MemoryPage() {
     onError: (error) => setChangeError(error.message),
   })
   const scopeLabel = scope === 'all' ? 'All available units' : formatUnitPath(units, scope) || scope
-  const governanceScope = useMemo(() => memory.data?.scope ?? selectedScope ?? { ids: units.filter((unit) => unit.id !== 'organization').map((unit) => unit.id) }, [memory.data?.scope, selectedScope, units])
+  const governanceScope = useMemo(() => memory.data?.scope ?? selectedScope ?? { ids: units.filter((unit) => unit.canView && unit.id !== 'organization').map((unit) => unit.id) }, [memory.data?.scope, selectedScope, units])
 
   function submitAddMemory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -74,7 +74,7 @@ function MemoryPage() {
           <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium"><ProductTerm term="agentDefinition" /><select value={agentDefinition} onChange={(event) => setAgentDefinition(event.target.value)} className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm font-normal">{agentDefinitions.map((definition) => <option key={definition} value={definition}>{definition}</option>)}</select></label>
           <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium">Search query<input value={query} onChange={(event) => setQuery(event.target.value)} className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm font-normal" maxLength={2000} /></label>
           <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium">Project filter<input value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="Optional project id" className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm font-normal" maxLength={160} /></label>
-          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium">Scope<select value={scope} onChange={(event) => setScope(event.target.value)} className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm font-normal"><option value="all">All available units</option>{units.filter((unit) => unit.id !== 'organization').map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
+          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium">Scope<select value={scope} onChange={(event) => setScope(event.target.value)} className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm font-normal"><option value="all">All available units</option>{units.filter((unit) => unit.canView && unit.id !== 'organization').map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
         </div>
         {memory.isLoading ? <p className="text-sm text-muted-foreground">Retrieving scoped memory…</p> : null}
         {memory.isError ? <EmptyPanel icon={CircleAlert} title={isApiError(memory.error) && memory.error.code === 'MEMORY_UNAVAILABLE' ? 'Memory unavailable' : 'Memory search failed'} description={memory.error.message} /> : null}

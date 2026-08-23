@@ -39,6 +39,8 @@ function toUnit(unit: OrganizationProjection['units'][number]): OrganizationUnit
     type: unit.type,
     name: unit.name,
     description: unit.description,
+    canView: unit.canView,
+    canManage: unit.canManage,
     manager: unit.manager,
     memberCount: unit.memberCount,
   }
@@ -88,8 +90,14 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!query.data || units.some((unit) => unit.id === currentUnitId)) return
-    setCurrentUnitId(units.find((unit) => unit.parentId === null)?.id ?? units[0]?.id ?? '')
+    setCurrentUnitId(units.find((unit) => unit.id === currentUnitId && unit.canView)?.id ?? units.find((unit) => unit.canView)?.id ?? '')
   }, [currentUnitId, query.data, units])
+
+  useEffect(() => {
+    const currentUnit = units.find((unit) => unit.id === currentUnitId)
+    if (currentUnit?.canView) return
+    setCurrentUnitId(units.find((unit) => unit.canView)?.id ?? '')
+  }, [currentUnitId, units])
 
   const value = useMemo<OrganizationContextValue>(() => {
     const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.organization() })

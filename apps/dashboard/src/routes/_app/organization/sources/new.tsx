@@ -31,7 +31,7 @@ function NewSourcePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const scopeOptions = useMemo(() => units.filter((unit) => unit.id), [units])
+  const scopeOptions = useMemo(() => units.filter((unit) => unit.canView), [units])
   const activeIntegrations = useMemo(() => integrations.data?.filter((integration) => integration.status === IntegrationStatus.Active && integration.credentialConfigured) ?? [], [integrations.data])
   const selectedIntegration = activeIntegrations.find((integration) => integration.id === integrationId)
 

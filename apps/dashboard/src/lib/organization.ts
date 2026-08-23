@@ -7,8 +7,10 @@ export type OrganizationUnit = {
   type: OrganizationUnitType
   name: string
   description: string
-  manager: string
-  memberCount: number
+  canView: boolean
+  canManage: boolean
+  manager?: string
+  memberCount?: number
 }
 
 export type OrganizationMember = {

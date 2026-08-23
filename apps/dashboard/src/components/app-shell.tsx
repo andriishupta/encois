@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
   Bell,
@@ -13,6 +14,7 @@ import {
   FilePlus2,
   GitBranch,
   ListEnd,
+  LockKeyhole,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -72,27 +74,30 @@ const settingsNavigation: readonly NavigationItem[] = [
 ] as const
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [organizationOpen, setOrganizationOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const queryClient = useQueryClient()
   const { organizationName, units, members, currentUnitId, setCurrentUnitId } = useOrganization()
   const { can } = usePermissions()
   const branding = getBranding(organizationName)
   const workspaceName = branding.workspaceName
   const account = getAccountSummary(members)
   const organizationUnitOptions = flattenUnitOptions(units)
-  const currentUnit = getOrganizationUnit(units, currentUnitId) ?? units[0]
+  const currentUnit = getOrganizationUnit(units, currentUnitId)?.canView ? getOrganizationUnit(units, currentUnitId) : units.find((unit) => unit.canView)
   const currentScopeLabel = currentUnit ? currentUnit.id === 'organization' ? 'All organization units' : formatUnitPath(units, currentUnit.id) : 'Organization scope unavailable'
 
   useEffect(() => {
     const handleSessionChange = () => {
-      if (!getAuthSession()) void navigate({ to: '/login' })
+      if (!getAuthSession()) {
+        queryClient.clear()
+        window.location.replace('/login')
+      }
     }
     window.addEventListener(authSessionEventName(), handleSessionChange)
     return () => window.removeEventListener(authSessionEventName(), handleSessionChange)
-  }, [navigate])
+  }, [queryClient])
 
   useEffect(() => {
     setAccountOpen(false)
@@ -100,7 +105,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   function handleLogout() {
     clearAuthSession()
-    void navigate({ to: '/login' })
+  }
+
+  function selectOrganizationUnit(unitId: string) {
+    const unit = units.find((candidate) => candidate.id === unitId)
+    if (!unit?.canView) return
+    setCurrentUnitId(unitId)
+    setOrganizationOpen(false)
   }
 
   const closeNavigation = () => setMobileOpen(false)
@@ -124,9 +135,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           {organizationOpen ? <div className="absolute inset-x-3 top-[calc(100%-0.5rem)] z-10 rounded-lg border bg-background p-1 shadow-lg">
             <p className="px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Change organization unit</p>
             <div className="max-h-64 overflow-y-auto">
-              {organizationUnitOptions.map(({ unit, depth }) => <button key={unit.id} type="button" onClick={() => { setCurrentUnitId(unit.id); setOrganizationOpen(false) }} className={cn('flex w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-sm hover:bg-accent', currentUnitId === unit.id && 'bg-accent')} style={{ paddingLeft: `${8 + depth * 14}px` }}><span className="min-w-0 flex-1 truncate">{unit.name}</span>{currentUnitId === unit.id ? <span className="text-[11px] text-muted-foreground">Current</span> : null}</button>)}
+              {organizationUnitOptions.map(({ unit, depth }) => <button key={unit.id} type="button" disabled={!unit.canView} onClick={() => selectOrganizationUnit(unit.id)} title={unit.canView ? undefined : 'Access restricted'} className={cn('flex w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent', currentUnitId === unit.id && 'bg-accent')} style={{ paddingLeft: `${8 + depth * 14}px` }}><span className="min-w-0 flex-1 truncate">{unit.name}</span>{!unit.canView ? <LockKeyhole className="size-3.5 shrink-0 text-muted-foreground" aria-label="Access restricted" /> : currentUnitId === unit.id ? <span className="text-[11px] text-muted-foreground">Current</span> : null}</button>)}
             </div>
-            <div className="mt-1 border-t pt-1"><Link to="/organization" onClick={() => setOrganizationOpen(false)} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="size-3.5" aria-hidden="true" />Manage organization units</Link></div>
+            {organizationUnitOptions.some(({ unit }) => unit.canManage) ? <div className="mt-1 border-t pt-1"><Link to="/organization" onClick={() => setOrganizationOpen(false)} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Plus className="size-3.5" aria-hidden="true" />Manage organization units</Link></div> : null}
           </div> : null}
         </div>
 
