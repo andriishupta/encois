@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   workflowTemplateVersions,
   workflowTemplates,
@@ -7,8 +7,9 @@ import {
 } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
+import type { ListPage, ListQuery, ListSort } from "../list-query.js";
 
-export const WORKFLOW_TEMPLATE_MAX_LIMIT = 10;
+export const WORKFLOW_TEMPLATE_MAX_LIMIT = 50;
 
 export type WorkflowTemplateQuery = {
   query?: string;
@@ -24,6 +25,7 @@ export type WorkflowTemplateProjection = {
   description: string;
   keywords: readonly string[];
   requiredCapabilities: readonly string[];
+  status: "active" | "disabled" | "deleted";
   version: string;
   schemaVersion: string;
   template: WorkflowTemplate;
@@ -80,11 +82,23 @@ export async function listWorkflowTemplatesForPrincipal(
   principal: AosPrincipal,
   input: WorkflowTemplateQuery = {},
 ): Promise<readonly WorkflowTemplateProjection[]> {
+  return (await listWorkflowTemplatesPageForPrincipal(principal, {
+    ...input,
+    sort: "updated-desc",
+    offset: 0,
+  })).items;
+}
+
+export async function listWorkflowTemplatesPageForPrincipal(
+  principal: AosPrincipal,
+  input: WorkflowTemplateQuery & Pick<ListQuery, "status" | "sort" | "offset">,
+): Promise<ListPage<WorkflowTemplateProjection>> {
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
 
   const query = parseWorkflowTemplateQuery(input);
+  const status = input.status === "disabled" ? ["disabled"] as const : input.status === "active" ? ["active"] as const : ["active", "disabled"] as const;
   const conditions = [
-    eq(workflowTemplates.status, "published" as const),
+    inArray(workflowTemplates.status, status),
     eq(workflowTemplateVersions.status, "published" as const),
     eq(workflowTemplateVersions.version, workflowTemplates.publishedVersion),
     or(
@@ -106,6 +120,7 @@ export async function listWorkflowTemplatesForPrincipal(
         description: workflowTemplates.description,
         keywords: workflowTemplates.keywords,
         requiredCapabilities: workflowTemplates.requiredCapabilities,
+        status: workflowTemplates.status,
         version: workflowTemplateVersions.version,
         schemaVersion: workflowTemplateVersions.schemaVersion,
         template: workflowTemplateVersions.template,
@@ -116,9 +131,28 @@ export async function listWorkflowTemplatesForPrincipal(
         eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id),
       )
       .where(and(...conditions))
-      .orderBy(desc(workflowTemplates.updatedAt), desc(workflowTemplates.key))
-      .limit(query.limit),
+      .orderBy(...templateOrder(input.sort))
+      .limit(query.limit)
+      .offset(input.offset),
   );
 
-  return rows;
+  const items = rows.flatMap((row) => {
+    if (row.status !== "active" && row.status !== "disabled") return [];
+    return [{ ...row, status: row.status }];
+  });
+  return {
+    items,
+    pagination: {
+      limit: query.limit,
+      offset: input.offset,
+      hasMore: items.length === query.limit,
+    },
+  };
+}
+
+function templateOrder(sort: ListSort) {
+  if (sort === "name-asc") return [asc(workflowTemplates.title), asc(workflowTemplates.key)] as const;
+  if (sort === "updated-asc") return [asc(workflowTemplates.updatedAt), asc(workflowTemplates.key)] as const;
+  if (sort === "status") return [asc(sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`), desc(workflowTemplates.updatedAt)] as const;
+  return [asc(sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`), desc(workflowTemplates.updatedAt), desc(workflowTemplates.key)] as const;
 }

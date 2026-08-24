@@ -216,23 +216,30 @@ boundary. Workflow Templates are a Gateway helper and are deliberately
 unknown to the Go Agent Runtime, which continues to execute only validated
 Blueprint snapshots.
 
-#### Knowledge Sources and unified ingestion
+#### Integrations, Sources, and unified ingestion
 
-`Integration` is one kind of `Knowledge Source`, not the parent concept for
-all company knowledge. A source is an organization-scoped logical origin and
-has a `kind`, read scope, visibility scope, lifecycle status, and optional
-provider/integration reference. MVP kinds are `integration`,
-`uploaded_document`, `manual`, and `media`. An Integration row still owns the
-provider connection and credential reference; a Knowledge Source may point to
-that connection without copying credentials into source configuration.
+`Integration` is the organization-level provider connection. It owns the
+provider authorization, Secret Manager reference, lifecycle status, and
+granted capabilities for providers such as Jira or GitHub. Integrations are
+not duplicated for every team, and credentials never move into browser state
+or Source configuration. Creating or changing an Integration is restricted to
+organization administrators.
 
-An active Integration binding is a scope root, not a new credential. A binding
-at an organization or parent unit covers descendant units, while the caller's
-membership and manager permissions still gate every read or mutation. A
-Knowledge Source or Workflow may use the connection only when its requested
-scope is covered by the binding; provider capability grants remain separate
-from organization hierarchy scope. The Dashboard may request a selected unit
-for filtering, but the Gateway recomputes and validates that scope server-side.
+`Source` is the organization-unit-level provider resource or uploaded/manual
+origin that supplies evidence. An integration Source references an existing
+Integration and stores the provider resource selection (for example Jira
+project, GitHub repository, or Slack channel) together with read and
+visibility scopes. The organization root can also own a Source when the
+resource is intentionally available across the organization. MVP kinds are
+`integration`, `uploaded_document`, `manual`, and `media`.
+
+An Integration binding is kept at the organization root as a capability grant,
+not as a per-unit credential. The caller's membership and manager permissions
+still gate every Source read or mutation. A Source or Workflow may use the
+connection only when an active Integration grants the required capability and
+the Source's read/visibility scopes cover the effective execution scope. The
+Dashboard may request a selected unit for filtering, but the Gateway
+recomputes and validates that scope server-side.
 
 Uploaded or provider data is represented by an immutable `Source Revision`.
 Postgres stores source/revision metadata and an `artifactRef`; raw bytes stay
@@ -254,7 +261,7 @@ Source / Revision
   -> optionally distill scoped agent context to Memory Bank
 ```
 
-The Workflow is registered Go code and is not a user Blueprint. Integration
+The Workflow is registered Go code and is not a user-created Blueprint. Integration
 bootstrap, webhook, schedule, reconciliation, and an uploaded-document ingest
 all start this same Workflow with a different trigger and revision. User
 Blueprints remain provider-neutral execution graphs that consume source
@@ -361,7 +368,7 @@ remain deployment concerns.
 
 The first vertical slice can implement the Agent Gateway interface in the same Go process to reduce deployment work. The interface and security contract must still be explicit so extraction into a private Cloud Run service does not change agent or workflow code.
 
-Current code status: the worker registers `encois.user-blueprint.v1`, the
+Current code status: the worker registers `encois.dynamic.v1`, the
 Coordinator, bootstrap, and platform-owned `encois.source-ingestion.v1`
 workflows; it does not register provider-specific or user-specific Temporal
 Workflow types. The generic interpreter, source-revision envelope, scope propagation,
@@ -389,7 +396,7 @@ the scoped Encois service token; Terraform grants the Runtime service account
 the API invoker role and supplies the API URL/audience. Local development may
 continue using a Gemini API key and a local service token.
 
-The runtime is not a permanent “head agent,” and a specialist is not a server per repository. The registered `encois.user-blueprint.v1` Workflow interprets one validated company-specific Blueprint. It can execute agent or tool steps for Jira, GitHub, monitoring, or any other enabled pack. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
+The runtime is not a permanent “head agent,” and a specialist is not a server per repository. The registered `encois.dynamic.v1` Workflow interprets one validated company-specific Blueprint. It can execute agent or tool steps for Jira, GitHub, monitoring, or any other enabled pack. One Worker process can execute many such workflow instances concurrently, subject to task-queue and connector limits.
 
 For the current vertical slice, ADK runs inside a Temporal Activity. This is a
 deliberate simple boundary: the Workflow remains deterministic and Temporal
@@ -468,7 +475,7 @@ bootstrap is deferred or errors. Retry is explicit, reuses the stable
 Coordinator identity, and does not fabricate progress or product records.
 
 Until `ready`, a tenant is allowed to read/update onboarding settings, use the
-onboarding Source upload/ingestion path, browse the published Template and
+onboarding Source upload/ingestion path, browse the active Template and
 approved Blueprint catalogs, and start or retry onboarding when authorized.
 Ordinary dashboard, member/unit, integration, Workflow, Run, review, and
 other product routes are rejected with `ORGANIZATION_ONBOARDING_REQUIRED`
@@ -493,12 +500,12 @@ Temporal does not create new Go code from a prompt. A Workflow Creator may
 produce a typed `WorkflowChangePlan`, but a deterministic validator and the
 Gateway API must approve it against the tool/agent catalog, organization
 scope, policy, and versioned Blueprint schemas. Temporal starts the
-pre-registered generic `encois.user-blueprint.v1` Workflow and can
+pre-registered generic `encois.dynamic.v1` Workflow and can
 create/update/pause schedules through its Schedule API. A stored Blueprint is
 configuration interpreted by that generic Workflow; it is not executable code.
 
 For the manual workflow builder, the compatible implementation is the
-pre-registered `encois.user-blueprint.v1` generic Workflow. The Blueprint is a
+pre-registered `encois.dynamic.v1` generic Workflow. The Blueprint is a
 validated DAG of typed steps such as tool, agent, transform, condition, wait,
 and approval. Steps with the same satisfied dependencies run in parallel,
 while dependencies create ordering. The Agent Gateway can validate the tool
@@ -569,7 +576,7 @@ checks, a fixture-level MCP-shaped tool catalog and invocation boundary, a
 scope-aware Graph query/upsert boundary, and a Cloud Storage artifact
 read/write boundary backed by selectable mock/GCP adapters. Agent-specific Memory Bank access is a
 separate typed Runtime Activity boundary, not a public Gateway data source.
-Knowledge Source registration remains in the Gateway API control plane; the
+Source registration remains in the Gateway API control plane; the
 Agent Gateway only brokers source acquisition, artifact access, provider
 tools, and scoped Graph projection under the Runtime execution context.
 Catalog
@@ -958,7 +965,7 @@ The first demonstrable slice is one company-specific Blueprint, using release
 readiness as the example rather than as a platform workflow type:
 
 1. Synthetic Jira, GitHub, and monitoring tools are registered in the catalog.
-2. The Gateway API authenticates the actor, validates the Blueprint, and starts `encois.user-blueprint.v1`.
+2. The Gateway API authenticates the actor, validates the Blueprint, and starts `encois.dynamic.v1`.
 3. The Go Runtime interprets the Blueprint and runs tool/agent steps through Activities.
 4. Specialists use only MCP-shaped registered read tools through the Agent Gateway.
 5. Activities persist a small workflow projection and evidence references in the control plane.
@@ -1005,7 +1012,7 @@ User: “Are we on track for the August 30 release, and what changed after yeste
 3. Gateway API uses `SignalWithStart` with the stable Workflow ID:
    workflow:acme:release-readiness:checkout:aug-30
    If no active execution exists, Temporal starts:
-   encois.user-blueprint.v1 with the approved Blueprint snapshot.
+   encois.dynamic.v1 with the approved Blueprint snapshot.
 
 4. The Go Worker polls the task queue, receives the workflow task, and interprets the Blueprint.
    The selected agent step delegates to approved capabilities:

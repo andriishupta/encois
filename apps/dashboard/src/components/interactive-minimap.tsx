@@ -1,4 +1,5 @@
-import { MiniMap, useReactFlow, type MiniMapProps, type Node } from '@xyflow/react'
+import { MiniMap, useNodesInitialized, useReactFlow, type MiniMapProps, type Node } from '@xyflow/react'
+import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 type InteractiveMiniMapProps<NodeType extends Node = Node> = Omit<MiniMapProps<NodeType>, 'onClick'>
@@ -9,7 +10,7 @@ export const miniMapColors = {
   default: '#475569',
   editable: '#2563eb',
   selected: '#0f172a',
-  restricted: '#cbd5e1',
+  restricted: '#64748b',
   stroke: '#64748b',
   failed: '#dc2626',
   partial: '#b45309',
@@ -17,6 +18,18 @@ export const miniMapColors = {
   waiting: '#475569',
   pending: '#94a3b8',
 } as const
+
+export function FitViewOnContentChange({ contentKey, padding = 0.24 }: { contentKey: string; padding?: number }) {
+  const { fitView } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+
+  useEffect(() => {
+    if (!nodesInitialized) return
+    void fitView({ padding, duration: 0 })
+  }, [contentKey, fitView, nodesInitialized, padding])
+
+  return null
+}
 
 export function InteractiveMiniMap<NodeType extends Node = Node>({
   className,

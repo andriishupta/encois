@@ -312,7 +312,7 @@ async function assertPermission(
   permission: typeof Permission.KnowledgeRead | typeof Permission.KnowledgeManage,
 ): Promise<void> {
   if (!(await hasKnowledgePermission(db, principal, permission))) {
-    throw sourceServiceError("FORBIDDEN", permission === Permission.KnowledgeRead ? "The user is not allowed to read Knowledge Sources." : "The user is not allowed to manage Knowledge Sources.");
+    throw sourceServiceError("FORBIDDEN", permission === Permission.KnowledgeRead ? "The user is not allowed to read Sources." : "The user is not allowed to manage Sources.");
   }
 }
 
@@ -373,7 +373,7 @@ export async function createKnowledgeSource(
   return withOrganizationContext(database, principal.organizationId, async (db) => {
     await assertPermission(db, principal, Permission.KnowledgeManage);
     if (request.kind === KnowledgeSourceKind.Integration && !(await hasPermission(db, principal, Permission.IntegrationsRead))) {
-      throw sourceServiceError("FORBIDDEN", "The user is not allowed to use organization integrations as Knowledge Sources.");
+      throw sourceServiceError("FORBIDDEN", "The user is not allowed to use organization Integrations as Sources.");
     }
     const isOrganizationAdmin = await isOrganizationAdministrator(db, principal);
     const effectivePrincipalScope = isOrganizationAdmin ? ["*"] : principal.scope;
@@ -424,7 +424,7 @@ export async function createKnowledgeSource(
         configuration,
       })
       .returning();
-    if (!row) throw sourceServiceError("SOURCE_CREATE_FAILED", "The Knowledge Source could not be created.");
+    if (!row) throw sourceServiceError("SOURCE_CREATE_FAILED", "The Source could not be created.");
     return toKnowledgeSource(row);
   });
 }
@@ -723,7 +723,6 @@ export async function startSourceIngestion(
   }
   const workflowId = buildWorkflowId({
     organizationId: principal.organizationId,
-    workflowType: "encois.source-ingestion.v1",
     key: `${sourceId}:${revisionId}`,
   });
 

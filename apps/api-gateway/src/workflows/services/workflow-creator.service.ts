@@ -17,13 +17,14 @@ import {
   type WorkflowProviderBindingProjection,
   type WorkflowTemplate,
 } from "@encois/contracts";
-import { integrationBindings, integrations, membershipScopes, organizationMemberships, organizationUnits, workflowBlueprints, withOrganizationContext } from "@encois/persistence";
+import { integrationBindings, integrations, knowledgeSources, membershipScopes, organizationMemberships, organizationUnits, workflowBlueprints, withOrganizationContext } from "@encois/persistence";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
 import { hasPermission, isOrganizationAdministrator } from "../../auth/authorization.js";
 import { organizationScopeCovers, organizationScopesOverlap } from "../../security/organization-scope.js";
 import { listWorkflowTemplatesForPrincipal } from "./workflow-template.service.js";
 import { workflowServiceError } from "./workflow.service.js";
+import { listPage, type ListPage, type ListQuery } from "../list-query.js";
 
 function slug(value: string, fallback: string): string {
   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "");
@@ -80,7 +81,7 @@ function blueprintFromTemplate(
     blueprintId: `${workflowKey(intent)}-blueprint`,
     version: "1.0.0",
     name: intent.name.trim(),
-    workflowType: TemporalWorkflowType.UserBlueprint,
+    workflowType: TemporalWorkflowType.Dynamic,
     purpose: intent.description?.trim() || purpose,
     enabled: true,
     steps,
@@ -144,52 +145,6 @@ function runtimeToolRequirement(tool: string): (typeof runtimeToolCatalog)[numbe
   return runtimeToolCatalog.find((candidate) => candidate.tool === tool);
 }
 
-const manualProviderCatalog = [
-  { name: "github", matches: /github|pull request|repository|commit/u, capability: "code.read", tool: "github.repository_activity" },
-  { name: "jira", matches: /jira|issue|ticket|sprint/u, capability: "issues.read", tool: "jira.project_tasks" },
-] as const;
-
-const unsupportedManualProviders = [
-  { name: "linear", matches: /\blinear\b/u },
-  { name: "google-drive", matches: /google drive|drive|document|docs|spec/u },
-  { name: "slack", matches: /slack|message|conversation/u },
-] as const;
-
-function manualTemplate(intent: WorkflowCreationIntent): WorkflowTemplate {
-  const prompt = intent.prompt?.trim();
-  if (!prompt) throw workflowServiceError("MANUAL_PROMPT_REQUIRED", "Describe the outcome you want the workflow to investigate.");
-  const normalized = prompt.toLowerCase();
-  const unsupportedProvider = unsupportedManualProviders.find((provider) => provider.matches.test(normalized));
-  if (unsupportedProvider) {
-    throw workflowServiceError(
-      "WORKFLOW_PROVIDER_UNSUPPORTED",
-      `${unsupportedProvider.name} is not executable in the current Agent Gateway. Use GitHub or Jira, or select a published Template/approved Blueprint.`,
-    );
-  }
-  const providers = manualProviderCatalog.filter((provider) => provider.matches.test(normalized));
-  if (providers.length === 0) {
-    throw workflowServiceError("MANUAL_PROVIDER_REQUIRED", "Describe a GitHub or Jira investigation so Encois can build an executable workflow plan.");
-  }
-  const providerSlots = providers.map((provider) => ({ key: `${provider.name}-context`, capabilities: [provider.capability], preferredProviders: [provider.name], required: true }));
-  const collectionSteps = providers.map((provider) => ({ id: `collect-${provider.name}`, kind: WorkflowStepKind.Tool, tool: provider.tool, providerSlot: `${provider.name}-context` }));
-  const collectIds = collectionSteps.map((step) => step.id);
-  const requiresApproval = /approval|approve|production|release|deploy/u.test(normalized);
-  return {
-    schemaVersion: "workflow-template.v1",
-    version: "1.0.0",
-    workflowType: TemporalWorkflowType.UserBlueprint,
-    purpose: prompt,
-    inputs: { prompt: { type: "string", description: "The requested investigation outcome.", required: true } },
-    providerSlots,
-    steps: [
-      ...collectionSteps,
-      { id: "synthesize", kind: WorkflowStepKind.Agent, agentDefinition: "context.synthesizer@1", ...(collectIds.length ? { dependsOn: collectIds } : {}) },
-      ...(requiresApproval ? [{ id: "approval", kind: WorkflowStepKind.Approval, dependsOn: ["synthesize"], requiresApproval: true }] : []),
-    ],
-    output: { type: "evidence-backed-investigation", description: "Evidence references, findings, unresolved gaps, and recommended next steps." },
-  };
-}
-
 function bindingTemplateFromBlueprint(blueprint: WorkflowBlueprint): WorkflowTemplate {
   const providerSlots = new Map<string, { key: string; capabilities: Set<string>; preferredProviders: Set<string> }>();
   for (const step of blueprint.steps) {
@@ -232,11 +187,11 @@ async function resolveProviderBindings(
   requestedScopeIds?: readonly string[],
 ): Promise<readonly WorkflowProviderBindingProjection[]> {
   if (!database) throw workflowServiceError("PERSISTENCE_UNAVAILABLE", "Integration capability registry access is not configured.");
-  const rows = await withOrganizationContext(database, principal.organizationId, async (db) => {
+  const resolved = await withOrganizationContext(database, principal.organizationId, async (db) => {
     if (!(await hasPermission(db, principal, Permission.WorkflowsRead)) || !(await hasPermission(db, principal, Permission.IntegrationsRead))) {
       throw workflowServiceError("FORBIDDEN", "The user is not allowed to preview workflow provider bindings.");
     }
-    const [units, memberships, scopes, integrationsRows, organizationWide] = await Promise.all([
+    const [units, memberships, scopes, integrationsRows, sourceRows, organizationWide] = await Promise.all([
       db.select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type }).from(organizationUnits).where(eq(organizationUnits.organizationId, principal.organizationId)),
       db.select({ id: organizationMemberships.id }).from(organizationMemberships).where(and(eq(organizationMemberships.organizationId, principal.organizationId), eq(organizationMemberships.userId, principal.userId ?? principal.actorId), eq(organizationMemberships.status, "active"))),
       db.select({ membershipId: membershipScopes.membershipId, unitId: membershipScopes.organizationUnitId }).from(membershipScopes).where(eq(membershipScopes.organizationId, principal.organizationId)),
@@ -244,6 +199,9 @@ async function resolveProviderBindings(
         .from(integrations)
         .innerJoin(integrationBindings, and(eq(integrationBindings.integrationId, integrations.id), eq(integrationBindings.organizationId, principal.organizationId), eq(integrationBindings.status, "active")))
         .where(and(eq(integrations.organizationId, principal.organizationId), eq(integrations.status, "active"))),
+      db.select({ integrationId: knowledgeSources.integrationId, provider: knowledgeSources.provider, status: knowledgeSources.status, readScope: knowledgeSources.readScope, visibilityScope: knowledgeSources.visibilityScope })
+        .from(knowledgeSources)
+        .where(and(eq(knowledgeSources.organizationId, principal.organizationId), eq(knowledgeSources.kind, "integration"))),
       isOrganizationAdministrator(db, principal),
     ]);
     const membershipUnitIds = scopes.filter((scope) => memberships.some((membership) => membership.id === scope.membershipId)).map((scope) => scope.unitId);
@@ -258,18 +216,30 @@ async function resolveProviderBindings(
     if (!organizationScopeCovers(units, organizationWide ? ["*"] : principal.scope, executionScope)) {
       throw workflowServiceError("SCOPE_DENIED", "The requested workflow scope exceeds the caller's organization-unit scope.");
     }
-    return integrationsRows
-      .filter((row) => Boolean(row.credentialRef))
-      .filter((row) => organizationScopesOverlap(units, [row.organizationUnitId], [...effectiveUnitIds]))
-      .filter((row) => organizationScopeCovers(units, [row.organizationUnitId], executionScope));
+    const accessibleSources = sourceRows.filter((source) => Boolean(source.integrationId) && source.status === "active")
+      .filter((source) => organizationScopesOverlap(units, source.readScope.ids, [...effectiveUnitIds]) && organizationScopesOverlap(units, source.visibilityScope.ids, [...effectiveUnitIds]));
+    return {
+      units,
+      executionScope,
+      sources: accessibleSources,
+      rows: integrationsRows
+        .filter((row) => Boolean(row.credentialRef))
+        .filter((row) => organizationScopesOverlap(units, [row.organizationUnitId], [...effectiveUnitIds]))
+        .filter((row) => organizationScopeCovers(units, [row.organizationUnitId], executionScope)),
+    };
   });
+  const { units, executionScope, sources, rows } = resolved;
   const bindings: WorkflowProviderBindingProjection[] = [];
   for (const slot of template.providerSlots) {
     const match = rows.find((row) => {
       const preferred = slot.preferredProviders?.map((value) => value.toLowerCase());
       const provider = row.provider.toLowerCase();
       const capabilities = providerCapabilities(provider);
-      return (!preferred || preferred.includes(provider)) && slot.capabilities.every((capability) => capabilities.includes(capability) && row.grantedScopes.includes(capability));
+      const providerSources = sources
+        .filter((source) => source.integrationId === row.integrationId && source.provider?.toLowerCase() === provider)
+      const sourceReadScopeIds = providerSources.flatMap((source) => source.readScope.ids);
+      const sourceVisibilityScopeIds = providerSources.flatMap((source) => source.visibilityScope.ids);
+      return (!preferred || preferred.includes(provider)) && sourceReadScopeIds.length > 0 && sourceVisibilityScopeIds.length > 0 && organizationScopeCovers(units, sourceReadScopeIds, executionScope) && organizationScopeCovers(units, sourceVisibilityScopeIds, executionScope) && slot.capabilities.every((capability) => capabilities.includes(capability) && row.grantedScopes.includes(capability));
     });
     const binding: WorkflowProviderBindingProjection = {
       slotKey: slot.key,
@@ -286,7 +256,7 @@ async function resolveProviderBindings(
 export function assertWorkflowProviderBindingsReady(bindings: readonly WorkflowProviderBindingProjection[]): void {
   const missing = bindings.find((binding) => binding.required && binding.status === "missing");
   if (!missing) return;
-  throw workflowServiceError("INTEGRATION_CAPABILITY_MISSING", `Connect an active integration for the required ${missing.slotKey} capability before submitting this workflow plan.`);
+  throw workflowServiceError("INTEGRATION_CAPABILITY_MISSING", `Configure a matching Source in the selected scope for the required ${missing.slotKey} capability before submitting this workflow plan.`);
 }
 
 async function resolveBlueprint(
@@ -294,23 +264,16 @@ async function resolveBlueprint(
   intent: WorkflowCreationIntent,
 ): Promise<{ blueprint: WorkflowBlueprint; source: WorkflowCreationPreview["source"]; sourceSchemaVersion: string; requiredCapabilities: readonly string[]; providerBindings: readonly WorkflowProviderBindingProjection[] }> {
   if (intent.mode === "manual") {
-    const template = manualTemplate(intent);
-    const providerBindings = await resolveProviderBindings(principal, template, intent.scope?.ids);
-    return {
-      blueprint: blueprintFromTemplate(intent, template, template.purpose, providerBindings),
-      source: { kind: "manual", title: "Manual planner" },
-      sourceSchemaVersion: template.schemaVersion,
-      requiredCapabilities: [...new Set(template.providerSlots.flatMap((slot) => slot.capabilities))],
-      providerBindings,
-    };
+    throw workflowServiceError("WORKFLOW_MANUAL_UNAVAILABLE", "AI-generated workflows are coming soon. Select an active Template or approved Blueprint.");
   }
 
   if (intent.mode === "template") {
     const key = intent.templateKey?.trim();
-    if (!key) throw workflowServiceError("WORKFLOW_TEMPLATE_REQUIRED", "A published workflow Template is required.");
+    if (!key) throw workflowServiceError("WORKFLOW_TEMPLATE_REQUIRED", "An active workflow Template is required.");
     const templates = await listWorkflowTemplatesForPrincipal(principal, { query: key, limit: 10 });
     const selected = templates.find((candidate) => candidate.key === key);
     if (!selected) throw workflowServiceError("WORKFLOW_TEMPLATE_NOT_FOUND", "The selected workflow Template is not available in this scope.");
+    if (selected.status !== "active") throw workflowServiceError("WORKFLOW_TEMPLATE_DISABLED", "This workflow Template is coming soon and cannot be used yet.");
     const providerBindings = await resolveProviderBindings(principal, selected.template as WorkflowTemplate, intent.scope?.ids);
     return {
       blueprint: blueprintFromTemplate(intent, selected.template as WorkflowTemplate, selected.template.purpose, providerBindings),
@@ -386,15 +349,25 @@ export async function previewWorkflowCreation(
 export async function listWorkflowBlueprintsForPrincipal(
   principal: AosPrincipal,
 ): Promise<readonly WorkflowBlueprintProjection[]> {
+  return (await listWorkflowBlueprintsPageForPrincipal(principal, {
+    sort: "updated-desc",
+    limit: 50,
+    offset: 0,
+  })).items;
+}
+
+export async function listWorkflowBlueprintsPageForPrincipal(
+  principal: AosPrincipal,
+  query: ListQuery,
+): Promise<ListPage<WorkflowBlueprintProjection>> {
   if (!database) throw workflowServiceError("PERSISTENCE_UNAVAILABLE", "Blueprint registry access is not configured.");
   const rows = await withOrganizationContext(database, principal.organizationId, (db) =>
     db
       .select()
       .from(workflowBlueprints)
-      .where(eq(workflowBlueprints.organizationId, principal.organizationId))
-      .orderBy(desc(workflowBlueprints.updatedAt)),
+      .where(eq(workflowBlueprints.organizationId, principal.organizationId)),
   );
-  return rows.flatMap((row) => {
+  const projections = rows.flatMap((row) => {
     const blueprint = parseWorkflowBlueprint(row.blueprint);
     if (!blueprint) return [];
     return [{
@@ -414,4 +387,18 @@ export async function listWorkflowBlueprintsForPrincipal(
       ...(row.approvedAt ? { approvedAt: row.approvedAt.toISOString() } : {}),
     } satisfies WorkflowBlueprintProjection];
   });
+  const normalizedQuery = query.query?.toLowerCase();
+  const filtered = projections.filter((blueprint) => {
+    if (query.status && blueprint.status !== query.status) return false;
+    if (!normalizedQuery) return true;
+    return [blueprint.name, blueprint.purpose, blueprint.blueprintId, blueprint.status]
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+  });
+  const sorted = [...filtered].sort((left, right) => {
+    if (query.sort === "updated-asc") return left.updatedAt.localeCompare(right.updatedAt);
+    if (query.sort === "name-asc") return left.name.localeCompare(right.name);
+    if (query.sort === "status") return left.status.localeCompare(right.status) || right.updatedAt.localeCompare(left.updatedAt);
+    return right.updatedAt.localeCompare(left.updatedAt);
+  });
+  return listPage(sorted, query);
 }

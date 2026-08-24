@@ -646,19 +646,19 @@ paths:
   /api/v1/sources:
     get:
       operationId: listKnowledgeSources
-      summary: List Knowledge Sources visible in the caller's scope
+      summary: List Sources visible in the caller's scope
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Scoped Knowledge Sources
+          description: Scoped Sources
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/KnowledgeSourceListResponse'
     post:
       operationId: createKnowledgeSource
-      summary: Register a scoped Knowledge Source
+      summary: Register a scoped Source
       security:
         - bearerAuth: []
       requestBody:
@@ -677,7 +677,7 @@ paths:
   /api/v1/sources/uploads:
     post:
       operationId: uploadKnowledgeSourcePdf
-      summary: Upload a PDF as a new Knowledge Source and immutable revision
+      summary: Upload a PDF as a new Source and immutable revision
       security:
         - bearerAuth: []
       requestBody:
@@ -711,7 +711,7 @@ paths:
   /api/v1/sources/{sourceId}:
     get:
       operationId: getKnowledgeSource
-      summary: Get a Knowledge Source and its immutable revisions
+      summary: Get a Source and its immutable revisions
       security:
         - bearerAuth: []
       parameters:
@@ -1026,7 +1026,7 @@ paths:
   /api/v1/workflows/templates:
     get:
       operationId: listWorkflowTemplates
-      summary: List published workflow Templates available in the caller scope
+      summary: List non-deleted workflow Templates available in the caller scope
       security:
         - bearerAuth: []
       parameters:
@@ -1038,7 +1038,7 @@ paths:
           schema: { type: string, maxLength: 80 }
       responses:
         '200':
-          description: Published workflow Templates
+          description: Active and disabled workflow Templates
           content:
             application/json:
               schema:
@@ -1702,6 +1702,7 @@ components:
           minItems: 1
           items: { type: string, minLength: 1 }
     KnowledgeSource:
+      description: Compatibility schema name for the organization-unit-scoped product entity Source.
       type: object
       additionalProperties: false
       required: [contractVersion, id, organizationId, name, kind, status, readScope, visibilityScope, createdAt, updatedAt]
@@ -2000,11 +2001,11 @@ components:
     IntegrationCreateRequest:
       type: object
       additionalProperties: false
-      required: [displayName, provider, organizationUnitId]
+      required: [displayName, provider]
       properties:
         displayName: { type: string, minLength: 2, maxLength: 160 }
         provider: { type: string, minLength: 1, maxLength: 80 }
-        organizationUnitId: { type: string, format: uuid }
+        organizationUnitId: { type: string, format: uuid, deprecated: true, description: Compatibility field. Integrations are always organization-scoped. }
         grantedScopes:
           type: array
           items: { type: string, maxLength: 120 }
@@ -2123,7 +2124,7 @@ components:
       properties:
         workflowType:
           type: string
-          enum: [encois.user-blueprint.v1, CoordinatorWorkflow, BootstrapProjectWorkflow]
+          enum: [encois.dynamic.v1, CoordinatorWorkflow, BootstrapProjectWorkflow]
         version: { type: string, maxLength: 128 }
         key: { type: string, maxLength: 128 }
         blueprintId: { type: string, maxLength: 128 }
@@ -2152,7 +2153,15 @@ components:
               enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
             statusMessage: { type: string }
             retryAt: { type: string }
+            completedAt: { type: string }
             organizationId: { type: string }
+            scope:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
             reused: { type: boolean }
             createdAt: { type: string }
             updatedAt: { type: string }
@@ -2238,7 +2247,15 @@ components:
         statusReason: { type: string }
         statusMessage: { type: string }
         retryAt: { type: string }
+        completedAt: { type: string }
         organizationId: { type: string }
+        scope:
+          type: object
+          required: [ids]
+          properties:
+            ids:
+              type: array
+              items: { type: string }
         reused: { type: boolean }
         createdAt: { type: string }
         updatedAt: { type: string }
@@ -2389,7 +2406,7 @@ components:
         blueprintId: { type: string, minLength: 1 }
         version: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
-        workflowType: { const: encois.user-blueprint.v1 }
+        workflowType: { const: encois.dynamic.v1 }
         purpose: { type: string }
         enabled: { type: boolean }
         steps:
@@ -2430,7 +2447,7 @@ components:
       properties:
         schemaVersion: { const: workflow-template.v1 }
         version: { type: string }
-        workflowType: { const: encois.user-blueprint.v1 }
+        workflowType: { const: encois.dynamic.v1 }
         purpose: { type: string }
         inputs:
           type: object
@@ -2467,7 +2484,7 @@ components:
             description: { type: string }
     WorkflowTemplateProjection:
       type: object
-      required: [id, key, category, title, description, keywords, requiredCapabilities, version, schemaVersion, template]
+      required: [id, key, category, title, description, keywords, requiredCapabilities, status, version, schemaVersion, template]
       properties:
         id: { type: string }
         key: { type: string }
@@ -2480,6 +2497,9 @@ components:
         requiredCapabilities:
           type: array
           items: { type: string }
+        status:
+          type: string
+          enum: [active, disabled, deleted]
         version: { type: string }
         schemaVersion: { type: string }
         template: { $ref: '#/components/schemas/WorkflowTemplate' }
@@ -2498,7 +2518,7 @@ components:
         version: { type: string }
         name: { type: string }
         purpose: { type: string }
-        workflowType: { const: encois.user-blueprint.v1 }
+        workflowType: { const: encois.dynamic.v1 }
         status: { enum: [draft, approved, retired] }
         isCurrent: { type: boolean }
         sourcePlanId: { type: string }

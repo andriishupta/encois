@@ -15,7 +15,9 @@ import { organizations } from "./organizations.js";
 export const workflowTemplateStatus = pgEnum("workflow_template_status", [
   "draft",
   "published",
+  "active",
   "disabled",
+  "deleted",
   "retired",
 ]);
 export type WorkflowTemplateStatus = (typeof workflowTemplateStatus.enumValues)[number];
@@ -46,7 +48,7 @@ export type WorkflowTemplateStep = {
 export type WorkflowTemplate = {
   schemaVersion: "workflow-template.v1";
   version: string;
-  workflowType: "encois.user-blueprint.v1";
+  workflowType: "encois.dynamic.v1";
   purpose: string;
   inputs: Readonly<Record<string, { type: string; description: string; required?: boolean }> >;
   providerSlots: readonly {

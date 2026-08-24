@@ -31,7 +31,7 @@ const startResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    workflowType: "encois.user-blueprint.v1",
+    workflowType: "encois.dynamic.v1",
     key: workflowKey,
     input: { projectKey: "checkout" },
     blueprint: {
@@ -39,7 +39,7 @@ const startResponse = await app.request("/api/v1/workflows", {
       blueprintId: "project-context",
       version: "1.0.0",
       name: "Project context",
-      workflowType: "encois.user-blueprint.v1",
+      workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
       steps: [
@@ -66,7 +66,7 @@ const replayResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    workflowType: "encois.user-blueprint.v1",
+    workflowType: "encois.dynamic.v1",
     key: workflowKey,
     input: { projectKey: "checkout" },
     blueprint: {
@@ -74,7 +74,7 @@ const replayResponse = await app.request("/api/v1/workflows", {
       blueprintId: "project-context",
       version: "1.0.0",
       name: "Project context",
-      workflowType: "encois.user-blueprint.v1",
+      workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
       steps: [
@@ -92,7 +92,7 @@ const conflictResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    workflowType: "encois.user-blueprint.v1",
+    workflowType: "encois.dynamic.v1",
     key: workflowKey,
     input: { projectKey: "other" },
     blueprint: {
@@ -100,7 +100,7 @@ const conflictResponse = await app.request("/api/v1/workflows", {
       blueprintId: "project-context",
       version: "1.0.0",
       name: "Project context",
-      workflowType: "encois.user-blueprint.v1",
+      workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
       steps: [

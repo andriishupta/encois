@@ -42,6 +42,7 @@ import { Route as AppWorkflowsWorkflowIdRouteImport } from './routes/_app/workfl
 import { Route as AppWorkflowsBlueprintsRouteImport } from './routes/_app/workflows/blueprints'
 import { Route as AppWorkflowsMemoryRouteImport } from './routes/_app/workflows/memory'
 import { Route as AppWorkflowsNewRouteImport } from './routes/_app/workflows/new'
+import { Route as AppWorkflowsPlansRouteImport } from './routes/_app/workflows/plans'
 import { Route as AppWorkflowsRunsRouteImport } from './routes/_app/workflows/runs'
 import { Route as AppWorkflowsTemplatesRouteImport } from './routes/_app/workflows/templates'
 import { Route as AppOrganizationIntegrationsIndexRouteImport } from './routes/_app/organization/integrations/index'
@@ -221,6 +222,11 @@ const AppWorkflowsNewRoute = AppWorkflowsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppWorkflowsRoute,
 } as any)
+const AppWorkflowsPlansRoute = AppWorkflowsPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AppWorkflowsRoute,
+} as any)
 const AppWorkflowsRunsRoute = AppWorkflowsRunsRouteImport.update({
   id: '/runs',
   path: '/runs',
@@ -304,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
   '/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/workflows/new': typeof AppWorkflowsNewRoute
+  '/workflows/plans': typeof AppWorkflowsPlansRoute
   '/workflows/runs': typeof AppWorkflowsRunsRoute
   '/workflows/templates': typeof AppWorkflowsTemplatesRoute
   '/organization/': typeof AppOrganizationIndexRoute
@@ -341,6 +348,7 @@ export interface FileRoutesByTo {
   '/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
   '/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/workflows/new': typeof AppWorkflowsNewRoute
+  '/workflows/plans': typeof AppWorkflowsPlansRoute
   '/workflows/runs': typeof AppWorkflowsRunsRoute
   '/workflows/templates': typeof AppWorkflowsTemplatesRoute
   '/organization': typeof AppOrganizationIndexRoute
@@ -386,6 +394,7 @@ export interface FileRoutesById {
   '/_app/workflows/blueprints': typeof AppWorkflowsBlueprintsRouteWithChildren
   '/_app/workflows/memory': typeof AppWorkflowsMemoryRoute
   '/_app/workflows/new': typeof AppWorkflowsNewRoute
+  '/_app/workflows/plans': typeof AppWorkflowsPlansRoute
   '/_app/workflows/runs': typeof AppWorkflowsRunsRoute
   '/_app/workflows/templates': typeof AppWorkflowsTemplatesRoute
   '/_app/organization/': typeof AppOrganizationIndexRoute
@@ -431,6 +440,7 @@ export interface FileRouteTypes {
     | '/workflows/blueprints'
     | '/workflows/memory'
     | '/workflows/new'
+    | '/workflows/plans'
     | '/workflows/runs'
     | '/workflows/templates'
     | '/organization/'
@@ -468,6 +478,7 @@ export interface FileRouteTypes {
     | '/workflows/blueprints'
     | '/workflows/memory'
     | '/workflows/new'
+    | '/workflows/plans'
     | '/workflows/runs'
     | '/workflows/templates'
     | '/organization'
@@ -512,6 +523,7 @@ export interface FileRouteTypes {
     | '/_app/workflows/blueprints'
     | '/_app/workflows/memory'
     | '/_app/workflows/new'
+    | '/_app/workflows/plans'
     | '/_app/workflows/runs'
     | '/_app/workflows/templates'
     | '/_app/organization/'
@@ -768,6 +780,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWorkflowsNewRouteImport
       parentRoute: typeof AppWorkflowsRoute
     }
+    '/_app/workflows/plans': {
+      id: '/_app/workflows/plans'
+      path: '/plans'
+      fullPath: '/workflows/plans'
+      preLoaderRoute: typeof AppWorkflowsPlansRouteImport
+      parentRoute: typeof AppWorkflowsRoute
+    }
     '/_app/workflows/runs': {
       id: '/_app/workflows/runs'
       path: '/runs'
@@ -935,6 +954,7 @@ interface AppWorkflowsRouteChildren {
   AppWorkflowsBlueprintsRoute: typeof AppWorkflowsBlueprintsRouteWithChildren
   AppWorkflowsMemoryRoute: typeof AppWorkflowsMemoryRoute
   AppWorkflowsNewRoute: typeof AppWorkflowsNewRoute
+  AppWorkflowsPlansRoute: typeof AppWorkflowsPlansRoute
   AppWorkflowsRunsRoute: typeof AppWorkflowsRunsRoute
   AppWorkflowsTemplatesRoute: typeof AppWorkflowsTemplatesRoute
   AppWorkflowsIndexRoute: typeof AppWorkflowsIndexRoute
@@ -945,6 +965,7 @@ const AppWorkflowsRouteChildren: AppWorkflowsRouteChildren = {
   AppWorkflowsBlueprintsRoute: AppWorkflowsBlueprintsRouteWithChildren,
   AppWorkflowsMemoryRoute: AppWorkflowsMemoryRoute,
   AppWorkflowsNewRoute: AppWorkflowsNewRoute,
+  AppWorkflowsPlansRoute: AppWorkflowsPlansRoute,
   AppWorkflowsRunsRoute: AppWorkflowsRunsRoute,
   AppWorkflowsTemplatesRoute: AppWorkflowsTemplatesRoute,
   AppWorkflowsIndexRoute: AppWorkflowsIndexRoute,

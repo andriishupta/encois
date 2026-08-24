@@ -43,7 +43,7 @@ live manifests, and real provider adapters remain deferred.
 | Workflow change plans | Versioned JSON Schema | Workflow Creator, Go Runtime, Gateway API approval/application boundary |
 | Agent Gateway tool catalog and invocation | MCP-shaped JSON Schema plus Encois execution envelope | Go Runtime, Agent Gateway, integration adapters |
 | Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
-| Knowledge Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
+| Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
 | Integration manifests and evidence events | Versioned JSON Schema | registry, adapters, graph/memory pipeline |
 | Control-plane persistence | SQL migrations owned by Gateway API | Gateway API only |
 | Temporal command receipts | Gateway-owned tenant-scoped SQL table | TypeScript Gateway API only; never sent to Go or Temporal |
@@ -92,7 +92,7 @@ an explicit repair flow owns that correction.
 
 `PATCH /api/v1/organization/onboarding` is limited to `onboarding:manage` and
 persists the selected coordination mode and workflow catalog references. The
-Gateway accepts only published Template keys or current approved organization
+Gateway accepts only active Template keys or current approved organization
 Blueprints and rejects unknown selections before changing state.
 `POST /api/v1/organization/onboarding/start` starts the stable organization
 Coordinator Workflow through the existing Gateway WorkflowClient, persists the
@@ -111,7 +111,7 @@ reuses that stable Coordinator identity, and returns the organization to
 While the status is not `ready`, ordinary tenant product routes return
 `ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. The exceptions are the
 organization projection, onboarding update/start/retry, onboarding Source
-upload and ingestion, and published Template/current approved Blueprint
+upload and ingestion, and active Template/current approved Blueprint
 catalog reads. Existing authentication and permission checks still apply to
 those exceptions. A user without `onboarding:manage` can inspect progress but
 cannot update or retry onboarding. `GET /health/ready` is service readiness,
@@ -213,7 +213,7 @@ is data:
 ```text
 Workflow Start Request
   -> immutable Workflow Blueprint snapshot
-  -> generic Temporal Workflow: encois.user-blueprint.v1
+  -> generic Temporal Workflow: encois.dynamic.v1
   -> typed steps: agent, tool, transform, condition, wait, approval
   -> structured result and evidence references
 ```
@@ -225,18 +225,21 @@ company-created workflow uses the registered generic Temporal Workflow.
 Release readiness
 is only an example Blueprint, not a required Encois workflow type.
 
-### Knowledge Source contracts
+### Source contracts
 
-`Knowledge Source` is the logical organization-scoped origin of knowledge.
-`Integration`, `uploaded_document`, `manual`, and `media` are source kinds.
-`Source Revision` is immutable and carries an artifact or provider-object
-reference; it does not carry raw bytes or credentials. The API owns source and
-revision registration. The Runtime receives `source-ingestion.v1`, validates
-the source/revision identity and scope, and returns
+`Source` is the organization-unit-level logical origin of knowledge.
+`uploaded_document`, `manual`, and `media` are direct Source kinds; an
+integration Source references an organization-level `Integration` and its
+provider resource selection. `Source Revision` is immutable and carries an
+artifact or provider-object reference; it does not carry raw bytes or
+credentials. The API owns Integration, Source, and revision registration. The
+Runtime receives `source-ingestion.v1`, validates the source/revision identity
+and scope, and returns
 `source-ingestion-result.v1` with a stage, status, fact count, and evidence
 references. Provider acquisition, parsing, PII filtering, normalized Graph
 writes, and optional Memory distillation are Activities/adapters behind that
-stable envelope.
+stable envelope. The wire schema names remain `KnowledgeSource*` and
+`knowledge-source.v1` for compatibility with generated consumers.
 
 ### Workflow start request
 
@@ -273,7 +276,7 @@ The Go Runtime does not query the control-plane database.
   "blueprintId": "release-readiness",
   "version": "2.1.0",
   "name": "Company release readiness",
-  "workflowType": "encois.user-blueprint.v1",
+  "workflowType": "encois.dynamic.v1",
   "inputSchemaRef": "schema://release-readiness/input.v1",
   "outputSchemaRef": "schema://release-readiness/output.v1",
   "requiredScopes": ["project:checkout"],
@@ -413,7 +416,7 @@ Blueprint versions:
         "blueprintId": "release-readiness",
         "version": "2.1.0",
         "name": "Company release readiness",
-        "workflowType": "encois.user-blueprint.v1",
+        "workflowType": "encois.dynamic.v1",
         "purpose": "Assess release readiness from approved company sources.",
         "enabled": true,
         "steps": [
@@ -514,7 +517,7 @@ Blueprint or reference an approved registry snapshot:
 
 ```json
 {
-  "workflowType": "encois.user-blueprint.v1",
+  "workflowType": "encois.dynamic.v1",
   "blueprintId": "release-readiness",
   "blueprintVersion": "1.0.0",
   "key": "checkout-aug-30",

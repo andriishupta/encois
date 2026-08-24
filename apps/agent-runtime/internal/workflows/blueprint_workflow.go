@@ -101,8 +101,8 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	if blueprint.WorkflowType == "" {
 		blueprint = input.Payload
 	}
-	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
-		return BlueprintWorkflowResult{}, fmt.Errorf("unsupported blueprint workflow type %q", blueprint.WorkflowType)
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeDynamic) {
+		return BlueprintWorkflowResult{}, fmt.Errorf("unsupported dynamic workflow type %q", blueprint.WorkflowType)
 	}
 	if len(blueprint.Steps) == 0 {
 		return BlueprintWorkflowResult{}, fmt.Errorf("blueprint contains no steps")
@@ -334,8 +334,8 @@ func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
 	if blueprint.ContractVersion != string(contracts.ContractWorkflowBlueprint) {
 		return fmt.Errorf("unsupported blueprint contractVersion %q", blueprint.ContractVersion)
 	}
-	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
-		return fmt.Errorf("unsupported blueprint workflow type %q", blueprint.WorkflowType)
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeDynamic) {
+		return fmt.Errorf("unsupported dynamic workflow type %q", blueprint.WorkflowType)
 	}
 	if blueprint.BlueprintID == "" || blueprint.Version == "" || blueprint.Name == "" || blueprint.Purpose == "" {
 		return fmt.Errorf("blueprint identity and purpose are required")

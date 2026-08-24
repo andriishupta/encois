@@ -32,7 +32,19 @@ function temporalStatus(value: string): WorkflowRunStatus {
 }
 
 function workflowIdBelongsToOrganization(workflowId: string, organizationId: string): boolean {
-  return Boolean(organizationId) && workflowId.startsWith(`workflow:${organizationId}:`);
+  return Boolean(organizationId) && [
+    `org:${organizationId}:`,
+    `workflow:${organizationId}:`,
+  ].some((prefix) => workflowId.startsWith(prefix));
+}
+
+function semanticWorkflowType(input: WorkflowStartCommand["input"], workflowType: string): string {
+  if (workflowType === "encois.source-ingestion.v1") return "Encois · Source ingestion";
+  const provider = input.blueprint?.steps
+    .map((step) => step.tool?.split(".")[0])
+    .find((value): value is string => Boolean(value));
+  if (provider) return `Encois · ${provider.charAt(0).toUpperCase()}${provider.slice(1)} workflow`;
+  return "Encois · Workflow";
 }
 
 function assertWorkflowCommandTenant(command: WorkflowStartCommand): void {
@@ -117,6 +129,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
           ...(typeof description.memo?.encoisTrigger === "string" ? { trigger: description.memo.encoisTrigger } : {}),
           reused: true,
           createdAt: description.startTime?.toISOString() ?? now(),
+          ...(description.closeTime ? { completedAt: description.closeTime.toISOString() } : {}),
           updatedAt: now(),
         };
       }
@@ -126,6 +139,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         workflowId: command.workflowId,
         memo: {
           encoisRequestHash: command.requestHash,
+          encoisWorkflowType: semanticWorkflowType(command.input, command.workflowType),
           ...(command.input.blueprint?.blueprintId ? { encoisBlueprintId: command.input.blueprint.blueprintId } : {}),
           ...(command.input.blueprint?.version || command.input.blueprintVersion ? { encoisBlueprintVersion: command.input.blueprint?.version ?? command.input.blueprintVersion } : {}),
           ...(command.input.parentWorkflowId ? { encoisParentWorkflowId: command.input.parentWorkflowId } : {}),
@@ -155,7 +169,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
     },
 
     async get(workflowId, organizationId, namespace) {
-      if (!workflowId.startsWith(`workflow:${organizationId}:`)) return null;
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) return null;
 
       const client = await getClient();
       const handle = client.workflow.getHandle(workflowId);
@@ -174,13 +188,14 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
         blueprintVersion: typeof description.memo?.encoisBlueprintVersion === "string" ? description.memo.encoisBlueprintVersion : undefined,
         ...(typeof description.memo?.encoisParentWorkflowId === "string" ? { parentWorkflowId: description.memo.encoisParentWorkflowId } : {}),
         ...(typeof description.memo?.encoisTrigger === "string" ? { trigger: description.memo.encoisTrigger } : {}),
+        ...(description.closeTime ? { completedAt: description.closeTime.toISOString() } : {}),
         createdAt: description.startTime?.toISOString() ?? timestamp,
         updatedAt: timestamp,
       };
     },
 
     async GetResult(workflowId, organizationId) {
-      if (!workflowId.startsWith(`workflow:${organizationId}:`)) return null;
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) return null;
       const handle = (await getClient()).workflow.getHandle(workflowId);
       return handle.result();
     },
@@ -189,7 +204,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
       const temporalClient = await getClient();
       const executions: WorkflowExecutionProjection[] = [];
       for await (const info of temporalClient.workflow.list({
-        query: `WorkflowId STARTS_WITH \"workflow:${organizationId}:\"`,
+        query: `WorkflowId STARTS_WITH \"org:${organizationId}:\" OR WorkflowId STARTS_WITH \"workflow:${organizationId}:\"`,
       })) {
         executions.push({
           workflowId: info.workflowId,
@@ -203,6 +218,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
           blueprintVersion: typeof info.memo?.encoisBlueprintVersion === "string" ? info.memo.encoisBlueprintVersion : undefined,
           ...(typeof info.memo?.encoisParentWorkflowId === "string" ? { parentWorkflowId: info.memo.encoisParentWorkflowId } : {}),
           ...(typeof info.memo?.encoisTrigger === "string" ? { trigger: info.memo.encoisTrigger } : {}),
+          ...(info.closeTime ? { completedAt: info.closeTime.toISOString() } : {}),
           createdAt: info.startTime.toISOString(),
           updatedAt: (info.closeTime ?? info.startTime).toISOString(),
         });
@@ -211,7 +227,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
     },
 
     async signal(workflowId, organizationId, _namespace, request) {
-      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       const temporalClient = await getClient();
       const isControlSignal = request.signalName === WorkflowSignalName.WorkflowPause || request.signalName === WorkflowSignalName.WorkflowResume;
       await temporalClient.workflow.getHandle(workflowId).signal(
@@ -230,7 +246,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
     },
 
     async update(workflowId, organizationId, _namespace, request) {
-      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       const temporalClient = await getClient();
       await temporalClient.workflow.getHandle(workflowId).executeUpdate(request.updateName, {
         args: [{ updateId: request.updateId, ...request.payload }],
@@ -239,7 +255,7 @@ function createTemporalWorkflowClient(options: TemporalWorkflowClientOptions): W
     },
 
     async cancel(workflowId, organizationId) {
-      if (!workflowId.startsWith(`workflow:${organizationId}:`)) throw new Error("workflow not found");
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId)) throw new Error("workflow not found");
       const handle = (await getClient()).workflow.getHandle(workflowId);
       const description = await handle.describe();
       const status = temporalStatus(description.status.name);

@@ -1,18 +1,21 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, FilePlus2, GitBranch, LoaderCircle, Play, PlugZap, Sparkles, WandSparkles } from 'lucide-react'
 import type { WorkflowBlueprintProjection, WorkflowCreationIntent, WorkflowPlanRecord, WorkflowTemplateProjection } from '@encois/contracts'
 import { Permission, WorkflowStepKind } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
+import { OrganizationUnitSelect } from '@/components/organization-unit-select'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardButton, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyPanel } from '@/components/empty-panel'
 import { applyWorkflowPlan, approveWorkflowPlan, listWorkflowBlueprints, listWorkflowTemplates, previewWorkflowCreation, submitWorkflowCreation } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
 import { useOrganization } from '@/lib/organization-context'
+import { formatUnitPath } from '@/lib/organization'
 import { cn } from '@/lib/utils'
+import { AvailabilityBadge, unavailableCardClassName } from '@/components/availability-state'
 
 export const Route = createFileRoute('/_app/workflows/new')({
   validateSearch: (search: Record<string, unknown>): { blueprint?: string; template?: string } => ({
@@ -28,10 +31,10 @@ export const Route = createFileRoute('/_app/workflows/new')({
 type CreationMode = WorkflowCreationIntent['mode']
 type Stage = 1 | 2 | 3
 
-const modeOptions: readonly { mode: CreationMode; title: string; description: string; icon: typeof FilePlus2 }[] = [
+const modeOptions: readonly { mode: CreationMode; title: string; description: string; icon: typeof FilePlus2; disabled?: boolean }[] = [
   { mode: 'template', title: 'From a template', description: 'Start with a reviewed, provider-neutral workflow pattern.', icon: FilePlus2 },
   { mode: 'blueprint', title: 'Use an existing Blueprint', description: 'Create a new workflow from an approved version in this organization.', icon: GitBranch },
-  { mode: 'manual', title: 'Describe it manually', description: 'Explain the outcome in plain language and let the planner propose steps.', icon: WandSparkles },
+  { mode: 'manual', title: 'Describe it manually', description: 'AI-generated workflows are coming soon.', icon: WandSparkles, disabled: true },
 ]
 
 function NewWorkflowPage() {
@@ -39,13 +42,13 @@ function NewWorkflowPage() {
   const queryClient = useQueryClient()
   const { currentUnitId, units } = useOrganization()
   const search = Route.useSearch()
+  const [executionScopeId, setExecutionScopeId] = useState('')
   const [stage, setStage] = useState<Stage>(1)
   const [mode, setMode] = useState<CreationMode | null>(() => search.blueprint ? 'blueprint' : search.template ? 'template' : null)
   const [templateKey, setTemplateKey] = useState<string | undefined>(() => search.template)
   const [blueprintKey, setBlueprintKey] = useState<string | undefined>(() => search.blueprint)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [prompt, setPrompt] = useState('')
   const [runAfterApply, setRunAfterApply] = useState(true)
   const [submittedPlanId, setSubmittedPlanId] = useState<string>()
   const [completed, setCompleted] = useState(false)
@@ -71,7 +74,15 @@ function NewWorkflowPage() {
   }, [blueprints.data])
   const selectedBlueprint = useMemo(() => availableBlueprints.find((item) => item.blueprintId === blueprintKey), [availableBlueprints, blueprintKey])
   const selectedSourceTitle = selectedTemplate?.title ?? selectedBlueprint?.name
-  const currentScope = currentUnitId === 'organization' ? 'All organization units' : units.find((unit) => unit.id === currentUnitId)?.name ?? 'Current organization scope'
+  const currentScope = executionScopeId ? formatUnitPath(units, executionScopeId) || 'Current organization scope' : 'Current organization scope'
+
+  useEffect(() => {
+    if (!units.length) return
+    const preferredScopeId = currentUnitId === 'organization'
+      ? units.find((unit) => unit.type === 'organization' && unit.canView)?.id
+      : currentUnitId
+    if (preferredScopeId && units.some((unit) => unit.id === preferredScopeId && unit.canView)) setExecutionScopeId(preferredScopeId)
+  }, [currentUnitId, units])
 
   const buildIntent = (start: boolean): WorkflowCreationIntent => ({
     mode: mode ?? 'manual',
@@ -79,8 +90,7 @@ function NewWorkflowPage() {
     ...(description.trim() ? { description: description.trim() } : {}),
     ...(templateKey ? { templateKey } : {}),
     ...(blueprintKey ? { blueprintKey } : {}),
-    ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
-    ...(currentUnitId && currentUnitId !== 'organization' ? { scope: { ids: [currentUnitId] } } : {}),
+    ...(executionScopeId ? { scope: { ids: [executionScopeId] } } : {}),
     start,
   })
 
@@ -101,7 +111,7 @@ function NewWorkflowPage() {
     },
   })
 
-  const sourceReady = mode === 'template' ? Boolean(templateKey) : mode === 'blueprint' ? Boolean(blueprintKey) : Boolean(prompt.trim())
+  const sourceReady = mode === 'template' ? selectedTemplate?.status === 'active' : mode === 'blueprint' ? Boolean(blueprintKey) : false
   const canContinueToConfigure = Boolean(mode && sourceReady)
   const canPreview = Boolean(name.trim() && sourceReady && !preview.isPending)
   const submitted = submit.data
@@ -139,15 +149,15 @@ function NewWorkflowPage() {
         <StepIndicator number="3" label="Review & apply" active={stage === 3} complete={completed} />
       </div>
 
-      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={mode === 'template' ? templates.error : mode === 'blueprint' ? blueprints.error : null} prompt={prompt} onPromptChange={setPrompt} /> : null}
-      {stage === 2 ? <ConfigureStage name={name} description={description} mode={mode} sourceTitle={selectedSourceTitle} currentScope={currentScope} prompt={prompt} onNameChange={setName} onDescriptionChange={setDescription} onBack={() => setStage(1)} onPreview={goToPreview} canPreview={canPreview} error={preview.error} /> : null}
+      {stage === 1 ? <SourceStage mode={mode} onModeChange={chooseMode} templates={templates.data ?? []} blueprints={availableBlueprints} selectedTemplateKey={templateKey} selectedBlueprintKey={blueprintKey} onTemplateChange={setTemplateKey} onBlueprintChange={setBlueprintKey} templatesLoading={templates.isLoading} blueprintsLoading={blueprints.isLoading} error={mode === 'template' ? templates.error : mode === 'blueprint' ? blueprints.error : null} /> : null}
+      {stage === 2 ? <ConfigureStage name={name} description={description} mode={mode} sourceTitle={selectedSourceTitle} currentScope={currentScope} executionScopeId={executionScopeId} units={units} onExecutionScopeChange={setExecutionScopeId} onNameChange={setName} onDescriptionChange={setDescription} onBack={() => setStage(1)} onPreview={goToPreview} canPreview={canPreview} error={preview.error} /> : null}
       {stage === 3 ? <ReviewStage preview={preview.data} isLoading={preview.isPending} error={preview.error ?? submit.error ?? approve.error ?? apply.error} runAfterApply={runAfterApply} onRunChange={setRunAfterApply} submitted={submitted} approved={approved} completed={completed} onSubmit={() => submit.mutate()} submitting={submit.isPending} onApprove={() => approve.mutate()} approving={approve.isPending} onApply={() => apply.mutate()} applying={apply.isPending} onBack={() => { preview.reset(); setStage(2) }} onOpenWorkflows={() => void navigate({ to: '/workflows' })} /> : null}
       {stage === 1 ? <div className="flex justify-end"><Button type="button" disabled={!canContinueToConfigure} onClick={() => setStage(2)}>Continue <ArrowRight data-icon="inline-end" /></Button></div> : null}
     </div>
   )
 }
 
-function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error, prompt, onPromptChange }: {
+function SourceStage({ mode, onModeChange, templates, blueprints, selectedTemplateKey, selectedBlueprintKey, onTemplateChange, onBlueprintChange, templatesLoading, blueprintsLoading, error }: {
   mode: CreationMode | null
   onModeChange: (mode: CreationMode) => void
   templates: readonly WorkflowTemplateProjection[]
@@ -159,8 +169,6 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
   templatesLoading: boolean
   blueprintsLoading: boolean
   error: Error | null
-  prompt: string
-  onPromptChange: (value: string) => void
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -168,23 +176,25 @@ function SourceStage({ mode, onModeChange, templates, blueprints, selectedTempla
       <div className="grid gap-3 lg:grid-cols-3">
         {modeOptions.map((option) => {
           const Icon = option.icon
-          return <button key={option.mode} type="button" onClick={() => onModeChange(option.mode)} className={cn('flex min-h-36 flex-col items-start gap-4 rounded-xl border bg-card p-5 text-left transition hover:border-foreground/30 hover:bg-accent/30', mode === option.mode && 'border-foreground bg-accent/50 ring-2 ring-foreground/10')} aria-pressed={mode === option.mode}><span className="flex size-10 items-center justify-center rounded-lg bg-muted"><Icon className="size-5" aria-hidden="true" /></span><span><span className="block font-medium">{option.title}</span><span className="mt-1 block text-sm text-muted-foreground">{option.description}</span></span></button>
+          return <CardButton key={option.mode} type="button" disabled={option.disabled} onClick={() => onModeChange(option.mode)} className={cn('min-h-36 items-start gap-4 p-5', mode === option.mode && 'border-foreground bg-accent/50 ring-2 ring-foreground/10', option.disabled && unavailableCardClassName)} aria-pressed={mode === option.mode}><span className="flex w-full items-start justify-between gap-3"><span className="flex size-10 items-center justify-center rounded-lg bg-muted"><Icon className="size-5" aria-hidden="true" /></span>{option.disabled ? <AvailabilityBadge /> : null}</span><span><span className="block font-medium">{option.title}</span><span className="mt-1 block text-sm text-muted-foreground">{option.description}</span></span></CardButton>
         })}
       </div>
-      {mode === 'template' ? <SelectionList title="Published templates" description="Templates are provider-neutral patterns. They do not contain credentials or integration IDs." loading={templatesLoading} error={error} empty="No published templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
+      {mode === 'template' ? <SelectionList title="Workflow templates" description="Active templates can be used now. Disabled templates remain visible but cannot be selected." loading={templatesLoading} error={error} empty="No workflow templates are available in this scope." items={templates} selectedKey={selectedTemplateKey} getKey={(item) => item.key} isDisabled={(item) => item.status !== 'active'} onSelect={onTemplateChange} renderItem={(item, selected) => <TemplateOption item={item} selected={selected} />} /> : null}
       {mode === 'blueprint' ? <SelectionList title="Current approved Blueprints" description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry." loading={blueprintsLoading} error={error} empty="No approved Blueprints are available in this scope." items={blueprints} selectedKey={selectedBlueprintKey} getKey={(item) => item.blueprintId} onSelect={onBlueprintChange} renderItem={(item, selected) => <BlueprintOption item={item} selected={selected} />} /> : null}
-      {mode === 'manual' ? <Card className="border-dashed"><CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="size-4" />Describe the outcome</CardTitle><CardDescription>Use plain language. A provider-aware Blueprint will be proposed for review; nothing is persisted before approval and apply.</CardDescription></CardHeader><CardContent><textarea value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="Example: Check GitHub release readiness for Checkout and highlight blockers, missing evidence, and required approvals." className="min-h-32 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="Workflow description" /><p className="mt-2 text-xs text-muted-foreground">Mention GitHub or Jira when the investigation needs a scoped integration. Other providers can be used through a published Template or approved Blueprint once provider support is enabled.</p></CardContent></Card> : null}
+      {mode === 'manual' ? <Card className={unavailableCardClassName}><CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="size-4" />Describe the outcome <AvailabilityBadge /></CardTitle><CardDescription>AI-generated workflows are not available yet. Use an active Template or an approved Blueprint.</CardDescription></CardHeader></Card> : null}
     </div>
   )
 }
 
-function ConfigureStage({ name, description, mode, sourceTitle, currentScope, prompt, onNameChange, onDescriptionChange, onBack, onPreview, canPreview, error }: {
+function ConfigureStage({ name, description, mode, sourceTitle, currentScope, executionScopeId, units, onExecutionScopeChange, onNameChange, onDescriptionChange, onBack, onPreview, canPreview, error }: {
   name: string
   description: string
   mode: CreationMode | null
   sourceTitle?: string
   currentScope: string
-  prompt: string
+  executionScopeId: string
+  units: ReturnType<typeof useOrganization>['units']
+  onExecutionScopeChange: (value: string) => void
   onNameChange: (value: string) => void
   onDescriptionChange: (value: string) => void
   onBack: () => void
@@ -192,7 +202,7 @@ function ConfigureStage({ name, description, mode, sourceTitle, currentScope, pr
   canPreview: boolean
   error: Error | null
 }) {
-  return <Card><CardHeader><CardTitle>Configure workflow</CardTitle><CardDescription>Give this workflow a human name and confirm the organization scope. Technical identifiers are generated for you.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2"><InfoItem label="Starting point" value={sourceTitle ?? (mode === 'manual' ? 'Manual description' : 'Not selected')} /><InfoItem label="Execution scope" value={currentScope} /></div>{mode === 'manual' ? <div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Requested outcome</p><p className="mt-1 text-muted-foreground">{prompt || 'No description entered.'}</p></div> : null}<div className="grid gap-5 sm:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-name">Workflow name<input id="workflow-name" value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Release readiness — Checkout" className="h-10 rounded-lg border border-input bg-background px-3 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-description">Purpose <span className="font-normal text-muted-foreground">Optional</span><input id="workflow-description" value={description} onChange={(event) => onDescriptionChange(event.target.value)} placeholder="Explain what this workflow should investigate." className="h-10 rounded-lg border border-input bg-background px-3 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label></div>{error ? <ErrorCallout message={error.message} /> : null}<div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={onBack}><ArrowLeft data-icon="inline-start" />Back</Button><Button disabled={!canPreview} onClick={onPreview}>{canPreview ? 'Preview plan' : 'Add a name to continue'}<ArrowRight data-icon="inline-end" /></Button></div></CardContent></Card>
+  return <Card><CardHeader><CardTitle>Configure workflow</CardTitle><CardDescription>Give this workflow a human name and choose the organization scope it will execute against. Technical identifiers are generated for you.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2"><InfoItem label="Starting point" value={sourceTitle ?? (mode === 'manual' ? 'Manual description' : 'Not selected')} /><InfoItem label="Selected scope" value={currentScope} /></div><div className="grid gap-5 sm:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-name">Workflow name<input id="workflow-name" value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Release readiness — Checkout" className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="workflow-description">Purpose <span className="font-normal text-muted-foreground">Optional</span><input id="workflow-description" value={description} onChange={(event) => onDescriptionChange(event.target.value)} placeholder="Explain what this workflow should investigate." className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label></div><OrganizationUnitSelect id="workflow-execution-scope" label="Execution scope" value={executionScopeId} units={units} filter={() => true} isDisabled={(unit) => !unit.canView} onChange={onExecutionScopeChange} required description="Sources must cover this scope. Owners can choose any visible organization unit without copying its Sources." />{error ? <ErrorCallout message={error.message} /> : null}<div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" onClick={onBack}><ArrowLeft data-icon="inline-start" />Back</Button><Button disabled={!canPreview || !executionScopeId} onClick={onPreview}>{canPreview && executionScopeId ? 'Preview plan' : 'Choose a scope to continue'}<ArrowRight data-icon="inline-end" /></Button></div></CardContent></Card>
 }
 
 function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, submitted, approved, completed, onSubmit, submitting, onApprove, approving, onApply, applying, onBack, onOpenWorkflows }: {
@@ -267,7 +277,7 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
         </details>
 
         {preview.warnings.filter((warning) => !completed || !warning.toLowerCase().includes('not persisted until')).length ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="font-medium">{finalPlan ? 'Apply notes' : 'Before you apply'}</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{preview.warnings.filter((warning) => !completed || !warning.toLowerCase().includes('not persisted until')).map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
-        {missingRequiredProvider ? <div role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">A required integration is missing</p><p className="mt-1 text-destructive/80">Connect the required provider in the current scope before submitting this plan.</p></div><Button variant="outline" asChild><Link to="/organization/integrations"><PlugZap data-icon="inline-start" />Manage integrations</Link></Button></div> : null}
+        {missingRequiredProvider ? <div role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">A required provider Source is missing</p><p className="mt-1 text-destructive/80">Add a matching Source in the selected organization unit scope before submitting this plan.</p></div><Button variant="outline" asChild><Link to="/organization/sources/new" search={{ sourceType: 'integration' }}><PlugZap data-icon="inline-start" />Add Source</Link></Button></div> : null}
 
         {!finalPlan ? <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
           <p className="text-sm font-medium">After approval</p>
@@ -282,7 +292,7 @@ function ReviewStage({ preview, isLoading, error, runAfterApply, onRunChange, su
 
         <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
           <Button variant="ghost" onClick={onBack} disabled={Boolean(finalPlan)}><ArrowLeft data-icon="inline-start" />Back</Button>
-          {completed ? <Button onClick={onOpenWorkflows}>Open workflows <ArrowRight data-icon="inline-end" /></Button> : !submitted ? <Button onClick={onSubmit} disabled={submitting || missingRequiredProvider}>{submitting ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{submitting ? 'Submitting…' : missingRequiredProvider ? 'Connect integration first' : 'Submit for approval'}</Button> : planStatus === 'proposed' ? <Button onClick={onApprove} disabled={approving}>{approving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{approving ? 'Approving…' : 'Approve plan'}</Button> : <Button onClick={onApply} disabled={applying || planStatus !== 'approved'}>{applying ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Play data-icon="inline-start" />}{applying ? 'Applying…' : 'Apply plan'}</Button>}
+          {completed ? <Button onClick={onOpenWorkflows}>Open workflows <ArrowRight data-icon="inline-end" /></Button> : !submitted ? <Button onClick={onSubmit} disabled={submitting || missingRequiredProvider}>{submitting ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{submitting ? 'Submitting…' : missingRequiredProvider ? 'Configure Source first' : 'Submit for approval'}</Button> : planStatus === 'proposed' ? <Button onClick={onApprove} disabled={approving}>{approving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Check data-icon="inline-start" />}{approving ? 'Approving…' : 'Approve plan'}</Button> : <Button onClick={onApply} disabled={applying || planStatus !== 'approved'}>{applying ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Play data-icon="inline-start" />}{applying ? 'Applying…' : 'Apply plan'}</Button>}
         </div>
       </CardContent>
     </Card>
@@ -294,7 +304,7 @@ function ProviderBindingList({ bindings, completed }: { bindings: readonly impor
     <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
       <div>
         <h3 className="text-sm font-semibold">Provider bindings</h3>
-        <p className="mt-1 text-xs text-muted-foreground">These requirements were resolved against active integrations in the selected scope. The browser never supplies integration IDs.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Each requirement is resolved server-side through an organization Integration and a matching Source in the selected scope.</p>
       </div>
       {bindings.length ? <div className="grid gap-2 sm:grid-cols-2">{bindings.map((binding) => {
         const ready = binding.status === 'ready'
@@ -303,23 +313,24 @@ function ProviderBindingList({ bindings, completed }: { bindings: readonly impor
             <div><p className="text-sm font-medium">{binding.slotKey}</p><p className="mt-1 text-xs text-muted-foreground">{binding.required ? 'Required' : 'Optional'} · {binding.capabilities.join(', ') || 'No capability constraint'}</p></div>
             <span className={cn('rounded-full px-2 py-1 text-[11px] font-medium', ready ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700')}>{ready ? 'Resolved' : 'Missing'}</span>
           </div>
-          {ready ? <p className="mt-2 text-xs text-muted-foreground">{binding.integrationName ?? binding.provider ?? 'Active integration'}</p> : <p className="mt-2 text-xs text-amber-700">{completed ? (binding.required ? 'This required binding was not resolved.' : 'This optional slot will be skipped by the runtime.') : 'Connect a matching active integration before applying this plan.'}</p>}
+          {ready ? <p className="mt-2 text-xs text-muted-foreground">{binding.integrationName ?? binding.provider ?? 'Active provider Source'}</p> : <p className="mt-2 text-xs text-amber-700">{completed ? (binding.required ? 'This required binding was not resolved.' : 'This optional slot will be skipped by the runtime.') : 'Add a matching active Source before applying this plan.'}</p>}
         </div>
       })}</div> : <p className="text-sm text-muted-foreground">No external provider bindings are required by this source.</p>}
     </div>
   )
 }
 
-function SelectionList<T>({ title, description, loading, error, empty, items, selectedKey, getKey, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
-  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error.message}</p> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); return <button key={key} type="button" onClick={() => onSelect(key)} className={cn('text-left', selectedKey === key && 'rounded-xl ring-2 ring-foreground/20')} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</button> })}</div>}</CardContent></Card>
+function SelectionList<T>({ title, description, loading, error, empty, items, selectedKey, getKey, isDisabled, onSelect, renderItem }: { title: string; description: string; loading: boolean; error: Error | null; empty: string; items: readonly T[]; selectedKey?: string; getKey: (item: T) => string; isDisabled?: (item: T) => boolean; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode }) {
+  return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader><CardContent>{loading ? <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Loading available options…</div> : error ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error.message}</p> : items.length === 0 ? <EmptyPanel icon={GitBranch} title="Nothing available" description={empty} /> : <div className="grid gap-3 md:grid-cols-2">{items.map((item) => { const key = getKey(item); const disabled = isDisabled?.(item) ?? false; return <CardButton key={key} type="button" disabled={disabled} onClick={() => onSelect(key)} className={cn('h-full gap-3 p-4', selectedKey === key && 'border-foreground bg-accent/40 ring-2 ring-foreground/10', disabled && unavailableCardClassName)} aria-pressed={selectedKey === key}>{renderItem(item, selectedKey === key)}</CardButton> })}</div>}</CardContent></Card>
 }
 
 function TemplateOption({ item, selected }: { item: WorkflowTemplateProjection; selected: boolean }) {
-  return <div className={cn('flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30', selected && 'border-foreground bg-accent/40')}><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{item.title}</p><p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{item.category}</p></div>{selected ? <CheckCircle2 className="size-5" /> : null}</div><p className="text-sm text-muted-foreground">{item.description}</p><div className="mt-auto flex flex-wrap gap-1.5">{item.requiredCapabilities.slice(0, 4).map((capability) => <span key={capability} className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{capability}</span>)}</div></div>
+  const disabled = item.status !== 'active'
+  return <><span className="flex w-full items-start justify-between gap-3"><span><span className="block font-medium">{item.title}</span><span className="mt-1 block text-xs uppercase tracking-wide text-muted-foreground">{item.category}</span></span>{disabled ? <AvailabilityBadge label="Disabled" /> : selected ? <CheckCircle2 className="size-5" /> : null}</span><span className="block text-sm text-muted-foreground">{item.description}</span><span className="mt-auto flex flex-wrap gap-1.5">{item.requiredCapabilities.slice(0, 4).map((capability) => <span key={capability} className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{capability}</span>)}</span></>
 }
 
 function BlueprintOption({ item, selected }: { item: WorkflowBlueprintProjection; selected: boolean }) {
-  return <div className={cn('flex h-full flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30', selected && 'border-foreground bg-accent/40')}><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{item.name}</p><p className="mt-1 text-xs text-muted-foreground">Version {item.version} · {item.status}</p></div>{selected ? <CheckCircle2 className="size-5" /> : null}</div><p className="text-sm text-muted-foreground">{item.purpose}</p><p className="mt-auto text-xs text-muted-foreground">{item.steps.length} steps · {item.requiresApproval ? 'Approval required' : 'Read-only plan'}</p></div>
+  return <><span className="flex w-full items-start justify-between gap-3"><span><span className="block font-medium">{item.name}</span><span className="mt-1 block text-xs text-muted-foreground">Version {item.version} · {item.status}</span></span>{selected ? <CheckCircle2 className="size-5" /> : null}</span><span className="block text-sm text-muted-foreground">{item.purpose}</span><span className="mt-auto block text-xs text-muted-foreground">{item.steps.length} steps · {item.requiresApproval ? 'Approval required' : 'Read-only plan'}</span></>
 }
 
 function StepIndicator({ number, label, active, complete }: { number: string; label: string; active: boolean; complete: boolean }) {

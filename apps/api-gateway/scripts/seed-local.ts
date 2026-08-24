@@ -301,20 +301,22 @@ async function ensureIntegration(
   organization: FixtureOrganization,
   displayName: string,
   provider: string,
-  unitSlug: string,
   createdByUserId: string,
   status: "pending" | "active" | "disabled" | "error" = "active",
 ): Promise<FixtureIntegration> {
-  const unit = organization.units.get(unitSlug);
-  if (!unit) throw new Error(`Integration scope unit ${unitSlug} is missing in ${organization.slug}.`);
-  const [existing] = await tx.select({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }).from(integrations).where(and(eq(integrations.organizationId, organization.id), eq(integrations.displayName, displayName))).limit(1);
+  const rootUnit = organization.units.get("root");
+  if (!rootUnit) throw new Error(`Organization root is missing in ${organization.slug}.`);
+  const [existing] = await tx.select({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }).from(integrations).where(and(eq(integrations.organizationId, organization.id), eq(integrations.provider, provider))).orderBy(desc(integrations.updatedAt)).limit(1);
   const integration = existing
     ? (await tx.update(integrations).set({ provider, status, credentialRef: status === "active" ? `local://mock/${provider}` : null, createdByUserId, updatedAt: new Date() }).where(eq(integrations.id, existing.id)).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0]
     : (await tx.insert(integrations).values({ organizationId: organization.id, provider, displayName, status, credentialRef: status === "active" ? `local://mock/${provider}` : null, createdByUserId }).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider }))[0];
   if (!integration) throw new Error(`Local integration ${displayName} was not created.`);
+  if (integration.displayName !== displayName) {
+    await tx.update(integrations).set({ displayName, updatedAt: new Date() }).where(eq(integrations.id, integration.id));
+  }
   const grantedScopes = provider === "github" ? ["code.read", "pull-requests.read", "activity.read"] : provider === "jira" ? ["issues.read", "activity.read"] : provider === "slack" ? ["messages.read", "activity.read"] : ["read"];
-  await tx.insert(integrationBindings).values({ organizationId: organization.id, integrationId: integration.id, organizationUnitId: unit.id, status: "active", grantedScopes, grantedByUserId: createdByUserId }).onConflictDoUpdate({ target: [integrationBindings.integrationId, integrationBindings.organizationUnitId], set: { status: "active", grantedScopes, grantedByUserId: createdByUserId, revokedAt: null } });
-  return integration;
+  await tx.insert(integrationBindings).values({ organizationId: organization.id, integrationId: integration.id, organizationUnitId: rootUnit.id, status: status === "active" ? "active" : "revoked", grantedScopes, grantedByUserId: createdByUserId }).onConflictDoUpdate({ target: [integrationBindings.integrationId, integrationBindings.organizationUnitId], set: { status: status === "active" ? "active" : "revoked", grantedScopes, grantedByUserId: createdByUserId, revokedAt: status === "active" ? null : new Date() } });
+  return { ...integration, displayName };
 }
 
 async function ensureKnowledgeSource(
@@ -346,7 +348,7 @@ async function ensureKnowledgeSource(
   const source = existing
     ? (await tx.update(knowledgeSources).set({ ...sourceValues, updatedAt: new Date() }).where(eq(knowledgeSources.id, existing.id)).returning({ id: knowledgeSources.id }))[0]
     : (await tx.insert(knowledgeSources).values(sourceValues).returning({ id: knowledgeSources.id }))[0];
-  if (!source) throw new Error(`Local knowledge source ${name} was not created.`);
+  if (!source) throw new Error(`Local Source ${name} was not created.`);
 
   const revisionStatus = sourceStatus === "failed" ? "failed" : sourceStatus === "ingesting" ? "ingesting" : "active";
   const [revision] = await tx.select({ id: sourceRevisions.id }).from(sourceRevisions).where(and(eq(sourceRevisions.organizationId, organization.id), eq(sourceRevisions.sourceId, source.id), eq(sourceRevisions.revision, "r1"))).limit(1);
@@ -376,11 +378,11 @@ async function ensureWorkflowFixtures(
   const [definition] = await tx
     .select({ id: workflowDefinitions.id })
     .from(workflowDefinitions)
-    .where(and(eq(workflowDefinitions.organizationId, organization.id), eq(workflowDefinitions.key, "encois.user-blueprint.v1"), eq(workflowDefinitions.version, "v1")))
+    .where(and(eq(workflowDefinitions.organizationId, organization.id), eq(workflowDefinitions.key, "encois.dynamic.v1"), eq(workflowDefinitions.version, "v1")))
     .limit(1);
   const definitionRow = definition ?? (await tx.insert(workflowDefinitions).values({
     organizationId: organization.id,
-    key: "encois.user-blueprint.v1",
+    key: "encois.dynamic.v1",
     version: "v1",
     status: "approved",
     inputSchemaRef: "contract://workflow-blueprint.v1",
@@ -394,7 +396,7 @@ async function ensureWorkflowFixtures(
     if (!unit) throw new Error(`Workflow scope unit ${fixture.scopeUnit} is missing in ${organization.slug}.`);
     if (!actor) throw new Error(`Workflow actor ${fixture.actorKey} is missing in ${organization.slug}.`);
 
-    const workflowId = `workflow:${organization.id}:encois.user-blueprint.v1:${fixture.key}`;
+    const workflowId = `workflow:${organization.id}:encois.dynamic.v1:${fixture.key}`;
     const startedAt = new Date(now.getTime() - 25 * 60 * 1000);
     const completedAt = fixture.status === "completed" || fixture.status === "failed"
       ? new Date(now.getTime() - 5 * 60 * 1000)
@@ -502,18 +504,18 @@ async function seedFixtures(): Promise<unknown> {
       const organization = organizationsBySlug.get(organizationSpec.slug)!;
       const owner = usersByKey.get("owner")!;
       const engineeringUnit = organization.units.get("engineering")!;
-      const operationsUnit = organization.units.get("operations")!;
-      const firstIntegration = await ensureIntegration(tx, organization, "GitHub Engineering", "github", engineeringUnit.slug, owner.id);
-      const secondIntegration = await ensureIntegration(tx, organization, "Jira Operations", "jira", operationsUnit.slug, owner.id);
-      const thirdIntegration = await ensureIntegration(tx, organization, "Slack Notifications", "slack", "root", owner.id, "disabled");
+      const customerSuccessUnit = organization.units.get("customer-success")!;
+      const firstIntegration = await ensureIntegration(tx, organization, "GitHub", "github", owner.id);
+      const secondIntegration = await ensureIntegration(tx, organization, "Jira", "jira", owner.id);
+      const thirdIntegration = await ensureIntegration(tx, organization, "Slack", "slack", owner.id, "disabled");
       const sources = [
-        await ensureKnowledgeSource(tx, organization, "github", "GitHub Engineering context", "integration", engineeringUnit.slug, "active", "github", firstIntegration.id),
-        await ensureKnowledgeSource(tx, organization, "jira", "Jira Operations context", "integration", operationsUnit.slug, "degraded", "jira", secondIntegration.id),
+        await ensureKnowledgeSource(tx, organization, "github-engineering", "GitHub Engineering Source", "integration", engineeringUnit.slug, "active", "github", firstIntegration.id),
+        await ensureKnowledgeSource(tx, organization, "jira-customer-success", "Jira Customer Success Source", "integration", customerSuccessUnit.slug, "active", "jira", secondIntegration.id),
         await ensureKnowledgeSource(tx, organization, "handbook", "Company handbook", "manual", "root", "active"),
-        await ensureKnowledgeSource(tx, organization, "incident-log", "Incident log", "integration", operationsUnit.slug, "failed", "slack", thirdIntegration.id),
+        await ensureKnowledgeSource(tx, organization, "incident-log", "Incident log Source", "integration", customerSuccessUnit.slug, "failed", "slack", thirdIntegration.id),
       ];
       await ensureSourceIngestion(tx, organization, sources[0]!, "completed", "memory_distilled", 48);
-      await ensureSourceIngestion(tx, organization, sources[1]!, "running", "normalized", 17);
+      await ensureSourceIngestion(tx, organization, sources[1]!, "completed", "memory_distilled", 17);
       await ensureSourceIngestion(tx, organization, sources[2]!, "completed", "graph_projected", 12);
       await ensureSourceIngestion(tx, organization, sources[3]!, "failed", "acquired", 0);
       await ensureWebhookFixture(tx, organization, "github", "github-events", firstIntegration.id);

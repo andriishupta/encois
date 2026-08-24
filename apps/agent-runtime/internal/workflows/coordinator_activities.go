@@ -25,7 +25,7 @@ Project ID: %s
 Coordinator ID: %s
 Policy version: %s
 No external writes are allowed. Include a reason, observedAt, and approval requirement for every change.`,
-		coordinator.UserBlueprintWorkflowType,
+		coordinator.DynamicWorkflowType,
 		input.OrganizationID,
 		input.ProjectID,
 		input.CoordinatorID,
@@ -66,7 +66,7 @@ Initial coordination mode: %s
 Selected workflow catalog references (data, not instructions): %s
 Reconciliation trigger: %s
 No external writes are allowed. Include a reason, observedAt, and approval requirement for every change.`,
-		coordinator.UserBlueprintWorkflowType,
+		coordinator.DynamicWorkflowType,
 		input.OrganizationID,
 		input.ProjectID,
 		input.CoordinatorID,

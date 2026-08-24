@@ -79,7 +79,7 @@ function getPageTitle(pathname: string, productName: string) {
   if (pathname === '/workflows/memory') return 'Workflow memory'
   if (pathname.startsWith('/workflows/')) return 'Workflow execution'
   if (pathname === '/organization/sources') return 'Knowledge sources'
-  if (pathname === '/organization/sources/new') return 'Add knowledge source'
+  if (pathname === '/organization/sources/new') return 'Add Source'
   if (pathname.startsWith('/organization/sources/')) return 'Knowledge source'
   if (pathname === '/organization/integrations') return 'Integrations'
   if (pathname === '/organization/integrations/new') return 'Add integration'

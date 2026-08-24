@@ -62,7 +62,7 @@ function statusForSourceError(code: string): 400 | 403 | 404 | 409 | 422 | 500 |
 
 export const createKnowledgeSourceRoute: Handler<GatewayEnv> = async (context) => {
   const request = parseRequest(await context.req.json().catch(() => null));
-  if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid Knowledge Source payload is required." } }, 400);
+  if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid Source payload is required." } }, 400);
   try {
     return context.json({ data: await createKnowledgeSource(context.get("principal"), request) }, 201);
   } catch (error) {

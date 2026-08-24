@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Background, Controls, MarkerType, Panel, ReactFlow, useNodesState, type Edge, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { GraphInspectionProjection, GraphNode } from '@encois/contracts'
-import { InteractiveMiniMap } from '@/components/interactive-minimap'
+import { FitViewOnContentChange, InteractiveMiniMap } from '@/components/interactive-minimap'
 
 function nodeLabel(node: GraphNode): string {
   const properties = node.properties
@@ -30,9 +30,10 @@ export function ContextGraphCanvas({ graph, onSelect }: { graph: GraphInspection
     .map((edge) => ({ id: edge.id, source: edge.sourceId, target: edge.targetId, label: edge.relationship, type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, labelStyle: { fontSize: 10, fill: 'var(--muted-foreground)' }, labelBgStyle: { fill: 'var(--background)' }, labelBgPadding: [4, 2], labelBgBorderRadius: 4 })), [graph.edges, graph.nodes])
 
   return <div className="h-[560px] overflow-hidden rounded-xl border bg-muted/10">
-    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.25 }} nodesDraggable nodesConnectable={false} deleteKeyCode={null} proOptions={{ hideAttribution: true }} minZoom={0.25} maxZoom={1.3}>
+    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} fitView fitViewOptions={{ padding: 0.25 }} nodesDraggable nodesConnectable={false} deleteKeyCode={null} proOptions={{ hideAttribution: true }} minZoom={0.15} maxZoom={1.3}>
       <Background color="var(--border)" gap={22} size={1} />
       <Controls showInteractive={false} />
+      <FitViewOnContentChange contentKey={graph.nodes.map((node) => node.id).join('|')} padding={0.25} />
       <InteractiveMiniMap />
       <Panel position="top-left"><div className="rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur"><span className="font-medium">Context projection</span><span className="ml-2 text-muted-foreground">{graph.nodes.length} nodes · {graph.edges.length} edges</span></div></Panel>
     </ReactFlow>

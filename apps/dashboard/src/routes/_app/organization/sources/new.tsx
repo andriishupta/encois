@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, FileText, LoaderCircle, PlugZap, Save, Upload } from 'lucide-react'
 import { IntegrationStatus, KnowledgeSourceKind, Permission, type KnowledgeSourceCreateRequest } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
+import { OrganizationUnitSelect } from '@/components/organization-unit-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createKnowledgeSource, isApiError, listIntegrations, startSourceIngestion, uploadKnowledgeSourcePdf } from '@/lib/api'
@@ -12,6 +13,9 @@ import { useOrganization } from '@/lib/organization-context'
 import { queryKeys } from '@/lib/query-keys'
 
 export const Route = createFileRoute('/_app/organization/sources/new')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    sourceType: search.sourceType === KnowledgeSourceKind.Integration ? KnowledgeSourceKind.Integration : undefined,
+  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeManage)) throw redirect({ to: '/forbidden' })
   },
@@ -20,10 +24,11 @@ export const Route = createFileRoute('/_app/organization/sources/new')({
 
 function NewSourcePage() {
   const navigate = useNavigate()
+  const search = Route.useSearch()
   const { units, currentUnitId } = useOrganization()
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
   const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
-  const [kind, setKind] = useState<KnowledgeSourceKind>(KnowledgeSourceKind.UploadedDocument)
+  const [kind, setKind] = useState<KnowledgeSourceKind>(() => search.sourceType === KnowledgeSourceKind.Integration ? KnowledgeSourceKind.Integration : KnowledgeSourceKind.UploadedDocument)
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | undefined>()
   const [integrationId, setIntegrationId] = useState('')
@@ -32,7 +37,7 @@ function NewSourcePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const scopeOptions = useMemo(() => units.filter((unit) => unit.canView), [units])
+  const scopeOptions = useMemo(() => units.filter((unit) => unit.canManage), [units])
   const activeIntegrations = useMemo(() => integrations.data?.filter((integration) => integration.status === IntegrationStatus.Active && integration.credentialConfigured) ?? [], [integrations.data])
   const selectedIntegration = activeIntegrations.find((integration) => integration.id === integrationId)
 
@@ -96,7 +101,7 @@ function NewSourcePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Add Knowledge Source" description={<>Create a provider-backed source or upload an immutable document. The source keeps its Integration, read scope, visibility scope, and revision history.</>} actions={<Button variant="outline" asChild><Link to="/organization/sources"><ArrowLeft data-icon="inline-start" />Back to Sources</Link></Button>} />
+      <PageHeader title="Add Source" description={<>Create a provider-backed Source or upload an immutable document. The Source keeps its Integration, read scope, visibility scope, and revision history.</>} actions={<Button variant="outline" asChild><Link to="/organization/sources"><ArrowLeft data-icon="inline-start" />Back to Sources</Link></Button>} />
       <form className="max-w-3xl" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
@@ -105,17 +110,17 @@ function NewSourcePage() {
             <CardDescription>These scopes are enforced before the Source or its ingestion workflow is created.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="source-kind">Source type<select id="source-kind" value={kind} onChange={(event) => setKind(event.target.value as KnowledgeSourceKind)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value={KnowledgeSourceKind.UploadedDocument}>Uploaded document</option><option value={KnowledgeSourceKind.Integration}>Integration source</option></select></label>
+            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="source-kind">Source type<select id="source-kind" value={kind} onChange={(event) => setKind(event.target.value as KnowledgeSourceKind)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value={KnowledgeSourceKind.UploadedDocument}>Uploaded document</option><option value={KnowledgeSourceKind.Integration}>Integration Source</option></select></label>
             <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="source-name">Source name<input id="source-name" value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === KnowledgeSourceKind.Integration ? 'GitHub Engineering context' : 'Project architecture'} maxLength={120} required className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50" /></label>
 
             {kind === KnowledgeSourceKind.Integration ? <div className="flex flex-col gap-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="source-integration">Authorized Integration<select id="source-integration" value={integrationId} onChange={(event) => setIntegrationId(event.target.value)} disabled={integrations.isLoading || integrations.isError || activeIntegrations.length === 0} required className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"><option value="" disabled>{integrations.isLoading ? 'Loading integrations…' : integrations.isError ? 'Integrations unavailable' : 'Select an authorized integration'}</option>{activeIntegrations.map((integration) => <option key={integration.id} value={integration.id}>{integration.name} · {integration.provider}</option>)}</select></label>{integrations.isError ? <p role="alert" className="text-xs text-destructive">Could not load integrations: {integrations.error.message}</p> : null}{!integrations.isLoading && !integrations.isError && !activeIntegrations.length ? <p className="text-xs text-amber-700">No authorized active Integration is available. Register and authorize one before creating a provider-backed Source.</p> : null}</div> : <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition-colors hover:bg-accent" htmlFor="source-file"><span className="flex size-10 items-center justify-center rounded-full bg-muted"><Upload className="size-5 text-muted-foreground" aria-hidden="true" /></span><span className="text-sm font-medium">{file?.name ?? 'Choose a PDF'}</span><span className="text-xs text-muted-foreground">PDF · maximum 10 MiB</span><input id="source-file" type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => setFile(event.target.files?.[0])} /></label>}
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <ScopeSelect id="source-read-scope" label="Read scope" value={readScopeId} units={scopeOptions} onChange={setReadScopeId} />
-              <ScopeSelect id="source-visibility-scope" label="Visibility scope" value={visibilityScopeId} units={scopeOptions} onChange={setVisibilityScopeId} />
+              <OrganizationUnitSelect id="source-read-scope" label="Read scope" value={readScopeId} units={units} isDisabled={(unit) => !unit.canManage} onChange={setReadScopeId} required />
+              <OrganizationUnitSelect id="source-visibility-scope" label="Visibility scope" value={visibilityScopeId} units={units} isDisabled={(unit) => !unit.canManage} onChange={setVisibilityScopeId} required />
             </div>
             <p className="text-xs text-muted-foreground">Read scope controls what ingestion may access. Visibility scope controls who can discover the normalized Source and its evidence.</p>
-            {kind === KnowledgeSourceKind.Integration ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><p className="font-medium">Provider authorization remains explicit</p><p className="mt-1 text-muted-foreground">Creating this Source does not copy credentials or enable write access. Ingestion will remain unavailable until the Integration has valid provider credentials.</p></div> : null}
+            {kind === KnowledgeSourceKind.Integration ? <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm"><p className="font-medium">Provider authorization remains explicit</p><p className="mt-1 text-muted-foreground">Creating this Source does not copy credentials or enable write access. Ingestion will remain unavailable until the organization Integration has valid provider credentials.</p></div> : null}
             {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
             <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between"><Button variant="ghost" asChild><Link to="/organization/sources">Cancel</Link></Button><Button type="submit" disabled={saving || !readScopeId || !visibilityScopeId || (kind === KnowledgeSourceKind.Integration && (!selectedIntegration || integrations.isLoading))}>{saving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}{saving ? 'Saving…' : kind === KnowledgeSourceKind.Integration ? 'Create Source' : 'Upload and ingest'}</Button></div>
           </CardContent>
@@ -123,8 +128,4 @@ function NewSourcePage() {
       </form>
     </div>
   )
-}
-
-function ScopeSelect({ id, label, value, units, onChange }: { id: string; label: string; value: string; units: readonly { id: string; name: string; parentId: string | null }[]; onChange: (value: string) => void }) {
-  return <label className="flex flex-col gap-2 text-sm font-medium" htmlFor={id}>{label}<select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={units.length === 0} required className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"><option value="" disabled>Select a unit</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
 }

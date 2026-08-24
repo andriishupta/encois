@@ -16,7 +16,7 @@ The platform-owned execution path is:
 Gateway API
   -> Workflow Start Request
   -> immutable Workflow Blueprint snapshot
-  -> Temporal: encois.user-blueprint.v1
+  -> Temporal: encois.dynamic.v1
   -> Go Runtime interprets the validated step graph
   -> ADK runs agent steps
   -> Agent Gateway executes MCP-shaped tools or API adapters
@@ -26,7 +26,7 @@ Gateway API
 `Release Investigation` is only one possible Blueprint. It is a useful demo
 scenario, but it is not the Encois platform contract and should not require a
 new Go workflow type for every customer. User workflows are validated
-Blueprint data interpreted by the generic `encois.user-blueprint.v1` workflow.
+Blueprint data interpreted by the generic `encois.dynamic.v1` workflow.
 
 ### Current repository status
 
@@ -190,7 +190,7 @@ model-generated permissions, or unbounded expressions.
 The Gateway API starts the registered generic Workflow:
 
 ```text
-workflowType = encois.user-blueprint.v1
+workflowType = encois.dynamic.v1
 input = execution context + immutable blueprint snapshot + validated input
 ```
 
@@ -265,9 +265,9 @@ tool-manifest versions and the allowlist captured by its validated Blueprint.
 The model must not discover an arbitrary new server or tool in the middle of
 an execution.
 
-### 5. Knowledge Source ingestion protocol
+### 5. Source ingestion protocol
 
-Knowledge Source control-plane records use the following versioned contracts:
+Source control-plane records use the following versioned contracts:
 
 ```text
 knowledge-source.v1        logical source, kind, provider, scopes, status

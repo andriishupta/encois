@@ -20,7 +20,7 @@ function parseRequest(value: unknown): WorkflowStartRequest | null {
   if (!isTemporalWorkflowType(value.workflowType)) return null;
   // Source ingestion is a platform-owned workflow. It is launched only after
   // a persisted Source + Revision pass the source-specific authorization and
-  // provenance checks; it must not be accepted as a user Blueprint payload.
+  // provenance checks; it must not be accepted as a user-created Blueprint payload.
   if (value.workflowType === TemporalWorkflowType.SourceIngestion) return null;
 
   const request: WorkflowStartRequest = { workflowType: value.workflowType };
@@ -40,7 +40,7 @@ function parseRequest(value: unknown): WorkflowStartRequest | null {
   if (blueprint && typeof value.blueprintVersion === "string" && value.blueprintVersion !== blueprint.version) return null;
   if (
     (value.blueprintId !== undefined || value.blueprintVersion !== undefined) &&
-    value.workflowType !== TemporalWorkflowType.UserBlueprint
+    value.workflowType !== TemporalWorkflowType.Dynamic
   ) return null;
   request.input = input ?? undefined;
   request.scope = scope as WorkflowStartRequest["scope"];

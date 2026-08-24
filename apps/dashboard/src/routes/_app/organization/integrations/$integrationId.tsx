@@ -5,7 +5,6 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { CheckCircle2, Clock3, Copy, Github, PlugZap, Power, RefreshCw, Save, ShieldCheck, WandSparkles, Webhook } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
-import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getKnowledgeSource, getWebhookEndpoint, isApiError, listIntegrations, listKnowledgeSources, provisionWebhookEndpoint, rotateWebhookEndpoint, setWebhookEndpointStatus, startIntegrationAuthorization, updateIntegration } from '@/lib/api'
@@ -25,10 +24,11 @@ export const Route = createFileRoute('/_app/organization/integrations/$integrati
 function IntegrationDetailPage() {
   const { integrationId } = Route.useParams()
   const queryClient = useQueryClient()
-  const { units, currentUnitId } = useOrganization()
+  const { units, currentUnitId, members } = useOrganization()
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
   const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
-  const canManage = useCan(Permission.IntegrationsManage)
+  const actor = members.find((member) => member.id === getAuthSession()?.userId)
+  const canManage = useCan(Permission.IntegrationsManage) && (actor?.roleKey === 'organization_admin' || actor?.roleKey === 'admin')
   const canViewSources = useCan(Permission.KnowledgeRead)
   const [activeTab, setActiveTab] = useState<IntegrationTab>('overview')
   const sources = useQuery({ queryKey: queryKeys.sources(selectedScopeUnitId), queryFn: () => listKnowledgeSources({ scopeUnitId: selectedScopeUnitId }), enabled: canViewSources })
@@ -100,7 +100,7 @@ function IntegrationDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title={`${providerName} integration`} description={<>Provider connection, <ProductTerm term="scope" />, and read permissions.</>} />
+      <PageHeader title={`${providerName} integration`} description="Organization-level provider connection, permissions, and unit-scoped Sources." />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryCard icon={Icon} label="Provider" value={providerName} />
@@ -173,16 +173,16 @@ function IntegrationDetailPage() {
 
         <Card className={activeTab === 'permissions' ? undefined : 'hidden'}>
           <CardHeader>
-            <CardTitle>Permission <ProductTerm term="scope" /></CardTitle>
-            <CardDescription>Effective organization <ProductTerm term="scope" /> for provider reads.</CardDescription>
+            <CardTitle>Organization permissions</CardTitle>
+            <CardDescription>Provider permissions are configured once for the organization. Source access is controlled by each Source scope.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="rounded-lg border bg-muted/20 p-4">
-              <p className="text-sm font-medium">Organization <ProductTerm term="scope" /></p>
+              <p className="text-sm font-medium">Organization-level Integration</p>
               <p className="mt-1 font-mono text-xs text-muted-foreground">Resolved securely</p>
             </div>
             <p className="text-sm text-muted-foreground">Credentials are intentionally not shown in the browser and are handled securely.</p>
-            <div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Effective binding</p><p className="mt-1 text-xs text-muted-foreground">{integration.scopeIds?.length ?? 0} organization unit binding{integration.scopeIds?.length === 1 ? '' : 's'} · {integration.grantedScopes?.length ?? 0} provider scope{integration.grantedScopes?.length === 1 ? '' : 's'}</p><p className="mt-2 text-xs text-muted-foreground">Credential state: {integration.credentialConfigured ? 'configured' : 'not configured'}</p></div>
+            <div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Organization connection</p><p className="mt-1 text-xs text-muted-foreground">{integration.grantedScopes?.length ?? 0} provider permission{integration.grantedScopes?.length === 1 ? '' : 's'} · Sources configure unit-level resource access.</p><p className="mt-2 text-xs text-muted-foreground">Credential state: {integration.credentialConfigured ? 'configured' : 'not configured'}</p></div>
           </CardContent>
         </Card>
       </div>
@@ -223,26 +223,26 @@ function IntegrationDetailPage() {
       <Card className={activeTab === 'sync' ? undefined : 'hidden'}>
         <CardHeader>
           <CardTitle>Sync history</CardTitle>
-          <CardDescription>Ingestion runs for Knowledge Sources connected to this Integration. Runtime identifiers stay available only inside the source detail.</CardDescription>
+          <CardDescription>Ingestion runs for Sources connected to this Integration. Runtime identifiers stay available only inside the Source detail.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-3 text-sm text-muted-foreground">
             Webhook-triggered ingestion uses the signed Gateway ingress, retained payload, delivery idempotency, and the same scoped ingestion workflow as manual sync. Real provider delivery and hosted retry behavior still require release smoke tests.
           </div>
-          {!canViewSources ? <EmptyPanel icon={PlugZap} title="Source history is restricted" description="Knowledge source visibility is not included in the current permissions." /> : null}
+          {!canViewSources ? <EmptyPanel icon={PlugZap} title="Source history is restricted" description="Source visibility is not included in the current permissions." /> : null}
           {canViewSources && (sources.isLoading || sourceDetailQueries.some((query) => query.isLoading)) ? <p className="text-sm text-muted-foreground">Loading sync history…</p> : null}
           {canViewSources && sourceDetailQueries.some((query) => query.isError) ? <p role="alert" className="text-sm text-destructive">Some source history is unavailable. Reload the page when the service is available.</p> : null}
-          {canViewSources && !sources.isLoading && !sourceDetailQueries.some((query) => query.isLoading) && !syncHistory.length ? <EmptyPanel icon={Clock3} title="No ingestion runs yet" description={integrationSources.length ? 'Connected Sources have not recorded an ingestion run in this scope.' : 'Create a Knowledge Source after this Integration becomes active.'} /> : null}
+          {canViewSources && !sources.isLoading && !sourceDetailQueries.some((query) => query.isLoading) && !syncHistory.length ? <EmptyPanel icon={Clock3} title="No ingestion runs yet" description={integrationSources.length ? 'Connected Sources have not recorded an ingestion run in this scope.' : 'Create a Source after this Integration becomes active.'} /> : null}
           {syncHistory.map(({ source, run }) => <div key={run.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="block truncate text-sm font-medium hover:underline">{source.name}</Link><p className="text-xs text-muted-foreground">{humanizeKey(run.trigger)} · {humanizeKey(run.status)} · {run.factsCount} facts</p></div><div className="shrink-0 text-left text-xs text-muted-foreground sm:text-right"><p>{formatDate(run.updatedAt)}</p>{run.error ? <p className="max-w-64 truncate text-destructive">{run.error}</p> : null}</div></div>)}
         </CardContent>
       </Card>
 
       {canViewSources ? <Card className={activeTab === 'sources' ? undefined : 'hidden'}>
-        <CardHeader><CardTitle>Knowledge Sources</CardTitle><CardDescription>Sources currently referencing this Integration in your visible scope.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Sources</CardTitle><CardDescription>Sources currently referencing this Integration in your visible scope.</CardDescription></CardHeader>
         <CardContent className="flex flex-col gap-2">
           {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading Sources…</p> : null}
           {sources.isError ? <p role="alert" className="text-sm text-destructive">Could not load Sources: {sources.error.message}</p> : null}
-          {!sources.isLoading && !sources.isError && !integrationSources.length ? <EmptyPanel icon={PlugZap} title="No Sources use this Integration" description="Create a Knowledge Source after the connection is authorized and active." /> : null}
+          {!sources.isLoading && !sources.isError && !integrationSources.length ? <EmptyPanel icon={PlugZap} title="No Sources use this Integration" description="Create a Source after the connection is authorized and active." /> : null}
           {integrationSources.map((source) => <Link key={source.id} to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><span className="min-w-0"><span className="block truncate font-medium">{source.name}</span><span className="block truncate text-xs text-muted-foreground">{source.status.replace('_', ' ')} · {source.currentRevisionId ? 'revision available' : 'no revision yet'}</span></span><span className="text-xs text-muted-foreground">Open</span></Link>)}
         </CardContent>
       </Card> : null}
@@ -253,8 +253,8 @@ function IntegrationDetailPage() {
       </Card> : null}
 
       {activeTab === 'capabilities' ? <Card>
-        <CardHeader><CardTitle>Capabilities</CardTitle><CardDescription>Read capabilities granted to this scoped Integration. Workflow creation still resolves these server-side against the selected scope.</CardDescription></CardHeader>
-        <CardContent className="flex flex-col gap-4"><div className="flex flex-wrap gap-2">{integration.grantedScopes?.length ? integration.grantedScopes.map((scope) => <span key={scope} className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">{scope}</span>) : <p className="text-sm text-muted-foreground">No provider scopes were returned.</p>}</div><div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Execution availability</p><p className="mt-1 text-xs text-muted-foreground">{integration.status === IntegrationStatus.Active ? 'This Integration can be considered by workflow and Source capability resolution.' : 'Only active, authorized, and scope-visible connections can satisfy a workflow capability.'}</p></div></CardContent>
+        <CardHeader><CardTitle>Capabilities</CardTitle><CardDescription>Read capabilities granted to this organization Integration. Workflow creation resolves Sources server-side against the selected scope.</CardDescription></CardHeader>
+        <CardContent className="flex flex-col gap-4"><div className="flex flex-wrap gap-2">{integration.grantedScopes?.length ? integration.grantedScopes.map((scope) => <span key={scope} className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">{scope}</span>) : <p className="text-sm text-muted-foreground">No provider permissions were returned.</p>}</div><div className="rounded-lg border bg-muted/20 p-4 text-sm"><p className="font-medium">Execution availability</p><p className="mt-1 text-xs text-muted-foreground">{integration.status === IntegrationStatus.Active ? 'This Integration can be considered only when a matching Source exists in the workflow scope.' : 'Only active, authorized connections can satisfy a Source or workflow capability.'}</p></div></CardContent>
       </Card> : null}
     </div>
   )

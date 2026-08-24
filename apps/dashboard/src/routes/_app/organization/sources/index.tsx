@@ -13,7 +13,7 @@ import { getAuthSession, hasPermission } from '@/lib/auth'
 import { Permission } from '@encois/contracts'
 import { queryKeys } from '@/lib/query-keys'
 import { humanizeKey } from '@/lib/formatters'
-import { formatUnitPath } from '@/lib/organization'
+import { formatUnitPath, getDescendantUnitIds } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 
 export const Route = createFileRoute('/_app/organization/sources/')({
@@ -37,14 +37,14 @@ function SourcesPage() {
   const [scope, setScope] = useState('all')
   const [freshness, setFreshness] = useState('all')
   const providerOptions = [...new Set((sources.data ?? []).map((source) => source.provider).filter((value): value is string => Boolean(value)))].sort()
-  const scopeOptions = [...new Set((sources.data ?? []).flatMap((source) => source.readScope.ids))].sort().map((value) => ({ value, label: formatUnitPath(units, value) || value }))
+  const scopeOptions = units.filter((unit) => unit.canView).map((unit) => ({ value: unit.id, label: formatUnitPath(units, unit.id) || unit.name }))
   const freshnessOptions = [...new Set((sources.data ?? []).map((source) => source.freshness?.status).filter((value): value is NonNullable<typeof value> => Boolean(value)))].sort()
   const filteredSources = (sources.data ?? []).filter((source) => {
     const normalizedQuery = query.trim().toLowerCase()
     const matchesQuery = !normalizedQuery || [source.name, source.provider, source.kind].some((value) => value?.toLowerCase().includes(normalizedQuery))
     const matchesProvider = provider === 'all' || source.provider === provider
     const matchesKind = kind === 'all' || source.kind === kind
-    const matchesScope = scope === 'all' || source.readScope.ids.includes(scope) || source.visibilityScope.ids.includes(scope)
+    const matchesScope = scope === 'all' || (scopesOverlap(units, source.readScope.ids, [scope]) && scopesOverlap(units, source.visibilityScope.ids, [scope]))
     const matchesFreshness = freshness === 'all' || source.freshness?.status === freshness
     return matchesQuery && (status === 'all' || source.status === status) && matchesProvider && matchesKind && matchesScope && matchesFreshness
   })
@@ -58,7 +58,7 @@ function SourcesPage() {
       />
       <Card>
         <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Sources by name or provider…" aria-label="Search knowledge sources" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>
+          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Sources by name or provider…" aria-label="Search Sources" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <select value={provider} onChange={(event) => setProvider(event.target.value)} aria-label="Filter sources by provider" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All providers</option>{providerOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
             <select value={kind} onChange={(event) => setKind(event.target.value as KnowledgeSourceKind | 'all')} aria-label="Filter sources by type" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All types</option>{Object.values(KnowledgeSourceKind).map((value) => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}</select>
@@ -71,21 +71,23 @@ function SourcesPage() {
       </Card>
       {sources.isLoading ? <p className="text-sm text-muted-foreground">Loading sources…</p> : null}
       {sources.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load <ProductTerm term="knowledgeSource" plural />: {sources.error.message}</p></CardContent></Card> : null}
-      {filteredSources.length ? <div className="grid gap-4 md:grid-cols-2">{filteredSources.map((source) => <SourceCard key={source.id} source={source} />)}</div> : null}
+      {filteredSources.length ? <div className="grid gap-4 md:grid-cols-2">{filteredSources.map((source) => <SourceCard key={source.id} source={source} units={units} />)}</div> : null}
       {!sources.isLoading && !sources.isError && Boolean(sources.data?.length) && !filteredSources.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Sources match" description="Change the search or status filter." /></CardContent></Card> : null}
       {!sources.isLoading && !sources.isError && !sources.data?.length ? <Card>
         <CardContent className="pt-6">
-        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}</>} description={<>No Knowledge Sources are available in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}. Upload a document or connect a provider when this scope needs one.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add a source in this scope.</span>} />
+        <EmptyPanel icon={Waypoints} title={<>No <ProductTerm term="knowledgeSource" plural /> in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}</>} description={<>No Sources are available in {scopeLabel}{currentUnit?.type === 'organization' ? '' : ' scope'}. Upload a document or connect a provider when this scope needs one.</>} action={canManageKnowledgeSources ? <Button asChild><Link to="/organization/sources/new"><Plus data-icon="inline-start" />Add your first source</Link></Button> : <span className="text-sm text-muted-foreground">Ask an organization administrator to add a source in this scope.</span>} />
         </CardContent>
       </Card> : null}
     </div>
   )
 }
 
-function SourceCard({ source }: { source: KnowledgeSource }) {
+function SourceCard({ source, units }: { source: KnowledgeSource; units: ReturnType<typeof useOrganization>['units'] }) {
   const Icon = source.kind === KnowledgeSourceKind.UploadedDocument ? FileText : Waypoints
   const statusLabel = source.status === KnowledgeSourceStatus.Ingesting ? 'Ingesting' : source.status.replace('_', ' ')
   const freshnessLabel = source.freshness?.status ? humanizeKey(source.freshness.status) : 'Freshness unavailable'
+  const readScope = formatSourceScope(source.readScope.ids, units)
+  const visibilityScope = formatSourceScope(source.visibilityScope.ids, units)
   return (
     <Link to="/organization/sources/$sourceId" params={{ sourceId: source.id }} className="group">
       <Card className="h-full transition-colors group-hover:border-foreground/30">
@@ -96,6 +98,10 @@ function SourceCard({ source }: { source: KnowledgeSource }) {
           </div>
           <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
         </CardHeader>
+        <CardContent className="grid gap-1 border-t pt-0 text-xs text-muted-foreground">
+          <p><span className="font-medium text-foreground">Read scope:</span> {readScope}</p>
+          <p><span className="font-medium text-foreground">Visible in:</span> {visibilityScope}</p>
+        </CardContent>
         <CardContent className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-secondary-foreground"><RefreshCw className="size-3" aria-hidden="true" />{statusLabel}</span>
           <span className={source.freshness?.status === 'stale' ? 'rounded-full bg-amber-500/10 px-2 py-1 text-amber-700' : 'rounded-full bg-muted px-2 py-1'}>{freshnessLabel}</span>
@@ -104,4 +110,14 @@ function SourceCard({ source }: { source: KnowledgeSource }) {
       </Card>
     </Link>
   )
+}
+
+function formatSourceScope(ids: readonly string[], units: ReturnType<typeof useOrganization>['units']): string {
+  return ids.map((id) => formatUnitPath(units, id) || id).join(', ')
+}
+
+function scopesOverlap(units: ReturnType<typeof useOrganization>['units'], leftRoots: readonly string[], rightRoots: readonly string[]): boolean {
+  const expand = (roots: readonly string[]) => new Set(roots.flatMap((root) => [root, ...getDescendantUnitIds(units, root)]))
+  const left = expand(leftRoots)
+  return [...expand(rightRoots)].some((unitId) => left.has(unitId))
 }

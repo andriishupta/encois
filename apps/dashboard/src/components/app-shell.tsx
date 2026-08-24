@@ -29,7 +29,7 @@ import {
 import { cn } from '@/lib/utils'
 import { clearAuthSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { flattenUnitOptions, formatUnitParentPath, getOrganizationUnit } from '@/lib/organization'
+import { flattenUnitOptions, formatUnitParentPath, getOrganizationUnit, getUnitPath } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 import { usePermissions } from '@/lib/permissions'
 import { getAccountSummary } from '@/lib/account'
@@ -56,6 +56,7 @@ const workflowNavigation: readonly NavigationItem[] = [
   { label: 'Memory', to: '/workflows/memory', icon: BrainCircuit, permission: Permission.MemoryRead },
   { label: 'Templates', to: '/workflows/templates', icon: FilePlus2, permission: Permission.WorkflowsRead },
   { label: 'Blueprints', to: '/workflows/blueprints', icon: GitBranch, permission: Permission.WorkflowsRead },
+  { label: 'Plans', to: '/workflows/plans', icon: ClipboardCheck, permission: Permission.WorkflowsManage },
 ] as const
 
 const organizationNavigation: readonly NavigationItem[] = [
@@ -88,6 +89,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const currentUnit = getOrganizationUnit(units, currentUnitId)?.canView ? getOrganizationUnit(units, currentUnitId) : units.find((unit) => unit.canView)
   const currentUnitLabel = currentUnit?.name ?? workspaceName
   const currentUnitPath = currentUnit ? formatUnitParentPath(units, currentUnit.id) || 'All organization units' : 'Organization scope unavailable'
+  const currentBreadcrumbScope = currentUnit && currentUnit.type !== 'organization'
+    ? getUnitPath(units, currentUnit.id).filter((unit) => unit.type !== 'organization').map((unit) => unit.name)
+    : undefined
 
   useEffect(() => {
     setAccountOpen(false)
@@ -155,7 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu /></Button>
-          <Breadcrumbs pathname={pathname} rootLabel={workspaceName} productName={branding.productName} />
+          <Breadcrumbs pathname={pathname} rootLabel={workspaceName} productName={branding.productName} currentScope={currentBreadcrumbScope} />
           <div className="relative ml-auto">
             <Button variant="outline" size="sm" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen((value) => !value)}><UserRound data-icon="inline-start" /><span className="hidden max-w-36 truncate text-left sm:block">{account.name}</span><ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" /></Button>
             {accountOpen ? <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 rounded-lg border bg-background p-2 shadow-lg">
@@ -183,12 +187,13 @@ function NavSection({ label, pathname, items, onNavigate }: { label: string; pat
   </div>
 }
 
-function Breadcrumbs({ pathname, rootLabel, productName }: { pathname: string; rootLabel: string; productName: string }) {
+function Breadcrumbs({ pathname, rootLabel, productName, currentScope }: { pathname: string; rootLabel: string; productName: string; currentScope?: readonly string[] }) {
   const items = getBreadcrumbItems(pathname, productName)
-  return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link to="/" className="max-w-40 truncate text-muted-foreground transition-colors hover:text-foreground">{rootLabel}</Link>{items.map((item) => <span key={item.label} className="flex min-w-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="truncate text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="truncate font-medium">{item.label}</span>}</span>)}</nav>
+  const scopeLabel = currentScope?.length ? [rootLabel, ...currentScope].join(' / ') : rootLabel
+  return <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap text-sm"><Link to="/" className="shrink-0 text-muted-foreground transition-colors hover:text-foreground">{scopeLabel}</Link>{items.map((item) => <span key={item.label} className="flex shrink-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/activity' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/documentation' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/plans' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/activity' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/documentation' | '/profile'
 
 function getBreadcrumbItems(pathname: string, productName: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
@@ -196,6 +201,7 @@ function getBreadcrumbItems(pathname: string, productName: string): { label: str
   if (pathname === '/workflows/runs') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Runs' }]
   if (pathname === '/workflows/templates') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Templates' }]
   if (pathname === '/workflows/blueprints') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Blueprints' }]
+  if (pathname === '/workflows/plans') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Plans' }]
   if (pathname.startsWith('/workflows/blueprints/')) return [{ label: 'Workflows', to: '/workflows' }, { label: 'Blueprints', to: '/workflows/blueprints' }, { label: 'Blueprint revision' }]
   if (pathname === '/workflows/new') return [{ label: 'Workflows', to: '/workflows' }, { label: 'New workflow' }]
   if (pathname === '/workflows/memory') return [{ label: 'Workflows', to: '/workflows' }, { label: 'Memory' }]

@@ -54,8 +54,25 @@ import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
 const apiBaseUrl = (environment.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
 
-type ApiEnvelope<T> = { data: T }
+type ApiEnvelope<T> = { data: T; pagination?: { limit?: unknown; offset?: unknown; hasMore?: unknown } }
 type ApiErrorPayload = { error?: { code?: string; message?: string } }
+
+export type ListQueryInput = {
+  query?: string
+  status?: string
+  sort?: 'updated-desc' | 'updated-asc' | 'name-asc' | 'status'
+  limit?: number
+  offset?: number
+}
+
+export type ListPage<T> = {
+  items: readonly T[]
+  pagination: {
+    limit: number
+    offset: number
+    hasMore: boolean
+  }
+}
 
 export type KnowledgeSourceDetail = {
   source: KnowledgeSource
@@ -106,6 +123,7 @@ function isWorkflowProjection(value: unknown): value is WorkflowExecutionProject
   if (!isJsonObject(value)) return false
   if (typeof value.workflowId !== 'string' || typeof value.workflowType !== 'string' || typeof value.namespace !== 'string' || typeof value.taskQueue !== 'string' || typeof value.organizationId !== 'string' || typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string') return false
   if (!Object.values(WorkflowExecutionStatus).includes(value.status as WorkflowExecutionStatus)) return false
+  if (value.scope !== undefined && (!isJsonObject(value.scope) || !Array.isArray(value.scope.ids) || value.scope.ids.some((id) => typeof id !== 'string'))) return false
   return value.statusReason === undefined || Object.values(WorkflowStatusReason).includes(value.statusReason as WorkflowStatusReason)
 }
 
@@ -139,6 +157,7 @@ function isWorkflowTemplateProjection(value: unknown): value is WorkflowTemplate
     && value.keywords.every((keyword) => typeof keyword === 'string')
     && Array.isArray(value.requiredCapabilities)
     && value.requiredCapabilities.every((capability) => typeof capability === 'string')
+    && ['active', 'disabled', 'deleted'].includes(value.status as string)
     && typeof value.version === 'string'
     && typeof value.schemaVersion === 'string'
     && isWorkflowTemplate(value.template)
@@ -150,7 +169,7 @@ function isWorkflowBlueprintProjection(value: unknown): value is WorkflowBluepri
     && typeof value.version === 'string'
     && typeof value.name === 'string'
     && typeof value.purpose === 'string'
-    && value.workflowType === 'encois.user-blueprint.v1'
+    && value.workflowType === 'encois.dynamic.v1'
     && typeof value.status === 'string'
     && ['draft', 'approved', 'retired'].includes(value.status)
     && typeof value.isCurrent === 'boolean'
@@ -473,6 +492,17 @@ function parseList<T>(value: unknown, guard: (item: unknown) => item is T, name:
   return value
 }
 
+function parseListPage<T>(value: unknown, guard: (item: unknown) => item is T, name: string): ListPage<T> {
+  if (!isJsonObject(value) || !Array.isArray(value.data) || !value.data.every(guard)) {
+    throw createApiError(200, `The service returned an invalid ${name} response.`, 'INVALID_RESPONSE')
+  }
+  const pagination = isJsonObject(value.pagination) ? value.pagination : {}
+  const limit = typeof pagination.limit === 'number' ? pagination.limit : value.data.length
+  const offset = typeof pagination.offset === 'number' ? pagination.offset : 0
+  const hasMore = typeof pagination.hasMore === 'boolean' ? pagination.hasMore : value.data.length === limit
+  return { items: value.data, pagination: { limit, offset, hasMore } }
+}
+
 function isAcceptedResponse(value: unknown): value is { accepted: true } {
   return isJsonObject(value) && value.accepted === true
 }
@@ -489,7 +519,7 @@ async function getSafeAuthSessionToken(forceRefresh = false) {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
+async function requestEnvelope<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<ApiEnvelope<T>> {
   let session = requiresAuth ? await getSafeAuthSessionToken() : null
   if (requiresAuth && !session) {
     clearAuthSession()
@@ -531,27 +561,55 @@ async function request<T>(path: string, init?: RequestInit, requiresAuth = true)
     if (typeof body !== 'object' || body === null || Array.isArray(body) || !('data' in body)) {
       throw createApiError(response.status, 'The service returned an invalid response.', 'INVALID_RESPONSE')
     }
-    return (body as ApiEnvelope<T>).data
+    return body as ApiEnvelope<T>
   }
 
   clearAuthSession()
   throw createApiError(401, 'Authentication is required.', 'UNAUTHENTICATED')
 }
 
-export function listWorkflows(): Promise<readonly WorkflowExecutionProjection[]> {
-  return request<unknown>('/workflows').then((value) => parseList(value, isWorkflowProjection, 'workflow list'))
+async function request<T>(path: string, init?: RequestInit, requiresAuth = true): Promise<T> {
+  return (await requestEnvelope<T>(path, init, requiresAuth)).data
 }
 
-export function listWorkflowTemplates(input: { query?: string; category?: string } = {}): Promise<readonly WorkflowTemplateProjection[]> {
+function listQuery(input: ListQueryInput): string {
   const params = new URLSearchParams()
   if (input.query?.trim()) params.set('q', input.query.trim())
-  if (input.category?.trim()) params.set('category', input.category.trim())
-  const query = params.size > 0 ? `?${params.toString()}` : ''
-  return request<unknown>(`/workflows/templates${query}`).then((value) => parseList(value, isWorkflowTemplateProjection, 'workflow template list'))
+  if (input.status && input.status !== 'all') params.set('status', input.status)
+  if (input.sort) params.set('sort', input.sort)
+  if (input.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(Math.trunc(input.limit), 100))))
+  if (input.offset !== undefined) params.set('offset', String(Math.max(0, Math.trunc(input.offset))))
+  return params.size ? `?${params.toString()}` : ''
 }
 
-export function listWorkflowBlueprints(): Promise<readonly WorkflowBlueprintProjection[]> {
-  return request<unknown>('/workflows/blueprints').then((value) => parseList(value, isWorkflowBlueprintProjection, 'workflow Blueprint list'))
+function requestList<T>(path: string, guard: (item: unknown) => item is T, name: string): Promise<ListPage<T>> {
+  return requestEnvelope<unknown>(path).then((envelope) => parseListPage(envelope, guard, name))
+}
+
+export function listWorkflows(input: ListQueryInput = {}): Promise<readonly WorkflowExecutionProjection[]> {
+  return request<unknown>(`/workflows${listQuery(input)}`).then((value) => parseList(value, isWorkflowProjection, 'workflow list'))
+}
+
+export function listWorkflowsPage(input: ListQueryInput = {}): Promise<ListPage<WorkflowExecutionProjection>> {
+  return requestList(`/workflows${listQuery(input)}`, isWorkflowProjection, 'workflow list')
+}
+
+export function listWorkflowTemplates(input: ListQueryInput & { category?: string } = {}): Promise<readonly WorkflowTemplateProjection[]> {
+  return listWorkflowTemplatesPage(input).then((page) => page.items)
+}
+
+export function listWorkflowTemplatesPage(input: ListQueryInput & { category?: string } = {}): Promise<ListPage<WorkflowTemplateProjection>> {
+  const params = new URLSearchParams(listQuery(input).replace(/^\?/u, ''))
+  if (input.category?.trim()) params.set('category', input.category.trim())
+  return requestList(`/workflows/templates${params.size ? `?${params.toString()}` : ''}`, isWorkflowTemplateProjection, 'workflow template list')
+}
+
+export function listWorkflowBlueprints(input: ListQueryInput = {}): Promise<readonly WorkflowBlueprintProjection[]> {
+  return listWorkflowBlueprintsPage(input).then((page) => page.items)
+}
+
+export function listWorkflowBlueprintsPage(input: ListQueryInput = {}): Promise<ListPage<WorkflowBlueprintProjection>> {
+  return requestList(`/workflows/blueprints${listQuery(input)}`, isWorkflowBlueprintProjection, 'workflow Blueprint list')
 }
 
 export async function createBlueprintLifecyclePlan(blueprintId: string, input: Omit<WorkflowBlueprintLifecycleRequest, 'contractVersion'>): Promise<WorkflowPlanRecord> {
@@ -576,8 +634,11 @@ export async function submitWorkflowCreation(input: WorkflowCreationIntent): Pro
 }
 
 export function listWorkflowPlans(limit = 100): Promise<readonly WorkflowPlanRecord[]> {
-  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100))
-  return request<unknown>(`/workflows/plans?limit=${boundedLimit}`).then((value) => parseList(value, isWorkflowPlanRecord, 'workflow plan list'))
+  return listWorkflowPlansPage({ limit }).then((page) => page.items)
+}
+
+export function listWorkflowPlansPage(input: ListQueryInput = {}): Promise<ListPage<WorkflowPlanRecord>> {
+  return requestList(`/workflows/plans${listQuery(input)}`, isWorkflowPlanRecord, 'workflow plan list')
 }
 
 export function listWorkflowPlannerVersions(limit = 100): Promise<readonly WorkflowPlannerVersionProjection[]> {
@@ -697,18 +758,18 @@ export async function createIntegration(input: IntegrationCreateRequest): Promis
 
 export function listKnowledgeSources(options: { scopeUnitId?: string } = {}): Promise<readonly KnowledgeSource[]> {
   const query = options.scopeUnitId ? `?scopeUnitId=${encodeURIComponent(options.scopeUnitId)}` : ''
-  return request<unknown>(`/sources${query}`).then((value) => parseList(value, isKnowledgeSource, 'Knowledge Source list'))
+  return request<unknown>(`/sources${query}`).then((value) => parseList(value, isKnowledgeSource, 'Source list'))
 }
 
 export async function createKnowledgeSource(input: KnowledgeSourceCreateRequest): Promise<KnowledgeSource> {
   const value = await request<unknown>('/sources', { method: 'POST', body: JSON.stringify(input) })
-  if (!isKnowledgeSource(value)) throw createApiError(200, 'The service returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSource(value)) throw createApiError(200, 'The service returned an invalid Source response.', 'INVALID_RESPONSE')
   return value
 }
 
 export async function getKnowledgeSource(sourceId: string): Promise<KnowledgeSourceDetail> {
   const value = await request<unknown>(`/sources/${encodeURIComponent(sourceId)}`)
-  if (!isKnowledgeSourceDetail(value)) throw createApiError(200, 'The service returned an invalid Knowledge Source response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceDetail(value)) throw createApiError(200, 'The service returned an invalid Source response.', 'INVALID_RESPONSE')
   return value
 }
 
@@ -728,7 +789,7 @@ export async function uploadKnowledgeSourcePdf(file: File, name?: string, scopes
   if (scopes?.readScope) form.append('readScope', JSON.stringify(scopes.readScope))
   if (scopes?.visibilityScope) form.append('visibilityScope', JSON.stringify(scopes.visibilityScope))
   const value = await request<unknown>('/sources/uploads', { method: 'POST', body: form })
-  if (!isKnowledgeSourceUpload(value)) throw createApiError(200, 'The service returned an invalid Knowledge Source upload response.', 'INVALID_RESPONSE')
+  if (!isKnowledgeSourceUpload(value)) throw createApiError(200, 'The service returned an invalid Source upload response.', 'INVALID_RESPONSE')
   return value
 }
 

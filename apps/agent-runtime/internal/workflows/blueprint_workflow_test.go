@@ -12,7 +12,7 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
 )
 
-const UserBlueprintWorkflowType = coordinator.UserBlueprintWorkflowType
+const DynamicWorkflowType = coordinator.DynamicWorkflowType
 
 func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
@@ -21,7 +21,7 @@ func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) 
 	registerContractActivities(env)
 	env.RegisterActivityWithOptions(testBlueprintActivity, activity.RegisterOptions{Name: "ExecuteBlueprintStep"})
 
-	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+	env.ExecuteWorkflow(DynamicWorkflowType, BlueprintWorkflowInput{
 		ContractVersion: "workflow-blueprint.v1",
 		WorkflowID:      "workflow:org-1:release-1",
 		OrganizationID:  "org-1",
@@ -36,7 +36,7 @@ func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) 
 			BlueprintID:     "project-context:checkout",
 			Version:         "1.0.0",
 			Name:            "Project context",
-			WorkflowType:    UserBlueprintWorkflowType,
+			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Collect project context",
 			Steps: []coordinator.WorkflowStep{
 				{ID: "jira", Kind: "tool", Tool: "jira.project_tasks"},
@@ -73,7 +73,7 @@ func TestDynamicBlueprintWorkflowDeduplicatesApprovalSignals(t *testing.T) {
 		env.SignalWorkflow("blueprint-approval", BlueprintApprovalSignal{SignalID: "approval-1", StepID: "approval", Approved: false, Reason: "duplicate"})
 	}, time.Second)
 
-	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+	env.ExecuteWorkflow(DynamicWorkflowType, BlueprintWorkflowInput{
 		ContractVersion: "workflow-blueprint.v1",
 		WorkflowID:      "workflow:org-1:approval-1",
 		OrganizationID:  "org-1",
@@ -87,7 +87,7 @@ func TestDynamicBlueprintWorkflowDeduplicatesApprovalSignals(t *testing.T) {
 			BlueprintID:     "approval-check",
 			Version:         "1.0.0",
 			Name:            "Approval check",
-			WorkflowType:    UserBlueprintWorkflowType,
+			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Require approval",
 			Steps:           []coordinator.WorkflowStep{{ID: "approval", Kind: "approval"}},
 		},
@@ -117,7 +117,7 @@ func TestDynamicBlueprintWorkflowPausesAndResumesAtAControlBoundary(t *testing.T
 		env.SignalWorkflow("workflow-control", BlueprintControlSignal{SignalID: "resume-1", Action: "workflow-resume"})
 	}, 1500*time.Millisecond)
 
-	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+	env.ExecuteWorkflow(DynamicWorkflowType, BlueprintWorkflowInput{
 		ContractVersion: "workflow-blueprint.v1",
 		WorkflowID:      "workflow:org-1:pause-1",
 		OrganizationID:  "org-1",
@@ -131,7 +131,7 @@ func TestDynamicBlueprintWorkflowPausesAndResumesAtAControlBoundary(t *testing.T
 			BlueprintID:     "pause-check",
 			Version:         "1.0.0",
 			Name:            "Pause check",
-			WorkflowType:    UserBlueprintWorkflowType,
+			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Pause between durable steps",
 			Steps: []coordinator.WorkflowStep{
 				{ID: "delay", Kind: "wait", Input: map[string]any{"duration": "1s"}},
@@ -157,7 +157,7 @@ func TestDynamicBlueprintWorkflowRejectsInvalidContract(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterDynamicWorkflow(DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
 	registerContractActivities(env)
-	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+	env.ExecuteWorkflow(DynamicWorkflowType, BlueprintWorkflowInput{
 		ContractVersion: "workflow-blueprint.invalid",
 		WorkflowID:      "workflow:org-1:invalid",
 		OrganizationID:  "org-1",
@@ -177,7 +177,7 @@ func TestDynamicBlueprintWorkflowRejectsEmptyScope(t *testing.T) {
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterDynamicWorkflow(DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
 	registerContractActivities(env)
-	env.ExecuteWorkflow(UserBlueprintWorkflowType, BlueprintWorkflowInput{
+	env.ExecuteWorkflow(DynamicWorkflowType, BlueprintWorkflowInput{
 		ContractVersion: "workflow-blueprint.v1",
 		WorkflowID:      "workflow:org-1:empty-scope",
 		OrganizationID:  "org-1",
@@ -190,7 +190,7 @@ func TestDynamicBlueprintWorkflowRejectsEmptyScope(t *testing.T) {
 			BlueprintID:     "scope-check",
 			Version:         "1.0.0",
 			Name:            "Scope check",
-			WorkflowType:    UserBlueprintWorkflowType,
+			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Require a scope",
 			Steps:           []coordinator.WorkflowStep{{ID: "transform", Kind: "transform"}},
 		},
@@ -216,7 +216,7 @@ func TestDynamicBlueprintWorkflowRejectsCrossOrganizationWorkflowID(t *testing.T
 			BlueprintID:     "cross-organization",
 			Version:         "1.0.0",
 			Name:            "Cross organization",
-			WorkflowType:    UserBlueprintWorkflowType,
+			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Reject mismatched tenant identity",
 			Steps:           []coordinator.WorkflowStep{{ID: "transform", Kind: "transform"}},
 		},

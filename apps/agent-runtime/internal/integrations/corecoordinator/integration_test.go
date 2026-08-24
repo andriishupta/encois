@@ -53,7 +53,7 @@ func TestHTTPClientSubmitsPlanThroughAuthenticatedInternalRoute(t *testing.T) {
 				BlueprintID:      "release-test",
 				Version:          "1.0.0",
 				Name:             "Release test",
-				WorkflowType:     coordinator.UserBlueprintWorkflowType,
+				WorkflowType:     coordinator.DynamicWorkflowType,
 				Purpose:          "Test the Coordinator boundary.",
 				Enabled:          true,
 				Steps:            []coordinator.WorkflowStep{{ID: "transform", Kind: "transform"}},
@@ -78,7 +78,7 @@ func TestHTTPClientStartsApprovedBlueprintWithExecutionContext(t *testing.T) {
 		if request.Header.Get("X-Request-ID") != "request-test" || request.Header.Get("X-Trace-ID") != "trace-test" {
 			t.Fatalf("missing correlation headers")
 		}
-		return jsonResponse(http.StatusAccepted, `{"data":{"workflowId":"workflow:org-test:encois.user-blueprint.v1:release-test","runId":"run-test","status":"queued"}}`), nil
+		return jsonResponse(http.StatusAccepted, `{"data":{"workflowId":"workflow:org-test:encois.dynamic.v1:release-test","runId":"run-test","status":"queued"}}`), nil
 	})
 
 	result, err := client.StartApprovedWorkflow(context.Background(), StartWorkflowRequest{

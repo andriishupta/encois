@@ -92,7 +92,7 @@ func (c *HTTPClient) StartApprovedWorkflow(ctx context.Context, request StartWor
 		return WorkflowReference{}, fmt.Errorf("approved workflow request is incomplete")
 	}
 	body := map[string]any{
-		"workflowType":     coordinator.UserBlueprintWorkflowType,
+		"workflowType":     coordinator.DynamicWorkflowType,
 		"key":              request.Key,
 		"blueprintId":      request.BlueprintID,
 		"blueprintVersion": request.BlueprintVersion,

@@ -42,9 +42,9 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
     description: 'The read-only agent that gathers context and proposes what this workspace should investigate next.',
   },
   knowledgeSource: {
-    label: 'Knowledge source',
-    pluralLabel: 'Knowledge sources',
-    description: 'A scoped origin of organization context, such as an integration, document, or manual update.',
+    label: 'Source',
+    pluralLabel: 'Sources',
+    description: 'A scoped organization-unit resource, such as an integration resource, document, or manual update.',
   },
   workflow: {
     label: 'Workflow',
@@ -84,7 +84,7 @@ const productTerms: Record<ProductTermKey, { label: string; pluralLabel: string;
   revision: {
     label: 'Revision',
     pluralLabel: 'Revisions',
-    description: 'An immutable snapshot of a knowledge source at a point in time.',
+    description: 'An immutable snapshot of a Source at a point in time.',
   },
   signal: {
     label: 'Signal',

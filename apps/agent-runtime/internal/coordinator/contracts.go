@@ -7,7 +7,7 @@ const (
 	BootstrapProjectWorkflowName            = string(contracts.WorkflowTypeBootstrapProject)
 	CoordinatorContractVersion              = string(contracts.ContractCoordinator)
 	WorkflowChangePlanVersion               = string(contracts.ContractWorkflowChangePlan)
-	UserBlueprintWorkflowType               = string(contracts.WorkflowTypeUserBlueprint)
+	DynamicWorkflowType                     = string(contracts.WorkflowTypeDynamic)
 	SignalIntegrationConnected              = string(contracts.SignalIntegrationConnected)
 	SignalSourceReady                       = string(contracts.SignalSourceReady)
 	SignalReconcile                         = string(contracts.SignalReconcile)

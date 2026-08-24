@@ -18,7 +18,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			schema: SchemaWorkflowBlueprint,
 			value: map[string]any{
 				"contractVersion": "workflow-blueprint.v1", "blueprintId": "bp-1", "version": "1.0.0",
-				"name": "Example", "workflowType": "encois.user-blueprint.v1", "purpose": "Test", "enabled": true,
+				"name": "Example", "workflowType": "encois.dynamic.v1", "purpose": "Test", "enabled": true,
 				"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 			},
 		},
@@ -133,7 +133,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 				"changes": []any{map[string]any{
 					"kind": "create", "blueprint": map[string]any{
 						"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "1.0.0",
-						"name": "Release readiness", "workflowType": "encois.user-blueprint.v1", "purpose": "Check release readiness", "enabled": true,
+						"name": "Release readiness", "workflowType": "encois.dynamic.v1", "purpose": "Check release readiness", "enabled": true,
 						"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 					}, "start": map[string]any{"key": "release-aug-30", "businessInput": map[string]any{"releaseKey": "aug-30"}}, "reason": "Create the approved release readiness workflow.", "requiresApproval": true,
 				}},
@@ -150,7 +150,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 						"kind": "update", "targetBlueprintId": "release-readiness", "targetBlueprintVersion": "1.0.0",
 						"blueprint": map[string]any{
 							"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "2.0.0",
-							"name": "Release readiness", "workflowType": "encois.user-blueprint.v1", "purpose": "Check release readiness", "enabled": true,
+							"name": "Release readiness", "workflowType": "encois.dynamic.v1", "purpose": "Check release readiness", "enabled": true,
 							"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}},
 						}, "reason": "Publish a new revision.", "requiresApproval": true,
 					},
@@ -159,7 +159,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 						"reason": "Retire an obsolete revision.", "requiresApproval": true,
 					},
 					map[string]any{
-						"kind": "cancel", "targetWorkflowId": "workflow:org-1:encois.user-blueprint.v1:release-1",
+						"kind": "cancel", "targetWorkflowId": "workflow:org-1:encois.dynamic.v1:release-1",
 						"reason": "Cancel the superseded execution.", "requiresApproval": true,
 					},
 				},
@@ -179,7 +179,7 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 func TestCanonicalSchemaRejectsInvalidToolStepAndScope(t *testing.T) {
 	invalidBlueprint := map[string]any{
 		"contractVersion": "workflow-blueprint.v1", "blueprintId": "bp-1", "version": "1.0.0",
-		"name": "Example", "workflowType": "encois.user-blueprint.v1", "purpose": "Test", "enabled": true,
+		"name": "Example", "workflowType": "encois.dynamic.v1", "purpose": "Test", "enabled": true,
 		"steps": []any{map[string]any{"id": "jira", "kind": "tool"}},
 	}
 	if err := Validate(SchemaWorkflowBlueprint, invalidBlueprint); err == nil {
@@ -199,7 +199,7 @@ func TestCanonicalSchemaRejectsInvalidToolStepAndScope(t *testing.T) {
 		"contractVersion": "workflow-change-plan.v1", "planId": "plan-invalid", "coordinatorId": "coord-1",
 		"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
 		"changes": []any{map[string]any{
-			"kind": "deprecate", "targetWorkflowId": "workflow:org-1:encois.user-blueprint.v1:release-1",
+			"kind": "deprecate", "targetWorkflowId": "workflow:org-1:encois.dynamic.v1:release-1",
 			"reason": "Wrong target kind.", "requiresApproval": true,
 		}},
 	}

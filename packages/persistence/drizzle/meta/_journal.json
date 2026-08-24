@@ -22,6 +22,34 @@
       "when": 1787400120000,
       "tag": "0002_backfill-organization-onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787569310455,
+      "tag": "0003_workflow-template-status",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787569370455,
+      "tag": "0004_workflow-template-catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787569430455,
+      "tag": "0005_organization-integrations-and-scoped-sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787569490455,
+      "tag": "0006_dynamic-workflow-type",
+      "breakpoints": true
     }
   ]
 }

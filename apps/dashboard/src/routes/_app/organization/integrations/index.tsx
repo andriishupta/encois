@@ -1,6 +1,6 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Github, Plus, PlugZap, Search } from 'lucide-react'
 import { IntegrationStatus, type IntegrationProjection } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
@@ -25,6 +25,9 @@ const providerCatalog = [
 ] as const
 
 export const Route = createFileRoute('/_app/organization/integrations/')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: typeof search.q === 'string' ? search.q : undefined,
+  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsRead)) throw redirect({ to: '/forbidden' })
   },
@@ -32,18 +35,23 @@ export const Route = createFileRoute('/_app/organization/integrations/')({
 })
 
 function IntegrationsPage() {
-  const { organizationName, units, currentUnitId } = useOrganization()
+  const navigate = useNavigate()
+  const { q } = Route.useSearch()
+  const { organizationName, units, currentUnitId, members } = useOrganization()
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId) ? currentUnitId : undefined
   const currentUnit = units.find((unit) => unit.id === selectedScopeUnitId)
   const scopeLabel = currentUnit?.type === 'organization' ? organizationName ?? currentUnit.name : currentUnit?.name ?? 'current scope'
   const integrations = useQuery({ queryKey: queryKeys.integrations(selectedScopeUnitId), queryFn: () => listIntegrations({ scopeUnitId: selectedScopeUnitId }) })
-  const canManage = useCan(Permission.IntegrationsManage)
+  const actor = members.find((member) => member.id === getAuthSession()?.userId)
+  const canManage = useCan(Permission.IntegrationsManage) && (actor?.roleKey === 'organization_admin' || actor?.roleKey === 'admin')
+  const query = q?.trim().toLowerCase() ?? ''
+  const visibleProviders = providerCatalog.filter((provider) => !query || [provider.key, provider.name, provider.description, ...provider.capabilities].some((value) => value.toLowerCase().includes(query)))
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title={<ProductTerm term="integration" plural />}
-        description={<>Manage the systems this workspace can read from in {scopeLabel} and normalize into <ProductTerm term="evidence" />.</>}
+        description={<>Organization-level provider integrations are available to authorized unit-scoped Sources. Current scope: {scopeLabel}.</>}
         actions={canManage ? <Button asChild><Link to="/organization/integrations/new"><Plus data-icon="inline-start" />Add integration</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>}
       />
       {integrations.isLoading ? <p className="text-sm text-muted-foreground">Loading integrations…</p> : null}
@@ -57,13 +65,16 @@ function IntegrationsPage() {
       {canManage ? <Card>
         <CardHeader>
           <CardTitle>Integration catalog</CardTitle>
-          <CardDescription>Supported read-only providers. Registering one creates a pending connection; authorization is completed by the deployment’s provider adapter.</CardDescription>
+          <CardDescription>Provider credentials and permissions are configured once for the organization. Add Jira projects, repositories, or channels as Sources in their organization unit.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {providerCatalog.map((provider) => {
+        <CardContent className="flex flex-col gap-4">
+          <div className="relative max-w-xl"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={q ?? ''} onChange={(event) => { void navigate({ search: (current) => ({ ...current, q: event.target.value || undefined }) }) }} placeholder="Search integrations by provider or capability…" aria-label="Search integration catalog" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>
+          {visibleProviders.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleProviders.map((provider) => {
             const connected = integrations.data?.filter((integration) => integration.provider.toLowerCase() === provider.key) ?? []
-            return <div key={provider.key} className="rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{provider.name}</p><p className="mt-1 text-xs text-muted-foreground">{provider.description}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{connected.length ? `${connected.length} registered` : 'Available'}</span></div><p className="mt-3 text-[11px] text-muted-foreground">Read scopes: {provider.capabilities.join(' · ')}</p><Button className="mt-4" variant="outline" size="sm" asChild><Link to="/organization/integrations/new">Register {provider.name}</Link></Button></div>
+            return <div key={provider.key} className="rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{provider.name}</p><p className="mt-1 text-xs text-muted-foreground">{provider.description}</p></div><span className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">{connected.length ? `${connected.length} registered` : 'Available'}</span></div><p className="mt-3 text-[11px] text-muted-foreground">Read capabilities: {provider.capabilities.join(' · ')}</p><Button className="mt-4" variant="outline" size="sm" asChild><Link to="/organization/integrations/new" search={{ provider: provider.key }}>Register {provider.name}</Link></Button></div>
           })}
+          </div> : <EmptyPanel icon={Search} title="No integrations match" description="Change the provider or capability search." />}
         </CardContent>
       </Card> : null}
     </div>

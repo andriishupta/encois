@@ -28,6 +28,121 @@ The Dashboard must never manufacture an insight, activity event, connection, or 
 
 Summary cards link to the owning product surface. Individual rows link to the relevant workflow, source, integration, or organization request. Workflow run links should lead to the aggregate Runs page when the user asks to see the complete run history.
 
+## Real integrations, Sources, and Workflows
+
+The hackathon MVP does not need live provider authorization to demonstrate the
+product. It should keep the real control-plane model and use deterministic
+provider adapters at the edge. This makes the demo executable without OAuth,
+provider credentials, or production data while keeping the later migration to
+real integrations straightforward.
+
+The product model is deliberately split into two levels:
+
+```text
+Organization Integration
+  -> provider authorization, credential reference, capabilities, health
+
+Organization Unit Source
+  -> selected repository, project, board, channel, folder, or document scope
+  -> read scope, visibility scope, freshness, and provenance
+
+Source + Workflow Template / Blueprint
+  -> provider binding resolution
+  -> approved Workflow Run
+  -> evidence-backed result
+```
+
+An **Integration** is configured once for an organization. For example, an
+organization administrator installs a GitHub App or completes Jira OAuth and
+grants access to a set of repositories or projects. Credentials remain in a
+secret store and are never copied into a Source or sent to the browser.
+
+A **Source** is the resource selection made available to an organization unit.
+An Engineering manager may select three GitHub repositories; a Customer
+Success manager may select a Jira project or board. The Source references the
+existing Integration and stores only the provider resource identity and
+Encois scope. The same Integration can therefore support many unit-level
+Sources without creating duplicate credentials.
+
+Workflow Templates and Blueprints remain provider-neutral. They declare logical
+capabilities such as `code.read` or `issues.read`, not OAuth tokens or provider
+SDK calls. During preview and submission, the Gateway resolves each provider
+slot against an active Integration and a matching Source in the selected
+organization scope. The generic Workflow then executes typed steps through the
+Agent Gateway, which performs the final policy and provider access checks.
+
+### Provider adapters and UI
+
+The shared integration layer should expose a small adapter contract:
+
+- authorize or attach provider credentials;
+- report health and capabilities;
+- discover resources available to the organization;
+- validate a selected resource;
+- read provider data for a Source;
+- optionally receive webhooks or scheduled sync requests.
+
+The Dashboard should provide a common flow for authorization, resource
+selection, scope, freshness, and errors. The resource picker may be provider-
+specific: GitHub needs repository and installation selection, while Jira needs
+project/board selection. These pickers should remain small provider modules,
+not separate product applications, until a provider requires substantially
+different interaction or permissions.
+
+For the MVP, the GitHub and Jira adapters can return deterministic resource
+catalogs and evidence fixtures. Mock mode must use the same request/response
+contract and failure semantics as the real adapter, remain limited to the
+provider boundary, and be explicitly enabled by runtime configuration. It must
+not fabricate organization, permission, Source, Workflow, or Run state.
+
+### GCP, AWS, and customer-owned deployment paths
+
+The product contracts should not depend on a cloud SDK. A reference GCP path
+and a future AWS path can implement the same ports:
+
+| Product boundary | GCP implementation | Possible AWS implementation | Customer-owned option |
+| --- | --- | --- | --- |
+| Provider secrets | Secret Manager | AWS Secrets Manager | Customer secret service |
+| Raw artifacts | Cloud Storage | S3 | Customer object storage |
+| Organization Memory Graph | Spanner Graph | Neptune or another graph adapter | Customer graph API |
+| Workflow Memory | Vertex AI Memory Bank | AWS/provider memory or vector adapter | Customer memory API |
+| Control-plane database | Cloud SQL / PostgreSQL | RDS or Aurora PostgreSQL | Customer PostgreSQL/API |
+| Runtime compute | Cloud Run / GKE | ECS, EKS, or Lambda where suitable | Customer Kubernetes/compute |
+| Events and scheduling | Pub/Sub / Cloud Scheduler | EventBridge, SNS/SQS, or Scheduler | Customer event platform |
+| Durable Workflows | Temporal Cloud | Temporal Cloud or self-hosted Temporal | Customer Temporal deployment |
+
+These are adapter choices, not a requirement to support every service in the
+MVP. Portability comes from keeping `SecretProvider`, `ObjectStore`,
+`GraphStore`, `MemoryStore`, `ProviderAdapter`, and `WorkflowClient` small and
+provider-neutral. Terraform should describe environment-specific resources,
+while application contracts and authorization remain unchanged.
+
+In a customer-owned deployment, Encois can keep Workflow execution and policy
+at its boundary while calling a customer API for memory, graph, artifacts, or
+provider data. The customer adapter must authenticate service-to-service,
+bind every request to organization and visibility scope, separate read and
+write capabilities, enforce bounded retries and payloads, and return normalized
+evidence with provenance. The external database schema must never become the
+product contract or the authorization source.
+
+The resulting real-provider flow is:
+
+```text
+Admin authorizes Integration
+  -> provider credential stored as a secret reference
+  -> provider adapter discovers available resources
+  -> unit manager creates a scoped Source
+  -> Source is ingested or queried by a Workflow
+  -> Agent Gateway re-checks identity, capability, and scope
+  -> Temporal runs the approved Workflow
+  -> API exposes scoped status, evidence, freshness, and audit history
+```
+
+No cloud migration or live OAuth implementation is implied by the MVP. The
+important decision now is to preserve these boundaries so real GCP, AWS, and
+customer-owned adapters can be added without changing the Workflow, Source, or
+permission model.
+
 ## Provider-neutral memory and storage plane
 
 The current MVP keeps provider access behind three small boundaries:

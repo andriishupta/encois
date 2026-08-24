@@ -14,7 +14,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Building2, FolderKanban, Layers3, LockKeyhole, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { InteractiveMiniMap, miniMapColors } from '@/components/interactive-minimap'
+import { FitViewOnContentChange, InteractiveMiniMap, miniMapColors } from '@/components/interactive-minimap'
 import { humanizeUnitType, type OrganizationUnit, type OrganizationUnitType } from '@/lib/organization'
 
 type OrganizationNodeData = {
@@ -121,6 +121,9 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
       id: unit.id,
       type: 'organization',
       position: positions.get(unit.id) ?? { x: 0, y: 0 },
+      initialWidth: nodeWidth,
+      initialHeight: 110,
+      style: { width: nodeWidth },
       data: { unit, selected: unit.id === selectedUnitId, onSelect: onSelectUnit },
     }))
   }, [onSelectUnit, selectedUnitId, units])
@@ -147,11 +150,12 @@ export function OrganizationCanvas({ units, selectedUnitId, onSelectUnit }: { un
         nodesConnectable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
-        minZoom={0.25}
+        minZoom={0.15}
         maxZoom={1.15}
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
+        <FitViewOnContentChange contentKey={units.map((unit) => unit.id).join('|')} padding={0.24} />
         <InteractiveMiniMap<OrganizationNode>
           nodeColor={(node) => node.id === selectedUnitId
             ? miniMapColors.selected

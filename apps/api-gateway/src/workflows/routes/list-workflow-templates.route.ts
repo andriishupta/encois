@@ -2,33 +2,32 @@ import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   isWorkflowTemplateServiceError,
-  listWorkflowTemplatesForPrincipal,
-  type WorkflowTemplateQuery,
+  listWorkflowTemplatesPageForPrincipal,
 } from "../services/workflow-template.service.js";
-
-function parseLimit(value: string | undefined): number | "invalid" | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
-  const limit = Number(value);
-  return Number.isInteger(limit) ? limit : "invalid";
-}
+import { parseListQuery } from "../list-query.js";
 
 export const listWorkflowTemplatesRoute: Handler<GatewayEnv> = async (context) => {
-  const requestedLimit = parseLimit(context.req.query("limit"));
-  if (requestedLimit === "invalid" || (requestedLimit !== undefined && (requestedLimit < 1 || requestedLimit > 10))) {
-    return context.json(
-      { error: { code: "INVALID_REQUEST", message: "limit must be an integer between 1 and 10." } },
-      400,
-    );
-  }
-
-  const input: WorkflowTemplateQuery = {
+  const parsed = parseListQuery({
     query: context.req.query("q") ?? context.req.query("keywords"),
+    status: context.req.query("status"),
+    sort: context.req.query("sort"),
+    limit: context.req.query("limit"),
+    offset: context.req.query("offset"),
+  }, { maxLimit: 50, statuses: ["active", "disabled"] });
+  if ("error" in parsed) return context.json({ error: { code: "INVALID_REQUEST", message: parsed.error } }, 400);
+
+  const input = {
+    query: parsed.value.query,
     category: context.req.query("category"),
-    limit: requestedLimit,
+    status: parsed.value.status,
+    sort: parsed.value.sort,
+    limit: parsed.value.limit,
+    offset: parsed.value.offset,
   };
 
   try {
-    return context.json({ data: await listWorkflowTemplatesForPrincipal(context.get("principal"), input) });
+    const page = await listWorkflowTemplatesPageForPrincipal(context.get("principal"), input);
+    return context.json({ data: page.items, pagination: page.pagination });
   } catch (error) {
     if (isWorkflowTemplateServiceError(error)) {
       return context.json(

@@ -23,7 +23,7 @@ const plan: WorkflowChangePlan = {
         blueprintId: "release-readiness",
         version: "1.0.0",
         name: "Release readiness",
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         purpose: "Assess release readiness.",
         enabled: true,
         steps: [{ id: "jira", kind: "tool", tool: "jira.project_tasks" }],
@@ -86,7 +86,7 @@ describe("workflow plan coordinator events", () => {
       changes: [
         {
           kind: "cancel",
-          targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:release-1",
+          targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
           reason: "The execution is superseded.",
           requiresApproval: true,
         },

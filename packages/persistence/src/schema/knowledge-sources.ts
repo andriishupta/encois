@@ -64,7 +64,7 @@ export type SourceScope = {
   ids: readonly string[];
 };
 
-/** Logical organization-scoped origin of knowledge. Raw bytes live elsewhere. */
+/** Logical organization-unit-scoped origin of knowledge. Raw bytes live elsewhere. */
 export const knowledgeSources = pgTable(
   "knowledge_sources",
   {

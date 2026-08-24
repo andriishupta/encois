@@ -110,7 +110,7 @@ function ActivityPage() {
         <QueueSummary icon={AlertTriangle} label="Run attention" value={queueMetric(workflows, failedRuns.length)} detail="Failed or partial investigations" to="/workflows/runs" />
         <QueueSummary icon={Waypoints} label="Source attention" value={queueMetric(sources, unhealthySources.length)} detail="Degraded, failed, or reauth required" to="/organization/sources" />
         <QueueSummary icon={PlugZap} label="Integration setup" value={queueMetric(integrations, pendingIntegrations.length)} detail="Pending authorization or error" to="/organization/integrations" />
-        <QueueSummary icon={ClipboardCheck} label="Workflow plans" value={canManageWorkflows ? queueMetric(plans, pendingPlans.length) : '—'} detail={canManageWorkflows ? 'Proposals awaiting approval or apply' : 'Access restricted'} to="/workflows" />
+        <QueueSummary icon={ClipboardCheck} label="Workflow plans" value={canManageWorkflows ? queueMetric(plans, pendingPlans.length) : '—'} detail={canManageWorkflows ? 'Proposals awaiting approval or apply' : 'Access restricted'} to="/workflows/plans" />
         <QueueSummary icon={BrainCircuit} label="Memory changes" value={canManageMemory ? queueMetric(memoryChanges, pendingMemoryChanges.length) : '—'} detail={canManageMemory ? 'Additions, corrections, or deletions awaiting review' : 'Access restricted'} to="/workflows/memory" />
         <QueueSummary icon={UserRound} label="Access requests" value={canViewOrganization ? queueMetric(accessRequests, pendingAccessRequests.length) : '—'} detail={canViewOrganization ? 'Membership scopes awaiting decision' : 'Access restricted'} to="/organization/access" />
       </div>
@@ -125,13 +125,13 @@ function ActivityPage() {
         <ReviewCard title="Run attention" description="Investigations that ended partially or failed." icon={GitBranch} to="/workflows/runs" loading={workflows.isLoading} error={workflows.error} empty="No failed or partial workflow runs." hasItems={failedRuns.length > 0}>
           {failedRuns.map((workflow) => <WorkflowReviewRow key={workflow.workflowId} workflow={workflow} />)}
         </ReviewCard>
-        <ReviewCard title="Source attention" description="Knowledge Sources that may no longer provide reliable context." icon={Waypoints} to="/organization/sources" loading={sources.isLoading} error={sources.error} empty="All visible Sources are healthy." hasItems={unhealthySources.length > 0}>
+        <ReviewCard title="Source attention" description="Sources that may no longer provide reliable context." icon={Waypoints} to="/organization/sources" loading={sources.isLoading} error={sources.error} empty="All visible Sources are healthy." hasItems={unhealthySources.length > 0}>
           {unhealthySources.map((source) => <SourceReviewRow key={source.id} source={source} />)}
         </ReviewCard>
         <ReviewCard title="Integration setup" description="Connections that still need authorization or recovery." icon={PlugZap} to="/organization/integrations" loading={integrations.isLoading} error={integrations.error} empty="All visible Integrations are active or disabled intentionally." hasItems={pendingIntegrations.length > 0}>
           {pendingIntegrations.map((integration) => <IntegrationReviewRow key={integration.id} integration={integration} />)}
         </ReviewCard>
-        <ReviewCard title="Workflow plans" description="Persisted proposals are filtered by organization and execution scope before they reach this inbox." icon={ClipboardCheck} to="/workflows" loading={plans.isLoading || blueprints.isLoading} error={plans.error ?? blueprints.error} empty="No workflow plan is waiting for approval or apply." hasItems={pendingPlans.length > 0}>
+        <ReviewCard title="Workflow plans" description="Persisted proposals are filtered by organization and execution scope before they reach this inbox." icon={ClipboardCheck} to="/workflows/plans" loading={plans.isLoading || blueprints.isLoading} error={plans.error ?? blueprints.error} empty="No workflow plan is waiting for approval or apply." hasItems={pendingPlans.length > 0}>
           {planActionError ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Could not update the workflow plan: {planActionError}</p> : null}
           {pendingPlans.map((plan) => <WorkflowPlanReviewRow key={plan.planId} plan={plan} blueprints={blueprints.data ?? []} busy={approvePlan.isPending || applyPlan.isPending} onApprove={(planId) => { setPlanActionError(null); approvePlan.mutate(planId) }} onApply={(planId) => { setPlanActionError(null); applyPlan.mutate(planId) }} />)}
         </ReviewCard>
@@ -151,7 +151,7 @@ function ActivityPage() {
   )
 }
 
-function QueueSummary({ icon: Icon, label, value, detail, to }: { icon: typeof Clock3; label: string; value: number | string; detail: string; to: '/workflows' | '/workflows/runs' | '/workflows/memory' | '/organization/sources' | '/organization/integrations' | '/organization/access' }) {
+function QueueSummary({ icon: Icon, label, value, detail, to }: { icon: typeof Clock3; label: string; value: number | string; detail: string; to: '/workflows' | '/workflows/runs' | '/workflows/plans' | '/workflows/memory' | '/organization/sources' | '/organization/integrations' | '/organization/access' }) {
   return <Card className="min-w-0"><CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0"><CardTitle className="min-w-0 text-sm font-medium text-muted-foreground">{label}</CardTitle><Link to={to} aria-label={`Open ${label}`} className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link></CardHeader><CardContent><p className="text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>
 }
 
@@ -161,7 +161,7 @@ function queueMetric(query: { isLoading: boolean; isError: boolean }, value: num
   return value
 }
 
-function ReviewCard({ title, description, icon: Icon, loading, error, empty, hasItems, children, to }: { title: string; description: string; icon: typeof Clock3; loading: boolean; error: Error | null; empty: string; hasItems: boolean; children: React.ReactNode; to?: '/workflows/runs' | '/organization/sources' | '/organization/integrations' | '/workflows' | '/workflows/memory' | '/organization/access' }) {
+function ReviewCard({ title, description, icon: Icon, loading, error, empty, hasItems, children, to }: { title: string; description: string; icon: typeof Clock3; loading: boolean; error: Error | null; empty: string; hasItems: boolean; children: React.ReactNode; to?: '/workflows/runs' | '/organization/sources' | '/organization/integrations' | '/workflows' | '/workflows/plans' | '/workflows/memory' | '/organization/access' }) {
   return <Card className="min-w-0"><CardHeader><div className="flex items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="flex min-w-0 items-center gap-2"><Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />{title}</CardTitle><CardDescription>{description}</CardDescription></div>{to ? <Link to={to} aria-label={`Open all ${title}`} className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ArrowUpRight className="size-4" aria-hidden="true" /></Link> : null}</div></CardHeader><CardContent className="flex min-w-0 flex-col gap-2">{loading ? <p className="text-sm text-muted-foreground">Loading activity items…</p> : error ? <p className="text-sm text-destructive">Could not load this activity: {error.message}</p> : hasItems ? children : <EmptyPanel icon={CircleDashed} title="Nothing here" description={empty} />}</CardContent></Card>
 }
 

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { FilePlus2, GitBranch, Search } from 'lucide-react'
+import { GitBranch, Search } from 'lucide-react'
 import { useState } from 'react'
 import type { WorkflowBlueprintProjection, WorkflowBlueprintStatus } from '@encois/contracts'
 import { Permission } from '@encois/contracts'
@@ -11,7 +11,6 @@ import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { listWorkflowBlueprints } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
-import { useCan } from '@/lib/permissions'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate } from '@/lib/formatters'
 
@@ -26,7 +25,6 @@ function WorkflowBlueprintsPage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   if (pathname !== '/workflows/blueprints') return <Outlet />
 
-  const canManage = useCan(Permission.WorkflowsManage)
   const blueprints = useQuery({ queryKey: queryKeys.workflowBlueprints(), queryFn: listWorkflowBlueprints, staleTime: 30_000 })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<WorkflowBlueprintStatus | 'all'>('all')
@@ -36,7 +34,7 @@ function WorkflowBlueprintsPage() {
   })
 
   return <div className="flex flex-col gap-8">
-    <PageHeader title="Workflow Blueprints" description="Immutable, organization-scoped execution definitions. A Run is created from a Blueprint snapshot; changing one never rewrites an existing Run." actions={canManage ? <Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />Create workflow</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>} />
+    <PageHeader title="Workflow Blueprints" description="Immutable, organization-scoped execution definitions. A Run is created from a Blueprint snapshot; changing one never rewrites an existing Run." />
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Blueprints by name or purpose…" aria-label="Search workflow Blueprints" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>

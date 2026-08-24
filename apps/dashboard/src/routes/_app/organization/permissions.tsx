@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { Check, ChevronRight, CircleAlert, LockKeyhole, Plus, ShieldCheck, UserRound, X } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { OrganizationUnitSelect } from '@/components/organization-unit-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  flattenUnitOptions,
   formatUnitPath,
   getEffectiveUnitIds,
   getManagedUnitIds,
@@ -58,7 +58,6 @@ function OrganizationPermissionsPage() {
   const effectiveUnits = units.filter((unit) => effectiveUnitIds.includes(unit.id))
   const managedUnitIds = getManagedUnitIds(units, permissions, selectedMember.id)
   const managedUnits = units.filter((unit) => managedUnitIds.includes(unit.id))
-  const unitOptions = flattenUnitOptions(units).filter(({ unit }) => unit.canManage)
 
   async function addPermission() {
     await createPermission({ memberId: selectedMember.id, unitId: newUnitId, access: newAccess })
@@ -164,7 +163,7 @@ function OrganizationPermissionsPage() {
               {memberPermissions.length ? memberPermissions.map((permission) => <PermissionRow key={permission.id} permission={permission} units={units} canManage={getOrganizationUnit(units, permission.unitId)?.canManage === true} canAssignAdministrator={canAssignAdministrator} busy={pendingAction !== null} removalPending={pendingRemovalId === permission.id} onAccessChange={(access) => { void runMutation(`update:${permission.id}`, async () => { await updatePermission(permission.id, access) }) }} onRemove={() => handleRemovePermission(permission.id)} onCancelRemove={() => setPendingRemovalId(null)} />) : <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct permissions assigned.</p>}
             </div>
 
-            {addPermissionOpen ? <AddPermissionForm unitOptions={unitOptions} accessLevels={canAssignAdministrator ? accessLevels : accessLevels.filter((level) => level !== 'admin')} unitId={newUnitId} access={newAccess} onUnitChange={setNewUnitId} onAccessChange={setNewAccess} onCancel={() => setAddPermissionOpen(false)} onSubmit={handleAddPermission} busy={pendingAction !== null} /> : null}
+            {addPermissionOpen ? <AddPermissionForm units={units} accessLevels={canAssignAdministrator ? accessLevels : accessLevels.filter((level) => level !== 'admin')} unitId={newUnitId} access={newAccess} onUnitChange={setNewUnitId} onAccessChange={setNewAccess} onCancel={() => setAddPermissionOpen(false)} onSubmit={handleAddPermission} busy={pendingAction !== null} /> : null}
 
             <div className="flex flex-col gap-3 border-t pt-5">
               <div>
@@ -209,11 +208,11 @@ function PermissionRow({ permission, units, canManage, canAssignAdministrator, b
   )
 }
 
-function AddPermissionForm({ unitOptions, accessLevels: availableAccessLevels, unitId, access, onUnitChange, onAccessChange, onCancel, onSubmit, busy }: { unitOptions: { unit: OrganizationUnit; depth: number }[]; accessLevels: AccessLevel[]; unitId: string; access: AccessLevel; onUnitChange: (value: string) => void; onAccessChange: (value: AccessLevel) => void; onCancel: () => void; onSubmit: () => void; busy: boolean }) {
+function AddPermissionForm({ units, accessLevels: availableAccessLevels, unitId, access, onUnitChange, onAccessChange, onCancel, onSubmit, busy }: { units: OrganizationUnit[]; accessLevels: AccessLevel[]; unitId: string; access: AccessLevel; onUnitChange: (value: string) => void; onAccessChange: (value: AccessLevel) => void; onCancel: () => void; onSubmit: () => void; busy: boolean }) {
   return (
     <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-unit">Organization unit<select id="permission-unit" value={unitId} onChange={(event) => onUnitChange(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{unitOptions.map(({ unit, depth }) => <option key={unit.id} value={unit.id}>{'— '.repeat(depth)}{unit.name}</option>)}</select></label>
+        <OrganizationUnitSelect id="permission-unit" label="Organization unit" value={unitId} units={units} isDisabled={(unit) => !unit.canManage} onChange={onUnitChange} required />
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-access">Access level<select id="permission-access" value={availableAccessLevels.includes(access) ? access : availableAccessLevels[0]} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{availableAccessLevels.map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select></label>
       </div>
       <p className="text-xs text-muted-foreground">This direct scope includes descendants below the selected unit.</p>

@@ -41,7 +41,7 @@ func WorkflowChangePlanJSON(prompt string) (string, error) {
 		"blueprintId":     "mock-context-summary",
 		"version":         "1.0.0",
 		"name":            "Mock context summary",
-		"workflowType":    "encois.user-blueprint.v1",
+		"workflowType":    "encois.dynamic.v1",
 		"purpose":         "Produce a deterministic local evidence summary.",
 		"enabled":         true,
 		"steps": []map[string]any{{

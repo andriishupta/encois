@@ -164,7 +164,7 @@ not make the service unhealthy.
 
 Before `ready`, the onboarding exception surface is limited to reading the
 organization projection, updating onboarding settings, starting or retrying
-the Coordinator, listing published Templates and approved Blueprints, and
+the Coordinator, listing active Templates and approved Blueprints, and
 registering/uploading/ingesting onboarding Sources. Internal Coordinator
 callbacks are service-authenticated and are not browser routes. All other
 tenant routes remain behind the readiness gate while the existing permissions
@@ -271,7 +271,7 @@ POST /v1/workflows/plans/validate
   -> update/deprecate changes without start only change the registry; cancel-only plans cancel targeted Temporal executions
 
 Temporal start:
-  workflowType = encois.user-blueprint.v1
+  workflowType = encois.dynamic.v1
   input        = validated blueprint + execution context
 ```
 
@@ -291,12 +291,14 @@ policy authorization. External-write nodes such as `email.send` produce an
 approval requirement; the current read-only fixture policy denies it before
 execution, and a future write policy must preserve the approval boundary.
 
-## 2.4 Knowledge Source ingestion
+## 2.4 Integration and Source ingestion
 
-Workflow Templates and Knowledge Sources are separate concepts. A Template is
-a provider-neutral suggestion for a user Blueprint; a Source is an actual,
-scoped origin of evidence. Creating a Template never creates an Integration,
-Source, or ingestion run.
+Workflow Templates and Sources are separate concepts. A Template is a
+provider-neutral suggestion for a user-created Blueprint; a Source is an actual,
+scoped origin of evidence. An Integration is the organization-level provider
+connection, while an integration Source selects the Jira project, GitHub
+repository, Slack channel, or similar resource for an organization unit.
+Creating a Template never creates an Integration, Source, or ingestion run.
 
 ```mermaid
 sequenceDiagram
@@ -310,7 +312,7 @@ sequenceDiagram
     participant Graph as Spanner Graph
     participant Memory as Memory Bank
 
-    Admin->>API: create Knowledge Source + scope
+    Admin->>API: create Source + unit scope
     API->>DB: persist source metadata
     Admin->>API: create immutable Source Revision
     API->>DB: persist artifactRef and provenance metadata
@@ -374,7 +376,7 @@ User / Workflow Creator
   -> coordinator-event.v1 via transactional outbox
   -> CoordinatorWorkflow
   -> private Gateway start Activity, only when change.start exists
-  -> Temporal: encois.user-blueprint.v1
+  -> Temporal: encois.dynamic.v1
 ```
 
 Temporal Cloud stores the Workflow history and schedules tasks. It does not execute Go code. The Go Agent Runtime opens the connection and polls the task queue. The Gateway API starts and controls the Workflow but does not execute long Gemini or provider calls inside the HTTP request.
@@ -405,7 +407,7 @@ sequenceDiagram
 
     Trigger->>API: Blueprint trigger/event
     API->>API: authenticate trigger and resolve organization scope
-    API->>Temporal: start encois.user-blueprint.v1
+    API->>Temporal: start encois.dynamic.v1
     API-->>UI: workflowId + queued status
     Runtime-->>Temporal: poll workflow task queue
     Temporal-->>Runtime: deliver workflow task
@@ -559,7 +561,7 @@ If fresh evidence already exists, the workflow can answer quickly. If evidence i
 A specialist is a logical agent definition. An Integration Pack provides the connector and tools. The MVP does not deploy one server per specialist or repository.
 
 ```text
-encois.user-blueprint.v1
+encois.dynamic.v1
   -> tool step: jira.search_issues
   -> tool step: github.search_pull_requests
   -> tool step: monitoring.query_errors
@@ -634,13 +636,13 @@ Admin opens Integrations
 
 The UI shows connection state, granted scope, last successful read, last error, and exposed data types. It never shows raw tokens.
 
-An organization-level connection can be reused by descendant units through an
-active binding, so a unit manager does not create another Secret Manager
-credential just to add a Source for that unit. The API checks both the
-manager's effective unit scope and the binding's hierarchy coverage; selecting
-a unit in the Dashboard only narrows the server-side projection and never
-grants access. Resource-specific repository/channel configuration belongs on
-the unit-scoped Knowledge Source contract, not in browser-held credentials.
+An organization-level Integration can be reused by descendant units, so a unit
+manager does not create another Secret Manager credential just to add a Source
+for that unit. The API checks the manager's effective unit scope, the active
+Integration capability, and the Source's hierarchy coverage; selecting a unit
+in the Dashboard only narrows the server-side projection and never grants
+access. Resource-specific repository/project/channel configuration belongs on
+the unit-scoped Source contract, not in browser-held credentials.
 
 For a connector without a usable API, a browser worker may be introduced later. It follows the same pack contract and policy boundary; it is not a way around authorization.
 

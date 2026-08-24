@@ -46,6 +46,7 @@ export const integrationBindings = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     integrationId: uuid("integration_id").notNull(),
+    /** Organization root for provider-level capability grants. Source scopes are stored on knowledgeSources. */
     organizationUnitId: uuid("organization_unit_id").notNull(),
     status: integrationBindingStatus("status").notNull().default("active"),
     grantedScopes: jsonb("granted_scopes").$type<readonly string[]>().notNull().default([]),

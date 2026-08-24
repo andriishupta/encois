@@ -16,6 +16,11 @@ import (
 const executionCapabilityVersion = "execution-capability.v1"
 const executionCapabilityAudience = "agent-gateway"
 
+func workflowIDBelongsToOrganization(workflowID, organizationID string) bool {
+	return organizationID != "" && (strings.HasPrefix(workflowID, "org:"+organizationID+":") ||
+		strings.HasPrefix(workflowID, "workflow:"+organizationID+":"))
+}
+
 type executionCapabilityClaims struct {
 	Version       string   `json:"v"`
 	Audience      string   `json:"aud"`
@@ -68,7 +73,7 @@ func verifyExecutionCapability(raw, secret string, context domain.ExecutionConte
 		claims.Actor != context.ActorID || claims.PolicyVersion != context.PolicyVersion {
 		return fmt.Errorf("execution capability claims do not match execution context")
 	}
-	if !strings.HasPrefix(context.WorkflowID, "workflow:"+context.OrganizationID+":") {
+	if !workflowIDBelongsToOrganization(context.WorkflowID, context.OrganizationID) {
 		return fmt.Errorf("workflow id is outside the organization scope")
 	}
 	nowSeconds := now.Unix()

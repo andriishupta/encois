@@ -581,7 +581,7 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 			BlueprintID:     "project-custom",
 			Version:         "1.0.0",
 			Name:            "Custom project check",
-			WorkflowType:    "encois.user-blueprint.v1",
+			WorkflowType:    "encois.dynamic.v1",
 			Purpose:         "Run Jira and GitHub checks in parallel",
 			Enabled:         true,
 			Steps: []domain.WorkflowStep{
@@ -608,7 +608,7 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.WorkflowID == "" || len(result.Permissions) != 3 || result.TemporalWorkflowType != "encois.user-blueprint.v1" {
+	if result.WorkflowID == "" || len(result.Permissions) != 3 || result.TemporalWorkflowType != "encois.dynamic.v1" {
 		t.Fatalf("unexpected workflow response: %+v", result)
 	}
 	if !result.Permissions[2].ApprovalRequired {
@@ -618,7 +618,7 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 
 func TestRejectsWorkflowDependencyCycle(t *testing.T) {
 	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"workflow-definition.v1","requestId":"req-cycle","organizationId":"org-test","blueprint":{"contractVersion":"workflow-blueprint.v1","blueprintId":"cycle","version":"1.0.0","name":"Cycle","workflowType":"encois.user-blueprint.v1","purpose":"Detect cycles","enabled":true,"steps":[{"id":"a","kind":"tool","tool":"jira.project_tasks","dependsOn":["b"]},{"id":"b","kind":"tool","tool":"github.project_activity","dependsOn":["a"]}]}}`
+	body := `{"contractVersion":"workflow-definition.v1","requestId":"req-cycle","organizationId":"org-test","blueprint":{"contractVersion":"workflow-blueprint.v1","blueprintId":"cycle","version":"1.0.0","name":"Cycle","workflowType":"encois.dynamic.v1","purpose":"Detect cycles","enabled":true,"steps":[{"id":"a","kind":"tool","tool":"jira.project_tasks","dependsOn":["b"]},{"id":"b","kind":"tool","tool":"github.project_activity","dependsOn":["a"]}]}}`
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/workflows/validate", bytes.NewBufferString(body))
 	httpRequest.Header.Set("Content-Type", "application/json")

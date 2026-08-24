@@ -69,7 +69,7 @@ var workflowCapabilities = []domain.WorkflowCapability{
 func (s *Server) workflowCapabilities(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"contractVersion":      domain.WorkflowBlueprintContractVersion,
-		"temporalWorkflowType": string(contracts.WorkflowTypeUserBlueprint),
+		"temporalWorkflowType": string(contracts.WorkflowTypeDynamic),
 		"capabilities":         workflowCapabilities,
 		"execution":            "Agent Gateway validates capabilities; API Gateway starts Temporal",
 	})
@@ -194,7 +194,7 @@ func workflowResponse(request domain.WorkflowDefinitionRequest, status string, p
 		ContractVersion:       domain.WorkflowDefinitionContractVersion,
 		RequestID:             request.RequestID,
 		Status:                status,
-		TemporalWorkflowType:  string(contracts.WorkflowTypeUserBlueprint),
+		TemporalWorkflowType:  string(contracts.WorkflowTypeDynamic),
 		TemporalStartRequired: false,
 		PolicyStatus:          "deterministic-read-only-fixture",
 		Permissions:           permissions,
@@ -213,8 +213,8 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 	if blueprint.BlueprintID == "" || blueprint.Version == "" || strings.TrimSpace(blueprint.Name) == "" {
 		return nil, nil, fmt.Errorf("blueprintId, version, and name are required")
 	}
-	if blueprint.WorkflowType != string(contracts.WorkflowTypeUserBlueprint) {
-		return nil, nil, fmt.Errorf("user blueprints must use workflowType %q", contracts.WorkflowTypeUserBlueprint)
+	if blueprint.WorkflowType != string(contracts.WorkflowTypeDynamic) {
+		return nil, nil, fmt.Errorf("dynamic workflows must use workflowType %q", contracts.WorkflowTypeDynamic)
 	}
 	if len(blueprint.Steps) == 0 {
 		return nil, nil, fmt.Errorf("blueprint must contain at least one step")

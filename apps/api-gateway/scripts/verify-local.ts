@@ -135,7 +135,7 @@ async function verifyFixtures(): Promise<void> {
       .from(sourceIngestionRuns)
       .where(eq(sourceIngestionRuns.organizationId, organization.id));
     for (const row of sourceRuns) {
-      if (!row.temporalWorkflowId.startsWith(`workflow:${organization.id}:`)) {
+      if (!row.temporalWorkflowId.startsWith(`org:${organization.id}:`) && !row.temporalWorkflowId.startsWith(`workflow:${organization.id}:`)) {
         throw new Error(`Source ingestion ${row.temporalWorkflowId} is outside organization ${slug}.`);
       }
     }

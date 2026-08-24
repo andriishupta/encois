@@ -209,9 +209,10 @@ integration IDs, raw provider payloads, or arbitrary code. A selected template
 must pass the same deterministic Blueprint validation, authorization, approval,
 and audit boundary before it can become a tenant workflow.
 
-Knowledge Sources are tenant-scoped control-plane records with separate
-immutable revisions and ingestion-run projections. A Source's read and
-visibility scope must be checked before acquisition, and the same scope must
+Sources are tenant-scoped control-plane records with separate immutable
+revisions and ingestion-run projections. An Integration is an organization-
+level provider authorization and capability record; it never carries a unit's
+resource selection. A Source's read and visibility scope must be checked before acquisition, and the same scope must
 be carried into artifact prefixes, provider queries, Graph writes, and Memory
 Bank distillation. `artifactRef` is a typed reference, not a URL to fetch
 arbitrarily; only approved `artifact://` or `gs://` references may cross the

@@ -25,9 +25,21 @@ The stack starts:
 | Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
+To apply new local database migrations without rebuilding the rest of the
+stack, run:
+
+```bash
+pnpm run migration:local
+```
+
+This rebuilds only the `migrations` image, runs the one-shot migration job,
+and removes its disposable container. A plain `docker compose run migrations`
+does not necessarily rebuild the image, so it can run an older migration
+bundle.
+
 `local-auth-seed` runs after migrations. It creates one deterministic local
 dataset for `Organization Sun`. It includes hierarchical units, users with
-different roles and scopes, integrations, Knowledge Sources with revisions and
+different roles and scopes, organization Integrations, unit-scoped Sources with revisions and
 ingestion runs, webhook deliveries, and persisted workflow runs/events.
 It also ensures the Organization Sun onboarding row is explicitly `ready` for
 the pre-bootstrapped demo organization. That fixture is intentionally ready so
@@ -95,7 +107,7 @@ Use this sequence when testing how the product components are connected:
    Check `docker compose -f compose.local.yaml ps`, then open the Dashboard,
    Temporal UI, and Emulator UI.
 2. Sign in as `owner@local.test`. Confirm that the organization, units,
-   integrations, Knowledge Sources, workflows, graph, and memory pages load.
+   integrations, Sources, workflows, graph, and memory pages load.
    Run `pnpm run verify:local:api` if the auth, invite, or scope boundary is
    the subject of the check.
 3. Repeat the same navigation as `manager@local.test`, `dev@local.test`, and
@@ -115,7 +127,11 @@ Use this sequence when testing how the product components are connected:
    confirm that its tools exist in the local Agent Gateway fixture catalog.
    The current local catalog includes `jira.project_tasks` and
    `github.project_activity`; arbitrary example names are not automatically
-   available. Choose an allowed organization scope and start the workflow.
+   available. The seed creates organization-level GitHub and Jira
+   Integrations, a GitHub Source in Engineering, and a Jira Source in
+   Customer Success. Select Engineering to exercise GitHub templates or
+   Customer Success to exercise Jira templates, then choose that allowed
+   organization scope and start the workflow.
 6. Follow the run in the Dashboard, Activity, workflow detail, and Temporal
    UI. The local run should traverse API Gateway -> Temporal -> Go Agent
    Runtime -> Agent Gateway -> deterministic tools -> API projections. The

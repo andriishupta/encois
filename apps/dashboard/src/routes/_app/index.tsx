@@ -12,6 +12,7 @@ import { usePermissions } from '@/lib/permissions'
 import { useOrganization } from '@/lib/organization-context'
 import { getAccountSummary } from '@/lib/account'
 import { formatDate, humanizeKey } from '@/lib/formatters'
+import { AvailabilityBadge, AvailabilityCard } from '@/components/availability-state'
 
 export const Route = createFileRoute('/_app/')({
   component: DashboardPage,
@@ -41,7 +42,7 @@ function DashboardPage() {
 
       <AssistantBriefing workspaceLabel={workspaceLabel} />
 
-      <Card aria-disabled="true" title="Coming soon" className="cursor-help border-muted bg-card opacity-90 shadow-sm">
+      <AvailabilityCard>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-start gap-3">
@@ -51,7 +52,7 @@ function DashboardPage() {
                 <CardDescription>Ask what changed, what matters, or what happened last week.</CardDescription>
               </div>
             </div>
-            <ComingSoonBadge />
+            <AvailabilityBadge />
           </div>
         </CardHeader>
         <CardContent>
@@ -65,7 +66,7 @@ function DashboardPage() {
           </form>
           <p className="mt-3 text-xs text-muted-foreground">Text chat and voice conversations will use the same scoped workspace context.</p>
         </CardContent>
-      </Card>
+      </AvailabilityCard>
 
       <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <RecentContext activity={activity} canViewWorkflows={canViewWorkflows} />
@@ -79,12 +80,12 @@ type ActivityQuery = UseQueryResult<readonly WorkflowRecentActivityProjection[]>
 
 function AssistantBriefing({ workspaceLabel }: { workspaceLabel: string }) {
   return (
-    <Card aria-disabled="true" title="Coming soon" className="cursor-help overflow-hidden border-muted bg-card opacity-90 shadow-sm">
+    <AvailabilityCard className="overflow-hidden">
       <div className="border-b px-6 py-6 sm:px-8">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border text-muted-foreground"><Sparkles className="size-4" aria-hidden="true" /></span>
           <div>
-            <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">Your morning brief</p><ComingSoonBadge /></div>
+            <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">Your morning brief</p><AvailabilityBadge /></div>
             <p className="mt-1 text-sm text-muted-foreground">A personalized brief for {workspaceLabel} will appear here when Pel AI is connected.</p>
           </div>
         </div>
@@ -97,12 +98,8 @@ function AssistantBriefing({ workspaceLabel }: { workspaceLabel: string }) {
           <li className="flex items-start gap-3"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/60" /><span>Two source updates are available for your next morning brief.</span></li>
         </ul>
       </CardContent>
-    </Card>
+    </AvailabilityCard>
   )
-}
-
-function ComingSoonBadge() {
-  return <span className="inline-flex shrink-0 items-center rounded-full border border-muted-foreground/20 bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide leading-none text-muted-foreground">Coming soon</span>
 }
 
 function RecentContext({ activity, canViewWorkflows }: { activity: ActivityQuery; canViewWorkflows: boolean }) {
@@ -116,9 +113,9 @@ function ContextRow({ event }: { event: WorkflowRecentActivityProjection }) {
 }
 
 function SuggestedActions() {
-  return <Card aria-disabled="true" title="Coming soon" className="cursor-help border-muted bg-card opacity-90 shadow-sm"><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Suggested actions</CardTitle><CardDescription>Pel AI capabilities planned for this space.</CardDescription></div><ComingSoonBadge /></div></CardHeader><CardContent className="flex flex-col gap-2"><ComingSoonAction icon={CalendarClock} title="Compare with last week" /><ComingSoonAction icon={Mail} title="Connect your work email" /><ComingSoonAction icon={Mic} title="Talk to Pel AI" /></CardContent></Card>
+  return <AvailabilityCard><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Suggested actions</CardTitle><CardDescription>Pel AI capabilities planned for this space.</CardDescription></div><AvailabilityBadge /></div></CardHeader><CardContent className="flex flex-col gap-2"><ComingSoonAction icon={CalendarClock} title="Compare with last week" /><ComingSoonAction icon={Mail} title="Connect your work email" /><ComingSoonAction icon={Mic} title="Talk to Pel AI" /></CardContent></AvailabilityCard>
 }
 
 function ComingSoonAction({ icon: Icon, title }: { icon: typeof CalendarClock; title: string }) {
-  return <div aria-disabled="true" title="Coming soon" className="flex cursor-help items-center gap-3 rounded-lg border border-dashed p-3 text-muted-foreground"><span className="flex size-8 shrink-0 items-center justify-center rounded-md border"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1 truncate text-sm">{title}</span><span className="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Soon</span></div>
+  return <div aria-disabled="true" title="Coming Soon" className="flex cursor-help items-center gap-3 rounded-lg border border-dashed p-3 text-muted-foreground"><span className="flex size-8 shrink-0 items-center justify-center rounded-md border"><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1 truncate text-sm">{title}</span><AvailabilityBadge /></div>
 }

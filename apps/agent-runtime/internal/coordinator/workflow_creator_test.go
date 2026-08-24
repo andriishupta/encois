@@ -3,7 +3,7 @@ package coordinator
 import "testing"
 
 func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
-	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
+	creator := NewWorkflowCreator([]string{DynamicWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-1",
@@ -26,7 +26,7 @@ func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
 }
 
 func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
-	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
+	creator := NewWorkflowCreator([]string{DynamicWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-1",
@@ -39,7 +39,7 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 			Blueprint: &WorkflowBlueprint{
 				BlueprintID:  "release-risk",
 				Version:      "1.0.0",
-				WorkflowType: UserBlueprintWorkflowType,
+				WorkflowType: DynamicWorkflowType,
 			},
 		}},
 	})
@@ -49,7 +49,7 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 }
 
 func TestWorkflowCreatorSeparatesBlueprintAndWorkflowTargets(t *testing.T) {
-	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
+	creator := NewWorkflowCreator([]string{DynamicWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-lifecycle",
@@ -60,11 +60,11 @@ func TestWorkflowCreatorSeparatesBlueprintAndWorkflowTargets(t *testing.T) {
 				Kind:                   ChangeUpdate,
 				TargetBlueprintID:      "release-readiness",
 				TargetBlueprintVersion: "1.0.0",
-				Blueprint:              &WorkflowBlueprint{BlueprintID: "release-readiness", Version: "2.0.0", WorkflowType: UserBlueprintWorkflowType},
+				Blueprint:              &WorkflowBlueprint{BlueprintID: "release-readiness", Version: "2.0.0", WorkflowType: DynamicWorkflowType},
 				Reason:                 "Publish a new revision.",
 			},
 			{Kind: ChangeDeprecate, TargetBlueprintID: "release-readiness", TargetBlueprintVersion: "0.9.0", Reason: "Retire old revision."},
-			{Kind: ChangeCancel, TargetWorkflowID: "workflow:org-1:encois.user-blueprint.v1:release-1", Reason: "Cancel execution."},
+			{Kind: ChangeCancel, TargetWorkflowID: "workflow:org-1:encois.dynamic.v1:release-1", Reason: "Cancel execution."},
 		},
 	})
 	if err != nil {
@@ -73,7 +73,7 @@ func TestWorkflowCreatorSeparatesBlueprintAndWorkflowTargets(t *testing.T) {
 }
 
 func TestWorkflowCreatorRejectsMixedTargetIdentity(t *testing.T) {
-	creator := NewWorkflowCreator([]string{UserBlueprintWorkflowType})
+	creator := NewWorkflowCreator([]string{DynamicWorkflowType})
 	err := creator.ValidatePlan(WorkflowChangePlan{
 		ContractVersion: WorkflowChangePlanVersion,
 		PlanID:          "plan-invalid-lifecycle",
@@ -81,7 +81,7 @@ func TestWorkflowCreatorRejectsMixedTargetIdentity(t *testing.T) {
 		OrganizationID:  "org-1",
 		Changes: []WorkflowChange{{
 			Kind:                   ChangeDeprecate,
-			TargetWorkflowID:       "workflow:org-1:encois.user-blueprint.v1:release-1",
+			TargetWorkflowID:       "workflow:org-1:encois.dynamic.v1:release-1",
 			TargetBlueprintVersion: "1.0.0",
 			Reason:                 "Ambiguous target.",
 		}},

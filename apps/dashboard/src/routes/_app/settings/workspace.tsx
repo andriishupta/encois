@@ -6,6 +6,7 @@ import type { OrganizationOnboardingProjection } from '@encois/contracts'
 import { CoordinationMode, Permission } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm, setProductTooltipsEnabled, useProductTooltipsEnabled } from '@/components/product-term'
+import { AvailabilityBadge, unavailableCardClassName } from '@/components/availability-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAuthSession, hasPermission } from '@/lib/auth'
@@ -13,6 +14,7 @@ import { listWorkflowBlueprints, listWorkflowTemplates, updateOrganizationOnboar
 import { useOrganization } from '@/lib/organization-context'
 import { usePermissions } from '@/lib/permissions'
 import { queryKeys } from '@/lib/query-keys'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_app/settings/workspace')({
   beforeLoad: () => {
@@ -80,10 +82,10 @@ function OnboardingConfigurationCard({ onboarding, canManage, canReadCatalog }: 
   }, [onboarding.coordinationMode, onboarding.selectedWorkflows])
 
   const catalog = useMemo(() => ({
-    templates: (templates.data ?? []).map((template) => ({ value: template.key, title: template.title, description: template.description, meta: `Template · ${template.category} · v${template.version}`, icon: BookOpen })),
-    blueprints: (blueprints.data ?? []).filter((blueprint) => blueprint.status === 'approved' && blueprint.isCurrent).map((blueprint) => ({ value: blueprint.blueprintId, title: blueprint.name, description: blueprint.purpose, meta: `Blueprint · v${blueprint.version}`, icon: GitBranch })),
+    templates: (templates.data ?? []).map((template) => ({ value: template.key, title: template.title, description: template.description, meta: `Template · ${template.category} · v${template.version}`, icon: BookOpen, unavailable: template.status !== 'active' })),
+    blueprints: (blueprints.data ?? []).filter((blueprint) => blueprint.status === 'approved' && blueprint.isCurrent).map((blueprint) => ({ value: blueprint.blueprintId, title: blueprint.name, description: blueprint.purpose, meta: `Blueprint · v${blueprint.version}`, icon: GitBranch, unavailable: false })),
   }), [blueprints.data, templates.data])
-  const catalogValues = useMemo(() => new Set([...catalog.templates, ...catalog.blueprints].map((item) => item.value)), [catalog.blueprints, catalog.templates])
+  const catalogValues = useMemo(() => new Set([...catalog.templates, ...catalog.blueprints].filter((item) => !item.unavailable).map((item) => item.value)), [catalog.blueprints, catalog.templates])
   const catalogReady = canReadCatalog && !templates.isLoading && !blueprints.isLoading && !templates.isError && !blueprints.isError
   const unknownSelections = catalogReady ? selectedWorkflows.filter((value) => !catalogValues.has(value)) : []
   const selectionChanged = onboarding.coordinationMode !== mode || (catalogReady && (onboarding.selectedWorkflows.length !== selectedWorkflows.length || onboarding.selectedWorkflows.some((value, index) => value !== selectedWorkflows[index])))
@@ -130,7 +132,7 @@ function OnboardingConfigurationCard({ onboarding, canManage, canReadCatalog }: 
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <div><h3 className="text-sm font-medium">Initial workflow catalog</h3><p className="mt-1 text-xs text-muted-foreground">Select published Templates or current approved Blueprints. These are product references; runtime IDs are resolved by the control plane.</p></div>
+            <div><h3 className="text-sm font-medium">Initial workflow catalog</h3><p className="mt-1 text-xs text-muted-foreground">Select active Templates or current approved Blueprints. These are product references; runtime IDs are resolved by the control plane.</p></div>
             <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">{selectedWorkflows.length} selected</span>
           </div>
           {!canReadCatalog ? <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Workflow catalog visibility is restricted by the current session. An administrator with workflow read access can configure the initial selection.</div> : null}
@@ -151,7 +153,7 @@ function OnboardingConfigurationCard({ onboarding, canManage, canReadCatalog }: 
   )
 }
 
-type CatalogItem = { value: string; title: string; description: string; meta: string; icon: typeof BookOpen }
+type CatalogItem = { value: string; title: string; description: string; meta: string; icon: typeof BookOpen; unavailable: boolean }
 
 function CatalogGroup({ title, items, selected, onToggle, disabled }: { title: string; items: readonly CatalogItem[]; selected: readonly string[]; onToggle: (value: string) => void; disabled: boolean }) {
   return <div className="flex min-w-0 flex-col gap-2 rounded-lg border bg-background p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p><span className="text-xs text-muted-foreground">{items.length}</span></div>{items.length ? items.map((item) => <CatalogOption key={item.value} item={item} selected={selected.includes(item.value)} onToggle={onToggle} disabled={disabled} />) : <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">No available {title.toLowerCase()} in the current scope.</p>}</div>
@@ -159,7 +161,8 @@ function CatalogGroup({ title, items, selected, onToggle, disabled }: { title: s
 
 function CatalogOption({ item, selected, onToggle, disabled }: { item: CatalogItem; selected: boolean; onToggle: (value: string) => void; disabled: boolean }) {
   const Icon = item.icon
-  return <button type="button" aria-pressed={selected} disabled={disabled} onClick={() => onToggle(item.value)} className={`flex min-w-0 items-start gap-3 rounded-md border p-3 text-left transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 ${selected ? 'border-primary bg-primary/[0.05]' : 'bg-background'}`}><span className={`flex size-8 shrink-0 items-center justify-center rounded-md ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.description}</span><span className="mt-1 block text-[11px] text-muted-foreground">{item.meta}</span></span><span className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-sm border ${selected ? 'border-primary bg-primary text-primary-foreground' : ''}`}>{selected ? <Check className="size-3.5" aria-hidden="true" /> : null}</span></button>
+  const unavailable = item.unavailable
+  return <button type="button" aria-pressed={selected} disabled={disabled || unavailable} onClick={() => onToggle(item.value)} className={cn('flex min-w-0 items-start gap-3 rounded-md border p-3 text-left transition-colors', selected && !unavailable && 'border-primary bg-primary/[0.05]', unavailable ? unavailableCardClassName : 'bg-background hover:bg-accent', disabled && !unavailable && 'disabled:cursor-not-allowed disabled:opacity-60')}><span className={`flex size-8 shrink-0 items-center justify-center rounded-md ${selected && !unavailable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}><Icon className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{item.description}</span><span className="mt-1 block text-[11px] text-muted-foreground">{item.meta}</span></span>{unavailable ? <AvailabilityBadge label="Disabled" /> : <span className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-sm border ${selected ? 'border-primary bg-primary text-primary-foreground' : ''}`}>{selected ? <Check className="size-3.5" aria-hidden="true" /> : null}</span>}</button>
 }
 
 function ModeOption({ selected, onClick, disabled, icon: Icon, title, description }: { selected: boolean; onClick: () => void; disabled: boolean; icon: typeof Sparkles; title: string; description: string }) {

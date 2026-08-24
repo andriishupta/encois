@@ -672,38 +672,18 @@ export async function createIntegrationForPrincipal(
   if (!userId) throw new Error("IDENTITY_NOT_RESOLVED");
   const displayName = request.displayName.trim();
   const provider = request.provider.trim().toLowerCase();
-  const unitId = request.organizationUnitId.trim();
   if (displayName.length < 2 || displayName.length > 160) throw new Error("INVALID_INTEGRATION_NAME");
   if (!provider || provider.length > 80) throw new Error("INVALID_INTEGRATION_PROVIDER");
-  if (!unitId) throw new Error("SCOPE_DENIED");
 
   return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.IntegrationsManage))) throw new Error("FORBIDDEN");
-    const isOrganizationAdmin = await isOrganizationAdministrator(db, principal);
-    const [units, managerScopeRows] = await Promise.all([
-      db
-        .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
-        .from(organizationUnits)
-        .where(eq(organizationUnits.organizationId, principal.organizationId)),
-      db
-        .select({ unitId: membershipScopes.organizationUnitId, access: membershipScopes.access })
-        .from(membershipScopes)
-        .innerJoin(
-          organizationMemberships,
-          and(
-            eq(organizationMemberships.id, membershipScopes.membershipId),
-            eq(organizationMemberships.organizationId, principal.organizationId),
-            eq(organizationMemberships.userId, userId),
-            eq(organizationMemberships.status, "active"),
-          ),
-        )
-        .where(eq(membershipScopes.organizationId, principal.organizationId)),
-    ]);
-    const managerRoots = managerScopeRows.filter((row) => row.access === "manager" || row.access === "admin").map((row) => row.unitId);
-    if (!units.some((unit) => unit.id === unitId) || (!isOrganizationAdmin && !organizationScopeCovers(units, managerRoots, [unitId]))) {
-      throw new Error("SCOPE_DENIED");
-    }
-
+    if (!(await hasPermission(db, principal, Permission.IntegrationsManage)) || !(await isOrganizationAdministrator(db, principal))) throw new Error("FORBIDDEN");
+    const units = await db
+      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .from(organizationUnits)
+      .where(eq(organizationUnits.organizationId, principal.organizationId));
+    const rootUnit = units.find((unit) => unit.type === "organization" && unit.parentId === null);
+    if (!rootUnit) throw new Error("ORGANIZATION_ROOT_NOT_FOUND");
+    if (request.organizationUnitId && request.organizationUnitId !== rootUnit.id) throw new Error("INTEGRATION_ORGANIZATION_SCOPED");
     const [integration] = await db.insert(integrations).values({
       organizationId: principal.organizationId,
       provider,
@@ -716,7 +696,7 @@ export async function createIntegrationForPrincipal(
     await db.insert(integrationBindings).values({
       organizationId: principal.organizationId,
       integrationId: integration.id,
-      organizationUnitId: unitId,
+      organizationUnitId: rootUnit.id,
       grantedScopes: request.grantedScopes ?? [],
       grantedByUserId: userId,
       status: "active",
@@ -728,10 +708,10 @@ export async function createIntegrationForPrincipal(
       outcome: "accepted",
       resourceType: "integration",
       resourceId: integration.id,
-      scope: { ids: [unitId] },
-      metadata: { provider, status: "pending" },
+      scope: { ids: [rootUnit.id] },
+      metadata: { provider, status: "pending", scopeLevel: "organization" },
     });
-    return { id: integration.id, name: integration.displayName, provider: integration.provider, status: integration.status, scopeIds: [unitId], grantedScopes: request.grantedScopes ?? [], credentialConfigured: false, updatedAt: new Date().toISOString() };
+    return { id: integration.id, name: integration.displayName, provider: integration.provider, status: integration.status, scopeIds: [rootUnit.id], grantedScopes: request.grantedScopes ?? [], credentialConfigured: false, updatedAt: new Date().toISOString() };
   });
 }
 

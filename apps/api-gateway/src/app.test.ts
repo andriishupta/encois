@@ -272,7 +272,7 @@ describe("API Gateway", () => {
       config: testConfig,
     });
 
-    const invalidLimit = await app.request("/api/v1/workflows/templates?q=github&limit=11");
+    const invalidLimit = await app.request("/api/v1/workflows/templates?q=github&limit=51");
     expect(invalidLimit.status).toBe(400);
 
     const unavailable = await app.request("/api/v1/workflows/templates?q=github,jira&limit=10");
@@ -335,7 +335,7 @@ describe("API Gateway", () => {
       headers: { "content-type": "application/json" },
     });
     expect(manual.status).toBe(422);
-    await expect(manual.json()).resolves.toMatchObject({ error: { code: "MANUAL_PROVIDER_REQUIRED" } });
+    await expect(manual.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_MANUAL_UNAVAILABLE" } });
 
     const unsupportedProvider = await app.request("/api/v1/workflows/plans/preview", {
       method: "POST",
@@ -343,7 +343,7 @@ describe("API Gateway", () => {
       headers: { "content-type": "application/json" },
     });
     expect(unsupportedProvider.status).toBe(422);
-    await expect(unsupportedProvider.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_PROVIDER_UNSUPPORTED" } });
+    await expect(unsupportedProvider.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_MANUAL_UNAVAILABLE" } });
 
     const missingProvider = await app.request("/api/v1/workflows/plans/preview", {
       method: "POST",
@@ -351,7 +351,7 @@ describe("API Gateway", () => {
       headers: { "content-type": "application/json" },
     });
     expect(missingProvider.status).toBe(422);
-    await expect(missingProvider.json()).resolves.toMatchObject({ error: { code: "MANUAL_PROVIDER_REQUIRED" } });
+    await expect(missingProvider.json()).resolves.toMatchObject({ error: { code: "WORKFLOW_MANUAL_UNAVAILABLE" } });
   });
 
   it("exposes authentication status separately from tenant-protected routes", async () => {
@@ -537,7 +537,7 @@ describe("API Gateway", () => {
     expect(invalidAccessRequestAction.status).toBe(400);
   });
 
-  it("mounts tenant-protected Knowledge Source routes and rejects non-PDF uploads at the boundary", async () => {
+  it("mounts tenant-protected Source routes and rejects non-PDF uploads at the boundary", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: { actorId: "user-1", organizationId: "org-1", scope: ["root"] },
@@ -574,7 +574,7 @@ describe("API Gateway", () => {
 
     const startResponse = await app.request("/api/v1/workflows", {
       body: JSON.stringify({
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         key: "release-1",
         input: {
           blueprint: {
@@ -582,7 +582,7 @@ describe("API Gateway", () => {
             blueprintId: "release-readiness",
             version: "1.0.0",
             name: "Release readiness",
-            workflowType: "encois.user-blueprint.v1",
+            workflowType: "encois.dynamic.v1",
             purpose: "Verify release readiness from approved evidence.",
             enabled: true,
             steps: [{ id: "transform", kind: "transform", input: { status: "ready" } }],
@@ -598,7 +598,7 @@ describe("API Gateway", () => {
     const getResponse = await app.request(`/api/v1/workflows/${started.data.workflowId}`);
     expect(getResponse.status).toBe(200);
     await expect(getResponse.json()).resolves.toMatchObject({
-      data: { organizationId: "org-1", status: "queued", workflowType: "encois.user-blueprint.v1" },
+      data: { organizationId: "org-1", status: "queued", workflowType: "encois.dynamic.v1" },
     });
 
     const eventsResponse = await app.request(`/api/v1/workflows/${started.data.workflowId}/events`);
@@ -639,7 +639,7 @@ describe("API Gateway", () => {
     });
 
     const denied = await app.request("/api/v1/internal/coordinator/workflows", {
-      body: JSON.stringify({ workflowType: "encois.user-blueprint.v1" }),
+      body: JSON.stringify({ workflowType: "encois.dynamic.v1" }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
@@ -647,7 +647,7 @@ describe("API Gateway", () => {
 
     const rejectedInlineBlueprint = await app.request("/api/v1/internal/coordinator/workflows", {
       body: JSON.stringify({
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         key: "internal-release-1",
         input: {
           blueprint: {
@@ -655,7 +655,7 @@ describe("API Gateway", () => {
             blueprintId: "release-readiness",
             version: "1.0.0",
             name: "Release readiness",
-            workflowType: "encois.user-blueprint.v1",
+            workflowType: "encois.dynamic.v1",
             purpose: "Verify release readiness from approved evidence.",
             enabled: true,
             steps: [{ id: "transform", kind: "transform", input: { status: "ready" } }],
@@ -676,7 +676,7 @@ describe("API Gateway", () => {
 
     const unresolvedReference = await app.request("/api/v1/internal/coordinator/workflows", {
       body: JSON.stringify({
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         key: "internal-release-1",
         blueprintId: "release-readiness",
         blueprintVersion: "1.0.0",
@@ -817,7 +817,7 @@ describe("API Gateway", () => {
             blueprintId: "release-readiness",
             version: "1.0.0",
             name: "Release readiness",
-            workflowType: "encois.user-blueprint.v1",
+            workflowType: "encois.dynamic.v1",
             purpose: "Check release readiness.",
             enabled: true,
             requiredScopes: ["team-engineering"],
@@ -867,7 +867,7 @@ describe("API Gateway", () => {
               blueprintId: "release-readiness",
               version: "2.0.0",
               name: "Release readiness v2",
-              workflowType: "encois.user-blueprint.v1",
+              workflowType: "encois.dynamic.v1",
               purpose: "Check release readiness.",
               enabled: true,
               steps: [{ id: "transform", kind: "transform", input: { status: "ready" } }],
@@ -884,7 +884,7 @@ describe("API Gateway", () => {
           },
           {
             kind: "cancel",
-            targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:release-1",
+            targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
             reason: "Cancel the superseded execution.",
             requiresApproval: true,
           },
@@ -919,7 +919,7 @@ describe("API Gateway", () => {
           kind: "deprecate",
           targetBlueprintId: "release-readiness",
           targetBlueprintVersion: "1.0.0",
-          targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:release-1",
+          targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
           reason: "Ambiguous target.",
           requiresApproval: true,
         }],
@@ -954,7 +954,7 @@ describe("API Gateway", () => {
         observedAt: "2026-08-20T16:00:00.000Z",
         changes: [{
           kind: "cancel",
-          targetWorkflowId: "workflow:org-2:encois.user-blueprint.v1:release-1",
+          targetWorkflowId: "workflow:org-2:encois.dynamic.v1:release-1",
           reason: "Retire the workflow.",
           requiresApproval: true,
         }],
@@ -988,7 +988,7 @@ describe("API Gateway", () => {
       observedAt: "2026-08-20T16:00:00.000Z",
       changes: [{
         kind: "cancel",
-        targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:release-1",
+        targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
         reason: "Retire the obsolete workflow.",
         requiresApproval: true,
       }],
@@ -1037,7 +1037,7 @@ describe("API Gateway", () => {
       }),
       config: testConfig,
     });
-    const response = await app.request("/api/v1/workflows/workflow:org-1:encois.user-blueprint.v1:terminal/rerun", { method: "POST" });
+    const response = await app.request("/api/v1/workflows/workflow:org-1:encois.dynamic.v1:terminal/rerun", { method: "POST" });
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PERSISTENCE_UNAVAILABLE" } });
   });
@@ -1058,7 +1058,7 @@ describe("API Gateway", () => {
 
     const response = await app.request("/api/v1/workflows", {
       body: JSON.stringify({
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         blueprintId: "release-readiness",
         blueprintVersion: "1.0.0",
         key: "stored-blueprint-smoke",
@@ -1085,7 +1085,7 @@ describe("API Gateway", () => {
       workflowClient: createTestWorkflowClient(),
     });
     const request = {
-      workflowType: "encois.user-blueprint.v1",
+      workflowType: "encois.dynamic.v1",
       key: "project-context-demo",
       input: { projectKey: "DEMO" },
       blueprint: {
@@ -1093,7 +1093,7 @@ describe("API Gateway", () => {
         blueprintId: "project-context",
         version: "1.0.0",
         name: "Project context",
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         purpose: "Collect project context.",
         enabled: true,
         steps: [
@@ -1132,7 +1132,7 @@ describe("API Gateway", () => {
 
     const list = await app.request("/api/v1/workflows");
     expect(list.status).toBe(200);
-    await expect(list.json()).resolves.toMatchObject({ data: [{ workflowType: "encois.user-blueprint.v1" }] });
+    await expect(list.json()).resolves.toMatchObject({ data: [{ workflowType: "encois.dynamic.v1" }] });
 
     const signal = await app.request(`/api/v1/workflows/${firstBody.data.workflowId}/signals`, {
       body: JSON.stringify({
@@ -1182,8 +1182,8 @@ describe("API Gateway", () => {
   it("rejects Signals for a terminal workflow", async () => {
     let signalCalled = false;
     const terminalProjection: WorkflowExecutionProjection = {
-      workflowId: "workflow:org-1:encois.user-blueprint.v1:terminal",
-      workflowType: "encois.user-blueprint.v1",
+      workflowId: "workflow:org-1:encois.dynamic.v1:terminal",
+      workflowType: "encois.dynamic.v1",
       namespace: "default",
       taskQueue: "test",
       status: "completed",
@@ -1229,8 +1229,8 @@ describe("API Gateway", () => {
   it("accepts a scoped context Update for an active workflow", async () => {
     let updatedRequest: unknown;
     const projection: WorkflowExecutionProjection = {
-      workflowId: "workflow:org-1:encois.user-blueprint.v1:update-test",
-      workflowType: "encois.user-blueprint.v1",
+      workflowId: "workflow:org-1:encois.dynamic.v1:update-test",
+      workflowType: "encois.dynamic.v1",
       namespace: "default",
       taskQueue: "test",
       status: "running",

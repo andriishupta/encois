@@ -83,7 +83,7 @@ function BlueprintRevisionPage() {
             </div>
             {lifecycle.isPending ? <p className="text-sm text-muted-foreground">Submitting proposal…</p> : null}
             {lifecycle.isError ? <p className="text-sm text-destructive">Could not submit proposal: {lifecycle.error.message}</p> : null}
-            {lifecycleSuccess ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{lifecycleSuccess} <Link className="font-medium underline underline-offset-4" to="/activity">Open Activity</Link></p> : null}
+            {lifecycleSuccess ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{lifecycleSuccess} <Link className="font-medium underline underline-offset-4" to="/workflows/plans">Open Plans</Link></p> : null}
           </>}
         </CardContent>
       </Card>

@@ -32,7 +32,7 @@ const startResponse = await app.request("/api/v1/workflows", {
   method: "POST",
   headers: { "content-type": "application/json", "x-trace-id": traceId },
   body: JSON.stringify({
-    workflowType: "encois.user-blueprint.v1",
+    workflowType: "encois.dynamic.v1",
     key: workflowKey,
     input: {
       blueprint: {
@@ -40,7 +40,7 @@ const startResponse = await app.request("/api/v1/workflows", {
         blueprintId: "approval-smoke",
         version: "1.0.0",
         name: "Approval smoke",
-        workflowType: "encois.user-blueprint.v1",
+        workflowType: "encois.dynamic.v1",
         purpose: "Verify that a Temporal Workflow can wait for and resume from an authorized Signal.",
         enabled: true,
         steps: [

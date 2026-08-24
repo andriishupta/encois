@@ -117,7 +117,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
 		Model:                 coordinatorModel,
-		Instruction:           "Propose only typed changes to the generic user Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
+		Instruction:           "Propose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
 		GenerateContentConfig: deepThinkingConfig,
 	})
 	if err != nil {

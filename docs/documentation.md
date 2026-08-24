@@ -26,7 +26,7 @@ Activity is the technical operations view. Use it when you need to inspect work 
 - **Waiting approvals** — workflow runs paused for approval.
 - **Running** — queued, running, or paused workflow runs.
 - **Run attention** — failed or partially completed runs.
-- **Source attention** — Knowledge Sources that are degraded, failed, or need reauthorization.
+- **Source attention** — Sources that are degraded, failed, or need reauthorization.
 - **Integration setup** — integrations that need authorization or recovery.
 - **Workflow plans** — workflow changes waiting for approval or application.
 - **Memory changes** — proposed workflow memory additions, corrections, or deletions.
@@ -52,7 +52,7 @@ Organization pages describe the company context that {{PRODUCT_NAME}} uses.
 
 - **Organization** — view the organization unit structure.
 - **Memory** — explore the Organization Memory Graph: relationships, entities, and context visible in the current scope.
-- **Sources** — manage the Knowledge Sources that provide context, such as documents or connected systems.
+- **Sources** — manage unit-scoped Sources that provide context, such as documents or connected systems.
 - **Integrations** — view supported system connections and their health. An integration is configured once for the organization; managers can then use it within the scopes they manage.
 - **Investigations** — save and reopen bounded investigations.
 - **Permissions** — manage organization-unit permissions when your role allows it.
@@ -83,11 +83,11 @@ The effective result depends on the user, organization membership, selected orga
 
 Some operations are intentionally separate approval steps. For example, an access request can be proposed, approved, and applied; approving it does not silently change unrelated role permissions.
 
-## Integrations and Knowledge Sources
+## Integrations and Sources
 
 An **Integration** is the organization-level connection to a provider such as GitHub, Jira, Slack, or Google Workspace. Credentials and provider authorization are handled by the control plane; they are not exposed as browser data.
 
-A **Knowledge Source** is a scoped source that uses an integration or uploaded content to provide information to {{PRODUCT_NAME}}. A manager can configure sources within the organization unit they manage when the required permissions are available.
+A **Source** is the organization-unit-level provider resource or uploaded content that provides information to {{PRODUCT_NAME}}. A provider Source references an existing Integration and selects the Jira project, GitHub repository, Slack channel, or similar resource. A manager can configure Sources within the organization unit they manage when the required permissions are available.
 
 An organization-level integration can support multiple organization units. The source and its visibility scope determine where its information can be used.
 
@@ -97,7 +97,7 @@ An organization-level integration can support multiple organization units. The s
 - **Blueprint** — an approved, versioned definition of workflow steps.
 - **Evidence** — a source-backed reference that supports a workflow result or insight.
 - **Integration** — an authorized connection to an external provider.
-- **Knowledge Source** — a document or connected provider source that supplies context.
+- **Source** — a document or connected provider resource that supplies context within an organization-unit scope.
 - **Organization Memory Graph** — the organization’s visible entities and relationships.
 - **Pel AI** — the planned {{PRODUCT_NAME}} workspace assistant for natural-language questions and personalized briefings.
 - **Run** — one execution of a Workflow.

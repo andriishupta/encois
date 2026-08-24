@@ -8,12 +8,12 @@ describe("workflow template query parsing", () => {
     ).toEqual({
       terms: ["github", "jira", "release-readiness"],
       category: "engineering",
-      limit: 10,
+      limit: 50,
     });
   });
 
-  it("caps callers at ten results", () => {
-    expect(parseWorkflowTemplateQuery({ limit: 100 }).limit).toBe(10);
+  it("caps callers at fifty results", () => {
+    expect(parseWorkflowTemplateQuery({ limit: 100 }).limit).toBe(50);
     expect(parseWorkflowTemplateQuery({ limit: 0 }).limit).toBe(1);
   });
 });

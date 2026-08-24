@@ -1,8 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
-import { ContractVersion, isJsonObject, Permission, WorkflowExecutionStatus, WorkflowSignalName, type WorkflowEventProjection } from '@encois/contracts'
-import { CircleDashed, Clock3, GitBranch, RefreshCw, RotateCcw, TimerReset } from 'lucide-react'
+import { ContractVersion, isJsonObject, Permission, TemporalWorkflowType, WorkflowExecutionStatus, WorkflowSignalName, type WorkflowEventProjection, type WorkflowExecutionProjection, type WorkflowStatusReason } from '@encois/contracts'
+import { CircleDashed, FileText, RefreshCw } from 'lucide-react'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
@@ -14,7 +13,7 @@ import { cancelWorkflow, getWorkflow, getWorkflowEvents, rerunWorkflow, signalWo
 import { queryKeys } from '@/lib/query-keys'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
-import { formatDate, shortIdentifier, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
+import { formatDate, humanizeKey, shortIdentifier, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
 import { formatUnitPath } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
 
@@ -96,6 +95,7 @@ function WorkflowDetailPage() {
   const traceModels = [...new Set(eventRows.map((event) => event.trace?.model ?? metadataString(event, 'model')).filter((value): value is string => Boolean(value)))]
   const traceBudget = eventRows.map((event) => event.trace?.budget ?? metadataString(event, 'budget')).find(Boolean)
   const traceRows = eventRows.filter((event) => Boolean(event.trace || event.agentRunId || event.evidence?.length || event.evidenceRef))
+  const runOutput = extractWorkflowOutput(eventRows)
 
   if (workflow.isLoading) return <p className="text-sm text-muted-foreground">Loading workflow run…</p>
   if (workflow.isError || !workflow.data) return <div className="flex flex-col gap-6"><PageHeader title="Workflow run unavailable" description="The run could not be loaded in the current organization scope." /><Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">{workflow.error?.message ?? 'No workflow projection was returned.'}</p></CardContent></Card></div>
@@ -117,15 +117,9 @@ function WorkflowDetailPage() {
       {rerun.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not start this workflow again: {rerun.error.message}</div> : null}
       {control.isError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">Could not change run control: {control.error.message}</div> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Status" value={status ? <WorkflowStatusIndicator status={status} reason={workflow.data?.statusReason} /> : workflow.isLoading ? 'Loading' : 'Unavailable'} icon={CircleDashed} />
-        <SummaryCard label="Blueprint" value={workflow.data ? workflowLabel(workflow.data.blueprintId, workflow.data.workflowType) : 'Not available'} icon={GitBranch} />
-        <SummaryCard label="Revision" value={workflow.data?.blueprintVersion ?? 'Not recorded'} icon={RotateCcw} mono />
-        <SummaryCard label="Started" value={formatDate(workflow.data?.createdAt)} icon={Clock3} />
-        <SummaryCard label="Transitions" value={events.isLoading ? '…' : String(transitionCount)} icon={TimerReset} />
-      </div>
+      <RunDetailsCard workflowId={workflowId} workflow={workflow.data} providers={traceProviders} units={units} eventCount={events.isLoading ? undefined : eventRows.length} transitionCount={events.isLoading ? undefined : transitionCount} />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"><span>Updated {formatDate(workflow.data?.updatedAt)}</span><span>Retention until {formatDate(workflow.data?.retentionUntil)}</span><span>Events are scoped to your current permissions.</span>{workflow.data?.parentWorkflowId ? <span>Rerun of {shortIdentifier(workflow.data.parentWorkflowId)}</span> : null}<details><summary className="cursor-pointer underline underline-offset-2">Technical identifiers</summary><div className="mt-2 rounded-md border bg-muted/30 p-3 font-mono">Workflow: {workflowId}<br />Run: {workflow.data?.runId ?? 'not available'}<br />Blueprint: {workflow.data?.blueprintId ?? 'not available'}<br />Revision: {workflow.data?.blueprintVersion ?? 'not available'}<br />Parent: {workflow.data?.parentWorkflowId ?? 'not available'}</div></details></div>
+      <WorkflowOutputCard status={status} statusReason={workflow.data.statusReason} output={runOutput} />
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -256,26 +250,124 @@ function metadataBoolean(event: import('@encois/contracts').WorkflowEventProject
   return typeof event.metadata[key] === 'boolean' ? event.metadata[key] as boolean : undefined
 }
 
-function SummaryCard({
-  label,
-  value,
-  icon: Icon,
-  mono = false,
-}: {
-  label: string
-  value: ReactNode
-  icon: typeof GitBranch
-  mono?: boolean
-}) {
+type WorkflowOutput = {
+  text: string
+  activityName?: string
+  occurredAt: string
+}
+
+function RunDetailsCard({ workflowId, workflow, providers, units, eventCount, transitionCount }: { workflowId: string; workflow: WorkflowExecutionProjection; providers: readonly string[]; units: ReturnType<typeof useOrganization>['units']; eventCount?: number; transitionCount?: number }) {
+  const semanticWorkflowType = formatWorkflowType(workflow, providers)
+  const scopeIds = workflow.scope?.ids ?? []
+  const scopeLabel = scopeIds.length ? scopeIds.map((id) => formatUnitPath(units, id) || id).join(', ') : 'Not reported'
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle>Run details</CardTitle>
+          <CardDescription>Execution state, Temporal metadata, and scope-aware run history.</CardDescription>
+        </div>
+        <WorkflowStatusIndicator status={workflow.status} reason={workflow.statusReason} />
       </CardHeader>
-      <CardContent>
-        <p className={mono ? 'truncate font-mono text-sm' : 'truncate text-sm font-medium'}>{value}</p>
+      <CardContent className="flex flex-col gap-4">
+        <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <DetailField label="Blueprint" value={workflowLabel(workflow.blueprintId, workflow.workflowType)} />
+          <DetailField label="Revision" value={workflow.blueprintVersion ?? 'Not recorded'} mono />
+          <DetailField label="Started" value={formatDate(workflow.createdAt)} />
+          <DetailField label="Updated" value={formatDate(workflow.updatedAt)} />
+          <DetailField label="Finished" value={formatDate(workflow.completedAt)} />
+          <DetailField label="Retention" value={formatDate(workflow.retentionUntil)} />
+          <DetailField label="Event records" value={eventCount === undefined ? 'Loading…' : String(eventCount)} />
+          <DetailField label="Status transitions" value={transitionCount === undefined ? 'Loading…' : String(transitionCount)} />
+        </dl>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-4 text-xs text-muted-foreground">
+          <span>Org: <span className="font-mono" title={workflow.organizationId}>{shortIdentifier(workflow.organizationId, 18)}</span></span>
+          <span>Org unit: <span title={scopeLabel}>{scopeIds.length === 1 ? scopeLabel : scopeIds.length ? `${scopeIds.length} units` : 'Not reported'}</span></span>
+          <span>Workflow type: <span>{semanticWorkflowType}</span></span>
+          <span>Namespace: <span className="font-mono">{workflow.namespace}</span></span>
+          <span>Task queue: <span className="font-mono">{workflow.taskQueue}</span></span>
+          <span>Events are scoped to your current permissions.</span>
+          {workflow.parentWorkflowId ? <span>Rerun of {shortIdentifier(workflow.parentWorkflowId)}</span> : null}
+          <details>
+            <summary className="cursor-pointer underline underline-offset-2">Technical identifiers</summary>
+            <div className="mt-2 rounded-md border bg-muted/30 p-3 font-mono">
+              <div>Org ID: {workflow.organizationId}</div>
+              <div>Org unit IDs: {scopeIds.length ? scopeIds.join(', ') : 'not reported'}</div>
+              <div>Workflow type: {semanticWorkflowType}</div>
+              <div>Temporal type: {workflow.workflowType}</div>
+              <div>Run ID: {workflow.runId ?? 'not available'}</div>
+              <details className="mt-2">
+                <summary className="cursor-pointer font-sans underline underline-offset-2">Full Temporal IDs</summary>
+                <div className="mt-2">Workflow ID: {workflowId}</div>
+              </details>
+              <div>Blueprint: {workflow.blueprintId ?? 'not available'}</div>
+              <div>Revision: {workflow.blueprintVersion ?? 'not available'}</div>
+              <div>Parent: {workflow.parentWorkflowId ?? 'not available'}</div>
+            </div>
+          </details>
+        </div>
       </CardContent>
     </Card>
   )
+}
+
+function formatWorkflowType(workflow: WorkflowExecutionProjection, providers: readonly string[]): string {
+  const provider = providers[0]
+  if (provider) return `Encois · ${humanizeKey(provider)} workflow`
+  if (workflow.workflowType === TemporalWorkflowType.Dynamic) return 'Encois · Dynamic workflow'
+  return `Encois · ${humanizeKey(workflow.workflowType)}`
+}
+
+function DetailField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className={mono ? 'mt-1 truncate font-mono text-sm font-medium' : 'mt-1 truncate text-sm font-medium'}>{value}</dd></div>
+}
+
+function WorkflowOutputCard({ status, statusReason, output }: { status: WorkflowExecutionStatus; statusReason?: WorkflowStatusReason; output?: WorkflowOutput }) {
+  const terminal = terminalRunStatuses.has(status)
+  const title = output ? status === WorkflowExecutionStatus.Partial ? 'Partial output' : 'Output available' : status === WorkflowExecutionStatus.Failed ? 'No output · Run failed' : terminal ? 'No output returned' : 'Output pending'
+  const description = output ? `Read-only result from ${output.activityName ?? 'the workflow run'}.` : status === WorkflowExecutionStatus.Failed ? 'The run ended before an output was returned.' : terminal ? 'The run completed without a readable agent output.' : 'Agent output will appear here as the run reports a result.'
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/30"><FileText className="size-4 text-muted-foreground" aria-hidden="true" /></span>
+          <div>
+            <CardTitle>Output</CardTitle>
+            <CardDescription>Primary read-only result produced by the workflow agents.</CardDescription>
+          </div>
+        </div>
+        <WorkflowStatusIndicator status={status} reason={statusReason} compact />
+      </CardHeader>
+      <CardContent>
+        <div className={output ? 'rounded-lg border bg-background p-4' : 'rounded-lg border border-dashed bg-muted/20 p-4'}>
+          <p className="text-sm font-medium">{title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          {output ? <><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">{output.text}</p><p className="mt-4 text-xs text-muted-foreground">Produced {formatDate(output.occurredAt)}</p></> : null}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function extractWorkflowOutput(events: readonly WorkflowEventProjection[]): WorkflowOutput | undefined {
+  for (const event of [...events].reverse()) {
+    const data = isJsonObject(event.metadata.data) ? event.metadata.data : undefined
+    const text = data ? extractOutputText(data) : undefined
+    if (text) return { text, ...(event.activityName ? { activityName: event.activityName } : {}), occurredAt: event.occurredAt }
+  }
+  return undefined
+}
+
+function extractOutputText(value: Record<string, unknown>, depth = 0): string | undefined {
+  if (depth > 2) return undefined
+  for (const key of ['summary', 'output', 'result', 'text', 'message', 'content']) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+    if (isJsonObject(candidate)) {
+      const nested = extractOutputText(candidate, depth + 1)
+      if (nested) return nested
+    }
+  }
+  return undefined
 }

@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @encois/dashboard dev",
     "dev:api-gateway": "pnpm --filter @encois/api-gateway dev",
+    "migration:local": "node scripts/compose-with-version.mjs compose.local.yaml run --build --rm migrations",
     "local:seed": "node scripts/compose-local-run.mjs local-auth-seed",
     "local:reset": "node scripts/compose-local-run.mjs local-auth-seed node dist/scripts/reset-local.js && docker compose -f compose.local.yaml restart agent-gateway agent-runtime && node scripts/compose-local-run.mjs local-auth-seed node dist/scripts/seed-local.js",
     "verify:local": "node scripts/compose-local-run.mjs local-auth-seed node dist/scripts/verify-local.js",

@@ -27,7 +27,7 @@ Do not invent product requirements that conflict with those documents. If implem
 5. Make read-only behavior the default. Never add autonomous write actions without an approval, authorization, audit, and rollback story.
 6. Use TODOs for deliberately deferred production work. Every TODO should state the missing behavior or decision, not merely say “improve this”.
 7. Optimize for the hackathon demo without creating avoidable security or operational debt.
-8. Run tests only after full implementation - unit or tools like tsx/go are fine for harder things and multi-step implementations, but e2e should be definetly run only once; e2e is not mandatory on every run, only when we see it is required.
+8. Run tests only when the user explicitly requests testing/verification or the task itself requires it - unit or tools like tsx/go are fine for harder things and multi-step implementations, but e2e should be definetly run only once; e2e is not mandatory on every run.
 9. No need to add tests everywhere ad this point - only some crucial parts can be covered on api/agent code
 10. If during goal persue you notice some unrelated issues or gaps - report them but don't start to implement them or dont count them as part of goal - it is ok to stop, when not sure
 
@@ -67,11 +67,18 @@ agent runtime, persistence, contracts, seed data, and shared UI components.
 
 ## Iterative collaboration and approval boundary
 
-- Work iteratively with the user: inspect, propose, implement a small safe change, verify it, and report the result before expanding scope.
+- Work iteratively with the user: inspect, propose, and implement the requested small safe change. Verify only the behavior and artifacts explicitly included in the task; do not expand validation into unrelated surfaces.
 - Do not delete, reset, migrate destructively, rotate credentials, or make other critical externally visible changes without explicit user approval.
 - If a change is blocked, risky, or materially ambiguous, stop at the boundary, report the evidence and the risk, and ask for direction instead of silently changing the plan.
 - If a goal reaches a critical blocker that cannot be resolved safely from the available workspace or permissions, stop that goal explicitly, report the blocker and the evidence, and ask the user what access or decision is needed. Do not force completion by weakening security or inventing missing state.
 - Treat the user and the coding agent as partners: challenge assumptions when evidence disagrees, preserve unrelated work, and keep decisions reviewable.
+
+## Verification scope
+
+- Do not run tests, builds, browser checks, UI flows, screenshots, smoke tests, end-to-end tests, or unrelated validation unless the user explicitly asks for testing/verification or the task explicitly requires that check.
+- Verify only what the user requested. A database change does not authorize checking the UI; a UI change does not authorize checking the API, database, or unrelated routes.
+- If the user asks to test, test only the requested scope and do not add broad exploratory checks unless the user asks for them.
+- Higher-priority safety or environment checks that are required to execute the requested change may still be performed, but must remain narrowly scoped and be reported.
 
 ## Hackathon constraints
 
@@ -172,6 +179,7 @@ Prefer the narrowest filter while iterating, then run the full checks before han
 
 - Use a React SPA for the authenticated product UI.
 - Use client-side routing and typed API/query layers for dashboard, canvas, chat, and live workflow state.
+- Use the local shadcn-style primitives in `apps/dashboard/src/components/ui` for shared UI. Card surfaces must use `Card`; interactive card-like choices must use the shared card primitive rather than page-local `<button>` card markup. Keep the default shadow, radius, border, spacing, focus, hover, and disabled states consistent. Disabled cards must not expose hover highlighting.
 - Keep credentials and provider SDKs out of browser bundles. Browser code calls the API through typed contracts.
 - Handle loading, empty, error, and stale-data states for every intelligence view.
 - Make evidence and freshness visible in the UI. A model conclusion without sources, timestamps, and scope is not a trustworthy insight.
@@ -254,7 +262,7 @@ Tests should protect boundaries and the demo path, not create ceremony.
 - Add API tests for auth failures, invalid payloads, tenant isolation, rate limits, idempotency, and stable error responses.
 - Add agent evaluations with fixed scenarios and expected evidence requirements. Test refusal, missing data, contradictory data, prompt injection, and tool failure.
 - Add one end-to-end smoke test for the demo scenario using fake or synthetic integrations where possible.
-- Run typecheck, lint, tests, and a production build before declaring a change complete.
+- Run typecheck, lint, tests, or a production build only when explicitly requested or when the task explicitly requires that check; do not run them as a general completion checklist.
 - If a check cannot be added during the hackathon, leave a TODO with the risk and the intended test boundary.
 
 ## Google Cloud and deployment

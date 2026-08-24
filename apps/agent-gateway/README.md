@@ -3,7 +3,7 @@
 The private Go policy and tool broker for the Agent Runtime. It is the final
 internal boundary before provider, graph, and artifact access.
 
-Knowledge Source registration and revision metadata belong to the Gateway API
+Source registration and revision metadata belong to the Gateway API
 control plane. This service remains the Runtime-facing data-plane boundary for
 source acquisition, provider tools, raw artifact access, and future Graph
 projection; it is not a second Source registry.
@@ -64,7 +64,7 @@ Endpoints:
   ingestion;
 - `GET /v1/workflow-capabilities` — registered builder capabilities and the
   generic Temporal workflow type;
-- `POST /v1/workflows/validate` — validates a user blueprint and derives its
+- `POST /v1/workflows/validate` — validates a user-created Blueprint and derives its
   permission requirements;
 - `POST /v1/workflows` — MVP in-memory blueprint registration;
 - `GET /v1/workflows/:workflowId` — reads a registered blueprint.

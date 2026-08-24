@@ -15,7 +15,7 @@ import '@xyflow/react/dist/style.css'
 import { CircleDashed, GitBranch, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { WorkflowEventProjection, WorkflowExecutionStatus } from '@encois/contracts'
-import { InteractiveMiniMap, miniMapColors } from '@/components/interactive-minimap'
+import { FitViewOnContentChange, InteractiveMiniMap, miniMapColors } from '@/components/interactive-minimap'
 import { WorkflowStatusIndicator } from '@/components/workflow-status'
 import { getWorkflowCanvasStages, type WorkflowNodeStatus } from '@/lib/workflow-canvas-model'
 
@@ -127,11 +127,12 @@ export function WorkflowCanvas({ refreshCount, lastPolledAt, events = [], runSta
         nodesConnectable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: true }}
-        minZoom={0.25}
+        minZoom={0.15}
         maxZoom={1.25}
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
+        <FitViewOnContentChange contentKey={graph.nodes.map((node) => node.id).join('|')} padding={0.28} />
         <InteractiveMiniMap nodeColor={(node) => statusColors[(node.data as WorkflowNodeData).status]} />
         <Panel position="top-left">
           <div className="flex flex-col gap-2 rounded-md border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">

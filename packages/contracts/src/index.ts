@@ -111,6 +111,7 @@ export type DataProvenance = {
 
 export type KnowledgeSourceScope = ExecutionScope;
 
+/** Wire-compatible Source representation. The public product term is Source. */
 export type KnowledgeSource = {
   contractVersion: typeof ContractVersion.KnowledgeSource;
   id: string;
@@ -128,6 +129,12 @@ export type KnowledgeSource = {
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * User-facing terminology is Source. Keep the wire-compatible KnowledgeSource
+ * alias while older runtime and generated contracts are migrated independently.
+ */
+export type Source = KnowledgeSource;
 
 export type SourceRevision = {
   contractVersion: typeof ContractVersion.SourceRevision;
@@ -200,6 +207,8 @@ export type KnowledgeSourceCreateRequest = {
   contentType?: string;
   configuration?: JsonObject;
 };
+
+export type SourceCreateRequest = KnowledgeSourceCreateRequest;
 
 export type SavedInvestigationKind = "graph" | "memory" | "workflow";
 
@@ -307,7 +316,7 @@ export type WorkflowBlueprint = {
   blueprintId: string;
   version: string;
   name: string;
-  workflowType: typeof TemporalWorkflowType.UserBlueprint;
+  workflowType: typeof TemporalWorkflowType.Dynamic;
   purpose: string;
   enabled: boolean;
   steps: readonly WorkflowStep[];
@@ -345,7 +354,7 @@ export type WorkflowTemplateStep = {
 export type WorkflowTemplate = {
   schemaVersion: "workflow-template.v1";
   version: string;
-  workflowType: typeof TemporalWorkflowType.UserBlueprint;
+  workflowType: typeof TemporalWorkflowType.Dynamic;
   purpose: string;
   inputs: Readonly<Record<string, { type: string; description: string; required?: boolean }> >;
   providerSlots: readonly {
@@ -361,6 +370,8 @@ export type WorkflowTemplate = {
   };
 };
 
+export type WorkflowTemplateStatus = "active" | "disabled" | "deleted";
+
 export type WorkflowTemplateProjection = {
   id: string;
   key: string;
@@ -369,6 +380,7 @@ export type WorkflowTemplateProjection = {
   description: string;
   keywords: readonly string[];
   requiredCapabilities: readonly string[];
+  status: WorkflowTemplateStatus;
   version: string;
   schemaVersion: string;
   template: WorkflowTemplate;
@@ -381,7 +393,7 @@ export type WorkflowBlueprintProjection = {
   version: string;
   name: string;
   purpose: string;
-  workflowType: typeof TemporalWorkflowType.UserBlueprint;
+  workflowType: typeof TemporalWorkflowType.Dynamic;
   status: WorkflowBlueprintStatus;
   isCurrent: boolean;
   sourcePlanId?: string;
@@ -496,7 +508,10 @@ export type WorkflowExecutionProjection = {
   statusReason?: WorkflowStatusReason;
   statusMessage?: string;
   retryAt?: string;
+  completedAt?: string;
   organizationId: string;
+  /** Authorized organization-unit scope used to start this run. */
+  scope?: ExecutionScope;
   reused?: boolean;
   retentionUntil?: string;
   createdAt: string;
@@ -580,7 +595,8 @@ export type IntegrationAuthorizationStart = {
 export type IntegrationCreateRequest = {
   displayName: string;
   provider: string;
-  organizationUnitId: string;
+  /** Deprecated compatibility field. Integrations are always organization-scoped. */
+  organizationUnitId?: string;
   grantedScopes?: readonly string[];
 };
 
@@ -1055,7 +1071,7 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
   if (!isJsonObject(value)) return null;
   if (!validateContract("workflowBlueprint", value).valid) return null;
   if (value.contractVersion !== ContractVersion.WorkflowBlueprint) return null;
-  if (value.workflowType !== TemporalWorkflowType.UserBlueprint) return null;
+  if (value.workflowType !== TemporalWorkflowType.Dynamic) return null;
   if (typeof value.blueprintId !== "string" || value.blueprintId.trim().length === 0) return null;
   if (typeof value.version !== "string" || value.version.trim().length === 0) return null;
   if (typeof value.name !== "string" || typeof value.purpose !== "string") return null;
@@ -1067,21 +1083,21 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
   if (value.parameters !== undefined && (!isJsonObject(value.parameters) || Object.values(value.parameters).some((parameter) => typeof parameter !== "string"))) return null;
 
   const steps: WorkflowStep[] = [];
-  for (const candidate of value.steps) {
-    if (!isJsonObject(candidate) || typeof candidate.id !== "string" || typeof candidate.kind !== "string") return null;
-    if (!Object.values(WorkflowStepKind).includes(candidate.kind as WorkflowStepKind)) return null;
-    if (candidate.tool !== undefined && typeof candidate.tool !== "string") return null;
-    if (candidate.agentDefinition !== undefined && typeof candidate.agentDefinition !== "string") return null;
-    if (candidate.dependsOn !== undefined && (!Array.isArray(candidate.dependsOn) || candidate.dependsOn.some((dependency) => typeof dependency !== "string"))) return null;
-    if (candidate.input !== undefined && !isJsonObject(candidate.input)) return null;
+  for (const stepCandidate of value.steps) {
+    if (!isJsonObject(stepCandidate) || typeof stepCandidate.id !== "string" || typeof stepCandidate.kind !== "string") return null;
+    if (!Object.values(WorkflowStepKind).includes(stepCandidate.kind as WorkflowStepKind)) return null;
+    if (stepCandidate.tool !== undefined && typeof stepCandidate.tool !== "string") return null;
+    if (stepCandidate.agentDefinition !== undefined && typeof stepCandidate.agentDefinition !== "string") return null;
+    if (stepCandidate.dependsOn !== undefined && (!Array.isArray(stepCandidate.dependsOn) || stepCandidate.dependsOn.some((dependency) => typeof dependency !== "string"))) return null;
+    if (stepCandidate.input !== undefined && !isJsonObject(stepCandidate.input)) return null;
     steps.push({
-      id: candidate.id,
-      kind: candidate.kind as WorkflowStepKind,
-      ...(typeof candidate.tool === "string" ? { tool: candidate.tool } : {}),
-      ...(typeof candidate.agentDefinition === "string" ? { agentDefinition: candidate.agentDefinition } : {}),
-      ...(Array.isArray(candidate.dependsOn) ? { dependsOn: candidate.dependsOn as string[] } : {}),
-      ...(isJsonObject(candidate.input) ? { input: candidate.input } : {}),
-      ...(typeof candidate.requiresApproval === "boolean" ? { requiresApproval: candidate.requiresApproval } : {}),
+      id: stepCandidate.id,
+      kind: stepCandidate.kind as WorkflowStepKind,
+      ...(typeof stepCandidate.tool === "string" ? { tool: stepCandidate.tool } : {}),
+      ...(typeof stepCandidate.agentDefinition === "string" ? { agentDefinition: stepCandidate.agentDefinition } : {}),
+      ...(Array.isArray(stepCandidate.dependsOn) ? { dependsOn: stepCandidate.dependsOn as string[] } : {}),
+      ...(isJsonObject(stepCandidate.input) ? { input: stepCandidate.input } : {}),
+      ...(typeof stepCandidate.requiresApproval === "boolean" ? { requiresApproval: stepCandidate.requiresApproval } : {}),
     });
   }
 
@@ -1090,7 +1106,7 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
     blueprintId: value.blueprintId,
     version: value.version,
     name: value.name,
-    workflowType: TemporalWorkflowType.UserBlueprint,
+    workflowType: TemporalWorkflowType.Dynamic,
     purpose: value.purpose,
     enabled: value.enabled !== false,
     steps,

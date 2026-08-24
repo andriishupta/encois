@@ -21,7 +21,7 @@ artifacts retain source material; and Temporal retains execution history.
 ## Current MVP flow
 
 ```text
-Knowledge Source / provider
+Organization Integration + unit Source / provider
   -> API Source + immutable Revision
   -> typed artifact reference
   -> Temporal source-ingestion workflow

@@ -39,7 +39,7 @@ func (mockSourceReader) Read(_ context.Context, input SourceIngestionWorkflowInp
 	} else if input.Provider == "github" {
 		text += "checkout repository has 2 open pull requests; 1 failing check\n"
 	} else {
-		text += "mock knowledge source content\n"
+		text += "mock Source content\n"
 	}
 	return RawSource{Bytes: []byte(text), ContentType: contentType, ArtifactRef: input.ArtifactRef, SourceID: input.SourceID, ObservedAt: time.Now().UTC().Format(time.RFC3339)}, nil
 }

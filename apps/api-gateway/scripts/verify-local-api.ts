@@ -64,7 +64,7 @@ async function verify(): Promise<void> {
   assert(workflows.status === 200 && Array.isArray(workflows.data), "Owner cannot read the Temporal workflow list.");
   assert(activity.status === 200 && Array.isArray(activity.data), "Owner cannot read workflow activity.");
   assert(integrations.status === 200 && Array.isArray(integrations.data) && integrations.data.length >= 3, "Owner cannot see seeded integrations.");
-  assert(sources.status === 200 && Array.isArray(sources.data) && sources.data.length >= 4, "Owner cannot see seeded Knowledge Sources.");
+  assert(sources.status === 200 && Array.isArray(sources.data) && sources.data.length >= 4, "Owner cannot see seeded Sources.");
   assert(recommendations.status === 200 && Array.isArray(recommendations.data) && recommendations.data.length > 0, "Owner cannot see scoped persisted recommendations.");
   assert(recommendations.data.every((recommendation) => recommendation.id.length > 0 && recommendation.recommendationKey.length > 0 && new Set(["open", "accepted", "dismissed"]).has(recommendation.status)), "Recommendation response contains an invalid recommendation state.");
   assert(plannerVersions.status === 200 && Array.isArray(plannerVersions.data), "Owner cannot read planner version history.");

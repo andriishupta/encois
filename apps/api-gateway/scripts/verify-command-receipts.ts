@@ -23,7 +23,7 @@ try {
   const membershipId = randomUUID();
   const definitionId = randomUUID();
   const workflowRunId = randomUUID();
-  const workflowId = `workflow:${organizationId}:encois.user-blueprint.v1:receipt-concurrency`;
+  const workflowId = `workflow:${organizationId}:encois.dynamic.v1:receipt-concurrency`;
 
   await seedClient`INSERT INTO organizations (id, slug, name) VALUES (${organizationId}, ${`api-receipt-${organizationId}`}, 'API receipt verification')`;
   await seedClient`
@@ -56,7 +56,7 @@ try {
   `;
   await seedClient`
     INSERT INTO workflow_definitions (id, organization_id, key, version, status)
-    VALUES (${definitionId}, ${organizationId}, 'encois.user-blueprint.v1', 'v1', 'approved')
+    VALUES (${definitionId}, ${organizationId}, 'encois.dynamic.v1', 'v1', 'approved')
   `;
   await seedClient`
     INSERT INTO workflow_runs (id, organization_id, definition_id, actor_user_id, temporal_namespace, temporal_task_queue, temporal_workflow_id, status, scope)
@@ -65,7 +65,7 @@ try {
 
   const projection: WorkflowExecutionProjection = {
     workflowId,
-    workflowType: "encois.user-blueprint.v1",
+    workflowType: "encois.dynamic.v1",
     namespace: "default",
     taskQueue: "encois-agent-runtime",
     status: "waiting",

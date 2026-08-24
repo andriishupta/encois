@@ -36,7 +36,7 @@ const (
 type TemporalWorkflowType string
 
 const (
-	WorkflowTypeUserBlueprint    TemporalWorkflowType = "encois.user-blueprint.v1"
+	WorkflowTypeDynamic          TemporalWorkflowType = "encois.dynamic.v1"
 	WorkflowTypeCoordinator      TemporalWorkflowType = "CoordinatorWorkflow"
 	WorkflowTypeBootstrapProject TemporalWorkflowType = "BootstrapProjectWorkflow"
 	WorkflowTypeSourceIngestion  TemporalWorkflowType = "encois.source-ingestion.v1"

@@ -62,7 +62,7 @@ func TestCoordinatorWorkflowSubmitsAPlanAfterReconciliationSignal(t *testing.T) 
 						BlueprintID:      "blueprint-1",
 						Version:          "1",
 						Name:             "generic context refresh",
-						WorkflowType:     UserBlueprintWorkflowType,
+						WorkflowType:     DynamicWorkflowType,
 						Purpose:          "refresh context",
 						Enabled:          true,
 						RequiresApproval: true,
@@ -184,7 +184,7 @@ func TestCoordinatorWorkflowDeduplicatesCoordinatorEvents(t *testing.T) {
 	}, activity.RegisterOptions{Name: CoordinatorPlanActivityName})
 	env.RegisterActivityWithOptions(func(context.Context, ApprovedWorkflowStartInput) (ApprovedWorkflowStartResult, error) {
 		startedCalls++
-		return ApprovedWorkflowStartResult{WorkflowID: "workflow:org-1:encois.user-blueprint.v1:release-aug-30", Status: "queued"}, nil
+		return ApprovedWorkflowStartResult{WorkflowID: "workflow:org-1:encois.dynamic.v1:release-aug-30", Status: "queued"}, nil
 	}, activity.RegisterOptions{Name: CoordinatorStartActivityName})
 	event := CoordinatorEvent{
 		ContractVersion: "coordinator-event.v1",
@@ -236,7 +236,7 @@ func TestCoordinatorWorkflowRetainsFailedStartsForRetry(t *testing.T) {
 			return ApprovedWorkflowStartResult{}, errors.New("gateway temporarily unavailable")
 		}
 		startedCalls++
-		return ApprovedWorkflowStartResult{WorkflowID: "workflow:org-1:encois.user-blueprint.v1:release-retry", Status: "queued"}, nil
+		return ApprovedWorkflowStartResult{WorkflowID: "workflow:org-1:encois.dynamic.v1:release-retry", Status: "queued"}, nil
 	}, activity.RegisterOptions{Name: CoordinatorStartActivityName})
 	env.RegisterActivityWithOptions(func(context.Context, CoordinatorStartInput) (CoordinatorPlanActivityResult, error) {
 		return CoordinatorPlanActivityResult{Status: "deferred-no-agent-model"}, nil

@@ -67,7 +67,7 @@ In Encois, the primary Worker is a Go application in apps/agent-runtime.
 A named Temporal queue from which Workers receive Workflow or Activity tasks. Examples:
 
 ~~~text
-encois.user-blueprint.v1
+encois.dynamic.v1
 integration-activities
 synthesis
 ~~~
@@ -81,7 +81,7 @@ Deterministic code that describes a durable business process. A Workflow coordin
 The MVP's generic executable Workflow is:
 
 ~~~text
-encois.user-blueprint.v1
+encois.dynamic.v1
 ~~~
 
 Workflow code must not make arbitrary network calls, call Gemini directly, or read a database directly. Those operations belong in Activities.
@@ -252,7 +252,7 @@ A versioned, typed configuration describing an approved workflow intent:
 trigger, step graph, input/output schemas, tool and Agent Definition references,
 required scopes, schedule, budget, retry, and approval requirements. A
 Blueprint is not executable Go code; it is interpreted by the registered
-`encois.user-blueprint.v1` Workflow.
+`encois.dynamic.v1` Workflow.
 
 ### Workflow Step
 
@@ -320,16 +320,17 @@ GitHub Integration
 Monitoring Integration
 ~~~
 
-### Knowledge Source
+### Source
 
-An organization-scoped logical origin of company knowledge. An Integration is
-one source kind; other kinds include uploaded documents, manual input, and
-media. A Knowledge Source carries read/visibility scope and lifecycle state,
-but never stores provider credentials.
+An organization-unit-scoped logical origin of company knowledge. A provider
+Source references an organization-level Integration; other kinds include
+uploaded documents, manual input, and media. A Source carries read/visibility
+scope and lifecycle state, but never stores provider credentials. The API and
+generated wire contracts retain `KnowledgeSource` names for compatibility.
 
 ### Source Revision
 
-An immutable version of a Knowledge Source. It points to raw data through an
+An immutable version of a Source. It points to raw data through an
 artifact reference or a provider object ID and preserves observed time,
 checksum, content type, and later provenance locators. Replacing an uploaded
 file or reconciling changed provider data creates a new revision.
@@ -339,7 +340,7 @@ file or reconciling changed provider data creates a new revision.
 The platform-owned `encois.source-ingestion.v1` Temporal Workflow that runs
 acquisition, parsing, scope validation, redaction, fact/entity/relationship
 extraction, provenance creation, Graph projection, and optional Memory
-distillation. It is not a user Blueprint and does not create Go code
+distillation. It is not a user-created Blueprint and does not create Go code
 dynamically.
 
 ### Knowledge Ingestion

@@ -40,7 +40,7 @@ The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
 `password` provider, and uses `scripts/seed-local.ts` to create two isolated fixture
 organizations (`Organization Test` and `Organization Avengers`), active users,
 five onboarding invite users, scoped organization units, integrations,
-Knowledge Sources/revisions, ingestion runs, and webhooks. It does not create
+Sources/revisions, ingestion runs, and webhooks. It does not create
 workflow executions or fake workflow timelines; those come from the local
 Temporal server. The seed is idempotent and local-only.
 
@@ -60,7 +60,7 @@ status is `pending`, `initializing`, `ready`, or `failed`; a missing
 - `pending`, `initializing`, or `failed`: ordinary dashboard, membership,
   integration, Workflow, Run, and review routes are blocked with
   `ORGANIZATION_ONBOARDING_REQUIRED` (`409`). Only the onboarding settings and
-  Source upload/ingestion paths, published Template/current approved Blueprint
+  Source upload/ingestion paths, active Template/current approved Blueprint
   catalogs, and authorized start/retry operations remain available.
 - `ready`: the normal dashboard opens and the existing authentication,
   organization scope, and permission rules apply.
@@ -83,7 +83,7 @@ Current blueprint routes:
 - `GET /api/v1/integrations/:integrationId/webhook` — read the scoped webhook endpoint projection without returning a secret.
 - `POST /api/v1/integrations/:integrationId/webhook` — provision or repair a signed endpoint; the generated secret is returned once and stored in Secret Manager (or the local fixture adapter).
 - `POST /api/v1/integrations/:integrationId/webhook/rotate`, `/enable`, and `/disable` — rotate the signing secret or control delivery state with Integration manage permission and audit events.
-- `GET /api/v1/sources` — list scoped Knowledge Sources.
+- `GET /api/v1/sources` — list Sources visible in the caller's scope.
 - `POST /api/v1/sources` — register an integration, uploaded-document, manual, or media Source.
 - `POST /api/v1/sources/uploads` — upload a validated PDF (up to 10 MiB) as a new source and immutable revision; production requires `SOURCE_ARTIFACT_BUCKET`.
 - `GET /api/v1/sources/:sourceId` — read a Source and its immutable revisions.
@@ -125,13 +125,14 @@ metadata plus immutable JSONB versions. They use logical capabilities and
 provider slots, so a template can resolve to GitHub or GitLab, Jira or Linear,
 and Slack or Teams. Workflow Creator later maps a selected template to a
 validated tenant Blueprint; the Go Runtime does not read this catalog.
-Knowledge Sources are a separate control-plane model. Templates do not create
+Sources are a separate control-plane model. Templates do not create
 Sources, revisions, or ingestion runs.
 
-During preview, the Gateway resolves each Template provider slot against active
-integrations and the caller's organization scope. The preview returns resolved
-and missing slots so the UI can explain the gap; required gaps block plan
-submission and application, while optional gaps are returned as warnings.
+During preview, the Gateway resolves each Template provider slot against an
+active organization Integration, a matching unit-scoped Source, and the
+caller's organization scope. The preview returns resolved and missing slots so
+the UI can explain the gap; required gaps block plan submission and
+application, while optional gaps are returned as warnings.
 Integration IDs remain server-side and are not accepted from the browser as
 workflow-creation input.
 

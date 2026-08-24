@@ -33,7 +33,7 @@ const blueprint = {
   blueprintId: "project-context",
   version: "1.0.0",
   name: "Project context",
-  workflowType: TemporalWorkflowType.UserBlueprint,
+  workflowType: TemporalWorkflowType.Dynamic,
   purpose: "Collect project context.",
   enabled: true,
   steps: [
@@ -277,7 +277,7 @@ assert.equal(
       },
       {
         kind: "cancel",
-        targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:project-1",
+        targetWorkflowId: "workflow:org-1:encois.dynamic.v1:project-1",
         reason: "Cancel the superseded execution.",
         requiresApproval: true,
       },
@@ -294,7 +294,7 @@ assert.equal(
     observedAt: "2026-08-20T16:00:00.000Z",
     changes: [{
       kind: "deprecate",
-    targetWorkflowId: "workflow:org-1:encois.user-blueprint.v1:project-1",
+    targetWorkflowId: "workflow:org-1:encois.dynamic.v1:project-1",
       reason: "Wrong target kind.",
       requiresApproval: true,
     }],

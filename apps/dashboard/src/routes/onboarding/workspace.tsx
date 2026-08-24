@@ -56,7 +56,7 @@ function WorkspaceSetupPage() {
           <CardDescription className="text-primary-foreground/70">This information comes from the workspace control plane for the signed-in organization.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm text-primary-foreground/80">
-          <p>The next step uploads a real organization context document as a scoped Knowledge Source.</p>
+          <p>The next step uploads a real organization context document as a scoped Source.</p>
           <div className="flex items-start gap-3 rounded-lg border border-primary-foreground/15 bg-primary-foreground/10 p-3">
             <Users className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>Workspace access and visibility remain controlled by the existing organization permissions.</span>

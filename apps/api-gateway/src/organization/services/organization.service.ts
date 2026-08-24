@@ -399,7 +399,7 @@ async function validateWorkflowCatalogSelections(
       .innerJoin(workflowTemplateVersions, eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id))
       .where(and(
         inArray(workflowTemplates.key, selectedWorkflows),
-        eq(workflowTemplates.status, "published"),
+        eq(workflowTemplates.status, "active"),
         eq(workflowTemplateVersions.status, "published"),
         eq(workflowTemplateVersions.version, workflowTemplates.publishedVersion!),
         or(

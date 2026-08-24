@@ -16,6 +16,7 @@ import type { AosPrincipal } from "../../middleware/aos.js";
 import { database } from "../../database.js";
 import { hasPermission } from "../../auth/authorization.js";
 import type { WorkflowClient } from "../temporal-client.js";
+import { listPage, type ListPage, type ListQuery } from "../list-query.js";
 import {
   isWorkflowServiceError,
   localUserId,
@@ -290,6 +291,17 @@ export async function listWorkflowPlans(
   principal: AosPrincipal,
   limit = 100,
 ): Promise<readonly WorkflowPlanRecord[]> {
+  return (await listWorkflowPlansPage(principal, {
+    sort: "updated-desc",
+    limit: Math.max(1, Math.min(limit, 100)),
+    offset: 0,
+  })).items;
+}
+
+export async function listWorkflowPlansPage(
+  principal: AosPrincipal,
+  query: ListQuery,
+): Promise<ListPage<WorkflowPlanRecord>> {
   if (!database) return persistenceUnavailable();
   await requirePlanManager(principal);
   const rows = await withOrganizationContext(database, principal.organizationId, (db) => db
@@ -297,7 +309,7 @@ export async function listWorkflowPlans(
     .from(workflowChangePlans)
     .where(eq(workflowChangePlans.organizationId, principal.organizationId))
     .orderBy(desc(workflowChangePlans.updatedAt))
-    .limit(Math.max(1, Math.min(limit, 100))));
+    .limit(100));
 
   const visible: WorkflowPlanRecord[] = [];
   for (const row of rows) {
@@ -311,7 +323,24 @@ export async function listWorkflowPlans(
       // intentionally omitted instead of leaking a stale or unauthorized proposal.
     }
   }
-  return visible;
+  const normalizedQuery = query.query?.toLowerCase();
+  const filtered = visible.filter((plan) => {
+    if (query.status && plan.status !== query.status) return false;
+    if (!normalizedQuery) return true;
+    const change = plan.plan.changes[0];
+    const searchable = [change?.blueprint?.name, change?.blueprint?.purpose, change?.reason, plan.planId]
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(normalizedQuery);
+  });
+  const sorted = [...filtered].sort((left, right) => {
+    if (query.sort === "updated-asc") return left.updatedAt.localeCompare(right.updatedAt);
+    if (query.sort === "name-asc") return (left.plan.changes[0]?.blueprint?.name ?? "").localeCompare(right.plan.changes[0]?.blueprint?.name ?? "");
+    if (query.sort === "status") return left.status.localeCompare(right.status) || right.updatedAt.localeCompare(left.updatedAt);
+    return right.updatedAt.localeCompare(left.updatedAt);
+  });
+  return listPage(sorted, query);
 }
 
 export async function listWorkflowPlannerVersions(

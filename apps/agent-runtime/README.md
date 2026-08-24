@@ -90,13 +90,13 @@ so Cloud Run can replace the revision.
 
 Registered workflows:
 
-- `encois.user-blueprint.v1` — generic workflow that interprets a validated
+- `encois.dynamic.v1` — generic workflow that interprets a validated
   company-specific Blueprint and executes typed tool/agent steps;
 - `CoordinatorWorkflow` — long-lived organization onboarding and
   reconciliation loop; uses Signals, timers, and Continue-As-New;
 - `BootstrapProjectWorkflow` — short initial organization bootstrap phase.
 - `encois.source-ingestion.v1` — platform-owned source/revision ingestion
-  coordinator. It is distinct from user Blueprints and runs the shared
+  coordinator. It is distinct from user-created Blueprints and runs the shared
   acquire → parse → facts/provenance → Graph → Memory pipeline. Local mode
   uses deterministic source fixtures; hosted mode reads artifacts through the
   Agent Gateway and writes to the configured GCP adapters.
@@ -119,7 +119,7 @@ plus mock GitHub pull-request/check data. Agent steps currently run ADK
 reasoning over their validated input and prior step results; provider tools
 are invoked by explicit `tool` steps.
 
-Knowledge Source ingestion uses the same private data-plane boundary after a
+Source ingestion uses the same private data-plane boundary after a
 Source and immutable Revision are registered by the Gateway API. The Workflow
 input carries only source/revision IDs, scope, trigger, and artifact/provider
 references; raw bytes and credentials never enter Temporal history. The

@@ -91,7 +91,7 @@ function WorkflowDefinitionActions({ workflow, activeRun, canRun, runsReady }: {
       const latestRuns = await queryClient.fetchQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, staleTime: 0 })
       const latestActiveRun = selectActiveRuns(latestRuns).get(workflow.blueprintId)
       if (latestActiveRun) throw new Error('This workflow already has an active Run.')
-      return startWorkflow({ workflowType: TemporalWorkflowType.UserBlueprint, blueprintId: workflow.blueprintId, blueprintVersion: workflow.version })
+      return startWorkflow({ workflowType: TemporalWorkflowType.Dynamic, blueprintId: workflow.blueprintId, blueprintVersion: workflow.version })
     },
     onSuccess: async (started) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() })

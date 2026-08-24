@@ -31,7 +31,7 @@ export const ContractVersion = {
 export type ContractVersion = (typeof ContractVersion)[keyof typeof ContractVersion];
 
 export const TemporalWorkflowType = {
-  UserBlueprint: "encois.user-blueprint.v1",
+  Dynamic: "encois.dynamic.v1",
   Coordinator: "CoordinatorWorkflow",
   BootstrapProject: "BootstrapProjectWorkflow",
   SourceIngestion: "encois.source-ingestion.v1",

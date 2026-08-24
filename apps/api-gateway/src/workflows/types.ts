@@ -73,7 +73,7 @@ export type {
 
 export type WorkflowIdentity = {
   organizationId: string;
-  workflowType: string;
+  organizationUnitId?: string;
   key: string;
 };
 
@@ -84,13 +84,17 @@ function safePart(value: string, fallback: string): string {
 
 /**
  * Generates a stable, tenant-prefixed Temporal Workflow Id.
- * A caller-provided key is idempotent within an organization and workflow type.
+ * The executable Temporal type is intentionally not part of the ID. It is
+ * available as Temporal metadata, while the caller-provided key remains
+ * idempotent within the organization and organization-unit scope.
  */
 export function buildWorkflowId(identity: WorkflowIdentity): string {
   return [
-    "workflow",
+    "org",
     safePart(identity.organizationId, "organization"),
-    safePart(identity.workflowType, "workflow"),
+    "unit",
+    safePart(identity.organizationUnitId ?? "organization", "organization"),
+    "run",
     safePart(identity.key, "request"),
   ].join(":");
 }
@@ -99,7 +103,7 @@ export function buildWorkflowId(identity: WorkflowIdentity): string {
 export function buildCoordinatorWorkflowId(organizationId: string, coordinatorId: string): string {
   return buildWorkflowId({
     organizationId,
-    workflowType: TemporalWorkflowType.Coordinator,
+    organizationUnitId: organizationId,
     key: coordinatorId,
   });
 }
