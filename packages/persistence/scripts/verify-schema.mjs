@@ -1,5 +1,5 @@
-import postgres from "postgres";
 import { randomUUID } from "node:crypto";
+import postgres from "postgres";
 
 const url = process.env.DATABASE_MIGRATION_URL;
 if (!url) throw new Error("DATABASE_MIGRATION_URL is required");
@@ -14,7 +14,8 @@ try {
     WHERE n.nspname = 'public' AND c.relname = 'workflow_command_receipts'
   `;
   if (!table) throw new Error("workflow_command_receipts table is missing");
-  if (!table.row_security) throw new Error("workflow_command_receipts RLS is not enabled");
+  if (!table.row_security)
+    throw new Error("workflow_command_receipts RLS is not enabled");
 
   const [policy] = await sql`
     SELECT 1
@@ -23,7 +24,8 @@ try {
       AND tablename = 'workflow_command_receipts'
       AND policyname = 'workflow_command_receipts_tenant_isolation'
   `;
-  if (!policy) throw new Error("workflow_command_receipts tenant policy is missing");
+  if (!policy)
+    throw new Error("workflow_command_receipts tenant policy is missing");
 
   const [scopeIndex] = await sql`
     SELECT indexdef
@@ -33,7 +35,12 @@ try {
       AND indexname = 'workflow_command_receipts_scope_key_idx'
   `;
   const indexDefinition = String(scopeIndex?.indexdef ?? "");
-  for (const column of ["organization_id", "temporal_workflow_id", "command_type", "command_id"]) {
+  for (const column of [
+    "organization_id",
+    "temporal_workflow_id",
+    "command_type",
+    "command_id",
+  ]) {
     if (!indexDefinition.includes(column)) {
       throw new Error(`workflow command uniqueness index is missing ${column}`);
     }
@@ -46,8 +53,15 @@ try {
       has_table_privilege('api_gateway', 'public.workflow_command_receipts', 'UPDATE') AS can_update,
       has_table_privilege('api_gateway', 'public.workflow_command_receipts', 'DELETE') AS can_delete
   `;
-  if (!privileges?.can_select || !privileges?.can_insert || !privileges?.can_update || privileges.can_delete) {
-    throw new Error(`workflow command receipt privileges are unsafe: ${JSON.stringify(privileges)}`);
+  if (
+    !privileges?.can_select ||
+    !privileges?.can_insert ||
+    !privileges?.can_update ||
+    privileges.can_delete
+  ) {
+    throw new Error(
+      `workflow command receipt privileges are unsafe: ${JSON.stringify(privileges)}`,
+    );
   }
 
   const [retentionRole] = await sql`
@@ -57,7 +71,10 @@ try {
       AND rolcanlogin = false
       AND rolbypassrls = false
   `;
-  if (!retentionRole) throw new Error("tenant-scoped retention capability role is missing or unsafe");
+  if (!retentionRole)
+    throw new Error(
+      "tenant-scoped retention capability role is missing or unsafe",
+    );
 
   const [retentionColumn] = await sql`
     SELECT 1
@@ -66,7 +83,8 @@ try {
       AND table_name = 'workflow_runs'
       AND column_name = 'retention_until'
   `;
-  if (!retentionColumn) throw new Error("workflow run retention deadline column is missing");
+  if (!retentionColumn)
+    throw new Error("workflow run retention deadline column is missing");
 
   const [retentionPrivileges] = await sql`
     SELECT
@@ -76,8 +94,16 @@ try {
       has_table_privilege('api_gateway_retention', 'public.workflow_command_receipts', 'DELETE') AS can_delete_receipts,
       has_table_privilege('api_gateway_retention', 'public.audit_events', 'INSERT') AS can_insert_audit
   `;
-  if (!retentionPrivileges?.can_select_runs || !retentionPrivileges?.can_delete_runs || !retentionPrivileges?.can_delete_events || !retentionPrivileges?.can_delete_receipts || !retentionPrivileges?.can_insert_audit) {
-    throw new Error(`retention capability privileges are incomplete: ${JSON.stringify(retentionPrivileges)}`);
+  if (
+    !retentionPrivileges?.can_select_runs ||
+    !retentionPrivileges?.can_delete_runs ||
+    !retentionPrivileges?.can_delete_events ||
+    !retentionPrivileges?.can_delete_receipts ||
+    !retentionPrivileges?.can_insert_audit
+  ) {
+    throw new Error(
+      `retention capability privileges are incomplete: ${JSON.stringify(retentionPrivileges)}`,
+    );
   }
 
   const organizationId = randomUUID();
@@ -101,11 +127,24 @@ try {
       VALUES
         (${organizationId}, ${workflowRunId}, ${workflowId}, 'update', 'concurrent-command-1', 'hash-1')
     `;
-    const attempts = await Promise.allSettled([receiptInsert(), receiptInsert()]);
-    const successful = attempts.filter((attempt) => attempt.status === "fulfilled");
-    const rejected = attempts.filter((attempt) => attempt.status === "rejected");
-    if (successful.length !== 1 || rejected.length !== 1 || rejected[0].reason?.code !== "23505") {
-      throw new Error(`command receipt uniqueness race was not enforced: ${JSON.stringify(attempts)}`);
+    const attempts = await Promise.allSettled([
+      receiptInsert(),
+      receiptInsert(),
+    ]);
+    const successful = attempts.filter(
+      (attempt) => attempt.status === "fulfilled",
+    );
+    const rejected = attempts.filter(
+      (attempt) => attempt.status === "rejected",
+    );
+    if (
+      successful.length !== 1 ||
+      rejected.length !== 1 ||
+      rejected[0].reason?.code !== "23505"
+    ) {
+      throw new Error(
+        `command receipt uniqueness race was not enforced: ${JSON.stringify(attempts)}`,
+      );
     }
   } finally {
     await sql`DELETE FROM organizations WHERE id = ${organizationId}`;

@@ -1,10 +1,12 @@
-import postgres from "postgres";
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema/index.js";
 
 export type PersistenceDatabase = PostgresJsDatabase<typeof schema>;
-export type PersistenceTransaction = Parameters<Parameters<PersistenceDatabase["transaction"]>[0]>[0];
+export type PersistenceTransaction = Parameters<
+  Parameters<PersistenceDatabase["transaction"]>[0]
+>[0];
 
 export type DatabaseClientOptions = {
   maxConnections?: number;
@@ -15,10 +17,13 @@ export function createDatabase(options: DatabaseClientOptions = {}): {
   client: postgres.Sql;
   db: PersistenceDatabase;
 } {
-  const url = options.url ?? process.env.DATABASE_RUNTIME_URL ?? process.env.DATABASE_URL;
+  const url =
+    options.url ?? process.env.DATABASE_RUNTIME_URL ?? process.env.DATABASE_URL;
 
   if (!url) {
-    throw new Error("DATABASE_RUNTIME_URL is required to create the runtime database client.");
+    throw new Error(
+      "DATABASE_RUNTIME_URL is required to create the runtime database client.",
+    );
   }
 
   const client = postgres(url, {
@@ -38,7 +43,9 @@ export async function withOrganizationContext<T>(
   callback: (transaction: PersistenceTransaction) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (transaction) => {
-    await transaction.execute(sql`select set_config('app.organization_id', ${organizationId}, true)`);
+    await transaction.execute(
+      sql`select set_config('app.organization_id', ${organizationId}, true)`,
+    );
     return callback(transaction);
   });
 }

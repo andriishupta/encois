@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   AgentMemoryOperation,
   type AgentMemoryRequest,
+  type AgentMemoryResult,
   ContractVersion,
   type MemoryChangeRecord,
   type MemoryChangeRequest,
@@ -494,7 +495,7 @@ export async function applyMemoryChange(
       : {}),
   };
 
-  let result;
+  let result: AgentMemoryResult;
   try {
     result = await options.client.mutate(runtimeRequest);
   } catch (error) {

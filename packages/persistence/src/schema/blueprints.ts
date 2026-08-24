@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -9,7 +10,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { organizations } from "./organizations.js";
 
 export const workflowBlueprintStatus = pgEnum("workflow_blueprint_status", [
@@ -17,7 +17,8 @@ export const workflowBlueprintStatus = pgEnum("workflow_blueprint_status", [
   "approved",
   "retired",
 ]);
-export type WorkflowBlueprintStatus = (typeof workflowBlueprintStatus.enumValues)[number];
+export type WorkflowBlueprintStatus =
+  (typeof workflowBlueprintStatus.enumValues)[number];
 
 /**
  * Persisted company-specific configuration for the generic Temporal Workflow.
@@ -39,8 +40,12 @@ export const workflowBlueprints = pgTable(
     status: workflowBlueprintStatus("status").notNull().default("draft"),
     isCurrent: boolean("is_current").notNull().default(false),
     sourcePlanId: text("source_plan_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
   },
   (table) => [
@@ -49,7 +54,10 @@ export const workflowBlueprints = pgTable(
       table.blueprintId,
       table.version,
     ),
-    uniqueIndex("workflow_blueprints_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_blueprints_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
     uniqueIndex("workflow_blueprints_current_idx")
       .on(table.organizationId, table.blueprintId)
       .where(sql`is_current = true`),

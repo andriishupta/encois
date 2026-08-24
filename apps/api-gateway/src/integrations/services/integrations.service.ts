@@ -647,12 +647,19 @@ function assertCredentialReference(
   if (
     reference.length === 0 ||
     reference.length > 1024 ||
-    /[\u0000-\u001f\u007f\s]/.test(reference) ||
+    hasControlOrWhitespace(reference) ||
     !pattern.test(reference)
   ) {
     throw new Error("INVALID_CREDENTIAL_REFERENCE");
   }
   return reference;
+}
+
+function hasControlOrWhitespace(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f || /\s/u.test(character);
+  });
 }
 
 /**

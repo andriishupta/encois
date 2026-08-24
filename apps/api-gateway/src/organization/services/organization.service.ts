@@ -1295,14 +1295,12 @@ export async function applyOrganizationAccessRequestForPrincipal(
         .set({ access: effectiveAccess })
         .where(eq(membershipScopes.id, existing.id));
     } else {
-      await db
-        .insert(membershipScopes)
-        .values({
-          organizationId: principal.organizationId,
-          membershipId: member.membershipId,
-          organizationUnitId: row.organizationUnitId,
-          access: effectiveAccess,
-        });
+      await db.insert(membershipScopes).values({
+        organizationId: principal.organizationId,
+        membershipId: member.membershipId,
+        organizationUnitId: row.organizationUnitId,
+        access: effectiveAccess,
+      });
     }
     const now = new Date();
     const [updated] = await db
@@ -1520,20 +1518,18 @@ export async function createOrganizationPermissionForPrincipal(
         "ORGANIZATION_PERMISSION_NOT_FOUND",
         "The organization permission could not be saved.",
       );
-    await db
-      .insert(auditEvents)
-      .values({
-        organizationId: principal.organizationId,
-        actorUserId: context.actor.userId,
-        action: existing
-          ? "organization.permission.updated"
-          : "organization.permission.created",
-        outcome: "success",
-        resourceType: "membership_scope",
-        resourceId: scope.id,
-        scope: { unitId: request.unitId, memberId: request.memberId },
-        metadata: { access: request.access },
-      });
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: existing
+        ? "organization.permission.updated"
+        : "organization.permission.created",
+      outcome: "success",
+      resourceType: "membership_scope",
+      resourceId: scope.id,
+      scope: { unitId: request.unitId, memberId: request.memberId },
+      metadata: { access: request.access },
+    });
     return {
       id: scope.id,
       memberId: request.memberId,
@@ -1578,18 +1574,16 @@ export async function updateOrganizationPermissionForPrincipal(
         "ORGANIZATION_PERMISSION_NOT_FOUND",
         "Organization permission not found.",
       );
-    await db
-      .insert(auditEvents)
-      .values({
-        organizationId: principal.organizationId,
-        actorUserId: context.actor.userId,
-        action: "organization.permission.updated",
-        outcome: "success",
-        resourceType: "membership_scope",
-        resourceId: permissionId,
-        scope: { unitId: existing.unitId, memberId: existing.userId },
-        metadata: { access: request.access },
-      });
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.permission.updated",
+      outcome: "success",
+      resourceType: "membership_scope",
+      resourceId: permissionId,
+      scope: { unitId: existing.unitId, memberId: existing.userId },
+      metadata: { access: request.access },
+    });
     return {
       id: permissionId,
       memberId: existing.userId,
@@ -1621,17 +1615,15 @@ export async function deleteOrganizationPermissionForPrincipal(
     await db
       .delete(membershipScopes)
       .where(eq(membershipScopes.id, permissionId));
-    await db
-      .insert(auditEvents)
-      .values({
-        organizationId: principal.organizationId,
-        actorUserId: context.actor.userId,
-        action: "organization.permission.deleted",
-        outcome: "success",
-        resourceType: "membership_scope",
-        resourceId: permissionId,
-        scope: { unitId: existing.unitId, memberId: existing.userId },
-        metadata: {},
-      });
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.permission.deleted",
+      outcome: "success",
+      resourceType: "membership_scope",
+      resourceId: permissionId,
+      scope: { unitId: existing.unitId, memberId: existing.userId },
+      metadata: {},
+    });
   });
 }

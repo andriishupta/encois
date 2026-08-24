@@ -3,9 +3,7 @@ import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { resolveIntegrationCredentialForService } from "../services/integrations.service.js";
 
-function parseRequest(
-  value: unknown,
-): {
+function parseRequest(value: unknown): {
   provider: string;
   capabilities: readonly string[];
   integrationId?: string;

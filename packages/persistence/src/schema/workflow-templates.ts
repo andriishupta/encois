@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   check,
   jsonb,
   pgEnum,
@@ -8,7 +9,6 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations.js";
 
@@ -20,14 +20,15 @@ export const workflowTemplateStatus = pgEnum("workflow_template_status", [
   "deleted",
   "retired",
 ]);
-export type WorkflowTemplateStatus = (typeof workflowTemplateStatus.enumValues)[number];
+export type WorkflowTemplateStatus =
+  (typeof workflowTemplateStatus.enumValues)[number];
 
-export const workflowTemplateVersionStatus = pgEnum("workflow_template_version_status", [
-  "draft",
-  "published",
-  "retired",
-]);
-export type WorkflowTemplateVersionStatus = (typeof workflowTemplateVersionStatus.enumValues)[number];
+export const workflowTemplateVersionStatus = pgEnum(
+  "workflow_template_version_status",
+  ["draft", "published", "retired"],
+);
+export type WorkflowTemplateVersionStatus =
+  (typeof workflowTemplateVersionStatus.enumValues)[number];
 
 export type WorkflowTemplateStep = {
   id: string;
@@ -50,7 +51,9 @@ export type WorkflowTemplate = {
   version: string;
   workflowType: "encois.dynamic.v1";
   purpose: string;
-  inputs: Readonly<Record<string, { type: string; description: string; required?: boolean }> >;
+  inputs: Readonly<
+    Record<string, { type: string; description: string; required?: boolean }>
+  >;
   providerSlots: readonly {
     key: string;
     capabilities: readonly string[];
@@ -69,21 +72,36 @@ export const workflowTemplates = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     /** NULL means a platform-wide catalog entry; non-NULL is tenant-owned. */
-    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
     key: text("key").notNull(),
     category: text("category").notNull(),
     title: text("title").notNull(),
     description: text("description").notNull(),
     keywords: text("keywords").array().notNull().default([]),
-    requiredCapabilities: text("required_capabilities").array().notNull().default([]),
+    requiredCapabilities: text("required_capabilities")
+      .array()
+      .notNull()
+      .default([]),
     publishedVersion: text("published_version"),
     status: workflowTemplateStatus("status").notNull().default("draft"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("workflow_templates_scope_key_idx").on(table.organizationId, table.key),
-    uniqueIndex("workflow_templates_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_templates_scope_key_idx").on(
+      table.organizationId,
+      table.key,
+    ),
+    uniqueIndex("workflow_templates_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -92,18 +110,27 @@ export const workflowTemplateVersions = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     /** Must match the parent scope; NULL means a platform-wide snapshot. */
-    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
     workflowTemplateId: uuid("workflow_template_id")
       .notNull()
-      .references((): AnyPgColumn => workflowTemplates.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => workflowTemplates.id, {
+        onDelete: "cascade",
+      }),
     version: text("version").notNull(),
     schemaVersion: text("schema_version").notNull(),
     template: jsonb("template").$type<WorkflowTemplate>().notNull(),
     status: workflowTemplateVersionStatus("status").notNull().default("draft"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("workflow_template_versions_identity_idx").on(table.workflowTemplateId, table.version),
+    uniqueIndex("workflow_template_versions_identity_idx").on(
+      table.workflowTemplateId,
+      table.version,
+    ),
     uniqueIndex("workflow_template_versions_id_idx").on(table.id),
     check(
       "workflow_template_versions_template_version_check",

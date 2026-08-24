@@ -1,11 +1,12 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { Permission } from '@encois/contracts'
-import { WorkflowRunList } from '@/components/workflow-run-list'
-import { getAuthSession, hasPermission } from '@/lib/auth'
+import { Permission } from "@encois/contracts";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { WorkflowRunList } from "@/components/workflow-run-list";
+import { getAuthSession, hasPermission } from "@/lib/auth";
 
-export const Route = createFileRoute('/_app/workflows/runs')({
+export const Route = createFileRoute("/_app/workflows/runs")({
   beforeLoad: () => {
-    if (!hasPermission(getAuthSession(), Permission.WorkflowsRead)) throw redirect({ to: '/forbidden' })
+    if (!hasPermission(getAuthSession(), Permission.WorkflowsRead))
+      throw redirect({ to: "/forbidden" });
   },
   component: () => <WorkflowRunList />,
-})
+});

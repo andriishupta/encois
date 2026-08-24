@@ -1,13 +1,22 @@
-import { foreignKey, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { organizations } from "./organizations.js";
 import { workflowRuns } from "./workflows.js";
 
-export const workflowCommandReceiptStatus = pgEnum("workflow_command_receipt_status", [
-  "in_flight",
-  "accepted",
-  "failed",
-]);
-export type WorkflowCommandReceiptStatus = (typeof workflowCommandReceiptStatus.enumValues)[number];
+export const workflowCommandReceiptStatus = pgEnum(
+  "workflow_command_receipt_status",
+  ["in_flight", "accepted", "failed"],
+);
+export type WorkflowCommandReceiptStatus =
+  (typeof workflowCommandReceiptStatus.enumValues)[number];
 
 /**
  * Tenant-scoped idempotency receipts for commands sent to Temporal.
@@ -29,11 +38,20 @@ export const workflowCommandReceipts = pgTable(
     commandType: text("command_type").notNull(),
     commandId: text("command_id").notNull(),
     requestHash: text("request_hash").notNull(),
-    status: workflowCommandReceiptStatus("status").notNull().default("in_flight"),
+    status: workflowCommandReceiptStatus("status")
+      .notNull()
+      .default("in_flight"),
     error: text("error"),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     uniqueIndex("workflow_command_receipts_scope_key_idx").on(
@@ -42,7 +60,10 @@ export const workflowCommandReceipts = pgTable(
       table.commandType,
       table.commandId,
     ),
-    uniqueIndex("workflow_command_receipts_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_command_receipts_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.workflowRunId, table.organizationId],
       foreignColumns: [workflowRuns.id, workflowRuns.organizationId],

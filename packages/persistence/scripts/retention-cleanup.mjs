@@ -6,11 +6,20 @@ const batchSize = Number(process.env.RETENTION_CLEANUP_BATCH_SIZE ?? "500");
 const dryRun = process.env.RETENTION_DRY_RUN === "true";
 
 if (!databaseUrl) throw new Error("DATABASE_RETENTION_URL is required");
-if (!organizationId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(organizationId)) {
-  throw new Error("RETENTION_ORGANIZATION_ID must be a valid organization UUID");
+if (
+  !organizationId ||
+  !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    organizationId,
+  )
+) {
+  throw new Error(
+    "RETENTION_ORGANIZATION_ID must be a valid organization UUID",
+  );
 }
 if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
-  throw new Error("RETENTION_CLEANUP_BATCH_SIZE must be an integer between 1 and 5000");
+  throw new Error(
+    "RETENTION_CLEANUP_BATCH_SIZE must be an integer between 1 and 5000",
+  );
 }
 
 const sql = postgres(databaseUrl, { max: 1, prepare: false });
@@ -32,7 +41,14 @@ try {
     `;
 
     if (dryRun || candidates.length === 0) {
-      return { organizationId, dryRun, candidates: candidates.length, deletedReceipts: 0, deletedEvents: 0, deletedRuns: 0 };
+      return {
+        organizationId,
+        dryRun,
+        candidates: candidates.length,
+        deletedReceipts: 0,
+        deletedEvents: 0,
+        deletedRuns: 0,
+      };
     }
 
     const runIds = candidates.map((candidate) => candidate.id);

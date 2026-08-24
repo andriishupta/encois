@@ -1,9 +1,9 @@
 import {
-	boolean,
+  boolean,
   foreignKey,
   index,
-  jsonb,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -20,7 +20,8 @@ export const workflowDefinitionStatus = pgEnum("workflow_definition_status", [
   "disabled",
   "retired",
 ]);
-export type WorkflowDefinitionStatus = (typeof workflowDefinitionStatus.enumValues)[number];
+export type WorkflowDefinitionStatus =
+  (typeof workflowDefinitionStatus.enumValues)[number];
 
 export const workflowRunStatus = pgEnum("workflow_run_status", [
   "queued",
@@ -62,16 +63,30 @@ export const workflowChangePlans = pgTable(
     promptHash: text("prompt_hash"),
     status: workflowPlanStatus("status").notNull().default("proposed"),
     approvalRequired: boolean("approval_required").notNull().default(true),
-    submittedByUserId: uuid("submitted_by_user_id").references(() => users.id, { onDelete: "restrict" }),
-    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    submittedByUserId: uuid("submitted_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     appliedAt: timestamp("applied_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workflow_change_plans_organization_plan_idx").on(table.organizationId, table.planId),
-    uniqueIndex("workflow_change_plans_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_change_plans_organization_plan_idx").on(
+      table.organizationId,
+      table.planId,
+    ),
+    uniqueIndex("workflow_change_plans_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -92,13 +107,26 @@ export const workflowPlannerVersions = pgTable(
     firstPlanId: text("first_plan_id").notNull(),
     lastPlanId: text("last_plan_id").notNull(),
     usageCount: integer("usage_count").notNull().default(1),
-    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("workflow_planner_versions_org_hash_idx").on(table.organizationId, table.versionHash),
-    index("workflow_planner_versions_org_last_seen_idx").on(table.organizationId, table.lastSeenAt),
-    uniqueIndex("workflow_planner_versions_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_planner_versions_org_hash_idx").on(
+      table.organizationId,
+      table.versionHash,
+    ),
+    index("workflow_planner_versions_org_last_seen_idx").on(
+      table.organizationId,
+      table.lastSeenAt,
+    ),
+    uniqueIndex("workflow_planner_versions_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -106,16 +134,28 @@ export const workflowDefinitions = pgTable(
   "workflow_definitions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
     key: text("key").notNull(),
     version: text("version").notNull(),
     status: workflowDefinitionStatus("status").notNull().default("draft"),
     inputSchemaRef: text("input_schema_ref"),
     outputSchemaRef: text("output_schema_ref"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => [uniqueIndex("workflow_definitions_key_version_idx").on(table.organizationId, table.key, table.version)],
+  (table) => [
+    uniqueIndex("workflow_definitions_key_version_idx").on(
+      table.organizationId,
+      table.key,
+      table.version,
+    ),
+  ],
 );
 
 export const workflowRuns = pgTable(
@@ -128,7 +168,9 @@ export const workflowRuns = pgTable(
     definitionId: uuid("definition_id")
       .notNull()
       .references(() => workflowDefinitions.id, { onDelete: "restrict" }),
-    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "restrict" }),
+    actorUserId: uuid("actor_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
     temporalNamespace: text("temporal_namespace"),
     temporalTaskQueue: text("temporal_task_queue"),
     temporalWorkflowId: text("temporal_workflow_id").notNull(),
@@ -138,19 +180,35 @@ export const workflowRuns = pgTable(
     parentWorkflowId: text("parent_workflow_id"),
     trigger: text("trigger"),
     status: workflowRunStatus("status").notNull().default("queued"),
-    scope: jsonb("scope").$type<Record<string, unknown>>().notNull().default({}),
-    businessInput: jsonb("business_input").$type<Record<string, unknown>>().notNull().default({}),
+    scope: jsonb("scope")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    businessInput: jsonb("business_input")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     inputRef: text("input_ref"),
     resultRef: text("result_ref"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     retentionUntil: timestamp("retention_until", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("workflow_runs_organization_temporal_id_idx").on(table.organizationId, table.temporalWorkflowId),
-    uniqueIndex("workflow_runs_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_runs_organization_temporal_id_idx").on(
+      table.organizationId,
+      table.temporalWorkflowId,
+    ),
+    uniqueIndex("workflow_runs_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -167,11 +225,19 @@ export const workflowEvents = pgTable(
     activityName: text("activity_name"),
     agentRunId: text("agent_run_id"),
     evidenceRef: text("evidence_ref"),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("workflow_events_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("workflow_events_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.workflowRunId, table.organizationId],
       foreignColumns: [workflowRuns.id, workflowRuns.organizationId],
@@ -192,7 +258,14 @@ export const idempotencyKeys = pgTable(
     resourceType: text("resource_type"),
     resourceId: uuid("resource_id"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => [uniqueIndex("idempotency_keys_organization_key_idx").on(table.organizationId, table.key)],
+  (table) => [
+    uniqueIndex("idempotency_keys_organization_key_idx").on(
+      table.organizationId,
+      table.key,
+    ),
+  ],
 );

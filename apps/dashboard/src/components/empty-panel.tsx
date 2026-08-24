@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 export function EmptyPanel({
   icon: Icon,
@@ -7,10 +7,10 @@ export function EmptyPanel({
   description,
   action,
 }: {
-  icon: LucideIcon
-  title: ReactNode
-  description: ReactNode
-  action?: ReactNode
+  icon: LucideIcon;
+  title: ReactNode;
+  description: ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 px-6 py-8 text-center">
@@ -19,5 +19,5 @@ export function EmptyPanel({
       <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
-  )
+  );
 }

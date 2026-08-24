@@ -22,7 +22,6 @@ import type { WebhookPayloadStore } from "../payload-store.js";
 import type { WebhookSecretResolver } from "../secret-resolver.js";
 
 const STALE_RECEIPT_MS = 60_000;
-const EVENT_ID_PATTERN = /^[^\u0000-\u001f\u007f]{1,256}$/u;
 const SIGNATURE_PATTERN = /^sha256=([a-f0-9]{64})$/iu;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -65,13 +64,24 @@ function normalizeHeader(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
+}
+
 export function validateWebhookHeaders(
   eventId: string | undefined,
   signature: string | undefined,
 ): { eventId: string; signature: string } {
   const normalizedEventId = normalizeHeader(eventId);
   const normalizedSignature = normalizeHeader(signature);
-  if (!normalizedEventId || !EVENT_ID_PATTERN.test(normalizedEventId))
+  if (
+    !normalizedEventId ||
+    normalizedEventId.length > 256 ||
+    hasControlCharacter(normalizedEventId)
+  )
     throw new WebhookServiceError(
       "INVALID_WEBHOOK_HEADERS",
       "Webhook event headers are invalid.",
@@ -211,15 +221,13 @@ async function claimDelivery(
             ...(existing.payloadRef ? { payloadRef: existing.payloadRef } : {}),
           };
         }
-        await db
-          .insert(webhookDeliveries)
-          .values({
-            organizationId,
-            endpointId,
-            providerEventId,
-            payloadChecksum,
-            status: "received",
-          });
+        await db.insert(webhookDeliveries).values({
+          organizationId,
+          endpointId,
+          providerEventId,
+          payloadChecksum,
+          status: "received",
+        });
         return { kind: "process" };
       },
     );
@@ -435,7 +443,8 @@ export async function receiveWebhook(
     !UUID_PATTERN.test(input.organizationId) ||
     input.endpointKey.length === 0 ||
     input.endpointKey.length > 120 ||
-    /[\u0000-\u001f\u007f/]/u.test(input.endpointKey)
+    input.endpointKey.includes("/") ||
+    hasControlCharacter(input.endpointKey)
   ) {
     throw new WebhookServiceError(
       "INVALID_WEBHOOK_PATH",

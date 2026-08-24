@@ -18,7 +18,8 @@ export const knowledgeSourceKind = pgEnum("knowledge_source_kind", [
   "manual",
   "media",
 ]);
-export type KnowledgeSourceKind = (typeof knowledgeSourceKind.enumValues)[number];
+export type KnowledgeSourceKind =
+  (typeof knowledgeSourceKind.enumValues)[number];
 
 export const knowledgeSourceStatus = pgEnum("knowledge_source_status", [
   "draft",
@@ -31,7 +32,8 @@ export const knowledgeSourceStatus = pgEnum("knowledge_source_status", [
   "failed",
   "disabled",
 ]);
-export type KnowledgeSourceStatus = (typeof knowledgeSourceStatus.enumValues)[number];
+export type KnowledgeSourceStatus =
+  (typeof knowledgeSourceStatus.enumValues)[number];
 
 export const sourceRevisionStatus = pgEnum("source_revision_status", [
   "pending",
@@ -40,7 +42,8 @@ export const sourceRevisionStatus = pgEnum("source_revision_status", [
   "failed",
   "superseded",
 ]);
-export type SourceRevisionStatus = (typeof sourceRevisionStatus.enumValues)[number];
+export type SourceRevisionStatus =
+  (typeof sourceRevisionStatus.enumValues)[number];
 
 export const sourceIngestionTrigger = pgEnum("source_ingestion_trigger", [
   "bootstrap",
@@ -49,7 +52,8 @@ export const sourceIngestionTrigger = pgEnum("source_ingestion_trigger", [
   "schedule",
   "reconcile",
 ]);
-export type SourceIngestionTrigger = (typeof sourceIngestionTrigger.enumValues)[number];
+export type SourceIngestionTrigger =
+  (typeof sourceIngestionTrigger.enumValues)[number];
 
 export const sourceIngestionStatus = pgEnum("source_ingestion_status", [
   "queued",
@@ -58,7 +62,8 @@ export const sourceIngestionStatus = pgEnum("source_ingestion_status", [
   "deferred",
   "failed",
 ]);
-export type SourceIngestionStatus = (typeof sourceIngestionStatus.enumValues)[number];
+export type SourceIngestionStatus =
+  (typeof sourceIngestionStatus.enumValues)[number];
 
 export type SourceScope = {
   ids: readonly string[];
@@ -80,14 +85,27 @@ export const knowledgeSources = pgTable(
     readScope: jsonb("read_scope").$type<SourceScope>().notNull(),
     visibilityScope: jsonb("visibility_scope").$type<SourceScope>().notNull(),
     contentType: text("content_type"),
-    configuration: jsonb("configuration").$type<Record<string, unknown>>().notNull().default({}),
+    configuration: jsonb("configuration")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     currentRevisionId: uuid("current_revision_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("knowledge_sources_id_organization_idx").on(table.id, table.organizationId),
-    uniqueIndex("knowledge_sources_name_organization_idx").on(table.organizationId, table.name),
+    uniqueIndex("knowledge_sources_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
+    uniqueIndex("knowledge_sources_name_organization_idx").on(
+      table.organizationId,
+      table.name,
+    ),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
       foreignColumns: [integrations.id, integrations.organizationId],
@@ -113,12 +131,23 @@ export const sourceRevisions = pgTable(
     checksum: text("checksum"),
     observedAt: timestamp("observed_at", { withTimezone: true }),
     ingestedAt: timestamp("ingested_at", { withTimezone: true }),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("source_revisions_source_revision_idx").on(table.sourceId, table.revision),
-    uniqueIndex("source_revisions_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("source_revisions_source_revision_idx").on(
+      table.sourceId,
+      table.revision,
+    ),
+    uniqueIndex("source_revisions_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.sourceId, table.organizationId],
       foreignColumns: [knowledgeSources.id, knowledgeSources.organizationId],
@@ -144,14 +173,24 @@ export const sourceIngestionRuns = pgTable(
     currentStage: text("current_stage"),
     factsCount: integer("facts_count").notNull().default(0),
     error: text("error"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("source_ingestion_runs_id_organization_idx").on(table.id, table.organizationId),
-    uniqueIndex("source_ingestion_runs_temporal_id_idx").on(table.organizationId, table.temporalWorkflowId),
+    uniqueIndex("source_ingestion_runs_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
+    uniqueIndex("source_ingestion_runs_temporal_id_idx").on(
+      table.organizationId,
+      table.temporalWorkflowId,
+    ),
     foreignKey({
       columns: [table.sourceId, table.organizationId],
       foreignColumns: [knowledgeSources.id, knowledgeSources.organizationId],

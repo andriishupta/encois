@@ -8,14 +8,26 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organizationUnits, organizations } from "./organizations.js";
 import { users } from "./identity.js";
+import { organizations, organizationUnits } from "./organizations.js";
 
-export const integrationStatus = pgEnum("integration_status", ["pending", "authorized", "active", "degraded", "needs_reauth", "disabled", "error"]);
+export const integrationStatus = pgEnum("integration_status", [
+  "pending",
+  "authorized",
+  "active",
+  "degraded",
+  "needs_reauth",
+  "disabled",
+  "error",
+]);
 export type IntegrationStatus = (typeof integrationStatus.enumValues)[number];
 
-export const integrationBindingStatus = pgEnum("integration_binding_status", ["active", "revoked"]);
-export type IntegrationBindingStatus = (typeof integrationBindingStatus.enumValues)[number];
+export const integrationBindingStatus = pgEnum("integration_binding_status", [
+  "active",
+  "revoked",
+]);
+export type IntegrationBindingStatus =
+  (typeof integrationBindingStatus.enumValues)[number];
 
 export const integrations = pgTable(
   "integrations",
@@ -29,13 +41,26 @@ export const integrations = pgTable(
     status: integrationStatus("status").notNull().default("pending"),
     credentialRef: text("credential_ref"),
     authorizedAt: timestamp("authorized_at", { withTimezone: true }),
-    lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
+    lastHealthCheckAt: timestamp("last_health_check_at", {
+      withTimezone: true,
+    }),
     lastError: text("last_error"),
-    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => [uniqueIndex("integrations_id_organization_id_idx").on(table.id, table.organizationId)],
+  (table) => [
+    uniqueIndex("integrations_id_organization_id_idx").on(
+      table.id,
+      table.organizationId,
+    ),
+  ],
 );
 
 export const integrationBindings = pgTable(
@@ -49,13 +74,23 @@ export const integrationBindings = pgTable(
     /** Organization root for provider-level capability grants. Source scopes are stored on knowledgeSources. */
     organizationUnitId: uuid("organization_unit_id").notNull(),
     status: integrationBindingStatus("status").notNull().default("active"),
-    grantedScopes: jsonb("granted_scopes").$type<readonly string[]>().notNull().default([]),
-    grantedByUserId: uuid("granted_by_user_id").references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    grantedScopes: jsonb("granted_scopes")
+      .$type<readonly string[]>()
+      .notNull()
+      .default([]),
+    grantedByUserId: uuid("granted_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("integration_bindings_unique_idx").on(table.integrationId, table.organizationUnitId),
+    uniqueIndex("integration_bindings_unique_idx").on(
+      table.integrationId,
+      table.organizationUnitId,
+    ),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
       foreignColumns: [integrations.id, integrations.organizationId],
@@ -81,11 +116,18 @@ export const webhookEndpoints = pgTable(
     integrationId: uuid("integration_id"),
     secretRef: text("secret_ref"),
     status: integrationStatus("status").notNull().default("pending"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("webhook_endpoints_organization_key_idx").on(table.organizationId, table.endpointKey),
+    uniqueIndex("webhook_endpoints_organization_key_idx").on(
+      table.organizationId,
+      table.endpointKey,
+    ),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
       foreignColumns: [integrations.id, integrations.organizationId],
@@ -108,8 +150,15 @@ export const webhookDeliveries = pgTable(
     status: text("status").notNull().default("received"),
     payloadRef: text("payload_ref"),
     payloadChecksum: text("payload_checksum"),
-    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     processedAt: timestamp("processed_at", { withTimezone: true }),
   },
-  (table) => [uniqueIndex("webhook_deliveries_endpoint_event_idx").on(table.endpointId, table.providerEventId)],
+  (table) => [
+    uniqueIndex("webhook_deliveries_endpoint_event_idx").on(
+      table.endpointId,
+      table.providerEventId,
+    ),
+  ],
 );

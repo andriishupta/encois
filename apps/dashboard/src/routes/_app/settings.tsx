@@ -1,27 +1,55 @@
-import { Outlet, createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { Bell, ChevronRight, SlidersHorizontal } from 'lucide-react'
-import { PageHeader } from '@/components/page-header'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getAuthSession, hasPermission } from '@/lib/auth'
-import { Permission } from '@encois/contracts'
+import { Permission } from "@encois/contracts";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+} from "@tanstack/react-router";
+import { Bell, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { getAuthSession, hasPermission } from "@/lib/auth";
 
-export const Route = createFileRoute('/_app/settings')({
+export const Route = createFileRoute("/_app/settings")({
   beforeLoad: ({ location }) => {
-    if (location.pathname !== '/settings/documentation' && !hasPermission(getAuthSession(), Permission.SettingsRead)) throw redirect({ to: '/forbidden' })
+    if (
+      location.pathname !== "/settings/documentation" &&
+      !hasPermission(getAuthSession(), Permission.SettingsRead)
+    )
+      throw redirect({ to: "/forbidden" });
   },
   component: () => <Outlet />,
-})
+});
 
 export function SettingsOverviewPage() {
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Settings" description="Workspace preferences and notifications." />
+      <PageHeader
+        title="Settings"
+        description="Workspace preferences and notifications."
+      />
       <div className="grid gap-4 lg:grid-cols-2">
-        <SettingsCard to="/settings/workspace" icon={SlidersHorizontal} title="Workspace" description="Name, scope, and default investigation preferences." />
-        <SettingsCard to="/settings/notifications" icon={Bell} title="Notifications" description="Choose how workflow and evidence updates are surfaced." />
+        <SettingsCard
+          to="/settings/workspace"
+          icon={SlidersHorizontal}
+          title="Workspace"
+          description="Name, scope, and default investigation preferences."
+        />
+        <SettingsCard
+          to="/settings/notifications"
+          icon={Bell}
+          title="Notifications"
+          description="Choose how workflow and evidence updates are surfaced."
+        />
       </div>
     </div>
-  )
+  );
 }
 
 function SettingsCard({
@@ -30,24 +58,30 @@ function SettingsCard({
   description,
   to,
 }: {
-  icon: typeof SlidersHorizontal
-  title: string
-  description: string
-  to: '/settings/workspace' | '/settings/notifications'
+  icon: typeof SlidersHorizontal;
+  title: string;
+  description: string;
+  to: "/settings/workspace" | "/settings/notifications";
 }) {
   return (
     <Link to={to} className="group">
       <Card className="h-full transition-colors group-hover:border-foreground/30">
         <CardHeader>
-          <Icon className="mb-2 size-5 text-muted-foreground" aria-hidden="true" />
+          <Icon
+            className="mb-2 size-5 text-muted-foreground"
+            aria-hidden="true"
+          />
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Open settings</span>
-          <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          <ChevronRight
+            className="size-4 transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
         </CardContent>
       </Card>
     </Link>
-  )
+  );
 }

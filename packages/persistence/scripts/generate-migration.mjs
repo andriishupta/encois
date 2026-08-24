@@ -10,7 +10,15 @@ if (!name || unexpectedArguments.length > 0 || !logicalNamePattern.test(name)) {
 
 const result = spawnSync(
   "drizzle-kit",
-  ["generate", "--config", "drizzle.config.ts", "--name", name, "--prefix", "index"],
+  [
+    "generate",
+    "--config",
+    "drizzle.config.ts",
+    "--name",
+    name,
+    "--prefix",
+    "index",
+  ],
   { stdio: "inherit" },
 );
 

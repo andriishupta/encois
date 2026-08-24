@@ -1,7 +1,7 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-export const Route = createFileRoute('/sign-up')({
+export const Route = createFileRoute("/sign-up")({
   beforeLoad: () => {
-    throw redirect({ to: '/waitlist' })
+    throw redirect({ to: "/waitlist" });
   },
-})
+});

@@ -23,8 +23,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json --noEmit",
     "verify:command-receipts": "tsx scripts/verify-command-receipts.ts",
-    "biome:write": "biome check --write ./src",
-    "biome:format": "biome format --write ./src"
+    "biome:check": "biome check ./src ./scripts",
+    "biome:write": "biome check --write ./src ./scripts",
+    "biome:format": "biome format --write ./src ./scripts"
   },
   "dependencies": {
     "@encois/contracts": "workspace:*",

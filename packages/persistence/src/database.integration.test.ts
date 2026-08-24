@@ -1,20 +1,20 @@
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { readdirSync } from "node:fs";
-import postgres from "postgres";
+import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
+import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDatabase,
   integrationBindings,
   integrations,
   knowledgeSources,
-  organizationUnits,
   organizations,
-  withOrganizationContext,
-  workflowBlueprints,
+  organizationUnits,
   type PersistenceDatabase,
   type PersistenceTransaction,
+  withOrganizationContext,
+  workflowBlueprints,
 } from "./index.js";
 
 const runtimeUrl = process.env.DATABASE_TEST_URL;
@@ -72,16 +72,23 @@ let adminClient: ReturnType<typeof postgres> | undefined;
 let fixture: Fixture;
 
 function requireDatabase(): { db: PersistenceDatabase } {
-  if (!database) throw new Error("Persistence integration database is not initialized.");
+  if (!database)
+    throw new Error("Persistence integration database is not initialized.");
   return database;
 }
 
 function requireAdmin(): ReturnType<typeof postgres> {
-  if (!adminClient) throw new Error("Persistence integration admin database is not initialized.");
+  if (!adminClient)
+    throw new Error(
+      "Persistence integration admin database is not initialized.",
+    );
   return adminClient;
 }
 
-async function expectPostgresError(operation: () => Promise<unknown>, code: string): Promise<void> {
+async function expectPostgresError(
+  operation: () => Promise<unknown>,
+  code: string,
+): Promise<void> {
   try {
     await operation();
   } catch (error) {
@@ -97,13 +104,19 @@ function inOrganization<T>(
   organizationId: string,
   callback: (transaction: PersistenceTransaction) => Promise<T>,
 ): Promise<T> {
-  return withOrganizationContext(requireDatabase().db, organizationId, callback);
+  return withOrganizationContext(
+    requireDatabase().db,
+    organizationId,
+    callback,
+  );
 }
 
 integrationTest("PostgreSQL persistence boundaries", () => {
   beforeAll(async () => {
     if (!runtimeUrl || !adminUrl) {
-      throw new Error("DATABASE_TEST_URL and DATABASE_TEST_ADMIN_URL are required for persistence integration tests.");
+      throw new Error(
+        "DATABASE_TEST_URL and DATABASE_TEST_ADMIN_URL are required for persistence integration tests.",
+      );
     }
     database = createDatabase({ url: runtimeUrl, maxConnections: 3 });
     adminClient = postgres(adminUrl, { max: 2, prepare: false });
@@ -111,15 +124,20 @@ integrationTest("PostgreSQL persistence boundaries", () => {
     const admin = requireAdmin();
     await admin`SELECT 1`;
 
-    const migrationFiles = readdirSync(fileURLToPath(new URL("../drizzle/", import.meta.url)))
-      .filter((file) => file.endsWith(".sql"));
+    const migrationFiles = readdirSync(
+      fileURLToPath(new URL("../drizzle/", import.meta.url)),
+    ).filter((file) => file.endsWith(".sql"));
     const [migrationState] = await admin<{ count: string }[]>`
       SELECT COUNT(*)::text AS count
       FROM "__drizzle_migrations"
     `;
-    expect(Number(migrationState?.count ?? 0)).toBeGreaterThanOrEqual(migrationFiles.length);
+    expect(Number(migrationState?.count ?? 0)).toBeGreaterThanOrEqual(
+      migrationFiles.length,
+    );
 
-    const [runtimeRole] = await database.client<{ rolbypassrls: boolean; rolsuper: boolean }[]>`
+    const [runtimeRole] = await database.client<
+      { rolbypassrls: boolean; rolsuper: boolean }[]
+    >`
       SELECT rolsuper, rolbypassrls
       FROM pg_roles
       WHERE rolname = current_user
@@ -133,18 +151,29 @@ integrationTest("PostgreSQL persistence boundaries", () => {
     const unitB = randomUUID();
     const integrationA = randomUUID();
     const integrationB = randomUUID();
-    fixture = { organizationA, organizationB, unitA, unitB, integrationA, integrationB };
+    fixture = {
+      organizationA,
+      organizationB,
+      unitA,
+      unitB,
+      integrationA,
+      integrationB,
+    };
 
-    await inOrganization(organizationA, (tx) => tx.insert(organizations).values({
-      id: organizationA,
-      slug: `persistence-test-${organizationA}`,
-      name: "Persistence Test A",
-    }));
-    await inOrganization(organizationB, (tx) => tx.insert(organizations).values({
-      id: organizationB,
-      slug: `persistence-test-${organizationB}`,
-      name: "Persistence Test B",
-    }));
+    await inOrganization(organizationA, (tx) =>
+      tx.insert(organizations).values({
+        id: organizationA,
+        slug: `persistence-test-${organizationA}`,
+        name: "Persistence Test A",
+      }),
+    );
+    await inOrganization(organizationB, (tx) =>
+      tx.insert(organizations).values({
+        id: organizationB,
+        slug: `persistence-test-${organizationB}`,
+        name: "Persistence Test B",
+      }),
+    );
 
     await inOrganization(organizationA, async (tx) => {
       await tx.insert(organizationUnits).values({
@@ -204,7 +233,9 @@ integrationTest("PostgreSQL persistence boundaries", () => {
   });
 
   it("applies tenant RLS policies to every control-plane tenant table", async () => {
-    const rows = await requireAdmin()<Array<{ tableName: string; rowSecurity: boolean; hasPolicy: boolean }>>`
+    const rows = await requireAdmin()<
+      Array<{ tableName: string; rowSecurity: boolean; hasPolicy: boolean }>
+    >`
       SELECT
         c.relname AS "tableName",
         c.relrowsecurity AS "rowSecurity",
@@ -222,22 +253,27 @@ integrationTest("PostgreSQL persistence boundaries", () => {
         AND c.relname = ANY(${tenantTables})
     `;
 
-    expect(rows.map((row) => row.tableName).sort()).toEqual([...tenantTables].sort());
+    expect(rows.map((row) => row.tableName).sort()).toEqual(
+      [...tenantTables].sort(),
+    );
     for (const row of rows) {
       expect(row.rowSecurity, `${row.tableName} must enable RLS`).toBe(true);
-      expect(row.hasPolicy, `${row.tableName} must define tenant isolation policy`).toBe(true);
+      expect(
+        row.hasPolicy,
+        `${row.tableName} must define tenant isolation policy`,
+      ).toBe(true);
     }
   });
 
   it("keeps organization rows isolated and resets SET LOCAL after the transaction", async () => {
-    const visibleToA = await inOrganization(fixture.organizationA, (tx) => tx
-      .select({ id: organizations.id })
-      .from(organizations));
-    const visibleToB = await inOrganization(fixture.organizationB, (tx) => tx
-      .select({ id: organizations.id })
-      .from(organizations));
-    const visibleWithoutContext = await requireDatabase().db
-      .select({ id: organizations.id })
+    const visibleToA = await inOrganization(fixture.organizationA, (tx) =>
+      tx.select({ id: organizations.id }).from(organizations),
+    );
+    const visibleToB = await inOrganization(fixture.organizationB, (tx) =>
+      tx.select({ id: organizations.id }).from(organizations),
+    );
+    const visibleWithoutContext = await requireDatabase()
+      .db.select({ id: organizations.id })
       .from(organizations);
 
     expect(visibleToA).toEqual([{ id: fixture.organizationA }]);
@@ -247,71 +283,90 @@ integrationTest("PostgreSQL persistence boundaries", () => {
 
   it("rejects writes for another organization even when the caller supplies its ID", async () => {
     await expectPostgresError(
-      () => inOrganization(fixture.organizationA, (tx) => tx.insert(organizations).values({
-        id: fixture.organizationB,
-        slug: `cross-tenant-${randomUUID()}`,
-        name: "Must not be visible",
-      })),
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(organizations).values({
+            id: fixture.organizationB,
+            slug: `cross-tenant-${randomUUID()}`,
+            name: "Must not be visible",
+          }),
+        ),
       "42501",
     );
   });
 
   it("enforces composite foreign keys for organization-scoped resources", async () => {
     await expectPostgresError(
-      () => inOrganization(fixture.organizationA, (tx) => tx.insert(integrationBindings).values({
-        organizationId: fixture.organizationA,
-        integrationId: fixture.integrationB,
-        organizationUnitId: fixture.unitA,
-        grantedScopes: [],
-      })),
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(integrationBindings).values({
+            organizationId: fixture.organizationA,
+            integrationId: fixture.integrationB,
+            organizationUnitId: fixture.unitA,
+            grantedScopes: [],
+          }),
+        ),
       "23503",
     );
 
     await expectPostgresError(
-      () => inOrganization(fixture.organizationA, (tx) => tx.insert(integrationBindings).values({
-        organizationId: fixture.organizationA,
-        integrationId: fixture.integrationA,
-        organizationUnitId: fixture.unitB,
-        grantedScopes: [],
-      })),
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(integrationBindings).values({
+            organizationId: fixture.organizationA,
+            integrationId: fixture.integrationA,
+            organizationUnitId: fixture.unitB,
+            grantedScopes: [],
+          }),
+        ),
       "23503",
     );
   });
 
   it("keeps uniqueness tenant-scoped and rejects duplicates inside one tenant", async () => {
-    const rows = await inOrganization(fixture.organizationA, (tx) => tx
-      .select({ id: knowledgeSources.id })
-      .from(knowledgeSources)
-      .where(and(
-        eq(knowledgeSources.organizationId, fixture.organizationA),
-        eq(knowledgeSources.name, "Shared source name"),
-      )));
+    const rows = await inOrganization(fixture.organizationA, (tx) =>
+      tx
+        .select({ id: knowledgeSources.id })
+        .from(knowledgeSources)
+        .where(
+          and(
+            eq(knowledgeSources.organizationId, fixture.organizationA),
+            eq(knowledgeSources.name, "Shared source name"),
+          ),
+        ),
+    );
     expect(rows).toHaveLength(1);
 
     await expectPostgresError(
-      () => inOrganization(fixture.organizationA, (tx) => tx.insert(knowledgeSources).values({
-        organizationId: fixture.organizationA,
-        name: "Shared source name",
-        kind: "manual",
-        readScope: { ids: [fixture.unitA] },
-        visibilityScope: { ids: [fixture.unitA] },
-      })),
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(knowledgeSources).values({
+            organizationId: fixture.organizationA,
+            name: "Shared source name",
+            kind: "manual",
+            readScope: { ids: [fixture.unitA] },
+            visibilityScope: { ids: [fixture.unitA] },
+          }),
+        ),
       "23505",
     );
   });
 
   it("enforces check constraints at the database boundary", async () => {
     await expectPostgresError(
-      () => inOrganization(fixture.organizationA, (tx) => tx.insert(workflowBlueprints).values({
-        organizationId: fixture.organizationA,
-        blueprintId: `invalid-${randomUUID()}`,
-        version: "1.0.0",
-        workflowType: "encois.test.v1",
-        name: "Invalid current blueprint",
-        blueprint: {},
-        status: "draft",
-        isCurrent: true,
-      })),
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(workflowBlueprints).values({
+            organizationId: fixture.organizationA,
+            blueprintId: `invalid-${randomUUID()}`,
+            version: "1.0.0",
+            workflowType: "encois.test.v1",
+            name: "Invalid current blueprint",
+            blueprint: {},
+            status: "draft",
+            isCurrent: true,
+          }),
+        ),
       "23514",
     );
   });

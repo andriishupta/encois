@@ -325,17 +325,15 @@ export async function listRecommendations(
           (item) => item.recommendationKey === candidate.recommendationKey,
         );
         if (!row) {
-          await db
-            .insert(coordinatorRecommendations)
-            .values({
-              organizationId: principal.organizationId,
-              userId,
-              ...candidate,
-              scope: currentScope,
-              observedAt: now,
-              createdAt: now,
-              updatedAt: now,
-            });
+          await db.insert(coordinatorRecommendations).values({
+            organizationId: principal.organizationId,
+            userId,
+            ...candidate,
+            scope: currentScope,
+            observedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          });
           continue;
         }
         await db
@@ -470,21 +468,19 @@ export async function updateRecommendation(
         )
         .returning();
       if (!updated) return null;
-      await db
-        .insert(auditEvents)
-        .values({
-          organizationId: principal.organizationId,
-          actorUserId: userId,
-          action: `recommendation_${action}`,
-          outcome: action === "accept" ? "accepted" : "dismissed",
-          resourceType: "coordinator_recommendation",
-          resourceId: recommendationId,
-          scope: row.scope,
-          metadata: {
-            recommendationKey: row.recommendationKey,
-            target: row.target,
-          },
-        });
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: `recommendation_${action}`,
+        outcome: action === "accept" ? "accepted" : "dismissed",
+        resourceType: "coordinator_recommendation",
+        resourceId: recommendationId,
+        scope: row.scope,
+        metadata: {
+          recommendationKey: row.recommendationKey,
+          target: row.target,
+        },
+      });
       return toRecommendation(updated);
     },
   );

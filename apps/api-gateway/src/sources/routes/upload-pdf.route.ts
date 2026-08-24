@@ -23,7 +23,18 @@ function errorStatus(code: string): 400 | 403 | 409 | 413 | 422 | 500 | 503 {
 }
 
 function sourceNameFromFile(fileName: string): string {
-  const name = fileName.replace(/[\\/\u0000-\u001f\u007f]/g, " ").trim();
+  const name = Array.from(fileName)
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return character === "/" ||
+        character === "\\" ||
+        code <= 0x1f ||
+        code === 0x7f
+        ? " "
+        : character;
+    })
+    .join("")
+    .trim();
   return (name.replace(/\.pdf$/i, "").trim() || "Project document").slice(
     0,
     120,

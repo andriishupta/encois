@@ -53,7 +53,10 @@ import type {
   WorkflowClient,
   WorkflowResultReader,
 } from "../../workflows/temporal-client.js";
-import { buildWorkflowId } from "../../workflows/types.js";
+import {
+  buildWorkflowId,
+  type WorkflowExecutionProjection,
+} from "../../workflows/types.js";
 
 type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
 
@@ -142,7 +145,7 @@ async function reconcileSourceIngestion(
   run: typeof sourceIngestionRuns.$inferSelect,
   options: SourceServiceOptions,
 ): Promise<void> {
-  let projection;
+  let projection: WorkflowExecutionProjection | null;
   try {
     projection = await options.workflowClient.get(
       run.temporalWorkflowId,
@@ -329,7 +332,7 @@ function assertSafeArtifactReference(value: string | undefined): void {
   if (value === undefined) return;
   if (
     value.length > 2048 ||
-    /[\u0000-\u001f\u007f]/.test(value) ||
+    hasControlCharacter(value) ||
     !/^(artifact|gs):\/\/[^\s]+$/i.test(value)
   ) {
     throw sourceServiceError(
@@ -337,6 +340,13 @@ function assertSafeArtifactReference(value: string | undefined): void {
       "artifactRef must be an artifact:// or gs:// reference.",
     );
   }
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
 }
 
 const sourceFreshnessMaxAgeMs = {
@@ -1107,8 +1117,17 @@ export async function createSourceRevision(
 }
 
 function pdfFileName(value: string): string {
-  const normalized = value
-    .replace(/[\\/\u0000-\u001f\u007f]/g, " ")
+  const normalized = Array.from(value)
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return character === "/" ||
+        character === "\\" ||
+        code <= 0x1f ||
+        code === 0x7f
+        ? " "
+        : character;
+    })
+    .join("")
     .trim()
     .slice(0, 240);
   return normalized.toLowerCase().endsWith(".pdf")
@@ -1462,7 +1481,7 @@ export async function startSourceIngestion(
     };
   }
 
-  let projection;
+  let projection: WorkflowExecutionProjection;
   try {
     projection = await options.workflowClient.start(
       {

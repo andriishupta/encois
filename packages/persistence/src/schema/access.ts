@@ -1,7 +1,17 @@
 import { sql } from "drizzle-orm";
-import { check, foreignKey, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { organizations, organizationUnits, roles } from "./organizations.js";
+import {
+  check,
+  foreignKey,
+  index,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { users } from "./identity.js";
+import { organizations, organizationUnits, roles } from "./organizations.js";
 
 export const organizationInviteStatus = pgEnum("organization_invite_status", [
   "pending",
@@ -9,7 +19,8 @@ export const organizationInviteStatus = pgEnum("organization_invite_status", [
   "revoked",
   "expired",
 ]);
-export type OrganizationInviteStatus = (typeof organizationInviteStatus.enumValues)[number];
+export type OrganizationInviteStatus =
+  (typeof organizationInviteStatus.enumValues)[number];
 
 /**
  * Pre-auth access grants. This table is intentionally not tenant-RLS scoped:
@@ -30,18 +41,32 @@ export const organizationInvites = pgTable(
       .references(() => roles.id, { onDelete: "restrict" }),
     status: organizationInviteStatus("status").notNull().default("pending"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
-    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, { onDelete: "restrict" }),
-    acceptedUserId: uuid("accepted_user_id").references(() => users.id, { onDelete: "restrict" }),
+    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    acceptedUserId: uuid("accepted_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    index("organization_invites_email_status_idx").on(table.emailNormalized, table.status),
+    index("organization_invites_email_status_idx").on(
+      table.emailNormalized,
+      table.status,
+    ),
     uniqueIndex("organization_invites_pending_email_idx")
       .on(table.organizationId, table.emailNormalized)
       .where(sql`status = 'pending'`),
-    uniqueIndex("organization_invites_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("organization_invites_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
     foreignKey({
       columns: [table.organizationUnitId, table.organizationId],
       foreignColumns: [organizationUnits.id, organizationUnits.organizationId],
@@ -56,7 +81,8 @@ export const waitlistRequestStatus = pgEnum("waitlist_request_status", [
   "converted",
   "rejected",
 ]);
-export type WaitlistRequestStatus = (typeof waitlistRequestStatus.enumValues)[number];
+export type WaitlistRequestStatus =
+  (typeof waitlistRequestStatus.enumValues)[number];
 
 /** Public submissions are accepted, but listing and status changes are operator-only. */
 export const waitlistRequests = pgTable(
@@ -70,9 +96,13 @@ export const waitlistRequests = pgTable(
     companyLinkedinUrl: text("company_linkedin_url"),
     message: text("message"),
     status: waitlistRequestStatus("status").notNull().default("pending"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     contactedAt: timestamp("contacted_at", { withTimezone: true }),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     uniqueIndex("waitlist_requests_email_idx").on(table.emailNormalized),

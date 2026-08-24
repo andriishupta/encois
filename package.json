@@ -21,6 +21,9 @@
     "smoke:approval": "pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-approval-flow.ts",
     "smoke:release:local": "bash scripts/smoke-release-local.sh",
     "version:check": "node scripts/check-version.mjs",
+    "biome:check": "pnpm --filter @encois/api-gateway biome:check && pnpm --filter @encois/dashboard biome:check && pnpm --filter @encois/persistence biome:check",
+    "biome:write": "pnpm --filter @encois/api-gateway biome:write && pnpm --filter @encois/dashboard biome:write && pnpm --filter @encois/persistence biome:write",
+    "biome:format": "pnpm --filter @encois/api-gateway biome:format && pnpm --filter @encois/dashboard biome:format && pnpm --filter @encois/persistence biome:format",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

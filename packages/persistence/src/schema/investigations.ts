@@ -1,4 +1,14 @@
-import { boolean, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { users } from "./identity.js";
 import { organizations } from "./organizations.js";
 
@@ -6,19 +16,40 @@ export const savedInvestigations = pgTable(
   "saved_investigations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     kind: text("kind").notNull(),
     query: text("query").notNull(),
-    params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
-    scope: jsonb("scope").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    params: jsonb("params")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    scope: jsonb("scope")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("saved_investigations_id_organization_idx").on(table.id, table.organizationId),
-    uniqueIndex("saved_investigations_owner_name_idx").on(table.organizationId, table.ownerUserId, table.name),
+    uniqueIndex("saved_investigations_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
+    uniqueIndex("saved_investigations_owner_name_idx").on(
+      table.organizationId,
+      table.ownerUserId,
+      table.name,
+    ),
   ],
 );
 
@@ -26,24 +57,39 @@ export const notificationPreferences = pgTable(
   "notification_preferences",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     emailEnabled: boolean("email_enabled").notNull().default(false),
     pushEnabled: boolean("push_enabled").notNull().default(false),
     workflowUpdates: boolean("workflow_updates").notNull().default(true),
     evidenceReady: boolean("evidence_ready").notNull().default(true),
     weeklyDigest: boolean("weekly_digest").notNull().default(false),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => [uniqueIndex("notification_preferences_user_idx").on(table.organizationId, table.userId)],
+  (table) => [
+    uniqueIndex("notification_preferences_user_idx").on(
+      table.organizationId,
+      table.userId,
+    ),
+  ],
 );
 
 export const notifications = pgTable(
   "notifications",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     severity: text("severity").notNull().default("info"),
     title: text("title").notNull(),
@@ -52,24 +98,45 @@ export const notifications = pgTable(
     resourceId: text("resource_id"),
     dedupeKey: text("dedupe_key").notNull(),
     readAt: timestamp("read_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("notifications_user_dedupe_idx").on(table.organizationId, table.userId, table.dedupeKey),
-    uniqueIndex("notifications_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("notifications_user_dedupe_idx").on(
+      table.organizationId,
+      table.userId,
+      table.dedupeKey,
+    ),
+    uniqueIndex("notifications_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
-export const recommendationStatus = pgEnum("recommendation_status", ["open", "accepted", "dismissed", "resolved"]);
-export const recommendationSeverity = pgEnum("recommendation_severity", ["info", "attention"]);
+export const recommendationStatus = pgEnum("recommendation_status", [
+  "open",
+  "accepted",
+  "dismissed",
+  "resolved",
+]);
+export const recommendationSeverity = pgEnum("recommendation_severity", [
+  "info",
+  "attention",
+]);
 
 /** User-scoped, persisted Coordinator recommendations. The target is an allowlisted product surface, not a browser URL. */
 export const coordinatorRecommendations = pgTable(
   "coordinator_recommendations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     recommendationKey: text("recommendation_key").notNull(),
     kind: text("kind").notNull(),
     severity: recommendationSeverity("severity").notNull().default("info"),
@@ -77,19 +144,43 @@ export const coordinatorRecommendations = pgTable(
     description: text("description").notNull(),
     target: text("target").notNull(),
     actionLabel: text("action_label").notNull(),
-    scope: jsonb("scope").$type<Record<string, unknown>>().notNull().default({}),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    scope: jsonb("scope")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     status: recommendationStatus("status").notNull().default("open"),
-    observedAt: timestamp("observed_at", { withTimezone: true }).defaultNow().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("coordinator_recommendations_user_key_idx").on(table.organizationId, table.userId, table.recommendationKey),
-    index("coordinator_recommendations_user_status_idx").on(table.organizationId, table.userId, table.status, table.updatedAt),
-    uniqueIndex("coordinator_recommendations_id_organization_idx").on(table.id, table.organizationId),
+    uniqueIndex("coordinator_recommendations_user_key_idx").on(
+      table.organizationId,
+      table.userId,
+      table.recommendationKey,
+    ),
+    index("coordinator_recommendations_user_status_idx").on(
+      table.organizationId,
+      table.userId,
+      table.status,
+      table.updatedAt,
+    ),
+    uniqueIndex("coordinator_recommendations_id_organization_idx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );

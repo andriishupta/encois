@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { Permission, type CoordinatorEvent } from "@encois/contracts";
+import { type CoordinatorEvent, Permission } from "@encois/contracts";
 import { createDatabase } from "@encois/persistence";
 import type { AosPrincipal } from "../src/middleware/aos.js";
 import type { WorkflowClient } from "../src/workflows/temporal-client.js";
-import type { WorkflowExecutionProjection, WorkflowUpdateRequest } from "../src/workflows/types.js";
+import type {
+  WorkflowExecutionProjection,
+  WorkflowUpdateRequest,
+} from "../src/workflows/types.js";
 
 const seedDatabaseUrl = process.env.DATABASE_TEST_ADMIN_URL;
 if (!seedDatabaseUrl || !process.env.DATABASE_RUNTIME_URL) {
-  throw new Error("DATABASE_TEST_ADMIN_URL and DATABASE_RUNTIME_URL are required");
+  throw new Error(
+    "DATABASE_TEST_ADMIN_URL and DATABASE_RUNTIME_URL are required",
+  );
 }
 
 const { client: seedClient } = createDatabase({ url: seedDatabaseUrl });
@@ -89,10 +94,20 @@ try {
     async signal() {
       throw new Error("not used by receipt verification");
     },
-    async signalCoordinator(_coordinatorId: string, _tenantId: string, _namespace: string, _event: CoordinatorEvent) {
+    async signalCoordinator(
+      _coordinatorId: string,
+      _tenantId: string,
+      _namespace: string,
+      _event: CoordinatorEvent,
+    ) {
       throw new Error("not used by receipt verification");
     },
-    async update(_workflowId: string, _tenantId: string, _namespace: string, request: WorkflowUpdateRequest) {
+    async update(
+      _workflowId: string,
+      _tenantId: string,
+      _namespace: string,
+      request: WorkflowUpdateRequest,
+    ) {
       transportCalls += 1;
       // Hold the first transport call long enough to force a second API caller
       // to observe the in_flight receipt. Temporal Update IDs then collapse the
@@ -141,13 +156,22 @@ try {
   const sendUpdate = () =>
     app.request(updateUrl, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-trace-id": "receipt-concurrency-trace" },
+      headers: {
+        "content-type": "application/json",
+        "x-trace-id": "receipt-concurrency-trace",
+      },
       body: JSON.stringify(request),
     });
   const responses = await Promise.all([sendUpdate(), sendUpdate()]);
   if (responses.some((response) => response.status !== 200)) {
-    const responseDetails = await Promise.all(responses.map(async (response) => `${response.status}: ${await response.text()}`));
-    throw new Error(`concurrent API Updates failed: ${responseDetails.join(" | ")}`);
+    const responseDetails = await Promise.all(
+      responses.map(
+        async (response) => `${response.status}: ${await response.text()}`,
+      ),
+    );
+    throw new Error(
+      `concurrent API Updates failed: ${responseDetails.join(" | ")}`,
+    );
   }
 
   const [receipt] = await seedClient`
@@ -158,14 +182,22 @@ try {
       AND command_type = 'update'
       AND command_id = ${request.updateId}
   `;
-  if (!receipt || receipt.status !== "accepted" || transportCalls !== 2 || logicalApplications !== 1) {
-    throw new Error(`unexpected concurrent receipt result: ${JSON.stringify({ receipt, transportCalls, logicalApplications, appliedUpdateIds: [...appliedUpdateIds] })}`);
+  if (
+    !receipt ||
+    receipt.status !== "accepted" ||
+    transportCalls !== 2 ||
+    logicalApplications !== 1
+  ) {
+    throw new Error(
+      `unexpected concurrent receipt result: ${JSON.stringify({ receipt, transportCalls, logicalApplications, appliedUpdateIds: [...appliedUpdateIds] })}`,
+    );
   }
 
   console.log("API command receipt concurrency verification ok");
 } finally {
   await apiDatabaseClient?.end({ timeout: 5 });
-  if (organizationId) await seedClient`DELETE FROM organizations WHERE id = ${organizationId}`;
+  if (organizationId)
+    await seedClient`DELETE FROM organizations WHERE id = ${organizationId}`;
   if (userId) await seedClient`DELETE FROM users WHERE id = ${userId}`;
   await seedClient.end({ timeout: 5 });
 }

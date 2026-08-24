@@ -1,12 +1,12 @@
-import { and, eq, isNull } from "drizzle-orm";
 import {
   createDatabase,
   organizationInvites,
   organizationOnboarding,
-  organizationUnits,
   organizations,
+  organizationUnits,
   roles,
 } from "@encois/persistence";
+import { and, eq, isNull } from "drizzle-orm";
 import { normalizeEmail } from "../src/auth/identity-platform.js";
 import { databaseUrl, parseOptions, required, slugify } from "./cli.js";
 
@@ -43,9 +43,14 @@ try {
     const [role] = await tx
       .select({ id: roles.id })
       .from(roles)
-      .where(and(eq(roles.key, "organization_admin"), isNull(roles.organizationId)))
+      .where(
+        and(eq(roles.key, "organization_admin"), isNull(roles.organizationId)),
+      )
       .limit(1);
-    if (!role) throw new Error("System organization_admin role is missing. Run database migrations first.");
+    if (!role)
+      throw new Error(
+        "System organization_admin role is missing. Run database migrations first.",
+      );
 
     const [invite] = await tx
       .insert(organizationInvites)
@@ -58,10 +63,24 @@ try {
       .returning({ id: organizationInvites.id });
     if (!invite) throw new Error("Organization invite was not created.");
 
-    return { inviteId: invite.id, organizationId: organization.id, organizationSlug: organization.slug };
+    return {
+      inviteId: invite.id,
+      organizationId: organization.id,
+      organizationSlug: organization.slug,
+    };
   });
 
-  console.log(JSON.stringify({ ...result, email, next: "User completes Google login to accept the invite." }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ...result,
+        email,
+        next: "User completes Google login to accept the invite.",
+      },
+      null,
+      2,
+    ),
+  );
 } finally {
   await database.client.end({ timeout: 5 });
 }
