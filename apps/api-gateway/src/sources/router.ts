@@ -4,6 +4,7 @@ import {
   createKnowledgeSourceRoute,
   createSourceRevisionRoute,
   getKnowledgeSourceRoute,
+  getSourceRevisionRawRoute,
   listKnowledgeSourcesRoute,
   startSourceIngestionRoute,
   uploadPdfKnowledgeSourceRoute,
@@ -22,6 +23,10 @@ export function createSourcesRouter(
   router.post("/uploads", uploadPdfKnowledgeSourceRoute(options.artifactStore));
   router.get("/:sourceId", getKnowledgeSourceRoute(options));
   router.post("/:sourceId/revisions", createSourceRevisionRoute);
+  router.get(
+    "/:sourceId/revisions/:revisionId/raw",
+    getSourceRevisionRawRoute(options),
+  );
   router.post(
     "/:sourceId/revisions/:revisionId/ingest",
     startSourceIngestionRoute(options),

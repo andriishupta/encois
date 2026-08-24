@@ -1,6 +1,9 @@
 import {
+  type IntegrationCatalogProjection,
+  IntegrationCatalogStatus,
   type IntegrationProjection,
   IntegrationStatus,
+  IntegrationType,
   Permission,
 } from "@encois/contracts";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -12,11 +15,13 @@ import {
 } from "@tanstack/react-router";
 import {
   ArrowUpRight,
+  Bot,
   CheckCircle2,
   Github,
   PlugZap,
   Plus,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
@@ -41,55 +46,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { listIntegrationsPage } from "@/lib/api";
+import { listIntegrationCatalogPage, listIntegrationsPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { humanizeKey, shortIdentifier } from "@/lib/formatters";
 import { useOrganization } from "@/lib/organization-context";
 import { useCan } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
-const providerCatalog = [
-  {
-    key: "github",
-    name: "GitHub",
-    description: "Repositories, pull requests, and delivery activity.",
-    capabilities: ["code.read", "pull-requests.read", "activity.read"],
-  },
-  {
-    key: "gitlab",
-    name: "GitLab",
-    description: "Repositories, merge requests, and delivery activity.",
-    capabilities: ["code.read", "pull-requests.read", "activity.read"],
-  },
-  {
-    key: "jira",
-    name: "Jira",
-    description: "Issues, projects, and operational activity.",
-    capabilities: ["issues.read", "activity.read"],
-  },
-  {
-    key: "linear",
-    name: "Linear",
-    description: "Issues and project execution context.",
-    capabilities: ["issues.read", "activity.read"],
-  },
-  {
-    key: "slack",
-    name: "Slack",
-    description: "Read-only message and activity context.",
-    capabilities: ["messages.read", "activity.read"],
-  },
-  {
-    key: "google-drive",
-    name: "Google Drive",
-    description: "Scoped documents for organization context.",
-    capabilities: ["documents.read"],
-  },
-] as const;
-
 export const Route = createFileRoute("/_app/organization/integrations/")({
   validateSearch: (search: Record<string, unknown>) => ({
     q: typeof search.q === "string" ? search.q : undefined,
+    channel: search.channel === "ai" ? ("ai" as const) : ("api" as const),
+    catalogType: Object.values(IntegrationType).includes(
+      search.catalogType as IntegrationType,
+    )
+      ? (search.catalogType as IntegrationType)
+      : ("all" as const),
   }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsRead))
@@ -102,7 +74,7 @@ const pageSize = 10;
 
 function IntegrationsPage() {
   const navigate = useNavigate();
-  const { q } = Route.useSearch();
+  const { q, channel, catalogType } = Route.useSearch();
   const { organizationName, units, currentUnitId, members } = useOrganization();
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId)
     ? currentUnitId
@@ -123,6 +95,12 @@ function IntegrationsPage() {
     "updated-desc" | "updated-asc" | "name-asc" | "status"
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
+  const [catalogStatus, setCatalogStatus] = useState<
+    IntegrationCatalogStatus | "all"
+  >("all");
+  const [catalogSort, setCatalogSort] = useState<
+    "updated-desc" | "updated-asc" | "name-asc" | "status"
+  >("status");
   const integrations = useInfiniteQuery({
     queryKey: queryKeys.integrations(
       selectedScopeUnitId,
@@ -150,6 +128,35 @@ function IntegrationsPage() {
     [integrations.data],
   );
   const total = integrations.data?.pages[0]?.pagination.total ?? 0;
+  const catalog = useInfiniteQuery({
+    queryKey: queryKeys.integrationCatalog(
+      channel,
+      catalogType,
+      q ?? "",
+      catalogStatus,
+      catalogSort,
+    ),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      listIntegrationCatalogPage({
+        channel,
+        type: catalogType,
+        query: q,
+        status: catalogStatus,
+        sort: catalogSort,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.hasMore
+        ? lastPage.pagination.offset + lastPage.pagination.limit
+        : undefined,
+  });
+  const catalogItems = useMemo(
+    () => catalog.data?.pages.flatMap((page) => page.items) ?? [],
+    [catalog.data],
+  );
+  const catalogTotal = catalog.data?.pages[0]?.pagination.total ?? 0;
   const statuses = [
     { value: "all", label: "All statuses" },
     ...Object.values(IntegrationStatus).map((value) => ({
@@ -163,20 +170,29 @@ function IntegrationsPage() {
     { value: "name-asc", label: "Name" },
     { value: "status", label: "Status" },
   ] as const;
-  const visibleProviders = providerCatalog.filter(
-    (provider) =>
-      !q ||
-      [
-        provider.key,
-        provider.name,
-        provider.description,
-        ...provider.capabilities,
-      ].some((value) => value.toLowerCase().includes(q.toLowerCase())),
-  );
-
   function updateQuery(value: string) {
     void navigate({
       search: (current) => ({ ...current, q: value || undefined }),
+    });
+  }
+
+  function updateCatalogChannel(nextChannel: "api" | "ai") {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        channel: nextChannel,
+        catalogType: nextChannel === "api" ? undefined : current.catalogType,
+      }),
+    });
+  }
+
+  function updateCatalogType(nextType: IntegrationType | "all") {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        channel: "ai",
+        catalogType: nextType === "all" ? undefined : nextType,
+      }),
     });
   }
 
@@ -312,81 +328,143 @@ function IntegrationsPage() {
           onLoadMore={() => void integrations.fetchNextPage()}
         />
       ) : null}
-      {canManage ? (
-        <section className="flex flex-col gap-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">
-              Integration Catalog
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Provider credentials and permissions are configured once for the
-              organization. Add Jira projects, repositories, or channels as
-              Sources in their organization unit.
-            </p>
+      <section className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Integration Catalog
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Organization-level connectors are listed from the integration
+            catalog. Unit-specific repositories, projects, and channels remain
+            Sources.
+          </p>
+        </div>
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="tablist"
+          aria-label="Integration connector type"
+        >
+          <Button
+            type="button"
+            variant={channel === "api" ? "secondary" : "ghost"}
+            role="tab"
+            aria-selected={channel === "api"}
+            onClick={() => updateCatalogChannel("api")}
+          >
+            API
+          </Button>
+          <Button
+            type="button"
+            variant={channel === "ai" ? "secondary" : "ghost"}
+            role="tab"
+            aria-selected={channel === "ai"}
+            onClick={() => updateCatalogChannel("ai")}
+          >
+            AI
+          </Button>
+        </div>
+        <ListToolbar>
+          <ListSearch
+            value={q ?? ""}
+            onChange={updateQuery}
+            placeholder="Search the Integration Catalog…"
+            label="Search Integration Catalog"
+          />
+          {channel === "ai" ? (
+            <fieldset
+              className="flex shrink-0 items-center gap-1 rounded-md border p-0.5"
+              aria-label="Filter AI connectors"
+            >
+              {(["all", IntegrationType.Ai, IntegrationType.Mcp] as const).map(
+                (type) => (
+                  <Button
+                    key={type}
+                    type="button"
+                    size="sm"
+                    variant={catalogType === type ? "secondary" : "ghost"}
+                    aria-pressed={catalogType === type}
+                    onClick={() => updateCatalogType(type)}
+                  >
+                    {type === "all" ? "All" : type.toUpperCase()}
+                  </Button>
+                ),
+              )}
+            </fieldset>
+          ) : null}
+          <ListFilter
+            value={catalogStatus}
+            onChange={(value) =>
+              setCatalogStatus(value as IntegrationCatalogStatus | "all")
+            }
+            options={[
+              { value: "all", label: "All statuses" },
+              ...Object.values(IntegrationCatalogStatus).map((value) => ({
+                value,
+                label: humanizeKey(value),
+              })),
+            ]}
+            label="Filter Integration Catalog by status"
+          />
+          <ListFilter
+            value={catalogSort}
+            onChange={(value) => setCatalogSort(value as typeof catalogSort)}
+            options={[
+              { value: "status", label: "Status" },
+              { value: "name-asc", label: "Name" },
+              { value: "updated-desc", label: "Recently updated" },
+              { value: "updated-asc", label: "Oldest updated" },
+            ]}
+            label="Sort Integration Catalog"
+          />
+          <ListMeta>
+            {catalogItems.length} loaded · {catalogTotal} available
+          </ListMeta>
+        </ListToolbar>
+        {catalog.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            Loading Integration Catalog…
+          </p>
+        ) : null}
+        {catalog.isError ? (
+          <Card>
+            <CardContent className="pt-6">
+              <p role="alert" className="text-sm text-destructive">
+                Could not load Integration Catalog: {catalog.error.message}
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+        {!catalog.isLoading && !catalog.isError && catalogItems.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {catalogItems.map((entry) => (
+              <IntegrationCatalogCard
+                key={entry.key}
+                entry={entry}
+                integrations={items}
+                canManage={canManage}
+              />
+            ))}
           </div>
-          <ListToolbar>
-            <ListSearch
-              value={q ?? ""}
-              onChange={updateQuery}
-              placeholder="Search the Integration Catalog…"
-              label="Search Integration Catalog"
-            />
-            <ListMeta>{visibleProviders.length} providers</ListMeta>
-          </ListToolbar>
-          {visibleProviders.length ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {visibleProviders.map((provider) => {
-                const connected = items.filter(
-                  (integration) =>
-                    integration.provider.toLowerCase() === provider.key,
-                );
-                return (
-                  <Card key={provider.key}>
-                    <CardHeader className="flex flex-row items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-base">
-                          {provider.name}
-                        </CardTitle>
-                        <CardDescription>
-                          {provider.description}
-                        </CardDescription>
-                      </div>
-                      <span className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground">
-                        {connected.length
-                          ? `${connected.length} registered`
-                          : "Available"}
-                      </span>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-4">
-                      <p className="text-[11px] text-muted-foreground">
-                        Read capabilities: {provider.capabilities.join(" · ")}
-                      </p>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          to="/organization/integrations/new"
-                          search={{ provider: provider.key }}
-                        >
-                          Register {provider.name}
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <EmptyPanel
-                  icon={Search}
-                  title="No integrations match"
-                  description="Change the provider or capability search."
-                />
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      ) : null}
+        ) : null}
+        {!catalog.isLoading && !catalog.isError && !catalogItems.length ? (
+          <Card>
+            <CardContent className="pt-6">
+              <EmptyPanel
+                icon={Search}
+                title="No integrations match"
+                description="Change the search, connector type, or status filter."
+              />
+            </CardContent>
+          </Card>
+        ) : null}
+        {!catalog.isLoading && !catalog.isError && catalogItems.length ? (
+          <ListPagination
+            hasMore={Boolean(catalog.hasNextPage)}
+            loading={catalog.isFetchingNextPage}
+            onLoadMore={() => void catalog.fetchNextPage()}
+          />
+        ) : null}
+      </section>
     </div>
   );
 }
@@ -423,7 +501,9 @@ function IntegrationPreviewCard({
             </span>
             <div className="flex flex-col gap-1.5">
               <CardTitle>{integration.name}</CardTitle>
-              <CardDescription>{integration.provider}</CardDescription>
+              <CardDescription>
+                {integration.provider} · {integration.type.toUpperCase()}
+              </CardDescription>
             </div>
           </div>
           <ArrowUpRight
@@ -445,5 +525,85 @@ function IntegrationPreviewCard({
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function IntegrationCatalogCard({
+  entry,
+  integrations,
+  canManage,
+}: {
+  entry: IntegrationCatalogProjection;
+  integrations: readonly IntegrationProjection[];
+  canManage: boolean;
+}) {
+  const Icon =
+    entry.type === IntegrationType.Ai
+      ? Sparkles
+      : entry.type === IntegrationType.Mcp
+        ? Bot
+        : entry.provider === "github"
+          ? Github
+          : PlugZap;
+  const registered = integrations.filter(
+    (integration) =>
+      integration.provider.toLowerCase() === entry.provider &&
+      integration.type === entry.type,
+  ).length;
+  const available = entry.status === IntegrationCatalogStatus.Active;
+  const statusLabel =
+    entry.status === IntegrationCatalogStatus.Disabled
+      ? "Coming soon"
+      : entry.status === IntegrationCatalogStatus.Pending
+        ? "Pending"
+        : registered
+          ? `${registered} registered`
+          : "Available";
+
+  return (
+    <Card
+      className={
+        available
+          ? "h-full"
+          : "h-full cursor-default opacity-[0.85] shadow-none"
+      }
+    >
+      <CardHeader className="flex flex-row items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 items-center justify-center rounded-md border bg-muted/30">
+            <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+          </span>
+          <div>
+            <CardTitle className="text-base">{entry.name}</CardTitle>
+            <CardDescription>{entry.description}</CardDescription>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full border bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+          {statusLabel}
+        </span>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+          <span className="rounded-full border px-2 py-1">
+            {entry.type.toUpperCase()}
+          </span>
+          {entry.capabilities.map((capability) => (
+            <span key={capability} className="rounded-full border px-2 py-1">
+              {capability}
+            </span>
+          ))}
+        </div>
+        {available && canManage ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link
+              to="/organization/integrations/new"
+              search={{ provider: entry.provider, type: entry.type }}
+            >
+              Register {entry.name}
+            </Link>
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

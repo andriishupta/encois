@@ -3,7 +3,7 @@ import type {
   WorkflowBlueprintStatus,
 } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -11,7 +11,7 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router";
-import { GitBranch, Search } from "lucide-react";
+import { GitBranch, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -34,9 +34,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { listWorkflowBlueprintsPage } from "@/lib/api";
+import { deleteWorkflowBlueprint, listWorkflowBlueprintsPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
+import { useCan } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/blueprints")({
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/_app/workflows/blueprints")({
 });
 
 function WorkflowBlueprintsPage() {
+  const canManage = useCan(Permission.WorkflowsManage);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -141,7 +143,9 @@ function WorkflowBlueprintsPage() {
           getKey={(blueprint) =>
             `${blueprint.blueprintId}:${blueprint.version}`
           }
-          renderItem={(blueprint) => <BlueprintCard blueprint={blueprint} />}
+          renderItem={(blueprint) => (
+            <BlueprintCard blueprint={blueprint} canManage={canManage} />
+          )}
         />
       ) : null}
       {!blueprints.isLoading &&
@@ -190,9 +194,20 @@ function WorkflowBlueprintsPage() {
 
 function BlueprintCard({
   blueprint,
+  canManage,
 }: {
   blueprint: WorkflowBlueprintProjection;
+  canManage: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => deleteWorkflowBlueprint(blueprint.blueprintId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowBlueprints(),
+      }),
+  });
+
   return (
     <Card className="flex h-full flex-col">
       <CardHeader>
@@ -242,6 +257,28 @@ function BlueprintCard({
                 Use as workflow source
               </Link>
             </Button>
+          ) : null}
+          {canManage ? (
+            <Button
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Delete this Blueprint? Its historical Workflow Runs will remain available, but all Blueprint revisions will be hidden.",
+                  )
+                )
+                  remove.mutate();
+              }}
+            >
+              <Trash2 data-icon="inline-start" />
+              {remove.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          ) : null}
+          {remove.isError ? (
+            <p role="alert" className="basis-full text-xs text-destructive">
+              Could not delete this Blueprint: {remove.error.message}
+            </p>
           ) : null}
         </div>
       </CardContent>

@@ -6,7 +6,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { Check, ClipboardCheck, GitBranch, Search } from "lucide-react";
+import {
+  Check,
+  ClipboardCheck,
+  GitBranch,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -31,6 +37,7 @@ import {
 import {
   applyWorkflowPlan,
   approveWorkflowPlan,
+  deleteWorkflowPlan,
   listWorkflowPlansPage,
 } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
@@ -83,11 +90,13 @@ function WorkflowPlansPage() {
       operation,
     }: {
       planId: string;
-      operation: "approve" | "apply";
+      operation: "approve" | "apply" | "delete";
     }) =>
       operation === "approve"
         ? approveWorkflowPlan(planId)
-        : applyWorkflowPlan(planId),
+        : operation === "apply"
+          ? applyWorkflowPlan(planId)
+          : deleteWorkflowPlan(planId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["workflow-plans"] }),
     onError: (error) => setActionError(error.message),
@@ -220,7 +229,7 @@ function WorkflowPlanCard({
   plan: WorkflowPlanRecord;
   units: ReturnType<typeof useOrganization>["units"];
   busy: boolean;
-  onAction: (operation: "approve" | "apply") => void;
+  onAction: (operation: "approve" | "apply" | "delete") => void;
 }) {
   const change = plan.plan.changes[0];
   const blueprint = change?.blueprint;
@@ -332,6 +341,23 @@ function WorkflowPlanCard({
             {plan.status === "approved" ? (
               <Button disabled={busy} onClick={() => onAction("apply")}>
                 Apply plan
+              </Button>
+            ) : null}
+            {plan.status !== "applied" ? (
+              <Button
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Delete this workflow plan? It will be hidden from Plans and cannot be approved or applied.",
+                    )
+                  )
+                    onAction("delete");
+                }}
+              >
+                <Trash2 data-icon="inline-start" />
+                Delete
               </Button>
             ) : null}
           </div>

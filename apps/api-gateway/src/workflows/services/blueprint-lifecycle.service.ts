@@ -11,7 +11,7 @@ import {
   withOrganizationContext,
   workflowBlueprints,
 } from "@encois/persistence";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { stableSerialize, workflowServiceError } from "./workflow.service.js";
@@ -235,6 +235,7 @@ export async function createBlueprintLifecyclePlan(
           and(
             eq(workflowBlueprints.organizationId, principal.organizationId),
             eq(workflowBlueprints.blueprintId, blueprintId.trim()),
+            isNull(workflowBlueprints.deletedAt),
             ...(sourceVersion
               ? [eq(workflowBlueprints.version, sourceVersion)]
               : []),

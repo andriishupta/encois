@@ -79,6 +79,7 @@ export type UploadedPdfSourceInput = {
 export type SourceArtifactStore = {
   reference(input: {
     organizationId: string;
+    unitId: string;
     sourceId: string;
     revision: string;
   }): { artifactRef: string; objectKey: string };
@@ -92,6 +93,14 @@ export type SourceArtifactStore = {
     contentType: string;
     bytes: Uint8Array;
   }): Promise<void>;
+  read(input: {
+    artifactRef: string;
+    objectKey: string;
+  }): Promise<{
+    bytes: Uint8Array;
+    contentType?: string;
+    fileName?: string;
+  } | null>;
   remove?(input: { artifactRef: string; objectKey: string }): Promise<void>;
 };
 
@@ -109,6 +118,7 @@ export type SourceIngestionLaunch = {
 
 export type SourceServiceOptions = {
   workflowClient: WorkflowClient;
+  artifactStore?: SourceArtifactStore;
   namespace: string;
   taskQueue: string;
   policyVersion: string;
@@ -422,6 +432,12 @@ function toSourceRevision(
     createdAt: row.createdAt.toISOString(),
   };
 }
+
+export type SourceArtifactDownload = {
+  bytes: Uint8Array;
+  contentType: string;
+  fileName: string;
+};
 
 function toSourceIngestionRun(
   row: typeof sourceIngestionRuns.$inferSelect,
@@ -953,6 +969,40 @@ export async function getKnowledgeSource(
   );
 }
 
+export async function readSourceArtifact(
+  principal: AosPrincipal,
+  sourceId: string,
+  revisionId: string,
+  options: SourceServiceOptions,
+): Promise<SourceArtifactDownload | null> {
+  if (!options.artifactStore)
+    throw sourceServiceError(
+      "ARTIFACT_STORE_UNAVAILABLE",
+      "Source artifacts are not configured for this environment.",
+    );
+
+  const detail = await getKnowledgeSource(principal, sourceId, options);
+  const revision = detail?.revisions.find((candidate) => candidate.id === revisionId);
+  if (!revision?.artifactRef || !revision.sourceObjectId) return null;
+
+  const artifact = await options.artifactStore.read({
+    artifactRef: revision.artifactRef,
+    objectKey: revision.sourceObjectId,
+  });
+  if (!artifact) return null;
+
+  const metadataFileName = revision.metadata?.fileName;
+  const fileName =
+    typeof metadataFileName === "string" && metadataFileName.trim()
+      ? metadataFileName
+      : `source-revision-${revision.revision}.pdf`;
+  return {
+    bytes: artifact.bytes,
+    contentType: artifact.contentType ?? revision.contentType ?? "application/octet-stream",
+    fileName: artifact.fileName ?? fileName,
+  };
+}
+
 export async function createSourceRevision(
   principal: AosPrincipal,
   sourceId: string,
@@ -1135,6 +1185,18 @@ function pdfFileName(value: string): string {
     : `${normalized || "document"}.pdf`;
 }
 
+function sourceStorageUnitId(
+  source: KnowledgeSource,
+  principal: AosPrincipal,
+): string {
+  const ids = [
+    ...source.readScope.ids,
+    ...source.visibilityScope.ids,
+    ...principal.scope,
+  ].filter((id) => id !== "*" && id.trim().length > 0);
+  return ids[0] ?? "organization";
+}
+
 export async function uploadPdfKnowledgeSource(
   principal: AosPrincipal,
   input: UploadedPdfSourceInput,
@@ -1176,6 +1238,7 @@ export async function uploadPdfKnowledgeSource(
   });
   const reference = artifactStore.reference({
     organizationId: principal.organizationId,
+    unitId: sourceStorageUnitId(source, principal),
     sourceId: source.id,
     revision,
   });
@@ -1201,7 +1264,11 @@ export async function uploadPdfKnowledgeSource(
         contentType: "application/pdf",
         checksum,
         observedAt: new Date().toISOString(),
-        metadata: { fileName, sizeBytes: input.bytes.length },
+        metadata: {
+          fileName,
+          sizeBytes: input.bytes.length,
+          storageManaged: true,
+        },
       },
     );
     if (!revisionProjection)

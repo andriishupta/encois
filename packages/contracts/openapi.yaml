@@ -72,6 +72,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IntegrationResponse'
+  /api/v1/integrations/catalog:
+    get:
+      operationId: listIntegrationCatalog
+      summary: List catalog connectors available to the tenant
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: channel, in: query, schema: { type: string, enum: [api, ai] } }
+        - { name: type, in: query, schema: { type: string, enum: [all, api, ai, mcp, custom] } }
+        - { name: q, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: status, in: query, schema: { type: string, enum: [all, active, pending, disabled] } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated-desc, updated-asc, name-asc, status] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Global integration catalog metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationCatalogListResponse'
   /api/v1/integrations/{integrationId}:
     post:
       operationId: updateIntegration
@@ -754,6 +775,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SourceRevisionResponse'
+  /api/v1/sources/{sourceId}/revisions/{revisionId}/raw:
+    get:
+      operationId: downloadSourceRevisionRaw
+      summary: Download an uploaded raw Source file after scope authorization
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: revisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Raw Source file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Source or raw file not found
   /api/v1/sources/{sourceId}/revisions/{revisionId}/ingest:
     post:
       operationId: startSourceIngestion
@@ -1693,6 +1741,12 @@ components:
     IntegrationStatus:
       type: string
       enum: [pending, authorized, active, degraded, needs_reauth, disabled, error]
+    IntegrationType:
+      type: string
+      enum: [api, ai, mcp, custom]
+    IntegrationCatalogStatus:
+      type: string
+      enum: [active, pending, disabled]
     KnowledgeSourceKind:
       type: string
       enum: [integration, uploaded_document, manual, media]
@@ -1867,11 +1921,12 @@ components:
     IntegrationProjection:
       type: object
       additionalProperties: false
-      required: [id, name, provider, status]
+      required: [id, name, provider, type, status]
       properties:
         id: { type: string }
         name: { type: string }
         provider: { type: string }
+        type: { $ref: '#/components/schemas/IntegrationType' }
         status: { $ref: '#/components/schemas/IntegrationStatus' }
         scopeIds:
           type: array
@@ -1898,6 +1953,31 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/IntegrationProjection'
+    IntegrationCatalogProjection:
+      type: object
+      additionalProperties: false
+      required: [key, provider, name, description, type, status, capabilities, updatedAt]
+      properties:
+        key: { type: string }
+        provider: { type: string }
+        name: { type: string }
+        description: { type: string }
+        type: { $ref: '#/components/schemas/IntegrationType' }
+        status: { $ref: '#/components/schemas/IntegrationCatalogStatus' }
+        capabilities:
+          type: array
+          items: { type: string }
+        updatedAt: { type: string, format: date-time }
+    IntegrationCatalogListResponse:
+      type: object
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntegrationCatalogProjection'
+        pagination:
+          $ref: '#/components/schemas/ListPagination'
     WebhookEndpointProjection:
       type: object
       additionalProperties: false
@@ -2018,6 +2098,7 @@ components:
       properties:
         displayName: { type: string, minLength: 2, maxLength: 160 }
         provider: { type: string, minLength: 1, maxLength: 80 }
+        type: { $ref: '#/components/schemas/IntegrationType' }
         organizationUnitId: { type: string, format: uuid, deprecated: true, description: Compatibility field. Integrations are always organization-scoped. }
         grantedScopes:
           type: array

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  index,
   jsonb,
   pgEnum,
   pgTable,
@@ -47,6 +48,7 @@ export const workflowBlueprints = pgTable(
       .defaultNow()
       .notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     uniqueIndex("workflow_blueprints_organization_identity_idx").on(
@@ -61,6 +63,10 @@ export const workflowBlueprints = pgTable(
     uniqueIndex("workflow_blueprints_current_idx")
       .on(table.organizationId, table.blueprintId)
       .where(sql`is_current = true`),
+    index("workflow_blueprints_organization_deleted_idx").on(
+      table.organizationId,
+      table.deletedAt,
+    ),
     check(
       "workflow_blueprints_current_approved_check",
       sql`NOT ${table.isCurrent} OR ${table.status} = 'approved'`,

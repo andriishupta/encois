@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
-const composeFile = "compose.local.yaml";
+const composeFile = "compose.watch.mock.yaml";
 const args = process.argv.slice(2);
 const composeArgs = [];
 const runEnvironmentArguments = [];
@@ -23,7 +23,7 @@ for (let index = 0; index < args.length; index += 1) {
 }
 
 if (!composeArgs[0]) {
-  throw new Error("Usage: node scripts/compose-local-run.mjs [--env KEY=VALUE] SERVICE [COMMAND ...]");
+  throw new Error("Usage: node scripts/compose-watch-mock-run.mjs [--env KEY=VALUE] SERVICE [COMMAND ...]");
 }
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));

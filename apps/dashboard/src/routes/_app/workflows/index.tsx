@@ -20,7 +20,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { FilePlus2, GitBranch, Play, Search } from "lucide-react";
+import { FilePlus2, GitBranch, Play, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -47,6 +47,7 @@ import { WorkflowStatusIndicator } from "@/components/workflow-status";
 import {
   listWorkflowBlueprintsPage,
   listWorkflows,
+  deleteWorkflowBlueprint,
   startWorkflow,
 } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
@@ -185,6 +186,7 @@ function WorkflowsPage() {
             <WorkflowDefinitionCard
               workflow={workflow}
               activeRun={activeRuns.get(workflow.blueprintId)}
+              canManage={canManage}
               canRun={canRun}
               runsReady={!runs.isLoading && !runs.isError}
             />
@@ -290,11 +292,13 @@ function selectActiveRuns(
 function WorkflowDefinitionCard({
   workflow,
   activeRun,
+  canManage,
   canRun,
   runsReady,
 }: {
   workflow: WorkflowBlueprintProjection;
   activeRun?: WorkflowExecutionProjection;
+  canManage: boolean;
   canRun: boolean;
   runsReady: boolean;
 }) {
@@ -333,6 +337,7 @@ function WorkflowDefinitionCard({
         <WorkflowDefinitionActions
           workflow={workflow}
           activeRun={activeRun}
+          canManage={canManage}
           canRun={canRun}
           runsReady={runsReady}
         />
@@ -344,11 +349,13 @@ function WorkflowDefinitionCard({
 function WorkflowDefinitionActions({
   workflow,
   activeRun,
+  canManage,
   canRun,
   runsReady,
 }: {
   workflow: WorkflowBlueprintProjection;
   activeRun?: WorkflowExecutionProjection;
+  canManage: boolean;
   canRun: boolean;
   runsReady: boolean;
 }) {
@@ -379,6 +386,13 @@ function WorkflowDefinitionActions({
         params: { workflowId: started.workflowId },
       });
     },
+  });
+  const remove = useMutation({
+    mutationFn: () => deleteWorkflowBlueprint(workflow.blueprintId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowBlueprints(),
+      }),
   });
   const canStartAction =
     canRun && workflow.status === "approved" && workflow.isCurrent;
@@ -432,9 +446,31 @@ function WorkflowDefinitionActions({
           </Link>
         </Button>
       ) : null}
+      {canManage ? (
+        <Button
+          variant="destructive"
+          disabled={remove.isPending}
+          onClick={() => {
+            if (
+              window.confirm(
+                "Delete this Workflow? Its historical Runs will remain available, but the Workflow and its Blueprint revisions will be hidden.",
+              )
+            )
+              remove.mutate();
+          }}
+        >
+          <Trash2 data-icon="inline-start" />
+          {remove.isPending ? "Deleting…" : "Delete"}
+        </Button>
+      ) : null}
       {run.isError ? (
         <p role="alert" className="basis-full text-xs text-destructive">
           Could not start this workflow: {run.error.message}
+        </p>
+      ) : null}
+      {remove.isError ? (
+        <p role="alert" className="basis-full text-xs text-destructive">
+          Could not delete this Workflow: {remove.error.message}
         </p>
       ) : null}
     </div>

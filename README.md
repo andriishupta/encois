@@ -137,15 +137,15 @@ local stack; override them with `ENCOIS_SMOKE_TEMPORAL_PORT`,
 `ENCOIS_SMOKE_AGENT_GATEWAY_PORT`, and `ENCOIS_SMOKE_AGENT_RUNTIME_PORT` when
 those ports are occupied.
 
-For the full containerized local stack, run:
+For the full containerized watch-mock stack, run:
 
 ```bash
-pnpm run dev:local
+pnpm run dev:watch:mock
 ```
 
 This starts Postgres, the Temporal development server, migrations, API Gateway,
 Firebase Auth Emulator, local auth seed, Agent Gateway, Agent Runtime, and the
-Vite-served dashboard through `compose.local.yaml`. The local Runtime uses
+Vite-served dashboard through `compose.watch.mock.yaml`. The local Runtime uses
 `AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters, so
 no Gemini key or Google Cloud credentials are required. The dashboard uses the
 API Gateway and Temporal for workflow execution. Local fixture data is created
@@ -159,11 +159,11 @@ stack for workflow execution; the seed script creates explicit organization
 and source fixtures but is not selected as an API workflow backend.
 See [`docs/local.md`](docs/local.md) for the onboarding and database
 verification flow. Follow service logs with
-`docker compose -f compose.local.yaml logs -f`.
+`docker compose -f compose.watch.mock.yaml logs -f`.
 
 This local service mode includes live reload: the Dashboard uses Vite HMR, the
 API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
-and Agent Runtime. Stop it with `pnpm run dev:local:down`.
+and Agent Runtime. Stop it with `pnpm run dev:watch:mock:down`.
 
 To reset only the known fixture organizations and Auth Emulator accounts, use
 the scoped reset command documented in [`docs/local.md`](docs/local.md). It
@@ -182,6 +182,17 @@ Temporal Cloud, Identity Platform, Cloud Storage, Spanner, Vertex AI/Memory
 Bank, and Gemini access. It has no Firebase emulator, local Temporal server,
 local database, or mock data-plane fallback. Stop it with
 `pnpm dev:local:prod:down`.
+
+For the same managed dependencies with live reload, use:
+
+```bash
+pnpm dev:watch:prod
+```
+
+This uses `compose.watch.prod.yaml`, keeps the application containers in watch
+mode, and does not start local emulators, local Postgres, Temporal dev server,
+or mock data-plane services. Stop it with
+`pnpm dev:watch:prod:down`.
 
 Terraform does not run the application locally. It provisions cloud resources
 and references container images; Docker Compose is the local orchestration

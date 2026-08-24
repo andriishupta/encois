@@ -596,6 +596,7 @@ async function validateWorkflowCatalogSelections(
           eq(workflowBlueprints.organizationId, organizationId),
           eq(workflowBlueprints.status, "approved"),
           eq(workflowBlueprints.isCurrent, true),
+          isNull(workflowBlueprints.deletedAt),
           inArray(workflowBlueprints.blueprintId, selectedWorkflows),
         ),
       ),

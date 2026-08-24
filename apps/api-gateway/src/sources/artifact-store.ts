@@ -12,14 +12,21 @@ type ArtifactStoreOptions = {
 
 function objectKey(input: {
   organizationId: string;
+  unitId: string;
   sourceId: string;
   revision: string;
 }): string {
-  return `organizations/${input.organizationId}/sources/${input.sourceId}/revisions/${input.revision}.pdf`;
+  return `organizations/${input.organizationId}/units/${input.unitId}/sources/${input.sourceId}/revisions/${input.revision}.pdf`;
 }
 
+type StoredArtifact = {
+  bytes: Uint8Array;
+  contentType: string;
+  fileName: string;
+};
+
 function createMemoryArtifactStore(): SourceArtifactStore {
-  const objects = new Map<string, Uint8Array>();
+  const objects = new Map<string, StoredArtifact>();
   return {
     reference(input) {
       const key = objectKey(input);
@@ -28,7 +35,21 @@ function createMemoryArtifactStore(): SourceArtifactStore {
     async write(input) {
       if (input.bytes.length > MAX_UPLOAD_BYTES)
         throw new Error("artifact exceeds the configured upload limit");
-      objects.set(input.artifactRef, input.bytes.slice());
+      objects.set(input.artifactRef, {
+        bytes: input.bytes.slice(),
+        contentType: input.contentType,
+        fileName: input.fileName,
+      });
+    },
+    async read(input) {
+      const artifact = objects.get(input.artifactRef);
+      return artifact
+        ? {
+            bytes: artifact.bytes.slice(),
+            contentType: artifact.contentType,
+            fileName: artifact.fileName,
+          }
+        : null;
     },
     async remove(input) {
       objects.delete(input.artifactRef);
@@ -76,6 +97,27 @@ function createCloudStorageArtifactStore(
         },
       });
     },
+    async read(input) {
+      const file = bucket.file(input.objectKey);
+      try {
+        const [[bytes], [metadata]] = await Promise.all([
+          file.download(),
+          file.getMetadata(),
+        ]);
+        return {
+          bytes: new Uint8Array(bytes),
+          contentType: metadata.contentType ?? undefined,
+          fileName: metadata.metadata?.fileName ?? undefined,
+        };
+      } catch (error) {
+        const status =
+          typeof error === "object" && error !== null && "code" in error
+            ? (error as { code?: unknown }).code
+            : undefined;
+        if (status === 404) return null;
+        throw error;
+      }
+    },
     async remove(input) {
       await bucket.file(input.objectKey).delete({ ignoreNotFound: true });
     },
@@ -83,8 +125,9 @@ function createCloudStorageArtifactStore(
 }
 
 /**
- * Cloud Storage is required in production. The in-memory adapter keeps local
- * UI/API development usable without pretending that local bytes are durable.
+ * Cloud Storage is required in production. The in-memory adapter is retained
+ * for isolated tests and non-compose development only; watch mock configures
+ * the Firebase Storage emulator so uploaded PDFs survive API restarts.
  */
 export function createSourceArtifactStore(
   options: ArtifactStoreOptions,

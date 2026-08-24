@@ -4,7 +4,12 @@ import type {
 } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   ArchiveRestore,
   ArrowLeft,
@@ -13,6 +18,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
@@ -29,6 +35,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createBlueprintLifecyclePlan,
+  deleteWorkflowBlueprint,
   listWorkflowBlueprints,
 } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
@@ -48,6 +55,7 @@ export const Route = createFileRoute("/_app/workflows/blueprints/$blueprintId")(
 
 function BlueprintRevisionPage() {
   const { blueprintId } = Route.useParams();
+  const navigate = useNavigate();
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
     queryFn: listWorkflowBlueprints,
@@ -75,6 +83,15 @@ function BlueprintRevisionPage() {
       });
     },
   });
+  const remove = useMutation({
+    mutationFn: () => deleteWorkflowBlueprint(blueprintId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowBlueprints(),
+      });
+      await navigate({ to: "/workflows/blueprints" });
+    },
+  });
   const versions = (
     blueprints.data?.filter(
       (blueprint) => blueprint.blueprintId === blueprintId,
@@ -97,12 +114,40 @@ function BlueprintRevisionPage() {
         title={selected?.name ?? "Blueprint revisions"}
         description="Review immutable Blueprint versions and inspect what changed before using a revision for a new Run."
         actions={
-          <ButtonLink to="/workflows/blueprints">
-            <ArrowLeft data-icon="inline-start" />
-            Back to Blueprints
-          </ButtonLink>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink to="/workflows/blueprints">
+              <ArrowLeft data-icon="inline-start" />
+              Back to Blueprints
+            </ButtonLink>
+            {canManage && selected ? (
+              <Button
+                variant="destructive"
+                disabled={remove.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Delete this Blueprint? Its historical Workflow Runs will remain available, but all Blueprint revisions will be hidden.",
+                    )
+                  )
+                    remove.mutate();
+                }}
+              >
+                <Trash2 data-icon="inline-start" />
+                {remove.isPending ? "Deleting…" : "Delete Blueprint"}
+              </Button>
+            ) : null}
+          </div>
         }
       />
+      {remove.isError ? (
+        <Card>
+          <CardContent className="pt-6">
+            <p role="alert" className="text-sm text-destructive">
+              Could not delete this Blueprint: {remove.error.message}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
       {blueprints.isLoading ? (
         <p className="text-sm text-muted-foreground">
           Loading revision history…

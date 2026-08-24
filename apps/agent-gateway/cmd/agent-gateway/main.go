@@ -46,6 +46,17 @@ func main() {
 		defer func() { _ = closeAdapters() }()
 	case "mock":
 		// Explicit local/test fixture mode.
+		if cfg.StorageMode == "gcs" {
+			routerOptions.ArtifactStore, closeAdapters, err = gatewayserver.NewCloudStorageArtifactStore(context.Background(), cfg.StorageBucket)
+			if err != nil {
+				logger.Error("failed to initialize Cloud Storage artifact adapter", "error", err)
+				os.Exit(1)
+			}
+			defer func() { _ = closeAdapters() }()
+		} else if cfg.StorageMode != "memory" {
+			logger.Error("unsupported agent gateway storage mode", "storage_mode", cfg.StorageMode, "allowed", []string{"memory", "gcs"})
+			os.Exit(1)
+		}
 	default:
 		logger.Error("unsupported agent gateway data mode", "data_mode", cfg.DataMode, "allowed", []string{"gcp", "mock"})
 		os.Exit(1)

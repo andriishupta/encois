@@ -1,87 +1,113 @@
-import { validateContract } from "./validation.js";
 import { isJsonObject, type JsonObject } from "./json.js";
+import { validateContract } from "./validation.js";
 import {
-  AgentMemoryOperation,
-  AgentMemoryStatus,
-  AccessLevel,
-  AuthAccessStatus,
-  ArtifactRetentionClass,
+  type AccessLevel,
+  type AgentMemoryOperation,
+  type AgentMemoryStatus,
+  type ArtifactRetentionClass,
+  type AuthAccessStatus,
   ContractVersion,
+  type CoordinationMode,
+  type CoordinatorEventType,
   CoordinatorSignalName,
-  CoordinatorEventType,
-  GraphQueryStatus,
-  FreshnessStatus,
-  IntegrationStatus,
-  MemoryRedactionStatus,
-  OrganizationUnitType,
-  OrganizationMembershipStatus,
-  OrganizationAccessRequestStatus,
-  OrganizationOnboardingStatus,
-  CoordinationMode,
-  RecommendationStatus,
-  RecommendationTarget,
+  type FreshnessStatus,
+  type GraphQueryStatus,
+  type IntegrationCatalogStatus,
+  type IntegrationStatus,
+  type IntegrationType,
+  type KnowledgeSourceKind,
+  type KnowledgeSourceStatus,
+  type MemoryRedactionStatus,
+  type OrganizationAccessRequestStatus,
+  type OrganizationMembershipStatus,
+  type OrganizationOnboardingStatus,
+  type OrganizationUnitType,
+  type RecommendationStatus,
+  type RecommendationTarget,
   ScopeRuleMode,
-  ToolResultStatus,
-  ToolSideEffects,
+  type SourceIngestionStatus,
+  type SourceIngestionTrigger,
+  type SourceRevisionStatus,
   TemporalWorkflowType,
-  WorkflowChangeKind,
-  WorkflowExecutionStatus,
-  WorkflowResultStatus,
-  WorkflowSignalName,
+  type ToolResultStatus,
+  type ToolSideEffects,
+  type WorkflowChangeKind,
+  type WorkflowExecutionStatus,
+  type WorkflowResultStatus,
+  type WorkflowSignalName,
+  type WorkflowStatusReason,
   WorkflowStepKind,
-  WorkflowUpdateName,
-  WorkflowStatusReason,
-  KnowledgeSourceKind,
-  KnowledgeSourceStatus,
-  SourceRevisionStatus,
-  SourceIngestionTrigger,
-  SourceIngestionStatus,
+  type WorkflowUpdateName,
 } from "./values.js";
 
-export { resolveEffectiveScope, type EffectiveScope, type OrganizationUnitNode, type ScopeRule } from "./scope.js";
 export { isJsonObject, type JsonObject } from "./json.js";
-export { validateWaitlistRequest, WaitlistLimits, type WaitlistRequest, type WaitlistValidationField, type WaitlistValidationResult } from "./waitlist.js";
-export { allPermissions, Permission, permissionImplications, permissionIncludes, isPermission, type Permission as PermissionKey } from "./permissions.generated.js";
+export {
+  allPermissions,
+  isPermission,
+  Permission,
+  type Permission as PermissionKey,
+  permissionImplications,
+  permissionIncludes,
+} from "./permissions.generated.js";
+export {
+  type EffectiveScope,
+  type OrganizationUnitNode,
+  resolveEffectiveScope,
+  type ScopeRule,
+} from "./scope.js";
+export {
+  CONTRACT_SCHEMA_FILES,
+  type ContractSchemaName,
+  type ContractValidationResult,
+  validateContract,
+} from "./validation.js";
 
 export {
+  AccessLevel,
   AgentMemoryOperation,
   AgentMemoryStatus,
-  AccessLevel,
-  AuthAccessStatus,
   ArtifactRetentionClass,
+  AuthAccessStatus,
   ContractVersion,
-  CoordinatorSignalName,
-  CoordinatorEventType,
-  GraphQueryStatus,
-  FreshnessStatus,
-  IntegrationStatus,
-  MemoryRedactionStatus,
-  OrganizationUnitType,
-  OrganizationMembershipStatus,
-  OrganizationAccessRequestStatus,
-  OrganizationOnboardingStatus,
   CoordinationMode,
+  CoordinatorEventType,
+  CoordinatorSignalName,
+  FreshnessStatus,
+  GraphQueryStatus,
+  IntegrationCatalogStatus,
+  IntegrationStatus,
+  IntegrationType,
+  KnowledgeSourceKind,
+  KnowledgeSourceStatus,
+  MemoryRedactionStatus,
+  OrganizationAccessRequestStatus,
+  OrganizationMembershipStatus,
+  OrganizationOnboardingStatus,
+  OrganizationUnitType,
   RecommendationStatus,
   RecommendationTarget,
   ScopeRuleMode,
+  SourceIngestionStatus,
+  SourceIngestionTrigger,
+  SourceRevisionStatus,
+  TemporalWorkflowType,
   ToolResultStatus,
   ToolSideEffects,
-  TemporalWorkflowType,
   WorkflowChangeKind,
   WorkflowExecutionStatus,
   WorkflowResultStatus,
   WorkflowSignalName,
+  WorkflowStatusReason,
   WorkflowStepKind,
   WorkflowUpdateName,
-  WorkflowStatusReason,
-  KnowledgeSourceKind,
-  KnowledgeSourceStatus,
-  SourceRevisionStatus,
-  SourceIngestionTrigger,
-  SourceIngestionStatus,
 } from "./values.js";
-
-export { CONTRACT_SCHEMA_FILES, validateContract, type ContractSchemaName, type ContractValidationResult } from "./validation.js";
+export {
+  validateWaitlistRequest,
+  WaitlistLimits,
+  type WaitlistRequest,
+  type WaitlistValidationField,
+  type WaitlistValidationResult,
+} from "./waitlist.js";
 
 export type ExecutionScope = {
   /** Organization-unit IDs. No separate team/project scope namespaces exist. */
@@ -190,7 +216,12 @@ export type SourceIngestionResult = {
   sourceId: string;
   sourceRevisionId: string;
   status: SourceIngestionStatus;
-  stage: "acquired" | "parsed" | "normalized" | "graph_projected" | "memory_distilled";
+  stage:
+    | "acquired"
+    | "parsed"
+    | "normalized"
+    | "graph_projected"
+    | "memory_distilled";
   factsCount: number;
   evidenceRefs: readonly string[];
   freshness?: readonly SourceFreshness[];
@@ -356,7 +387,9 @@ export type WorkflowTemplate = {
   version: string;
   workflowType: typeof TemporalWorkflowType.Dynamic;
   purpose: string;
-  inputs: Readonly<Record<string, { type: string; description: string; required?: boolean }> >;
+  inputs: Readonly<
+    Record<string, { type: string; description: string; required?: boolean }>
+  >;
   providerSlots: readonly {
     key: string;
     capabilities: readonly string[];
@@ -408,7 +441,12 @@ export type WorkflowBlueprintProjection = {
 /** A product-level request for a governed Blueprint registry change. */
 export type WorkflowBlueprintLifecycleRequest = {
   contractVersion: typeof ContractVersion.WorkflowBlueprintLifecycle;
-  action: "create_revision" | "duplicate" | "deprecate" | "restore" | "mark_current";
+  action:
+    | "create_revision"
+    | "duplicate"
+    | "deprecate"
+    | "restore"
+    | "mark_current";
   sourceVersion?: string;
   version?: string;
   name?: string;
@@ -557,6 +595,7 @@ export type IntegrationProjection = {
   id: string;
   name: string;
   provider: string;
+  type: IntegrationType;
   status: IntegrationStatus;
   scopeIds?: readonly string[];
   grantedScopes?: readonly string[];
@@ -565,6 +604,17 @@ export type IntegrationProjection = {
   lastHealthCheckAt?: string;
   lastError?: string;
   updatedAt?: string;
+};
+
+export type IntegrationCatalogProjection = {
+  key: string;
+  provider: string;
+  name: string;
+  description: string;
+  type: IntegrationType;
+  status: IntegrationCatalogStatus;
+  capabilities: readonly string[];
+  updatedAt: string;
 };
 
 export type WebhookEndpointProjection = {
@@ -595,6 +645,7 @@ export type IntegrationAuthorizationStart = {
 export type IntegrationCreateRequest = {
   displayName: string;
   provider: string;
+  type?: IntegrationType;
   /** Deprecated compatibility field. Integrations are always organization-scoped. */
   organizationUnitId?: string;
   grantedScopes?: readonly string[];
@@ -767,11 +818,18 @@ export type WorkflowSignalRequest =
       contractVersion: typeof ContractVersion.WorkflowSignal;
       signalName: typeof WorkflowSignalName.BlueprintApproval;
       signalId: string;
-      payload: { stepId: string; approved: boolean; reason?: string; signalId?: string };
+      payload: {
+        stepId: string;
+        approved: boolean;
+        reason?: string;
+        signalId?: string;
+      };
     }
   | {
       contractVersion: typeof ContractVersion.WorkflowSignal;
-      signalName: typeof WorkflowSignalName.WorkflowPause | typeof WorkflowSignalName.WorkflowResume;
+      signalName:
+        | typeof WorkflowSignalName.WorkflowPause
+        | typeof WorkflowSignalName.WorkflowResume;
       signalId: string;
       payload: { reason?: string; signalId?: string };
     };
@@ -1017,7 +1075,12 @@ export type MemoryInspectionProjection = {
 };
 
 export type MemoryChangeAction = "add" | "correct" | "delete";
-export type MemoryChangeStatus = "proposed" | "approved" | "rejected" | "applied" | "failed";
+export type MemoryChangeStatus =
+  | "proposed"
+  | "approved"
+  | "rejected"
+  | "applied"
+  | "failed";
 
 export type MemoryChangeRequest = {
   memoryId?: string;
@@ -1067,37 +1130,103 @@ export type ToolManifest = {
   approvalRequired: boolean;
 };
 
-export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null {
+export function parseWorkflowBlueprint(
+  value: unknown,
+): WorkflowBlueprint | null {
   if (!isJsonObject(value)) return null;
   if (!validateContract("workflowBlueprint", value).valid) return null;
   if (value.contractVersion !== ContractVersion.WorkflowBlueprint) return null;
   if (value.workflowType !== TemporalWorkflowType.Dynamic) return null;
-  if (typeof value.blueprintId !== "string" || value.blueprintId.trim().length === 0) return null;
-  if (typeof value.version !== "string" || value.version.trim().length === 0) return null;
-  if (typeof value.name !== "string" || typeof value.purpose !== "string") return null;
-  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return null;
-  if (value.requiresApproval !== undefined && typeof value.requiresApproval !== "boolean") return null;
+  if (
+    typeof value.blueprintId !== "string" ||
+    value.blueprintId.trim().length === 0
+  )
+    return null;
+  if (typeof value.version !== "string" || value.version.trim().length === 0)
+    return null;
+  if (typeof value.name !== "string" || typeof value.purpose !== "string")
+    return null;
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean")
+    return null;
+  if (
+    value.requiresApproval !== undefined &&
+    typeof value.requiresApproval !== "boolean"
+  )
+    return null;
   if (!Array.isArray(value.steps) || value.steps.length === 0) return null;
-  if (value.allowedTools !== undefined && (!Array.isArray(value.allowedTools) || value.allowedTools.some((tool) => typeof tool !== "string"))) return null;
-  if (value.requiredScopes !== undefined && (!Array.isArray(value.requiredScopes) || value.requiredScopes.some((scope) => typeof scope !== "string"))) return null;
-  if (value.parameters !== undefined && (!isJsonObject(value.parameters) || Object.values(value.parameters).some((parameter) => typeof parameter !== "string"))) return null;
+  if (
+    value.allowedTools !== undefined &&
+    (!Array.isArray(value.allowedTools) ||
+      value.allowedTools.some((tool) => typeof tool !== "string"))
+  )
+    return null;
+  if (
+    value.requiredScopes !== undefined &&
+    (!Array.isArray(value.requiredScopes) ||
+      value.requiredScopes.some((scope) => typeof scope !== "string"))
+  )
+    return null;
+  if (
+    value.parameters !== undefined &&
+    (!isJsonObject(value.parameters) ||
+      Object.values(value.parameters).some(
+        (parameter) => typeof parameter !== "string",
+      ))
+  )
+    return null;
 
   const steps: WorkflowStep[] = [];
   for (const stepCandidate of value.steps) {
-    if (!isJsonObject(stepCandidate) || typeof stepCandidate.id !== "string" || typeof stepCandidate.kind !== "string") return null;
-    if (!Object.values(WorkflowStepKind).includes(stepCandidate.kind as WorkflowStepKind)) return null;
-    if (stepCandidate.tool !== undefined && typeof stepCandidate.tool !== "string") return null;
-    if (stepCandidate.agentDefinition !== undefined && typeof stepCandidate.agentDefinition !== "string") return null;
-    if (stepCandidate.dependsOn !== undefined && (!Array.isArray(stepCandidate.dependsOn) || stepCandidate.dependsOn.some((dependency) => typeof dependency !== "string"))) return null;
-    if (stepCandidate.input !== undefined && !isJsonObject(stepCandidate.input)) return null;
+    if (
+      !isJsonObject(stepCandidate) ||
+      typeof stepCandidate.id !== "string" ||
+      typeof stepCandidate.kind !== "string"
+    )
+      return null;
+    if (
+      !Object.values(WorkflowStepKind).includes(
+        stepCandidate.kind as WorkflowStepKind,
+      )
+    )
+      return null;
+    if (
+      stepCandidate.tool !== undefined &&
+      typeof stepCandidate.tool !== "string"
+    )
+      return null;
+    if (
+      stepCandidate.agentDefinition !== undefined &&
+      typeof stepCandidate.agentDefinition !== "string"
+    )
+      return null;
+    if (
+      stepCandidate.dependsOn !== undefined &&
+      (!Array.isArray(stepCandidate.dependsOn) ||
+        stepCandidate.dependsOn.some(
+          (dependency) => typeof dependency !== "string",
+        ))
+    )
+      return null;
+    if (stepCandidate.input !== undefined && !isJsonObject(stepCandidate.input))
+      return null;
     steps.push({
       id: stepCandidate.id,
       kind: stepCandidate.kind as WorkflowStepKind,
-      ...(typeof stepCandidate.tool === "string" ? { tool: stepCandidate.tool } : {}),
-      ...(typeof stepCandidate.agentDefinition === "string" ? { agentDefinition: stepCandidate.agentDefinition } : {}),
-      ...(Array.isArray(stepCandidate.dependsOn) ? { dependsOn: stepCandidate.dependsOn as string[] } : {}),
-      ...(isJsonObject(stepCandidate.input) ? { input: stepCandidate.input } : {}),
-      ...(typeof stepCandidate.requiresApproval === "boolean" ? { requiresApproval: stepCandidate.requiresApproval } : {}),
+      ...(typeof stepCandidate.tool === "string"
+        ? { tool: stepCandidate.tool }
+        : {}),
+      ...(typeof stepCandidate.agentDefinition === "string"
+        ? { agentDefinition: stepCandidate.agentDefinition }
+        : {}),
+      ...(Array.isArray(stepCandidate.dependsOn)
+        ? { dependsOn: stepCandidate.dependsOn as string[] }
+        : {}),
+      ...(isJsonObject(stepCandidate.input)
+        ? { input: stepCandidate.input }
+        : {}),
+      ...(typeof stepCandidate.requiresApproval === "boolean"
+        ? { requiresApproval: stepCandidate.requiresApproval }
+        : {}),
     });
   }
 
@@ -1110,11 +1239,23 @@ export function parseWorkflowBlueprint(value: unknown): WorkflowBlueprint | null
     purpose: value.purpose,
     enabled: value.enabled !== false,
     steps,
-    ...(Array.isArray(value.allowedTools) ? { allowedTools: value.allowedTools as string[] } : {}),
-    ...(Array.isArray(value.requiredScopes) ? { requiredScopes: value.requiredScopes as string[] } : {}),
-    ...(isJsonObject(value.parameters) ? { parameters: value.parameters as Record<string, string> } : {}),
-    ...(typeof value.inputSchemaRef === "string" ? { inputSchemaRef: value.inputSchemaRef } : {}),
-    ...(typeof value.outputSchemaRef === "string" ? { outputSchemaRef: value.outputSchemaRef } : {}),
-    ...(typeof value.requiresApproval === "boolean" ? { requiresApproval: value.requiresApproval } : {}),
+    ...(Array.isArray(value.allowedTools)
+      ? { allowedTools: value.allowedTools as string[] }
+      : {}),
+    ...(Array.isArray(value.requiredScopes)
+      ? { requiredScopes: value.requiredScopes as string[] }
+      : {}),
+    ...(isJsonObject(value.parameters)
+      ? { parameters: value.parameters as Record<string, string> }
+      : {}),
+    ...(typeof value.inputSchemaRef === "string"
+      ? { inputSchemaRef: value.inputSchemaRef }
+      : {}),
+    ...(typeof value.outputSchemaRef === "string"
+      ? { outputSchemaRef: value.outputSchemaRef }
+      : {}),
+    ...(typeof value.requiresApproval === "boolean"
+      ? { requiresApproval: value.requiresApproval }
+      : {}),
   };
 }

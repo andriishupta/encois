@@ -87,6 +87,7 @@ Current blueprint routes:
 - `POST /api/v1/sources` — register an integration, uploaded-document, manual, or media Source.
 - `POST /api/v1/sources/uploads` — upload a validated PDF (up to 10 MiB) as a new source and immutable revision; production requires `SOURCE_ARTIFACT_BUCKET`.
 - `GET /api/v1/sources/:sourceId` — read a Source and its immutable revisions.
+- `GET /api/v1/sources/:sourceId/revisions/:revisionId/raw` — download an uploaded raw file after the same authenticated Source-scope checks; the API, not the browser, reads Cloud Storage.
 - `POST /api/v1/sources/:sourceId/revisions` — register a revision by artifact/provider reference; raw bytes are not stored in Postgres or Temporal.
 - `POST /api/v1/sources/:sourceId/revisions/:revisionId/ingest` — start the platform-owned `encois.source-ingestion.v1` Workflow.
 - `POST /api/v1/webhooks/:organizationId/:endpointKey` — public signed provider ingress (`X-Encois-Event-Id` and `X-Encois-Signature`), retained outside Postgres, idempotently mapped to integration Sources, and handed to the existing ingestion workflow. Payloads are limited to 1 MiB; production requires `SOURCE_ARTIFACT_BUCKET` and Secret Manager-backed endpoint secrets.

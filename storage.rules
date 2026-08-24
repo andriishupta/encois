@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Browser clients never access raw Source files directly. The API applies
+    // organization and organization-unit permissions before proxying a file.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

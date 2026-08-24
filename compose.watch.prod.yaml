@@ -1,0 +1,163 @@
+name: encois-watch-prod
+
+# This stack uses the managed dependencies from .env.local.prod while keeping
+# the application containers in watch mode. It does not start local Postgres,
+# Temporal, Firebase Auth, migrations, or mock data-plane services.
+services:
+  agent-gateway:
+    user: "${LOCAL_UID:?set LOCAL_UID}:${LOCAL_GID:?set LOCAL_GID}"
+    image: encois-watch-prod/agent-gateway:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: apps/agent-gateway/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace/apps/agent-gateway
+    environment:
+      AGENT_GATEWAY_HTTP_ADDR: ":8080"
+      AGENT_GATEWAY_POLICY_VERSION: ${AGENT_GATEWAY_POLICY_VERSION:-policy-read-only-fixture-v1}
+      AGENT_GATEWAY_SERVICE_TOKEN: ${AGENT_GATEWAY_SERVICE_TOKEN:?set AGENT_GATEWAY_SERVICE_TOKEN}
+      AGENT_GATEWAY_CAPABILITY_SECRET: ${AGENT_GATEWAY_CAPABILITY_SECRET:?set AGENT_GATEWAY_CAPABILITY_SECRET}
+      AGENT_GATEWAY_DATA_MODE: gcp
+      GCP_STORAGE_BUCKET: ${GCP_STORAGE_BUCKET:?set GCP_STORAGE_BUCKET}
+      SPANNER_DATABASE: ${SPANNER_DATABASE:?set SPANNER_DATABASE}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
+      GIN_MODE: debug
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
+    volumes:
+      - .:/workspace
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+      - encois-watch-prod-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
+    ports:
+      - "8080:8080"
+
+  api-gateway:
+    user: "${LOCAL_UID:?set LOCAL_UID}:${LOCAL_GID:?set LOCAL_GID}"
+    image: encois-watch-prod/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/api-gateway", "dev"]
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: "8787"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-false}
+      IDENTITY_PLATFORM_PROJECT_ID: ${IDENTITY_PLATFORM_PROJECT_ID:?set IDENTITY_PLATFORM_PROJECT_ID}
+      IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: ${IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS:-google.com}
+      DATABASE_RUNTIME_URL: ${DATABASE_RUNTIME_URL:?set DATABASE_RUNTIME_URL}
+      SOURCE_ARTIFACT_BUCKET: ${SOURCE_ARTIFACT_BUCKET:?set SOURCE_ARTIFACT_BUCKET}
+      AGENT_GATEWAY_POLICY_VERSION: ${AGENT_GATEWAY_POLICY_VERSION:-policy-read-only-fixture-v1}
+      AGENT_GATEWAY_CAPABILITY_SECRET: ${AGENT_GATEWAY_CAPABILITY_SECRET:?set AGENT_GATEWAY_CAPABILITY_SECRET}
+      AGENT_GATEWAY_CAPABILITY_TTL_MS: ${AGENT_GATEWAY_CAPABILITY_TTL_MS:-86400000}
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_SERVICE_TOKEN: ${AGENT_GATEWAY_SERVICE_TOKEN:?set AGENT_GATEWAY_SERVICE_TOKEN}
+      AGENT_RUNTIME_URL: http://agent-runtime:8090
+      AGENT_RUNTIME_SERVICE_TOKEN: ${AGENT_RUNTIME_SERVICE_TOKEN:?set AGENT_RUNTIME_SERVICE_TOKEN}
+      AGENT_RUNTIME_AUDIENCE: ${AGENT_RUNTIME_AUDIENCE:-}
+      ENCOIS_WORKFLOW_MODE: temporal
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?set TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:?set TEMPORAL_NAMESPACE}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-encois-agent-runtime}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:?set TEMPORAL_API_KEY}
+      CONTROL_PLANE_SERVICE_TOKEN: ${CONTROL_PLANE_SERVICE_TOKEN:?set CONTROL_PLANE_SERVICE_TOKEN}
+      CONTROL_PLANE_SERVICE_USER_ID: ${CONTROL_PLANE_SERVICE_USER_ID:?set CONTROL_PLANE_SERVICE_USER_ID}
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
+    volumes:
+      - .:/workspace
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+      - encois-watch-prod-node-modules:/workspace/node_modules
+      - encois-watch-prod-api-node-modules:/workspace/apps/api-gateway/node_modules
+      - encois-watch-prod-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - encois-watch-prod-persistence-node-modules:/workspace/packages/persistence/node_modules
+    ports:
+      - "8787:8787"
+
+  agent-runtime:
+    user: "${LOCAL_UID:?set LOCAL_UID}:${LOCAL_GID:?set LOCAL_GID}"
+    image: encois-watch-prod/agent-runtime:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: apps/agent-runtime/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace/apps/agent-runtime
+    environment:
+      AGENT_RUNTIME_HTTP_ADDR: ":8090"
+      AGENT_RUNTIME_SERVICE_TOKEN: ${AGENT_RUNTIME_SERVICE_TOKEN:?set AGENT_RUNTIME_SERVICE_TOKEN}
+      TEMPORAL_HOST_PORT: ${TEMPORAL_ADDRESS:?set TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:?set TEMPORAL_NAMESPACE}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-encois-agent-runtime}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:?set TEMPORAL_API_KEY}
+      AGENT_AI_MODE: gemini
+      AGENT_MEMORY_MODE: gcp
+      VERTEX_MEMORY_REASONING_ENGINE: ${VERTEX_MEMORY_REASONING_ENGINE:?set VERTEX_MEMORY_REASONING_ENGINE}
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_SERVICE_TOKEN: ${AGENT_GATEWAY_SERVICE_TOKEN:?set AGENT_GATEWAY_SERVICE_TOKEN}
+      AGENT_GATEWAY_AUDIENCE: ${AGENT_GATEWAY_AUDIENCE:-}
+      CONTROL_PLANE_URL: http://api-gateway:8787
+      CONTROL_PLANE_SERVICE_TOKEN: ${CONTROL_PLANE_SERVICE_TOKEN:?set CONTROL_PLANE_SERVICE_TOKEN}
+      CONTROL_PLANE_AUDIENCE: ${CONTROL_PLANE_AUDIENCE:-}
+      GOOGLE_GENAI_USE_VERTEXAI: "true"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
+      GEMINI_COORDINATOR_MODEL: ${GEMINI_COORDINATOR_MODEL:-gemini-3.1-pro-preview}
+      GEMINI_COORDINATOR_THINKING_LEVEL: ${GEMINI_COORDINATOR_THINKING_LEVEL:-high}
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
+    volumes:
+      - .:/workspace
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+      - encois-watch-prod-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
+    ports:
+      - "8090:8090"
+    depends_on:
+      - agent-gateway
+      - api-gateway
+
+  dashboard:
+    image: encois-watch-prod/dashboard:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/dashboard", "exec", "vite", "--host", "0.0.0.0"]
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8787/api/v1}
+      VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:?set VITE_FIREBASE_API_KEY}
+      VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:?set VITE_FIREBASE_AUTH_DOMAIN}
+      VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:?set VITE_FIREBASE_PROJECT_ID}
+      VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:?set VITE_FIREBASE_APP_ID}
+    volumes:
+      - .:/workspace
+      - encois-watch-prod-node-modules:/workspace/node_modules
+      - encois-watch-prod-dashboard-node-modules:/workspace/apps/dashboard/node_modules
+      - encois-watch-prod-contracts-node-modules:/workspace/packages/contracts/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway
+
+volumes:
+  encois-watch-prod-node-modules:
+  encois-watch-prod-api-node-modules:
+  encois-watch-prod-dashboard-node-modules:
+  encois-watch-prod-contracts-node-modules:
+  encois-watch-prod-persistence-node-modules:
+  encois-watch-prod-agent-gateway-tmp:
+  encois-watch-prod-agent-runtime-tmp:

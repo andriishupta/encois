@@ -3,6 +3,7 @@ import type {
   GraphInspectionProjection,
   GraphInspectionQueryRequest,
   IntegrationAuthorizationStart,
+  IntegrationCatalogProjection,
   IntegrationCreateRequest,
   IntegrationProjection,
   IntegrationUpdateRequest,
@@ -52,7 +53,9 @@ import {
   AccessLevel,
   ContractVersion,
   CoordinationMode,
+  IntegrationCatalogStatus,
   IntegrationStatus,
+  IntegrationType,
   isJsonObject,
   isPermission,
   KnowledgeSourceKind,
@@ -428,7 +431,27 @@ function isIntegrationProjection(
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     typeof value.provider === "string" &&
+    Object.values(IntegrationType).includes(value.type as IntegrationType) &&
     Object.values(IntegrationStatus).includes(value.status as IntegrationStatus)
+  );
+}
+
+function isIntegrationCatalogProjection(
+  value: unknown,
+): value is IntegrationCatalogProjection {
+  return (
+    isJsonObject(value) &&
+    typeof value.key === "string" &&
+    typeof value.provider === "string" &&
+    typeof value.name === "string" &&
+    typeof value.description === "string" &&
+    Object.values(IntegrationType).includes(value.type as IntegrationType) &&
+    Object.values(IntegrationCatalogStatus).includes(
+      value.status as IntegrationCatalogStatus,
+    ) &&
+    Array.isArray(value.capabilities) &&
+    value.capabilities.every((capability) => typeof capability === "string") &&
+    typeof value.updatedAt === "string"
   );
 }
 
@@ -981,6 +1004,68 @@ async function request<T>(
   return (await requestEnvelope<T>(path, init, requiresAuth)).data;
 }
 
+export async function downloadSourceRevisionRaw(
+  sourceId: string,
+  revisionId: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  let session = await getSafeAuthSessionToken();
+  if (!session) {
+    clearAuthSession();
+    throw createApiError(401, "Authentication is required.", "UNAUTHENTICATED");
+  }
+
+  const path = `/sources/${encodeURIComponent(sourceId)}/revisions/${encodeURIComponent(revisionId)}/raw`;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const headers = new Headers({ Accept: "application/octet-stream" });
+    headers.set("Authorization", `Bearer ${session.accessToken}`);
+    if (session.organizationId)
+      headers.set("X-Organization-ID", session.organizationId);
+
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}${path}`, { headers });
+    } catch {
+      throw createApiError(
+        0,
+        "The workspace could not be reached.",
+        "API_UNAVAILABLE",
+      );
+    }
+
+    if (response.status === 401 && attempt === 0) {
+      const refreshed = await getSafeAuthSessionToken(true);
+      if (refreshed) {
+        session = refreshed;
+        continue;
+      }
+    }
+
+    if (!response.ok) {
+      const payload = errorPayload(await response.json().catch(() => null));
+      if (response.status === 401) clearAuthSession();
+      throw createApiError(
+        response.status,
+        payload?.error?.message ?? `API request failed (${response.status})`,
+        payload?.error?.code,
+      );
+    }
+
+    const contentDisposition = response.headers.get("Content-Disposition");
+    const encodedFileName = contentDisposition?.match(
+      /filename\*=UTF-8''([^;]+)/i,
+    )?.[1];
+    const quotedFileName =
+      contentDisposition?.match(/filename="([^"]+)"/i)?.[1];
+    const fileName = encodedFileName
+      ? decodeURIComponent(encodedFileName)
+      : (quotedFileName ?? `source-revision-${revisionId}.pdf`);
+    return { blob: await response.blob(), fileName };
+  }
+
+  clearAuthSession();
+  throw createApiError(401, "Authentication is required.", "UNAUTHENTICATED");
+}
+
 function listQuery(input: ListQueryInput): string {
   const params = new URLSearchParams();
   if (input.query?.trim()) params.set("q", input.query.trim());
@@ -1087,6 +1172,21 @@ export async function createBlueprintLifecyclePlan(
   return value;
 }
 
+export async function deleteWorkflowBlueprint(
+  blueprintId: string,
+): Promise<void> {
+  const value = await request<unknown>(
+    `/workflows/blueprints/${encodeURIComponent(blueprintId)}`,
+    { method: "DELETE" },
+  );
+  if (!isJsonObject(value) || value.deleted !== true)
+    throw createApiError(
+      200,
+      "The service returned an invalid Blueprint deletion response.",
+      "INVALID_RESPONSE",
+    );
+}
+
 export async function previewWorkflowCreation(
   input: WorkflowCreationIntent,
 ): Promise<WorkflowCreationPreview> {
@@ -1176,6 +1276,19 @@ export async function applyWorkflowPlan(
       "INVALID_RESPONSE",
     );
   return value;
+}
+
+export async function deleteWorkflowPlan(planId: string): Promise<void> {
+  const value = await request<unknown>(
+    `/workflows/plans/${encodeURIComponent(planId)}`,
+    { method: "DELETE" },
+  );
+  if (!isJsonObject(value) || value.deleted !== true)
+    throw createApiError(
+      200,
+      "The service returned an invalid workflow plan deletion response.",
+      "INVALID_RESPONSE",
+    );
 }
 
 export async function getAuthStatus(): Promise<AuthStatusResponse> {
@@ -1379,6 +1492,22 @@ export function listIntegrationsPage(
     `/integrations${params.size ? `?${params.toString()}` : ""}`,
     isIntegrationProjection,
     "integration list",
+  );
+}
+
+export function listIntegrationCatalogPage(
+  input: ListQueryInput & {
+    channel?: "api" | "ai";
+    type?: IntegrationType | "all";
+  } = {},
+): Promise<ListPage<IntegrationCatalogProjection>> {
+  const params = new URLSearchParams(listQuery(input).replace(/^\?/u, ""));
+  if (input.channel) params.set("channel", input.channel);
+  if (input.type && input.type !== "all") params.set("type", input.type);
+  return requestList(
+    `/integrations/catalog${params.size ? `?${params.toString()}` : ""}`,
+    isIntegrationCatalogProjection,
+    "integration catalog list",
   );
 }
 

@@ -51,6 +51,22 @@ export const queryKeys = {
           status,
           sort,
         ] as const),
+  integrationCatalog: (
+    channel = "api",
+    type = "all",
+    query = "",
+    status = "all",
+    sort = "updated-desc",
+  ) =>
+    [
+      "integration-catalog",
+      currentOrganizationId(),
+      channel,
+      type,
+      query,
+      status,
+      sort,
+    ] as const,
   webhookEndpoint: (integrationId: string) =>
     ["webhook-endpoint", currentOrganizationId(), integrationId] as const,
   sources: (

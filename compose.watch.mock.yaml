@@ -1,4 +1,4 @@
-name: encois-watch
+name: encois-watch-mock
 
 services:
   postgres:
@@ -33,7 +33,7 @@ services:
       retries: 30
 
   firebase-auth:
-    image: encois-watch/firebase-auth:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/firebase-auth:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/firebase/Dockerfile
@@ -42,14 +42,17 @@ services:
     ports:
       - "4000:4000"
       - "9099:9099"
+      - "9199:9199"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9099/').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "Promise.all(['9099','9199'].map((port) => fetch('http://127.0.0.1:' + port + '/'))).then(() => process.exit(0)).catch(() => process.exit(1))"]
       interval: 3s
       timeout: 5s
       retries: 30
+    volumes:
+      - encois-firebase-data:/firebase/data
 
   migrations:
-    image: encois-watch/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: packages/persistence/Dockerfile
@@ -63,7 +66,7 @@ services:
     restart: "no"
 
   local-auth-seed:
-    image: encois-watch/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/api-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
@@ -85,7 +88,7 @@ services:
     restart: "no"
 
   agent-gateway:
-    image: encois-watch/agent-gateway:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/agent-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-gateway/Dockerfile.dev
@@ -98,15 +101,21 @@ services:
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
       AGENT_GATEWAY_CAPABILITY_SECRET: local-execution-capability-secret
       AGENT_GATEWAY_DATA_MODE: mock
+      AGENT_GATEWAY_STORAGE_MODE: gcs
+      GCP_STORAGE_BUCKET: demo-encois.appspot.com
+      STORAGE_EMULATOR_HOST: firebase-auth:9199
       GIN_MODE: debug
     ports:
       - "8080:8080"
+    depends_on:
+      firebase-auth:
+        condition: service_healthy
     volumes:
       - .:/workspace
-      - encois-local-dev-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
+      - encois-watch-mock-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
 
   api-gateway:
-    image: encois-watch/api-gateway-dev:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/api-gateway-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
@@ -131,6 +140,8 @@ services:
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
       IDENTITY_PLATFORM_ALLOWED_SIGN_IN_PROVIDERS: google.com,password
       FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
+      FIREBASE_STORAGE_EMULATOR_HOST: firebase-auth:9199
+      SOURCE_ARTIFACT_BUCKET: demo-encois.appspot.com
       DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
       ENCOIS_WORKFLOW_MODE: temporal
       TEMPORAL_ADDRESS: temporal:7233
@@ -139,19 +150,21 @@ services:
     ports:
       - "8787:8787"
     depends_on:
+      firebase-auth:
+        condition: service_healthy
       temporal:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
     volumes:
       - .:/workspace
-      - encois-local-dev-node-modules:/workspace/node_modules
-      - encois-local-dev-api-node-modules:/workspace/apps/api-gateway/node_modules
-      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
-      - encois-local-dev-persistence-node-modules:/workspace/packages/persistence/node_modules
+      - encois-watch-mock-node-modules:/workspace/node_modules
+      - encois-watch-mock-api-node-modules:/workspace/apps/api-gateway/node_modules
+      - encois-watch-mock-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - encois-watch-mock-persistence-node-modules:/workspace/packages/persistence/node_modules
 
   agent-runtime:
-    image: encois-watch/agent-runtime:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/agent-runtime:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-runtime/Dockerfile.dev
@@ -182,10 +195,10 @@ services:
         condition: service_started
     volumes:
       - .:/workspace
-      - encois-local-dev-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
+      - encois-watch-mock-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
 
   dashboard:
-    image: encois-watch/dashboard-dev:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-mock/dashboard-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
@@ -209,17 +222,18 @@ services:
         condition: service_completed_successfully
     volumes:
       - .:/workspace
-      - encois-local-dev-node-modules:/workspace/node_modules
-      - encois-local-dev-dashboard-node-modules:/workspace/apps/dashboard/node_modules
-      - encois-local-dev-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - encois-watch-mock-node-modules:/workspace/node_modules
+      - encois-watch-mock-dashboard-node-modules:/workspace/apps/dashboard/node_modules
+      - encois-watch-mock-contracts-node-modules:/workspace/packages/contracts/node_modules
 
 volumes:
   encois-postgres-data:
   encois-temporal-data:
-  encois-local-dev-node-modules:
-  encois-local-dev-api-node-modules:
-  encois-local-dev-dashboard-node-modules:
-  encois-local-dev-contracts-node-modules:
-  encois-local-dev-persistence-node-modules:
-  encois-local-dev-agent-gateway-tmp:
-  encois-local-dev-agent-runtime-tmp:
+  encois-firebase-data:
+  encois-watch-mock-node-modules:
+  encois-watch-mock-api-node-modules:
+  encois-watch-mock-dashboard-node-modules:
+  encois-watch-mock-contracts-node-modules:
+  encois-watch-mock-persistence-node-modules:
+  encois-watch-mock-agent-gateway-tmp:
+  encois-watch-mock-agent-runtime-tmp:

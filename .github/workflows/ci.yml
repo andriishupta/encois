@@ -244,7 +244,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate local Compose file
-        run: docker compose -f compose.local.yaml config --quiet
+        run: docker compose -f compose.watch.mock.yaml config --quiet
 
   local-smoke:
     name: Local Temporal execution smoke

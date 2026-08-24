@@ -17,7 +17,7 @@ import {
   workflowDefinitions,
   workflowPlannerVersions,
 } from "@encois/persistence";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { hasPermission } from "../../auth/authorization.js";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
@@ -267,6 +267,12 @@ export async function submitWorkflowPlan(
         )
         .limit(1);
       if (existing) {
+        if (existing.deletedAt) {
+          throw workflowServiceError(
+            "WORKFLOW_PLAN_DELETED",
+            "This workflow plan was deleted and cannot be reused.",
+          );
+        }
         if (existing.planHash !== hash) {
           throw workflowServiceError(
             "IDEMPOTENCY_CONFLICT",
@@ -359,6 +365,7 @@ export async function getWorkflowPlan(
           and(
             eq(workflowChangePlans.organizationId, principal.organizationId),
             eq(workflowChangePlans.planId, planId),
+            isNull(workflowChangePlans.deletedAt),
           ),
         )
         .limit(1);
@@ -371,6 +378,76 @@ export async function getWorkflowPlan(
     row.plan as unknown as WorkflowChangePlanInput,
   );
   return recordFromRow(row);
+}
+
+export async function deleteWorkflowPlan(
+  principal: AosPrincipal,
+  planId: string,
+): Promise<void> {
+  if (!database) return persistenceUnavailable();
+  const userId = await requirePlanManager(principal);
+
+  await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      const [row] = await db
+        .select({
+          id: workflowChangePlans.id,
+          planId: workflowChangePlans.planId,
+          status: workflowChangePlans.status,
+        })
+        .from(workflowChangePlans)
+        .where(
+          and(
+            eq(workflowChangePlans.organizationId, principal.organizationId),
+            eq(workflowChangePlans.planId, planId),
+            isNull(workflowChangePlans.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!row)
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_NOT_FOUND",
+          "Workflow change plan not found.",
+        );
+      if (row.status === "applied")
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_NOT_DELETABLE",
+          "An applied workflow plan is part of the execution history and cannot be deleted.",
+        );
+
+      const now = new Date();
+      const [deleted] = await db
+        .update(workflowChangePlans)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(workflowChangePlans.id, row.id),
+            eq(workflowChangePlans.organizationId, principal.organizationId),
+            isNull(workflowChangePlans.deletedAt),
+          ),
+        )
+        .returning({ id: workflowChangePlans.id });
+      if (!deleted)
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_DELETE_CONFLICT",
+          "The workflow plan changed concurrently.",
+        );
+
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "workflow_plan_deleted",
+        outcome: "accepted",
+        resourceType: "workflow_change_plan",
+        resourceId: row.planId,
+        scope: { ids: principal.scope },
+        metadata: { previousStatus: row.status },
+      });
+    },
+  );
 }
 
 function planScopeVisible(
@@ -408,7 +485,12 @@ export async function listWorkflowPlansPage(
       db
         .select()
         .from(workflowChangePlans)
-        .where(eq(workflowChangePlans.organizationId, principal.organizationId))
+        .where(
+          and(
+            eq(workflowChangePlans.organizationId, principal.organizationId),
+            isNull(workflowChangePlans.deletedAt),
+          ),
+        )
         .orderBy(desc(workflowChangePlans.updatedAt))
         .limit(100),
   );
@@ -499,6 +581,7 @@ export async function approveWorkflowPlan(
           and(
             eq(workflowChangePlans.organizationId, principal.organizationId),
             eq(workflowChangePlans.planId, planId),
+            isNull(workflowChangePlans.deletedAt),
           ),
         )
         .limit(1);
@@ -598,6 +681,7 @@ export async function applyWorkflowPlan(
           and(
             eq(workflowChangePlans.organizationId, principal.organizationId),
             eq(workflowChangePlans.planId, planId),
+            isNull(workflowChangePlans.deletedAt),
           ),
         )
         .limit(1);
@@ -679,6 +763,7 @@ export async function applyWorkflowPlan(
                 eq(workflowBlueprints.organizationId, principal.organizationId),
                 eq(workflowBlueprints.blueprintId, change.targetBlueprintId),
                 eq(workflowBlueprints.version, change.targetBlueprintVersion),
+                isNull(workflowBlueprints.deletedAt),
               ),
             )
             .limit(1);
@@ -719,6 +804,7 @@ export async function applyWorkflowPlan(
                 eq(workflowBlueprints.organizationId, principal.organizationId),
                 eq(workflowBlueprints.blueprintId, change.targetBlueprintId),
                 eq(workflowBlueprints.version, change.targetBlueprintVersion),
+                isNull(workflowBlueprints.deletedAt),
               ),
             )
             .limit(1);
@@ -798,6 +884,7 @@ export async function applyWorkflowPlan(
                 eq(workflowBlueprints.organizationId, principal.organizationId),
                 eq(workflowBlueprints.blueprintId, change.targetBlueprintId),
                 eq(workflowBlueprints.version, change.targetBlueprintVersion),
+                isNull(workflowBlueprints.deletedAt),
               ),
             )
             .limit(1);
@@ -845,6 +932,12 @@ export async function applyWorkflowPlan(
           )
           .limit(1);
         if (existing) {
+          if (existing.deletedAt) {
+            throw workflowServiceError(
+              "WORKFLOW_BLUEPRINT_DELETED",
+              `Blueprint ${blueprint.blueprintId}@${blueprint.version} was deleted and cannot be reused.`,
+            );
+          }
           if (
             existing.sourcePlanId !== planId ||
             existing.status !== "approved"

@@ -9,6 +9,7 @@ type Config struct {
 	ServiceToken         string
 	CapabilitySecret     string
 	DataMode             string
+	StorageMode          string
 	StorageBucket        string
 	SpannerDatabase      string
 	GoogleCloudProject   string
@@ -28,6 +29,7 @@ func FromEnv() Config {
 		// Hosted and non-test processes must use the real data plane by default.
 		// Local Compose and .env.example opt into mock mode explicitly.
 		DataMode:             envOrDefault("AGENT_GATEWAY_DATA_MODE", "gcp"),
+		StorageMode:          envOrDefault("AGENT_GATEWAY_STORAGE_MODE", "memory"),
 		StorageBucket:        os.Getenv("GCP_STORAGE_BUCKET"),
 		SpannerDatabase:      os.Getenv("SPANNER_DATABASE"),
 		GoogleCloudProject:   os.Getenv("GOOGLE_CLOUD_PROJECT"),

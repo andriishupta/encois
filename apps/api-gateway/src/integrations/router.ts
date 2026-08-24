@@ -4,6 +4,7 @@ import type { IntegrationAuthorizationAdapter } from "./authorization-adapter.js
 import {
   createIntegrationRoute,
   getWebhookEndpointRoute,
+  listIntegrationCatalogRoute,
   listIntegrationsRoute,
   provisionWebhookEndpointRoute,
   rotateWebhookEndpointRoute,
@@ -21,6 +22,7 @@ export function createIntegrationsRouter(
 ): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
 
+  router.get("/catalog", listIntegrationCatalogRoute);
   router.get("/", listIntegrationsRoute);
   router.post("/", createIntegrationRoute);
   router.post("/:integrationId", updateIntegrationRoute);

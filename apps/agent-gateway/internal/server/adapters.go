@@ -10,6 +10,12 @@ type GCPProviderToolOptions struct {
 	OAuthConfigJSON      string
 }
 
+// NewCloudStorageArtifactStore exposes the artifact adapter for local
+// emulator-backed runs without requiring the Spanner adapter.
+func NewCloudStorageArtifactStore(ctx context.Context, bucket string) (ArtifactStore, func() error, error) {
+	return newGCSArtifactStore(ctx, bucket)
+}
+
 // NewGCPAdapters creates the hosted data-plane implementations. The caller
 // owns the returned cleanup function and should call it during shutdown.
 func NewGCPAdapters(ctx context.Context, bucket, database string, providerOptions ...GCPProviderToolOptions) (RouterOptions, func() error, error) {

@@ -6,6 +6,8 @@ import { approveWorkflowPlanRoute } from "./routes/approve-workflow-plan.route.j
 import { cancelWorkflowRoute } from "./routes/cancel-workflow.route.js";
 import { createBlueprintLifecyclePlanRoute } from "./routes/create-blueprint-lifecycle-plan.route.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
+import { deleteWorkflowBlueprintRoute } from "./routes/delete-workflow-blueprint.route.js";
+import { deleteWorkflowPlanRoute } from "./routes/delete-workflow-plan.route.js";
 import { getWorkflowRoute } from "./routes/get-workflow.route.js";
 import { getWorkflowEventsRoute } from "./routes/get-workflow-events.route.js";
 import { listWorkflowActivityRoute } from "./routes/list-workflow-activity.route.js";
@@ -55,8 +57,10 @@ export function createWorkflowsRouter(
   router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());
   router.post("/plans/:planId/apply", applyWorkflowPlanRoute(options));
+  router.delete("/plans/:planId", deleteWorkflowPlanRoute);
   router.get("/templates", listWorkflowTemplatesRoute);
   router.get("/blueprints", listWorkflowBlueprintsRoute);
+  router.delete("/blueprints/:blueprintId", deleteWorkflowBlueprintRoute);
   router.post(
     "/blueprints/:blueprintId/lifecycle",
     createBlueprintLifecyclePlanRoute,

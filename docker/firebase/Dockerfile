@@ -12,7 +12,8 @@ RUN apt-get update \
 WORKDIR /firebase
 ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 COPY firebase.json ./firebase.json
+COPY storage.rules ./storage.rules
 
-EXPOSE 4000 9099
+EXPOSE 4000 9099 9199
 
-CMD ["firebase", "emulators:start", "--only", "auth", "--project", "demo-encois", "--config", "/firebase/firebase.json"]
+CMD ["firebase", "emulators:start", "--only", "auth,storage", "--project", "demo-encois", "--config", "/firebase/firebase.json", "--import", "/firebase/data", "--export-on-exit", "/firebase/data"]

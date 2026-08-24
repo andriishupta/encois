@@ -17,6 +17,7 @@ import {
   type WorkflowTemplate,
 } from "@encois/contracts";
 import {
+  auditEvents,
   integrationBindings,
   integrations,
   knowledgeSources,
@@ -26,8 +27,9 @@ import {
   withOrganizationContext,
   workflowBlueprints,
 } from "@encois/persistence";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import {
+  hasPermission,
   hasPermissions,
   isOrganizationAdministrator,
 } from "../../auth/authorization.js";
@@ -38,7 +40,10 @@ import {
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
-import { workflowServiceError } from "./workflow.service.js";
+import {
+  localUserId,
+  workflowServiceError,
+} from "./workflow.service.js";
 import { listWorkflowTemplatesForPrincipal } from "./workflow-template.service.js";
 
 function slug(value: string, fallback: string): string {
@@ -602,6 +607,7 @@ async function resolveBlueprint(
           and(
             eq(workflowBlueprints.organizationId, principal.organizationId),
             eq(workflowBlueprints.blueprintId, key),
+            isNull(workflowBlueprints.deletedAt),
           ),
         )
         .orderBy(
@@ -723,7 +729,12 @@ export async function listWorkflowBlueprintsPageForPrincipal(
       db
         .select()
         .from(workflowBlueprints)
-        .where(eq(workflowBlueprints.organizationId, principal.organizationId)),
+        .where(
+          and(
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        ),
   );
   const projections = rows.flatMap((row) => {
     const blueprint = parseWorkflowBlueprint(row.blueprint);
@@ -774,4 +785,86 @@ export async function listWorkflowBlueprintsPageForPrincipal(
     return right.updatedAt.localeCompare(left.updatedAt);
   });
   return listPage(sorted, query);
+}
+
+export async function deleteWorkflowBlueprintForPrincipal(
+  principal: AosPrincipal,
+  blueprintId: string,
+): Promise<void> {
+  if (!database)
+    throw workflowServiceError(
+      "PERSISTENCE_UNAVAILABLE",
+      "Blueprint registry access is not configured.",
+    );
+  const userId = localUserId(principal);
+  if (!userId)
+    throw workflowServiceError(
+      "IDENTITY_NOT_RESOLVED",
+      "The identity is not linked to a local user.",
+    );
+
+  await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsManage)))
+        throw workflowServiceError(
+          "FORBIDDEN",
+          "The user cannot delete Workflows or Blueprints.",
+        );
+
+      const rows = await db
+        .select({
+          id: workflowBlueprints.id,
+          blueprintId: workflowBlueprints.blueprintId,
+          version: workflowBlueprints.version,
+          status: workflowBlueprints.status,
+        })
+        .from(workflowBlueprints)
+        .where(
+          and(
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            eq(workflowBlueprints.blueprintId, blueprintId),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        );
+      if (rows.length === 0)
+        throw workflowServiceError(
+          "WORKFLOW_BLUEPRINT_NOT_FOUND",
+          "The Workflow or Blueprint was not found.",
+        );
+
+      const now = new Date();
+      const deleted = await db
+        .update(workflowBlueprints)
+        .set({ deletedAt: now, isCurrent: false, updatedAt: now })
+        .where(
+          and(
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            eq(workflowBlueprints.blueprintId, blueprintId),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        )
+        .returning({ id: workflowBlueprints.id });
+      if (deleted.length !== rows.length)
+        throw workflowServiceError(
+          "WORKFLOW_BLUEPRINT_DELETE_CONFLICT",
+          "The Workflow or Blueprint changed concurrently.",
+        );
+
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "workflow_blueprint_deleted",
+        outcome: "accepted",
+        resourceType: "workflow_blueprint",
+        resourceId: blueprintId,
+        scope: { ids: principal.scope },
+        metadata: {
+          deletedVersions: rows.map((row) => row.version),
+          previousStatuses: rows.map((row) => row.status),
+        },
+      });
+    },
+  );
 }

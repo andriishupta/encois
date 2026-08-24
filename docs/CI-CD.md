@@ -21,7 +21,7 @@ The repository CI now validates the Node services, Go workers, persistence layer
 
 The root [`package.json`](../package.json) is the release-version source of truth. The current version is `1.0.0`; `pnpm version:check` verifies that every workspace package uses the same value. Go modules keep their normal module metadata and do not define a separate service release version. Go and Node images receive the shared version through the `ENCOIS_VERSION` build argument, the OCI image label, and the `ENCOIS_VERSION` runtime environment variable.
 
-CI tags images as `encois/<service>:<package-version>`. Local Compose uses the same version by default and allows an explicit override with `ENCOIS_VERSION=...`; watch and local-prod use different image prefixes so their development and production-style images do not collide. Reusing and overwriting `1.0.0` is accepted for the current stage. Once rollback and compatibility guarantees matter, protect version tags and publish immutable commit/digest tags instead.
+CI tags images as `encois/<service>:<package-version>`. Local Compose uses the same version by default and allows an explicit override with `ENCOIS_VERSION=...`; watch-mock, watch-prod, and local-prod use different image prefixes so their development and production-style images do not collide. Reusing and overwriting `1.0.0` is accepted for the current stage. Once rollback and compatibility guarantees matter, protect version tags and publish immutable commit/digest tags instead.
 
 ## Recommended approach
 
@@ -257,10 +257,10 @@ Do not reuse demo credentials or production data. The hackathon environment shou
 The canonical full local stack is now:
 
 ```bash
-pnpm run dev:local
+pnpm run dev:watch:mock
 ```
 
-It runs `compose.local.yaml` with Postgres, the Temporal development server,
+It runs `compose.watch.mock.yaml` with Postgres, the Temporal development server,
 the migration job, API Gateway, Agent Gateway, Agent Runtime, and the Vite
 dashboard with live reload. The Runtime is configured with `AGENT_AI_MODE=mock`, so this path is
 deterministic and does not require GCP or Gemini credentials. The existing

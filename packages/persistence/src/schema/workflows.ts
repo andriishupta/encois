@@ -77,6 +77,7 @@ export const workflowChangePlans = pgTable(
       .notNull(),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     appliedAt: timestamp("applied_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     uniqueIndex("workflow_change_plans_organization_plan_idx").on(
@@ -86,6 +87,10 @@ export const workflowChangePlans = pgTable(
     uniqueIndex("workflow_change_plans_id_organization_idx").on(
       table.id,
       table.organizationId,
+    ),
+    index("workflow_change_plans_organization_deleted_idx").on(
+      table.organizationId,
+      table.deletedAt,
     ),
   ],
 );

@@ -1,7 +1,9 @@
 import {
+  type IntegrationCatalogProjection,
   type IntegrationCreateRequest,
   type IntegrationProjection,
   IntegrationStatus,
+  IntegrationType,
   type IntegrationUpdateRequest,
   Permission,
   resolveEffectiveScope,
@@ -10,6 +12,7 @@ import {
   auditEvents,
   integrationAuthorizationStates,
   integrationBindings,
+  integrationCatalog,
   integrations,
   membershipScopes,
   organizationMemberships,
@@ -41,6 +44,8 @@ import type {
 } from "../authorization-adapter.js";
 
 export type IntegrationSummary = IntegrationProjection;
+export type IntegrationCatalogSummary = IntegrationCatalogProjection;
+export type IntegrationCatalogChannel = "api" | "ai";
 
 export type IntegrationCreate = IntegrationCreateRequest;
 export type IntegrationUpdate = IntegrationUpdateRequest;
@@ -422,6 +427,7 @@ export async function reportIntegrationHealthForService(
         id: row.id,
         name: row.displayName,
         provider: row.provider,
+        type: row.type,
         status: row.status,
         scopeIds: [
           ...new Set(bindings.map((binding) => binding.organizationUnitId)),
@@ -477,6 +483,7 @@ export async function listIntegrationsForPrincipal(
           id: row.id,
           name: row.displayName,
           provider: row.provider,
+          type: row.type,
           status: row.status,
           scopeIds: [
             ...new Set([...(previous?.scopeIds ?? []), row.organizationUnitId]),
@@ -519,6 +526,85 @@ export async function listIntegrationsPageForPrincipal(
     getStatus: (integration) => integration.status,
     compare: compareIntegrations,
   });
+}
+
+export async function listIntegrationCatalogPageForPrincipal(
+  principal: AosPrincipal,
+  options: {
+    channel?: IntegrationCatalogChannel;
+    type?: IntegrationType;
+    query: ListQuery;
+  },
+): Promise<ListPage<IntegrationCatalogSummary>> {
+  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.IntegrationsRead)))
+        return filterListPage([], options.query, {});
+
+      const rows = await db
+        .select()
+        .from(integrationCatalog)
+        .orderBy(integrationCatalog.sortOrder);
+      const catalog = rows.map<IntegrationCatalogSummary>((row) => ({
+        key: row.key,
+        provider: row.provider,
+        name: row.displayName,
+        description: row.description,
+        type: row.type,
+        status: row.status,
+        capabilities: row.capabilities,
+        updatedAt: row.updatedAt.toISOString(),
+      }));
+      const channelCatalog = catalog.filter((item) =>
+        options.channel === "api"
+          ? item.type === IntegrationType.Api ||
+            item.type === IntegrationType.Custom
+          : options.channel === "ai"
+            ? item.type === IntegrationType.Ai ||
+              item.type === IntegrationType.Mcp
+            : true,
+      );
+      const filteredCatalog = options.type
+        ? channelCatalog.filter((item) => item.type === options.type)
+        : channelCatalog;
+      return filterListPage(filteredCatalog, options.query, {
+        matches: (item, query) =>
+          [
+            item.key,
+            item.name,
+            item.provider,
+            item.description,
+            item.type,
+            ...item.capabilities,
+          ].some((value) => value.toLowerCase().includes(query)),
+        getStatus: (item) => item.status,
+        compare: compareIntegrationCatalog,
+      });
+    },
+  );
+}
+
+function compareIntegrationCatalog(
+  left: IntegrationCatalogSummary,
+  right: IntegrationCatalogSummary,
+  sort: ListQuery["sort"],
+): number {
+  const statusRank = (status: IntegrationCatalogSummary["status"]) =>
+    status === "active" ? 0 : status === "pending" ? 1 : 2;
+  if (sort === "status")
+    return (
+      statusRank(left.status) - statusRank(right.status) ||
+      left.name.localeCompare(right.name)
+    );
+  if (sort === "name-asc") return left.name.localeCompare(right.name);
+  return (
+    statusRank(left.status) - statusRank(right.status) ||
+    left.name.localeCompare(right.name)
+  );
 }
 
 function compareIntegrations(
@@ -584,6 +670,7 @@ export async function updateIntegrationForPrincipal(
           id: integrations.id,
           displayName: integrations.displayName,
           provider: integrations.provider,
+          type: integrations.type,
           status: integrations.status,
           authorizedAt: integrations.authorizedAt,
           lastHealthCheckAt: integrations.lastHealthCheckAt,
@@ -609,6 +696,7 @@ export async function updateIntegrationForPrincipal(
             id: row.id,
             name: row.displayName,
             provider: row.provider,
+            type: row.type,
             status: row.status,
             scopeIds: [
               ...new Set(accessible.map((item) => item.organizationUnitId)),
@@ -753,6 +841,7 @@ export async function authorizeIntegrationForService(
         id: row.id,
         name: row.displayName,
         provider: row.provider,
+        type: row.type,
         status: row.status,
         scopeIds: [
           ...new Set(bindings.map((binding) => binding.organizationUnitId)),
@@ -1041,10 +1130,13 @@ export async function createIntegrationForPrincipal(
   if (!userId) throw new Error("IDENTITY_NOT_RESOLVED");
   const displayName = request.displayName.trim();
   const provider = request.provider.trim().toLowerCase();
+  const type = request.type ?? IntegrationType.Api;
   if (displayName.length < 2 || displayName.length > 160)
     throw new Error("INVALID_INTEGRATION_NAME");
   if (!provider || provider.length > 80)
     throw new Error("INVALID_INTEGRATION_PROVIDER");
+  if (!Object.values(IntegrationType).includes(type))
+    throw new Error("INVALID_INTEGRATION_TYPE");
 
   return withOrganizationContext(
     database,
@@ -1077,6 +1169,7 @@ export async function createIntegrationForPrincipal(
         .values({
           organizationId: principal.organizationId,
           provider,
+          type,
           displayName,
           status: "pending",
           createdByUserId: userId,
@@ -1085,6 +1178,7 @@ export async function createIntegrationForPrincipal(
           id: integrations.id,
           displayName: integrations.displayName,
           provider: integrations.provider,
+          type: integrations.type,
           status: integrations.status,
           updatedAt: integrations.updatedAt,
         });
@@ -1112,6 +1206,7 @@ export async function createIntegrationForPrincipal(
         id: integration.id,
         name: integration.displayName,
         provider: integration.provider,
+        type: integration.type,
         status: integration.status,
         scopeIds: [rootUnit.id],
         grantedScopes: request.grantedScopes ?? [],
@@ -1187,6 +1282,7 @@ export async function accessibleIntegrations(
       id: integrations.id,
       displayName: integrations.displayName,
       provider: integrations.provider,
+      type: integrations.type,
       status: integrations.status,
       credentialRef: integrations.credentialRef,
       authorizedAt: integrations.authorizedAt,

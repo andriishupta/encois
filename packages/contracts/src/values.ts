@@ -28,7 +28,8 @@ export const ContractVersion = {
   AuthorizationCheck: "authorization-check.v1",
   WorkflowDefinition: "workflow-definition.v1",
 } as const;
-export type ContractVersion = (typeof ContractVersion)[keyof typeof ContractVersion];
+export type ContractVersion =
+  (typeof ContractVersion)[keyof typeof ContractVersion];
 
 export const TemporalWorkflowType = {
   Dynamic: "encois.dynamic.v1",
@@ -36,7 +37,8 @@ export const TemporalWorkflowType = {
   BootstrapProject: "BootstrapProjectWorkflow",
   SourceIngestion: "encois.source-ingestion.v1",
 } as const;
-export type TemporalWorkflowType = (typeof TemporalWorkflowType)[keyof typeof TemporalWorkflowType];
+export type TemporalWorkflowType =
+  (typeof TemporalWorkflowType)[keyof typeof TemporalWorkflowType];
 
 export const WorkflowStepKind = {
   Tool: "tool",
@@ -46,7 +48,8 @@ export const WorkflowStepKind = {
   Wait: "wait",
   Approval: "approval",
 } as const;
-export type WorkflowStepKind = (typeof WorkflowStepKind)[keyof typeof WorkflowStepKind];
+export type WorkflowStepKind =
+  (typeof WorkflowStepKind)[keyof typeof WorkflowStepKind];
 
 export const KnowledgeSourceKind = {
   Integration: "integration",
@@ -54,7 +57,8 @@ export const KnowledgeSourceKind = {
   Manual: "manual",
   Media: "media",
 } as const;
-export type KnowledgeSourceKind = (typeof KnowledgeSourceKind)[keyof typeof KnowledgeSourceKind];
+export type KnowledgeSourceKind =
+  (typeof KnowledgeSourceKind)[keyof typeof KnowledgeSourceKind];
 
 export const KnowledgeSourceStatus = {
   Draft: "draft",
@@ -67,7 +71,8 @@ export const KnowledgeSourceStatus = {
   Failed: "failed",
   Disabled: "disabled",
 } as const;
-export type KnowledgeSourceStatus = (typeof KnowledgeSourceStatus)[keyof typeof KnowledgeSourceStatus];
+export type KnowledgeSourceStatus =
+  (typeof KnowledgeSourceStatus)[keyof typeof KnowledgeSourceStatus];
 
 export const SourceRevisionStatus = {
   Pending: "pending",
@@ -76,7 +81,8 @@ export const SourceRevisionStatus = {
   Failed: "failed",
   Superseded: "superseded",
 } as const;
-export type SourceRevisionStatus = (typeof SourceRevisionStatus)[keyof typeof SourceRevisionStatus];
+export type SourceRevisionStatus =
+  (typeof SourceRevisionStatus)[keyof typeof SourceRevisionStatus];
 
 export const SourceIngestionTrigger = {
   Bootstrap: "bootstrap",
@@ -85,14 +91,16 @@ export const SourceIngestionTrigger = {
   Schedule: "schedule",
   Reconcile: "reconcile",
 } as const;
-export type SourceIngestionTrigger = (typeof SourceIngestionTrigger)[keyof typeof SourceIngestionTrigger];
+export type SourceIngestionTrigger =
+  (typeof SourceIngestionTrigger)[keyof typeof SourceIngestionTrigger];
 
 export const SourceIngestionStatus = {
   Completed: "completed",
   Deferred: "deferred",
   Failed: "failed",
 } as const;
-export type SourceIngestionStatus = (typeof SourceIngestionStatus)[keyof typeof SourceIngestionStatus];
+export type SourceIngestionStatus =
+  (typeof SourceIngestionStatus)[keyof typeof SourceIngestionStatus];
 
 export const WorkflowExecutionStatus = {
   Queued: "queued",
@@ -104,14 +112,16 @@ export const WorkflowExecutionStatus = {
   Completed: "completed",
   Cancelled: "cancelled",
 } as const;
-export type WorkflowExecutionStatus = (typeof WorkflowExecutionStatus)[keyof typeof WorkflowExecutionStatus];
+export type WorkflowExecutionStatus =
+  (typeof WorkflowExecutionStatus)[keyof typeof WorkflowExecutionStatus];
 
 export const WorkflowResultStatus = {
   Completed: "completed",
   Waiting: "waiting",
   Failed: "failed",
 } as const;
-export type WorkflowResultStatus = (typeof WorkflowResultStatus)[keyof typeof WorkflowResultStatus];
+export type WorkflowResultStatus =
+  (typeof WorkflowResultStatus)[keyof typeof WorkflowResultStatus];
 
 export const ToolResultStatus = {
   Mocked: "mocked",
@@ -119,14 +129,16 @@ export const ToolResultStatus = {
   Waiting: "waiting",
   Failed: "failed",
 } as const;
-export type ToolResultStatus = (typeof ToolResultStatus)[keyof typeof ToolResultStatus];
+export type ToolResultStatus =
+  (typeof ToolResultStatus)[keyof typeof ToolResultStatus];
 
 export const GraphQueryStatus = {
   Completed: "completed",
   Deferred: "deferred",
   Failed: "failed",
 } as const;
-export type GraphQueryStatus = (typeof GraphQueryStatus)[keyof typeof GraphQueryStatus];
+export type GraphQueryStatus =
+  (typeof GraphQueryStatus)[keyof typeof GraphQueryStatus];
 
 export const AgentMemoryOperation = {
   Retrieve: "retrieve",
@@ -134,32 +146,37 @@ export const AgentMemoryOperation = {
   Correct: "correct",
   Delete: "delete",
 } as const;
-export type AgentMemoryOperation = (typeof AgentMemoryOperation)[keyof typeof AgentMemoryOperation];
+export type AgentMemoryOperation =
+  (typeof AgentMemoryOperation)[keyof typeof AgentMemoryOperation];
 
 export const AgentMemoryStatus = {
   Completed: "completed",
   Deferred: "deferred",
   Failed: "failed",
 } as const;
-export type AgentMemoryStatus = (typeof AgentMemoryStatus)[keyof typeof AgentMemoryStatus];
+export type AgentMemoryStatus =
+  (typeof AgentMemoryStatus)[keyof typeof AgentMemoryStatus];
 
 export const ToolSideEffects = {
   ReadOnly: "read-only",
   ExternalWrite: "external-write",
 } as const;
-export type ToolSideEffects = (typeof ToolSideEffects)[keyof typeof ToolSideEffects];
+export type ToolSideEffects =
+  (typeof ToolSideEffects)[keyof typeof ToolSideEffects];
 
 export const WorkflowSignalName = {
   BlueprintApproval: "blueprint-approval",
   WorkflowPause: "workflow-pause",
   WorkflowResume: "workflow-resume",
 } as const;
-export type WorkflowSignalName = (typeof WorkflowSignalName)[keyof typeof WorkflowSignalName];
+export type WorkflowSignalName =
+  (typeof WorkflowSignalName)[keyof typeof WorkflowSignalName];
 
 export const WorkflowUpdateName = {
   BlueprintContext: "blueprint-context",
 } as const;
-export type WorkflowUpdateName = (typeof WorkflowUpdateName)[keyof typeof WorkflowUpdateName];
+export type WorkflowUpdateName =
+  (typeof WorkflowUpdateName)[keyof typeof WorkflowUpdateName];
 
 export const CoordinatorEventType = {
   WorkflowPlanApproved: "workflow-plan-approved",
@@ -170,7 +187,8 @@ export const CoordinatorEventType = {
   ReconcileRequested: "reconcile-requested",
   ProviderChanged: "provider-changed",
 } as const;
-export type CoordinatorEventType = (typeof CoordinatorEventType)[keyof typeof CoordinatorEventType];
+export type CoordinatorEventType =
+  (typeof CoordinatorEventType)[keyof typeof CoordinatorEventType];
 
 export const RecommendationStatus = {
   Open: "open",
@@ -178,7 +196,8 @@ export const RecommendationStatus = {
   Dismissed: "dismissed",
   Resolved: "resolved",
 } as const;
-export type RecommendationStatus = (typeof RecommendationStatus)[keyof typeof RecommendationStatus];
+export type RecommendationStatus =
+  (typeof RecommendationStatus)[keyof typeof RecommendationStatus];
 
 export const RecommendationTarget = {
   Integrations: "integrations",
@@ -189,7 +208,8 @@ export const RecommendationTarget = {
   Review: "review",
   Context: "context",
 } as const;
-export type RecommendationTarget = (typeof RecommendationTarget)[keyof typeof RecommendationTarget];
+export type RecommendationTarget =
+  (typeof RecommendationTarget)[keyof typeof RecommendationTarget];
 
 export const WorkflowChangeKind = {
   Create: "create",
@@ -199,12 +219,14 @@ export const WorkflowChangeKind = {
   SetCurrent: "set_current",
   Cancel: "cancel",
 } as const;
-export type WorkflowChangeKind = (typeof WorkflowChangeKind)[keyof typeof WorkflowChangeKind];
+export type WorkflowChangeKind =
+  (typeof WorkflowChangeKind)[keyof typeof WorkflowChangeKind];
 
 export const CoordinatorSignalName = {
   Event: "coordinator-event",
 } as const;
-export type CoordinatorSignalName = (typeof CoordinatorSignalName)[keyof typeof CoordinatorSignalName];
+export type CoordinatorSignalName =
+  (typeof CoordinatorSignalName)[keyof typeof CoordinatorSignalName];
 
 export const OrganizationUnitType = {
   Organization: "organization",
@@ -214,7 +236,8 @@ export const OrganizationUnitType = {
   Service: "service",
   Custom: "custom",
 } as const;
-export type OrganizationUnitType = (typeof OrganizationUnitType)[keyof typeof OrganizationUnitType];
+export type OrganizationUnitType =
+  (typeof OrganizationUnitType)[keyof typeof OrganizationUnitType];
 
 export const AccessLevel = {
   Viewer: "viewer",
@@ -229,7 +252,8 @@ export const OrganizationMembershipStatus = {
   Active: "active",
   Suspended: "suspended",
 } as const;
-export type OrganizationMembershipStatus = (typeof OrganizationMembershipStatus)[keyof typeof OrganizationMembershipStatus];
+export type OrganizationMembershipStatus =
+  (typeof OrganizationMembershipStatus)[keyof typeof OrganizationMembershipStatus];
 
 export const OrganizationAccessRequestStatus = {
   Proposed: "proposed",
@@ -237,7 +261,8 @@ export const OrganizationAccessRequestStatus = {
   Rejected: "rejected",
   Applied: "applied",
 } as const;
-export type OrganizationAccessRequestStatus = (typeof OrganizationAccessRequestStatus)[keyof typeof OrganizationAccessRequestStatus];
+export type OrganizationAccessRequestStatus =
+  (typeof OrganizationAccessRequestStatus)[keyof typeof OrganizationAccessRequestStatus];
 
 export const OrganizationOnboardingStatus = {
   Pending: "pending",
@@ -245,13 +270,15 @@ export const OrganizationOnboardingStatus = {
   Ready: "ready",
   Failed: "failed",
 } as const;
-export type OrganizationOnboardingStatus = (typeof OrganizationOnboardingStatus)[keyof typeof OrganizationOnboardingStatus];
+export type OrganizationOnboardingStatus =
+  (typeof OrganizationOnboardingStatus)[keyof typeof OrganizationOnboardingStatus];
 
 export const CoordinationMode = {
   StartCoordinator: "start-coordinator",
   ConnectOnly: "connect-only",
 } as const;
-export type CoordinationMode = (typeof CoordinationMode)[keyof typeof CoordinationMode];
+export type CoordinationMode =
+  (typeof CoordinationMode)[keyof typeof CoordinationMode];
 
 export const ScopeRuleMode = {
   Grant: "grant",
@@ -264,7 +291,8 @@ export const FreshnessStatus = {
   Stale: "stale",
   Unknown: "unknown",
 } as const;
-export type FreshnessStatus = (typeof FreshnessStatus)[keyof typeof FreshnessStatus];
+export type FreshnessStatus =
+  (typeof FreshnessStatus)[keyof typeof FreshnessStatus];
 
 export const WorkflowStatusReason = {
   TemporaryError: "temporary_error",
@@ -275,7 +303,8 @@ export const WorkflowStatusReason = {
   InvalidInput: "invalid_input",
   DegradedEvidence: "degraded_evidence",
 } as const;
-export type WorkflowStatusReason = (typeof WorkflowStatusReason)[keyof typeof WorkflowStatusReason];
+export type WorkflowStatusReason =
+  (typeof WorkflowStatusReason)[keyof typeof WorkflowStatusReason];
 
 export const ArtifactRetentionClass = {
   Ephemeral: "ephemeral",
@@ -283,14 +312,16 @@ export const ArtifactRetentionClass = {
   SourceSnapshot: "source_snapshot",
   LegalHold: "legal_hold",
 } as const;
-export type ArtifactRetentionClass = (typeof ArtifactRetentionClass)[keyof typeof ArtifactRetentionClass];
+export type ArtifactRetentionClass =
+  (typeof ArtifactRetentionClass)[keyof typeof ArtifactRetentionClass];
 
 export const MemoryRedactionStatus = {
   Applied: "applied",
   NoMatch: "no_match",
   Deferred: "deferred",
 } as const;
-export type MemoryRedactionStatus = (typeof MemoryRedactionStatus)[keyof typeof MemoryRedactionStatus];
+export type MemoryRedactionStatus =
+  (typeof MemoryRedactionStatus)[keyof typeof MemoryRedactionStatus];
 
 export const IntegrationStatus = {
   Pending: "pending",
@@ -301,10 +332,29 @@ export const IntegrationStatus = {
   Disabled: "disabled",
   Error: "error",
 } as const;
-export type IntegrationStatus = (typeof IntegrationStatus)[keyof typeof IntegrationStatus];
+export type IntegrationStatus =
+  (typeof IntegrationStatus)[keyof typeof IntegrationStatus];
+
+export const IntegrationType = {
+  Api: "api",
+  Ai: "ai",
+  Mcp: "mcp",
+  Custom: "custom",
+} as const;
+export type IntegrationType =
+  (typeof IntegrationType)[keyof typeof IntegrationType];
+
+export const IntegrationCatalogStatus = {
+  Active: "active",
+  Pending: "pending",
+  Disabled: "disabled",
+} as const;
+export type IntegrationCatalogStatus =
+  (typeof IntegrationCatalogStatus)[keyof typeof IntegrationCatalogStatus];
 
 export const AuthAccessStatus = {
   Active: "active",
   Pending: "pending",
 } as const;
-export type AuthAccessStatus = (typeof AuthAccessStatus)[keyof typeof AuthAccessStatus];
+export type AuthAccessStatus =
+  (typeof AuthAccessStatus)[keyof typeof AuthAccessStatus];

@@ -269,9 +269,11 @@ evidence; Workflow Templates remain a separate discovery/catalog layer and do
 not reference source IDs or become executable definitions.
 
 The implementation exposes source registration, PDF upload, immutable revision
-metadata, source detail/status projection, and an ingestion launch route in the
-Gateway API. PDF bytes are written through the Gateway's scoped Cloud Storage
-adapter (with an explicit development/test memory fallback), and only the
+metadata, source detail/status projection, raw-file download, and an ingestion
+launch route in the Gateway API. PDF bytes are written through the Gateway's
+scoped Cloud Storage adapter (Firebase Storage Emulator in Watch mock, managed
+Cloud Storage in hosted environments, and an explicit development/test memory
+fallback), under an organization/unit/source/revision object prefix. Only the
 resulting artifact reference crosses the revision and Temporal boundaries. The
 Runtime validates the versioned envelope, reads through Agent Gateway, and
 returns a completed result after deterministic facts, provenance, Graph, and

@@ -4,12 +4,27 @@ This is the repeatable local path for testing the current Encois application
 through Docker Compose. It is separate from Terraform and from the hosted
 Google Cloud Identity Platform deployment.
 
+## Compose modes
+
+The repository has three intentionally different Compose modes:
+
+| Mode | Command | Dependencies | Application containers |
+| --- | --- | --- | --- |
+| Watch mock | `pnpm run dev:watch:mock` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, mock data adapters | Development images with live reload |
+| Watch prod | `pnpm run dev:watch:prod` | Managed services from `.env.local.prod` | Development images with live reload |
+| Local prod | `pnpm run dev:local:prod` | Managed services from `.env.local.prod` | Production Docker images, no watch mode |
+
+Use Watch mock first for deterministic local workflows. Use Watch prod when
+you need to exercise real Temporal Cloud, Spanner, Memory Bank, Cloud Storage,
+Gemini, Identity Platform, and managed Postgres credentials while keeping
+source changes live. Use Local prod to validate the built production images.
+
 ## Start
 
 From the repository root:
 
 ```bash
-pnpm run dev:local
+pnpm run dev:watch:mock
 ```
 
 The stack starts:
@@ -19,6 +34,7 @@ The stack starts:
 | Dashboard | http://localhost:5173 | React application served by Vite with HMR |
 | API Gateway | http://localhost:8787 | Auth, authorization, waitlist, and workflows |
 | Firebase Auth Emulator | http://localhost:9099 | Local Firebase-compatible identity service |
+| Firebase Storage Emulator | http://localhost:9199 | Durable local raw Source files for the watch-mock volume |
 | Emulator UI | http://localhost:4000 | Inspect local Auth users |
 | Temporal UI | http://localhost:8233 | Inspect local workflow executions |
 | Agent Gateway | http://localhost:8080 | Private policy/tool broker in mock data mode |
@@ -29,7 +45,7 @@ To apply new local database migrations without rebuilding the rest of the
 stack, run:
 
 ```bash
-pnpm run migration:local
+pnpm run migration:watch:mock
 ```
 
 This rebuilds only the `migrations` image, runs the one-shot migration job,
@@ -88,10 +104,10 @@ and provider adapters at the edges:
 | Dashboard, API Gateway, Postgres | Real processes and persisted control-plane data | Auth, organization scope, permissions, source/workflow/run projections |
 | Temporal | Real local Temporal Server in Namespace `default` | Workflow start, Activities, retries, Signals, and worker execution |
 | Agent Runtime | Real Go worker with `AGENT_AI_MODE=mock` | Blueprint interpretation and runtime state transitions without model credentials |
-| Agent Gateway | Real private policy/tool broker with `AGENT_GATEWAY_DATA_MODE=mock` | Service authentication, capability/policy checks, and adapter routing |
+| Agent Gateway | Real private policy/tool broker; artifact access uses the Firebase Storage Emulator while Graph/provider adapters remain mocked | Service authentication, capability/policy checks, and local Source ingestion |
 | Jira/GitHub and other providers | Deterministic adapter fixtures | Stable tool schemas and success/failure handling, not live provider behavior |
 | Graph and Memory | Process-local mock stores | Contract and UI behavior for deterministic local data; state is lost on process restart |
-| Cloud Storage | API-local artifact store when GCS is not configured | Source metadata and reference flow; not durable/shared raw-byte storage |
+| Cloud Storage | Firebase Storage Emulator in Watch mock; managed Cloud Storage in Watch prod/Local prod | Raw Source files are stored outside Postgres under an organization/unit-scoped object key |
 
 Mocks are limited to infrastructure or third-party adapter boundaries. They do
 not create fake users, organizations, permissions, workflows, runs, or other
@@ -104,11 +120,11 @@ GitHub/Jira/Memory Bank/Spanner/Cloud Storage deployment is configured.
 Use this sequence when testing how the product components are connected:
 
 1. Start the stack and wait until `local-auth-seed` completes successfully.
-   Check `docker compose -f compose.local.yaml ps`, then open the Dashboard,
+   Check `docker compose -f compose.watch.mock.yaml ps`, then open the Dashboard,
    Temporal UI, and Emulator UI.
 2. Sign in as `owner@local.test`. Confirm that the organization, units,
    integrations, Sources, workflows, graph, and memory pages load.
-   Run `pnpm run verify:local:api` if the auth, invite, or scope boundary is
+   Run `pnpm run verify:watch:mock:api` if the auth, invite, or scope boundary is
    the subject of the check.
 3. Repeat the same navigation as `manager@local.test`, `dev@local.test`, and
    `viewer@local.test`. The visible hierarchy may include context needed to
@@ -118,11 +134,13 @@ Use this sequence when testing how the product components are connected:
 4. Open Organization Sources and upload a small PDF. Confirm that the API
    creates the Source, immutable revision, and ingestion-run projection. Start
    ingestion only through the product action and follow its status in the UI.
-   In mock mode, the API's local artifact store and the Agent Gateway's local
-   artifact store are separate processes; an `artifact://memory/...` reference
-   can use deterministic fallback bytes. This validates the metadata and
-   ingestion contract, but not durable/shared uploaded bytes. Use
-   `pnpm dev:local:prod` with Cloud Storage when that fidelity matters.
+   In Watch mock, the PDF is written to the Firebase Storage Emulator and the
+   revision keeps a scoped object key such as
+   `organizations/{organizationId}/units/{unitId}/sources/{sourceId}/...`.
+   Open the Source detail and use **Download raw file**; the API repeats the
+   Source permission check before reading the object. Agent Gateway reads the
+   same object during Source ingestion, so the PDF can reach the local parser.
+   The emulator data is persisted in the `encois-firebase-data` Compose volume.
 5. Open Workflows and use an approved Blueprint or Template. Before running,
    confirm that its tools exist in the local Agent Gateway fixture catalog.
    The current local catalog includes `jira.project_tasks` and
@@ -173,9 +191,9 @@ Events, Activity attempts, retries, and failure details. Compare that with the
 Dashboard run events and service logs:
 
 ```bash
-docker compose -f compose.local.yaml logs -f api-gateway
-docker compose -f compose.local.yaml logs -f agent-runtime
-docker compose -f compose.local.yaml logs -f agent-gateway
+docker compose -f compose.watch.mock.yaml logs -f api-gateway
+docker compose -f compose.watch.mock.yaml logs -f agent-runtime
+docker compose -f compose.watch.mock.yaml logs -f agent-gateway
 ```
 
 If a run fails with `403`, first compare the Blueprint tool name and declared
@@ -185,7 +203,7 @@ local allowlist; Temporal and the worker were running correctly. If no
 execution exists in Temporal, the item is likely one of the seeded persisted
 workflow rows and exercises the unavailable-runtime path instead.
 
-## Development watch mode
+## Watch mock mode
 
 This local mock mode uses development containers with live reload:
 
@@ -199,7 +217,7 @@ This local mock mode uses development containers with live reload:
 Stop it with:
 
 ```bash
-pnpm run dev:local:down
+pnpm run dev:watch:mock:down
 ```
 
 ## Authentication and onboarding test
@@ -242,7 +260,7 @@ the `pending` user experience.
 To inspect the resulting database rows:
 
 ```bash
-docker compose -f compose.local.yaml exec postgres \
+docker compose -f compose.watch.mock.yaml exec postgres \
   psql -U postgres -d encois -c \
   'select email, identity_subject from users;'
 ```
@@ -260,10 +278,10 @@ After the seed completes, verify the expected tenant, onboarding, source, and
 integration fixtures with:
 
 ```bash
-docker compose -f compose.local.yaml run --rm local-auth-seed \
+docker compose -f compose.watch.mock.yaml run --rm local-auth-seed \
   node dist/scripts/verify-local.js
 
-docker compose -f compose.local.yaml run --rm \
+docker compose -f compose.watch.mock.yaml run --rm \
   -e LOCAL_API_URL=http://api-gateway:8787/api/v1 \
   local-auth-seed node dist/scripts/verify-local-api.js
 ```
@@ -271,8 +289,8 @@ docker compose -f compose.local.yaml run --rm \
 The same checks are available from the repository root:
 
 ```bash
-pnpm run verify:local
-pnpm run verify:local:api
+pnpm run verify:watch:mock
+pnpm run verify:watch:mock:api
 pnpm run verify:production-auth
 ```
 
@@ -295,10 +313,10 @@ availability error instead of pretending that an execution exists.
 ## Useful checks
 
 ```bash
-docker compose -f compose.local.yaml ps
+docker compose -f compose.watch.mock.yaml ps
 curl http://localhost:8787/health/live
 curl http://localhost:8787/health/ready
-docker compose -f compose.local.yaml logs -f api-gateway local-auth-seed
+docker compose -f compose.watch.mock.yaml logs -f api-gateway local-auth-seed
 ```
 
 The local Agent Runtime uses `AGENT_AI_MODE=mock` and the local data plane uses
@@ -313,7 +331,24 @@ realistic projections to the same tenant-scoped stores. External Jira/GitHub
 calls remain deterministic fixtures; live provider credentials and adapters
 are hosted follow-up work.
 
-## Production-like local mode
+## Watch prod mode
+
+Use this mode to run the application containers with live reload while
+connecting to the managed services configured in `.env.local.prod`:
+
+```bash
+pnpm dev:watch:prod
+```
+
+It uses `compose.watch.prod.yaml`, enables Gemini, Vertex Memory Bank, Temporal
+Cloud, Identity Platform, Cloud SQL/Postgres, Cloud Storage, and Spanner, and
+does not start local emulators or mock data-plane services. Stop it with:
+
+```bash
+pnpm dev:watch:prod:down
+```
+
+## Local prod build mode
 
 Use this mode to run the Dashboard, API Gateway, Agent Runtime, and Agent
 Gateway locally while connecting to the managed services used by the hosted
@@ -349,16 +384,16 @@ pnpm dev:local:prod:down
 To stop the stack:
 
 ```bash
-pnpm run dev:local:down
+pnpm run dev:watch:mock:down
 ```
 
 To reset only the known local fixture organizations and accounts (without
 touching unrelated database data):
 
 ```bash
-docker compose -f compose.local.yaml run --rm local-auth-seed \
+docker compose -f compose.watch.mock.yaml run --rm local-auth-seed \
   node dist/scripts/reset-local.js
-docker compose -f compose.local.yaml run --rm local-auth-seed
+docker compose -f compose.watch.mock.yaml run --rm local-auth-seed
 ```
 
 The reset is deliberately scoped to the fixture slugs/emails. It does not
@@ -368,13 +403,13 @@ manual reset to clear their in-memory state as well. The same operation is
 available as:
 
 ```bash
-pnpm run local:reset
+pnpm run watch:mock:reset
 ```
 
 The seed is safe to run repeatedly and will not create duplicate memberships,
 integrations, revisions, or onboarding rows.
 To run only the idempotent seed without resetting fixtures, use
-`pnpm run local:seed`.
+`pnpm run watch:mock:seed`.
 
 ## Verification scope
 

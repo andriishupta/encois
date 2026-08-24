@@ -1,4 +1,4 @@
-import { isJsonObject } from "@encois/contracts";
+import { IntegrationType, isJsonObject } from "@encois/contracts";
 import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
@@ -24,6 +24,12 @@ function parseCreate(value: unknown): IntegrationCreate | null {
       value.grantedScopes.some((scope) => typeof scope !== "string"))
   )
     return null;
+  if (
+    value.type !== undefined &&
+    (typeof value.type !== "string" ||
+      !Object.values(IntegrationType).includes(value.type as IntegrationType))
+  )
+    return null;
   return {
     displayName: value.displayName,
     provider: value.provider,
@@ -32,6 +38,9 @@ function parseCreate(value: unknown): IntegrationCreate | null {
       : {}),
     ...(Array.isArray(value.grantedScopes)
       ? { grantedScopes: value.grantedScopes as string[] }
+      : {}),
+    ...(typeof value.type === "string"
+      ? { type: value.type as IntegrationType }
       : {}),
   };
 }

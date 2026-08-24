@@ -396,6 +396,7 @@ async function resolveStoredBlueprint(
         eq(workflowBlueprints.organizationId, organizationId),
         eq(workflowBlueprints.blueprintId, request.blueprintId),
         eq(workflowBlueprints.version, request.blueprintVersion),
+        isNull(workflowBlueprints.deletedAt),
       ),
     )
     .limit(1);
@@ -1863,6 +1864,7 @@ export async function rerunWorkflow(
             eq(workflowBlueprints.organizationId, principal.organizationId),
             eq(workflowBlueprints.blueprintId, blueprintId),
             eq(workflowBlueprints.version, row.blueprintVersion),
+            isNull(workflowBlueprints.deletedAt),
           ),
         )
         .limit(1);

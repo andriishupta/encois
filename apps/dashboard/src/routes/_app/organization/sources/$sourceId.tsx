@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  Download,
   FileText,
   LoaderCircle,
   Play,
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import {
   createSourceRevision,
+  downloadSourceRevisionRaw,
   getKnowledgeSource,
   isApiError,
   startSourceIngestion,
@@ -75,6 +77,25 @@ function SourceDetailPage() {
     onError: (cause) =>
       setError(
         isApiError(cause) ? cause.message : "Ingestion could not be started.",
+      ),
+  });
+  const download = useMutation({
+    mutationFn: (revisionId: string) =>
+      downloadSourceRevisionRaw(sourceId, revisionId),
+    onSuccess: ({ blob, fileName }) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setError(null);
+    },
+    onError: (cause) =>
+      setError(
+        isApiError(cause)
+          ? cause.message
+          : "The raw Source file could not be downloaded.",
       ),
   });
   const registerRevision = useMutation({
@@ -290,7 +311,9 @@ function SourceDetailPage() {
                   key={revision.id}
                   revision={revision}
                   onIngest={() => ingest.mutate(revision.id)}
+                  onDownload={() => download.mutate(revision.id)}
                   busy={ingest.isPending}
+                  downloading={download.isPending}
                 />
               ))
             ) : (
@@ -594,16 +617,25 @@ function RevisionComparison({
 function RevisionRow({
   revision,
   onIngest,
+  onDownload,
   busy,
+  downloading,
 }: {
   revision: SourceRevision;
   onIngest: () => void;
+  onDownload: () => void;
   busy: boolean;
+  downloading: boolean;
 }) {
   const fileName =
     typeof revision.metadata?.fileName === "string"
       ? revision.metadata.fileName
       : undefined;
+  const hasRawFile =
+    revision.metadata?.storageManaged === true ||
+    (revision.contentType === "application/pdf" &&
+      revision.artifactRef?.startsWith("gs://") === true &&
+      Boolean(revision.sourceObjectId));
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
@@ -623,6 +655,24 @@ function RevisionRow({
       <span className="shrink-0 text-xs text-muted-foreground">
         {revision.status}
       </span>
+      {hasRawFile ? (
+        <Button
+          className="shrink-0"
+          size="sm"
+          variant="ghost"
+          onClick={onDownload}
+          disabled={downloading}
+          title="Download raw file"
+        >
+          {downloading ? (
+            <LoaderCircle className="animate-spin" />
+          ) : (
+            <Download />
+          )}
+          <span className="hidden sm:inline">Download</span>
+          <span className="sr-only"> raw file</span>
+        </Button>
+      ) : null}
       <Button
         className="shrink-0"
         size="sm"

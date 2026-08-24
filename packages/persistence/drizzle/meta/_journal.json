@@ -50,6 +50,20 @@
       "when": 1787569490455,
       "tag": "0006_dynamic-workflow-type",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787584664478,
+      "tag": "0007_soft-delete-workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787584724478,
+      "tag": "0008_integration-catalog",
+      "breakpoints": true
     }
   ]
 }

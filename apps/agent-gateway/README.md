@@ -87,7 +87,10 @@ health locally.
 
 Set `AGENT_GATEWAY_DATA_MODE=mock` explicitly for local/test development. The
 default is `gcp`; set it with `GCP_STORAGE_BUCKET` and `SPANNER_DATABASE` to
-activate the hosted adapters. GCP mode also requires `GOOGLE_CLOUD_PROJECT`,
+activate the hosted adapters. Mock mode uses memory stores by default; set
+`AGENT_GATEWAY_STORAGE_MODE=gcs` with `STORAGE_EMULATOR_HOST` to read raw
+Source artifacts from a local GCS-compatible emulator while keeping Graph and
+provider adapters mocked. GCP mode also requires `GOOGLE_CLOUD_PROJECT`,
 `CONTROL_PLANE_URL`, `CONTROL_PLANE_AUDIENCE`, and
 `CONTROL_PLANE_SERVICE_TOKEN` for provider credential resolution.
 The Spanner database must contain the tables from `infra/spanner-schema.sql`.

@@ -128,7 +128,7 @@ Open `http://localhost:5173` for the dashboard and use `http://127.0.0.1:8787/he
 
 The canonical full local stack is:
 
-- `pnpm run dev:local` runs `compose.local.yaml` with Postgres, the official
+- `pnpm run dev:watch:mock` runs `compose.watch.mock.yaml` with Postgres, the official
   Temporal development image, migrations, Firebase Auth Emulator, the local
   auth seed, all four application services, and the dashboard. The local
   Runtime uses `AGENT_AI_MODE=mock`, the data plane uses local adapters, and

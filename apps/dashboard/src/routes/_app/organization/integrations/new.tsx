@@ -1,4 +1,8 @@
-import { type IntegrationCreateRequest, Permission } from "@encois/contracts";
+import {
+  type IntegrationCreateRequest,
+  IntegrationType,
+  Permission,
+} from "@encois/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -27,6 +31,11 @@ import { queryKeys } from "@/lib/query-keys";
 export const Route = createFileRoute("/_app/organization/integrations/new")({
   validateSearch: (search: Record<string, unknown>) => ({
     provider: typeof search.provider === "string" ? search.provider : undefined,
+    type: Object.values(IntegrationType).includes(
+      search.type as IntegrationType,
+    )
+      ? (search.type as IntegrationType)
+      : undefined,
   }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.IntegrationsManage))
@@ -49,23 +58,32 @@ function NewIntegrationPage() {
   const queryClient = useQueryClient();
   const { members } = useOrganization();
   const requestedProvider = Route.useSearch().provider;
+  const requestedType = Route.useSearch().type;
   const actor = members.find(
     (member) => member.id === getAuthSession()?.userId,
   );
   const organizationAdmin =
     actor?.roleKey === "organization_admin" || actor?.roleKey === "admin";
-  const initialProvider = [
-    "github",
-    "gitlab",
-    "jira",
-    "linear",
-    "slack",
-    "google-drive",
-  ].includes(requestedProvider ?? "")
-    ? requestedProvider!
-    : "github";
+  const initialProvider = requestedProvider?.trim() || "github";
+  const providerOptions = [
+    { value: "github", label: "GitHub" },
+    { value: "gitlab", label: "GitLab" },
+    { value: "jira", label: "Jira" },
+    { value: "linear", label: "Linear" },
+    { value: "slack", label: "Slack" },
+    { value: "google-drive", label: "Google Drive" },
+    ...(initialProvider &&
+    !["github", "gitlab", "jira", "linear", "slack", "google-drive"].includes(
+      initialProvider,
+    )
+      ? [{ value: initialProvider, label: initialProvider }]
+      : []),
+  ];
   const [displayName, setDisplayName] = useState("");
   const [provider, setProvider] = useState(initialProvider);
+  const [type, setType] = useState<IntegrationType>(
+    requestedType ?? IntegrationType.Api,
+  );
   const [grantedScopes, setGrantedScopes] = useState<string[]>(() => [
     ...(providerScopes[initialProvider] ?? []),
   ]);
@@ -87,6 +105,7 @@ function NewIntegrationPage() {
     mutation.mutate({
       displayName: displayName.trim(),
       provider,
+      type,
       grantedScopes,
     });
   }
@@ -154,14 +173,24 @@ function NewIntegrationPage() {
                       id="integration-provider"
                       value={provider}
                       onChange={(event) => changeProvider(event.target.value)}
-                      options={[
-                        { value: "github", label: "GitHub" },
-                        { value: "gitlab", label: "GitLab" },
-                        { value: "jira", label: "Jira" },
-                        { value: "linear", label: "Linear" },
-                        { value: "slack", label: "Slack" },
-                        { value: "google-drive", label: "Google Drive" },
-                      ]}
+                      options={providerOptions}
+                    />
+                  </label>
+                  <label
+                    className="flex flex-col gap-2 text-sm font-medium"
+                    htmlFor="integration-type"
+                  >
+                    Integration type
+                    <Select
+                      id="integration-type"
+                      value={type}
+                      onChange={(event) =>
+                        setType(event.target.value as IntegrationType)
+                      }
+                      options={Object.values(IntegrationType).map((value) => ({
+                        value,
+                        label: value.toUpperCase(),
+                      }))}
                     />
                   </label>
                 </div>

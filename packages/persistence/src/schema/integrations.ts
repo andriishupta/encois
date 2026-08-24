@@ -1,5 +1,6 @@
 import {
   foreignKey,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -22,6 +23,22 @@ export const integrationStatus = pgEnum("integration_status", [
 ]);
 export type IntegrationStatus = (typeof integrationStatus.enumValues)[number];
 
+export const integrationType = pgEnum("integration_type", [
+  "api",
+  "ai",
+  "mcp",
+  "custom",
+]);
+export type IntegrationType = (typeof integrationType.enumValues)[number];
+
+export const integrationCatalogStatus = pgEnum("integration_catalog_status", [
+  "active",
+  "pending",
+  "disabled",
+]);
+export type IntegrationCatalogStatus =
+  (typeof integrationCatalogStatus.enumValues)[number];
+
 export const integrationBindingStatus = pgEnum("integration_binding_status", [
   "active",
   "revoked",
@@ -37,6 +54,7 @@ export const integrations = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
+    type: integrationType("integration_type").notNull().default("api"),
     displayName: text("display_name").notNull(),
     status: integrationStatus("status").notNull().default("pending"),
     credentialRef: text("credential_ref"),
@@ -59,6 +77,40 @@ export const integrations = pgTable(
     uniqueIndex("integrations_id_organization_id_idx").on(
       table.id,
       table.organizationId,
+    ),
+  ],
+);
+
+/** Global catalog metadata; tenant connections remain in `integrations`. */
+export const integrationCatalog = pgTable(
+  "integration_catalog",
+  {
+    key: text("key").primaryKey(),
+    provider: text("provider").notNull(),
+    displayName: text("display_name").notNull(),
+    description: text("description").notNull(),
+    type: integrationType("integration_type").notNull(),
+    status: integrationCatalogStatus("status").notNull().default("disabled"),
+    capabilities: jsonb("capabilities")
+      .$type<readonly string[]>()
+      .notNull()
+      .default([]),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_catalog_provider_type_idx").on(
+      table.provider,
+      table.type,
+    ),
+    uniqueIndex("integration_catalog_status_sort_idx").on(
+      table.status,
+      table.sortOrder,
     ),
   ],
 );
