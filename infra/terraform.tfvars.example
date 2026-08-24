@@ -1,5 +1,5 @@
 project_id   = "replace-with-gcp-project-id"
-region       = "europe-west1"
+region       = "us-east1"
 environment  = "demo"
 domain_name  = "encois.com"
 
@@ -42,12 +42,12 @@ secret_names = [
 artifact_bucket_name = ""
 
 # Set these only when the corresponding service is enabled.
-dashboard_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"
-api_image           = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
-agent_runtime_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
-agent_gateway_image = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"
-migration_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/migrations:replace-with-immutable-tag"
-retention_image     = "europe-west1-docker.pkg.dev/replace-with-gcp-project-id/containers/retention:replace-with-immutable-tag"
+dashboard_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"
+api_image           = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
+agent_runtime_image = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
+agent_gateway_image = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"
+migration_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/migrations:replace-with-immutable-tag"
+retention_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/retention:replace-with-immutable-tag"
 retention_organization_ids = []
 integration_health_organization_ids = []
 

@@ -6,7 +6,7 @@ variable "project_id" {
 variable "region" {
   description = "Primary region for Cloud Run, regional NEGs, storage, and optional Spanner."
   type        = string
-  default     = "europe-west1"
+  default     = "us-east1"
 }
 
 variable "environment" {
@@ -379,9 +379,9 @@ variable "enable_spanner" {
 }
 
 variable "spanner_config" {
-  description = "Spanner instance configuration, for example regional-europe-west1."
+  description = "Spanner instance configuration, for example regional-us-east1."
   type        = string
-  default     = "regional-europe-west1"
+  default     = "regional-us-east1"
 }
 
 variable "spanner_processing_units" {
