@@ -698,6 +698,14 @@ team_id = platform       # optional
 
 Memory retrieval must use the exact authorized scope. Agent-specific memory must not become invisible cross-team knowledge.
 
+The current Vertex Memory Bank adapter maps organization, agent definition, and
+optional project/user scope, but does not yet materialize the full Encois
+organization-unit hierarchy in the provider scope. The API still performs the
+human authorization check and carries the effective unit scope in the request;
+provider-level unit isolation is a follow-up design decision, not an assumed
+MVP capability. See [`memory.md`](memory.md) for the current behavior and
+provider-neutral options.
+
 Memory Bank is a managed semantic memory service. It is not the canonical source of truth for company entities, relationships, permissions, or evidence.
 
 #### Spanner Graph

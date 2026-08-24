@@ -66,6 +66,109 @@ they do not put that organization back into `pending`. Their passwords are
 Open the Dashboard and use **Sign in locally**. The local login uses Firebase
 Auth Emulator only. Production remains invite-only Google sign-in.
 
+## What the local stack actually tests
+
+The local stack is a real vertical execution path with explicit infrastructure
+and provider adapters at the edges:
+
+| Boundary | Local behavior | What it proves |
+| --- | --- | --- |
+| Dashboard, API Gateway, Postgres | Real processes and persisted control-plane data | Auth, organization scope, permissions, source/workflow/run projections |
+| Temporal | Real local Temporal Server in Namespace `default` | Workflow start, Activities, retries, Signals, and worker execution |
+| Agent Runtime | Real Go worker with `AGENT_AI_MODE=mock` | Blueprint interpretation and runtime state transitions without model credentials |
+| Agent Gateway | Real private policy/tool broker with `AGENT_GATEWAY_DATA_MODE=mock` | Service authentication, capability/policy checks, and adapter routing |
+| Jira/GitHub and other providers | Deterministic adapter fixtures | Stable tool schemas and success/failure handling, not live provider behavior |
+| Graph and Memory | Process-local mock stores | Contract and UI behavior for deterministic local data; state is lost on process restart |
+| Cloud Storage | API-local artifact store when GCS is not configured | Source metadata and reference flow; not durable/shared raw-byte storage |
+
+Mocks are limited to infrastructure or third-party adapter boundaries. They do
+not create fake users, organizations, permissions, workflows, runs, or other
+control-plane state. A successful local run therefore means that the Encois
+flow works with the configured adapter fixtures; it does not prove that a live
+GitHub/Jira/Memory Bank/Spanner/Cloud Storage deployment is configured.
+
+## Full manual vertical slice
+
+Use this sequence when testing how the product components are connected:
+
+1. Start the stack and wait until `local-auth-seed` completes successfully.
+   Check `docker compose -f compose.local.yaml ps`, then open the Dashboard,
+   Temporal UI, and Emulator UI.
+2. Sign in as `owner@local.test`. Confirm that the organization, units,
+   integrations, Knowledge Sources, workflows, graph, and memory pages load.
+   Run `pnpm run verify:local:api` if the auth, invite, or scope boundary is
+   the subject of the check.
+3. Repeat the same navigation as `manager@local.test`, `dev@local.test`, and
+   `viewer@local.test`. The visible hierarchy may include context needed to
+   explain the organization, but reads and mutations must remain within the
+   user's effective unit scope. Viewer actions must be rejected by the API,
+   not only hidden in the Dashboard.
+4. Open Organization Sources and upload a small PDF. Confirm that the API
+   creates the Source, immutable revision, and ingestion-run projection. Start
+   ingestion only through the product action and follow its status in the UI.
+   In mock mode, the API's local artifact store and the Agent Gateway's local
+   artifact store are separate processes; an `artifact://memory/...` reference
+   can use deterministic fallback bytes. This validates the metadata and
+   ingestion contract, but not durable/shared uploaded bytes. Use
+   `pnpm dev:local:prod` with Cloud Storage when that fidelity matters.
+5. Open Workflows and use an approved Blueprint or Template. Before running,
+   confirm that its tools exist in the local Agent Gateway fixture catalog.
+   The current local catalog includes `jira.project_tasks` and
+   `github.project_activity`; arbitrary example names are not automatically
+   available. Choose an allowed organization scope and start the workflow.
+6. Follow the run in the Dashboard, Activity, workflow detail, and Temporal
+   UI. The local run should traverse API Gateway -> Temporal -> Go Agent
+   Runtime -> Agent Gateway -> deterministic tools -> API projections. The
+   seeded persisted workflow rows are deliberately not Temporal executions;
+   use a newly started run to test the successful execution path.
+7. Inspect the resulting evidence, graph projection, and memory projection.
+   Remember that local Graph and Memory state is process-local and resets when
+   the corresponding Go service restarts. The local Memory adapter is useful
+   for contract and permission checks, not for validating Vertex AI Memory Bank
+   scope semantics.
+8. Repeat the run with a missing or unsupported tool, an unavailable provider
+   fixture, and a viewer account. Expected outcomes are an explicit failed or
+   denied run with a stable error, never a fabricated successful result.
+
+For a smaller backend-only check, use:
+
+```bash
+pnpm smoke:release:local
+```
+
+It starts an isolated local Temporal server and Go services, runs the release
+and approval flows, and cleans up those child processes. It is useful for
+verifying the execution boundary without logging into the Dashboard; it does
+not replace the full manual source, permission, graph, or memory walkthrough.
+
+## Temporal inspection and failure diagnosis
+
+The containerized stack uses Temporal Namespace `default`, address
+`127.0.0.1:7233`, and task queue `encois-agent-runtime`:
+
+```bash
+temporal workflow list \
+  --address 127.0.0.1:7233 \
+  --namespace default
+```
+
+Use the Temporal UI at `http://localhost:8233` to open a run and inspect its
+Events, Activity attempts, retries, and failure details. Compare that with the
+Dashboard run events and service logs:
+
+```bash
+docker compose -f compose.local.yaml logs -f api-gateway
+docker compose -f compose.local.yaml logs -f agent-runtime
+docker compose -f compose.local.yaml logs -f agent-gateway
+```
+
+If a run fails with `403`, first compare the Blueprint tool name and declared
+scope with the Agent Gateway tool catalog and policy. A previous local failure
+was caused by a Blueprint referring to tools that were not in the configured
+local allowlist; Temporal and the worker were running correctly. If no
+execution exists in Temporal, the item is likely one of the seeded persisted
+workflow rows and exercises the unavailable-runtime path instead.
+
 ## Development watch mode
 
 This local mock mode uses development containers with live reload:

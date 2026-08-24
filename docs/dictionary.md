@@ -480,9 +480,14 @@ A managed conversation/session context for an agent interaction. It is useful fo
 
 ### Memory Bank
 
-Managed semantic memory for agent-specific context, prior conclusions, recurring patterns, and important outcomes.
+The current managed provider used for agent-specific semantic memory, prior
+conclusions, recurring patterns, and important outcomes. It is an adapter
+implementation name, not the preferred product/UI label.
 
-Memory Bank is scoped by organization and, where needed, agent, team, or user. It is not the canonical source for permissions, entities, relationships, or evidence.
+Memory Bank scope uses exact provider matching. The current Encois adapter maps
+organization, agent definition, and optional project/user scope; it does not yet
+materialize the complete organization-unit hierarchy inside the provider. It is
+not the canonical source for permissions, entities, relationships, or evidence.
 
 ## Data and intelligence terms
 
@@ -514,9 +519,13 @@ A Normalized Fact with source system, source record ID, timestamps, transformati
 
 A source-backed item that supports an insight. Evidence should identify the source record, observation time, freshness, and raw artifact reference where applicable.
 
-### Spanner Graph
+### Organization Memory Graph
 
-The shared company context layer. It stores organization entities, graph relationships, normalized facts, provenance, temporal validity, and relational read projections.
+The product term for the shared company context layer. It stores organization
+entities, graph relationships, normalized facts, provenance, temporal validity,
+visibility scope, and relational read projections. The current provider
+implementation is a tenant-keyed Spanner graph projection, but product docs and
+UI should use Organization Memory Graph rather than the provider name.
 
 Example relationships:
 
@@ -526,6 +535,14 @@ Commit IMPLEMENTS Ticket
 Deployment AFFECTS Service
 Person RESPONSIBLE_FOR Ticket
 ~~~
+
+### Workflow Memory
+
+The product term for scoped semantic memory used by a workflow or agent across
+executions. It is derived from validated evidence, must retain provenance and
+redaction metadata, and is never an authorization source. The current provider
+implementation is Memory Bank; future implementations may use another adapter
+or a customer-owned memory API.
 
 ### Freshness
 

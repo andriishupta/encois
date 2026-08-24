@@ -108,6 +108,12 @@ The current Spanner implementation is a tenant-keyed node/edge projection in
 Gateway. It is the MVP Graph persistence boundary; native property-graph query
 syntax can be introduced later without changing the Runtime contract.
 
+Graph, Workflow Memory, and artifact scope semantics are documented separately
+in [`memory.md`](memory.md). In particular, the current Vertex Memory Bank
+adapter does not yet encode the full Encois organization-unit hierarchy into
+provider memory scope; the API and Agent Gateway authorization boundary remains
+mandatory.
+
 ## Temporal client boundary
 
 The API Gateway owns the north-south Temporal client boundary, not the worker

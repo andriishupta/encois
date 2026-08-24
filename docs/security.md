@@ -220,6 +220,17 @@ even nested inside JSON.
 
 Spanner Graph, Cloud Storage, Memory Bank, and any vector or retrieval system follow the same tenant, scope, retention, and service-identity rules. A graph edge or memory retrieved without an authorization filter is a security defect even if the UI later hides it.
 
+Current implementation note: the API authorizes Encois organization-unit scope
+before graph and memory requests. Graph facts carry visibility scope, while the
+current Vertex Memory Bank adapter uses exact organization/agent and optional
+project/user provider scope and does not yet encode the full unit hierarchy.
+This is a documented capability gap, not permission to widen access. Until the
+provider mapping is extended, unit-level Memory Bank isolation must not be
+claimed as complete; workflow-result output still requires independent scope,
+classification, and redaction checks. The local memory and artifact adapters
+are process-local test boundaries and are not security evidence for hosted
+providers.
+
 ## 6. Secrets and credentials
 
 Store API keys, OAuth client secrets, refresh tokens, signing keys, service credentials, and encryption material in Secret Manager or an equivalent managed credential system.

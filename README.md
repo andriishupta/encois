@@ -46,6 +46,7 @@ Architecture references:
 - [`docs/contracts.md#organization-onboarding-and-readiness`](docs/contracts.md#organization-onboarding-and-readiness) — onboarding status and API error contract.
 - [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint and MCP/ADK/Temporal communication model.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
+- [`docs/memory.md`](docs/memory.md) — current Graph/Workflow Memory/artifact boundaries, scope semantics, and provider-neutral future adapters.
 - [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
 - [`docs/local.md`](docs/local.md) — complete local Compose, Auth Emulator, onboarding, and reset flow.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical meanings for Worker, Workflow, Activity, Agent, Integration, MCP, and related terms.
