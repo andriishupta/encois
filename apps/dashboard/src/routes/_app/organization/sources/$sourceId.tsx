@@ -8,6 +8,8 @@ import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { createSourceRevision, getKnowledgeSource, isApiError, startSourceIngestion } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { getAuthSession, hasPermission } from '@/lib/auth'
@@ -96,7 +98,7 @@ function SourceDetailPage() {
           <CardContent className="flex min-w-0 flex-col gap-3">
             {source.data.revisions.length ? source.data.revisions.map((revision) => <RevisionRow key={revision.id} revision={revision} onIngest={() => ingest.mutate(revision.id)} busy={ingest.isPending} />) : <EmptyPanel icon={FileText} title={<>No <ProductTerm term="revision" plural /></>} description={<>This source has not produced a <ProductTerm term="revision" /> yet.</>} />}
             {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-            {source.data.revisions.length > 1 ? <div className="mt-2 rounded-lg border bg-muted/20 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium" htmlFor="compare-source-revision">Compare latest with<select id="compare-source-revision" value={comparisonRevision?.id ?? ''} onChange={(event) => setCompareRevisionId(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="">Select a revision</option>{source.data.revisions.filter((revision) => revision.id !== latestRevision?.id).map((revision) => <option key={revision.id} value={revision.id}>{revision.revision} · {revision.status}</option>)}</select></label><span className="text-xs text-muted-foreground">History is immutable; compare shows stored provenance metadata.</span></div>{comparisonRevision && latestRevision ? <RevisionComparison current={latestRevision} previous={comparisonRevision} /> : null}</div> : null}
+            {source.data.revisions.length > 1 ? <div className="mt-2 rounded-lg border bg-muted/20 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium" htmlFor="compare-source-revision">Compare latest with<Select id="compare-source-revision" value={comparisonRevision?.id ?? ''} onChange={(event) => setCompareRevisionId(event.target.value)} options={[{ value: '', label: 'Select a revision' }, ...source.data.revisions.filter((revision) => revision.id !== latestRevision?.id).map((revision) => ({ value: revision.id, label: `${revision.revision} · ${revision.status}` }))]} /></label><span className="text-xs text-muted-foreground">History is immutable; compare shows stored provenance metadata.</span></div>{comparisonRevision && latestRevision ? <RevisionComparison current={latestRevision} previous={comparisonRevision} /> : null}</div> : null}
           </CardContent>
         </Card>
         <Card className="min-w-0">

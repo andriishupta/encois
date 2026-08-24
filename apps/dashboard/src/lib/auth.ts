@@ -42,9 +42,6 @@ type DashboardEnv = {
   VITE_FIREBASE_APP_ID?: string
   VITE_FIREBASE_AUTH_EMULATOR_HOST?: string
   VITE_ENCOIS_PERMISSIONS?: string
-  /** Deprecated flags; converted to permissions for compatibility. */
-  VITE_ENCOIS_CAN_ONBOARD?: string
-  VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?: string
 }
 
 function environment(): DashboardEnv {
@@ -111,13 +108,6 @@ function storedPermissions(): PermissionKey[] {
   }
 }
 
-function legacyPermissions(value: { canOnboard?: unknown; canManageKnowledgeSources?: unknown }): PermissionKey[] {
-  const permissions: PermissionKey[] = []
-  if (value.canOnboard === true) permissions.push(Permission.OnboardingManage)
-  if (value.canManageKnowledgeSources === true) permissions.push(Permission.KnowledgeManage)
-  return permissions
-}
-
 /** Wait until Firebase has restored the browser session before routing. */
 export async function initializeBrowserAuth(): Promise<void> {
   await Promise.all([persistenceReady, authStateReady])
@@ -137,7 +127,7 @@ export function getAuthSession(): AuthSession | null {
         ...(typeof value.organizationId === 'string' && value.organizationId.trim().length > 0
           ? { organizationId: value.organizationId }
           : {}),
-        permissions: permissions.length > 0 ? permissions : legacyPermissions(value),
+        permissions,
       }
     }
   } catch {
@@ -267,12 +257,7 @@ export function getDevelopmentAuthSession(): AuthSession | null {
   if (env.MODE !== 'development' || !accessToken) return null
 
   const configuredPermissions = (env.VITE_ENCOIS_PERMISSIONS ?? '').split(',').map((value) => value.trim()).filter(isPermission)
-  const permissions = configuredPermissions.length > 0
-    ? configuredPermissions
-    : legacyPermissions({
-        canOnboard: env.VITE_ENCOIS_CAN_ONBOARD?.trim().toLowerCase() === 'true',
-        canManageKnowledgeSources: env.VITE_ENCOIS_CAN_MANAGE_KNOWLEDGE_SOURCES?.trim().toLowerCase() === 'true',
-      })
+  const permissions = configuredPermissions
 
   return {
     accessToken,

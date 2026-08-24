@@ -193,7 +193,7 @@ function Breadcrumbs({ pathname, rootLabel, productName, currentScope }: { pathn
   return <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap text-sm"><Link to="/" className="shrink-0 text-muted-foreground transition-colors hover:text-foreground">{scopeLabel}</Link>{items.map((item) => <span key={item.label} className="flex shrink-0 items-center gap-1.5"><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />{item.to ? <Link to={item.to} className="text-muted-foreground transition-colors hover:text-foreground">{item.label}</Link> : <span className="font-medium">{item.label}</span>}</span>)}</nav>
 }
 
-type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/plans' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/activity' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/documentation' | '/profile'
+type BreadcrumbRoute = '/' | '/workflows' | '/workflows/runs' | '/workflows/templates' | '/workflows/blueprints' | '/workflows/plans' | '/workflows/memory' | '/organization' | '/organization/memory' | '/organization/sources' | '/organization/units/new' | '/organization/integrations' | '/organization/investigations' | '/organization/permissions' | '/organization/access' | '/activity' | '/settings' | '/settings/workspace' | '/settings/notifications' | '/settings/documentation' | '/profile'
 
 function getBreadcrumbItems(pathname: string, productName: string): { label: string; to?: BreadcrumbRoute }[] {
   if (pathname === '/') return [{ label: 'Dashboard' }]
@@ -209,6 +209,7 @@ function getBreadcrumbItems(pathname: string, productName: string): { label: str
   if (pathname === '/activity') return [{ label: 'Activity' }]
   if (pathname === '/organization/memory') return [{ label: 'Organization', to: '/organization' }, { label: 'Memory' }]
   if (pathname === '/organization/sources') return [{ label: 'Organization', to: '/organization' }, { label: 'Sources' }]
+  if (pathname === '/organization/units/new') return [{ label: 'Organization', to: '/organization' }, { label: 'Add organization unit' }]
   if (pathname === '/organization/sources/new') return [{ label: 'Organization', to: '/organization' }, { label: 'Sources', to: '/organization/sources' }, { label: 'Add source' }]
   if (pathname.startsWith('/organization/sources/')) return [{ label: 'Organization', to: '/organization' }, { label: 'Sources', to: '/organization/sources' }, { label: 'Source details' }]
   if (pathname === '/organization/integrations') return [{ label: 'Organization', to: '/organization' }, { label: 'Integrations' }]

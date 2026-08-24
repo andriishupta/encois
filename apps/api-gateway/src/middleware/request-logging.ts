@@ -1,7 +1,10 @@
 import type { MiddlewareHandler } from "hono";
 import type { GatewayEnv } from "./aos.js";
 
-export const requestLoggingMiddleware: MiddlewareHandler<GatewayEnv> = async (context, next) => {
+export const requestLoggingMiddleware: MiddlewareHandler<GatewayEnv> = async (
+  context,
+  next,
+) => {
   const startedAt = Date.now();
   await next();
 

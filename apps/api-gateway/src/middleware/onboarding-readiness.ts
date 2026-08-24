@@ -1,5 +1,5 @@
-import type { MiddlewareHandler } from "hono";
 import { OrganizationOnboardingStatus } from "@encois/contracts";
+import type { MiddlewareHandler } from "hono";
 import type { GatewayEnv } from "./aos.js";
 
 export type OnboardingReadiness = {
@@ -18,12 +18,24 @@ function routePath(path: string): string {
 function isOnboardingRoute(method: string, path: string): boolean {
   if (method === "GET" && path === "/organization") return true;
   if (method === "PATCH" && path === "/organization/onboarding") return true;
-  if (method === "POST" && path === "/organization/onboarding/start") return true;
+  if (method === "POST" && path === "/organization/onboarding/start")
+    return true;
   if (method === "GET" && path === "/sources") return true;
   if (method === "POST" && path === "/sources/uploads") return true;
-  if (method === "POST" && /^\/sources\/[^/]+\/revisions\/[^/]+\/ingest$/u.test(path)) return true;
-  if (method === "GET" && (path === "/workflows/templates" || path === "/workflows/blueprints")) return true;
-  return path.startsWith("/internal/coordinator/") || path.startsWith("/internal/integrations/");
+  if (
+    method === "POST" &&
+    /^\/sources\/[^/]+\/revisions\/[^/]+\/ingest$/u.test(path)
+  )
+    return true;
+  if (
+    method === "GET" &&
+    (path === "/workflows/templates" || path === "/workflows/blueprints")
+  )
+    return true;
+  return (
+    path.startsWith("/internal/coordinator/") ||
+    path.startsWith("/internal/integrations/")
+  );
 }
 
 function requiredMessage(readiness: OnboardingReadiness): string {
@@ -59,7 +71,8 @@ export function onboardingReadinessMiddleware(
         {
           error: {
             code: "ORGANIZATION_ONBOARDING_NOT_FOUND",
-            message: "Organization onboarding state is missing. Apply the current control-plane migration or repair the organization record.",
+            message:
+              "Organization onboarding state is missing. Apply the current control-plane migration or repair the organization record.",
             requestId: context.get("requestId"),
             traceId: context.get("traceId"),
           },

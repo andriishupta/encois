@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/page-header'
 import { OrganizationUnitSelect } from '@/components/organization-unit-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
 import {
   formatUnitPath,
   getEffectiveUnitIds,
@@ -201,7 +202,7 @@ function PermissionRow({ permission, units, canManage, canAssignAdministrator, b
     <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><LockKeyhole className="size-4 text-muted-foreground" aria-hidden="true" /></span>
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{unit.name}</p><p className="truncate text-xs text-muted-foreground">{formatUnitPath(units, unit.id)}</p></div>
-      <select value={permission.access} disabled={busy || !canManage} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{accessLevels.map((level) => <option key={level} value={level} disabled={level === 'admin' && !canAssignAdministrator}>{humanizeAccessLevel(level)}{level === 'admin' && !canAssignAdministrator ? ' (administrator only)' : ''}</option>)}</select>
+      <Select value={permission.access} disabled={busy || !canManage} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} aria-label={`${unit.name} access level`} className="h-8 w-auto px-2 text-xs" options={accessLevels.map((level) => ({ value: level, label: `${humanizeAccessLevel(level)}${level === 'admin' && !canAssignAdministrator ? ' (administrator only)' : ''}`, disabled: level === 'admin' && !canAssignAdministrator }))} />
       <span className="text-xs text-muted-foreground">{canManage ? 'Includes descendants' : 'Read-only scope'}</span>
       {canManage && (removalPending ? <span className="flex shrink-0 items-center gap-2"><span className="text-xs text-destructive">Remove this scope?</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelRemove}>Cancel</Button><Button type="button" size="sm" variant="destructive" disabled={busy} onClick={onRemove}>Confirm</Button></span> : <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`Remove ${unit.name} permission`} onClick={onRemove}><X className="size-4" /></Button>)}
     </div>
@@ -213,7 +214,7 @@ function AddPermissionForm({ units, accessLevels: availableAccessLevels, unitId,
     <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <OrganizationUnitSelect id="permission-unit" label="Organization unit" value={unitId} units={units} isDisabled={(unit) => !unit.canManage} onChange={onUnitChange} required />
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-access">Access level<select id="permission-access" value={availableAccessLevels.includes(access) ? access : availableAccessLevels[0]} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{availableAccessLevels.map((level) => <option key={level} value={level}>{humanizeAccessLevel(level)}</option>)}</select></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="permission-access">Access level<Select id="permission-access" value={availableAccessLevels.includes(access) ? access : availableAccessLevels[0]} onChange={(event) => onAccessChange(event.target.value as AccessLevel)} options={availableAccessLevels.map((level) => ({ value: level, label: humanizeAccessLevel(level) }))} /></label>
       </div>
       <p className="text-xs text-muted-foreground">This direct scope includes descendants below the selected unit.</p>
       <div className="flex justify-end gap-2"><Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>Cancel</Button><Button type="button" disabled={busy} onClick={onSubmit}>{busy ? 'Saving…' : 'Add permission'}</Button></div>

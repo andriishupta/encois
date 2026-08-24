@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { WorkflowExecutionStatus, type WorkflowExecutionProjection } from '@encois/contracts'
 import { Activity, ArrowUpRight, CircleDashed, Clock3, GitBranch, RefreshCw } from 'lucide-react'
@@ -7,27 +7,31 @@ import { PageHeader } from '@/components/page-header'
 import { EmptyPanel } from '@/components/empty-panel'
 import { ProductTerm } from '@/components/product-term'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { listWorkflows } from '@/lib/api'
+import { ListCollection, ListFilter, ListMeta, ListPagination, ListSearch, ListToolbar } from '@/components/list-controls'
+import { listWorkflowsPage } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate, shortIdentifier, workflowLabel, workflowStatusLabel } from '@/lib/formatters'
 import { WorkflowStatusIndicator } from '@/components/workflow-status'
 
 export function WorkflowRunList() {
-  const workflows = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows })
-  const hasRuns = Boolean(workflows.data?.length)
   const [status, setStatus] = useState<WorkflowExecutionStatus | 'all'>('all')
-  const filteredWorkflows = (workflows.data ?? []).filter((workflow) => status === 'all' || workflow.status === status)
+  const [query, setQuery] = useState('')
+  const workflows = useInfiniteQuery({
+    queryKey: ['workflow-run-list', ...queryKeys.workflows(), query, status],
+    queryFn: ({ pageParam }) => listWorkflowsPage({ query, status, limit: 10, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.pagination.hasMore ? lastPage.pagination.offset + lastPage.pagination.limit : undefined,
+  })
+  const visibleWorkflows = workflows.data?.pages.flatMap((page) => page.items) ?? []
 
   return <div className="flex flex-col gap-8">
     <PageHeader title={<ProductTerm term="run" plural />} description="Monitor each workflow execution, its current state, and the evidence it produces." />
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">Run history</p><p className="mt-1 text-xs text-muted-foreground">Filter workflow executions by lifecycle state. Technical IDs stay secondary to the business status.</p></div><div className="flex items-center gap-3"><select value={status} onChange={(event) => setStatus(event.target.value as WorkflowExecutionStatus | 'all')} aria-label="Filter workflow runs by status" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All statuses</option>{Object.values(WorkflowExecutionStatus).map((value) => <option key={value} value={value}>{workflowStatusLabel(value)}</option>)}</select><span className="text-xs text-muted-foreground">{filteredWorkflows.length} visible</span></div></CardContent>
-    </Card>
+    <ListToolbar><ListSearch value={query} onChange={setQuery} placeholder="Search runs by workflow, status, or ID…" label="Search workflow runs" /><ListFilter value={status} onChange={setStatus} label="Filter workflow runs by status" options={[{ value: 'all', label: 'All statuses' }, ...Object.values(WorkflowExecutionStatus).map((value) => ({ value, label: workflowStatusLabel(value) }))]} /><ListMeta>{visibleWorkflows.length} visible runs</ListMeta></ListToolbar>
     {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflow runs…</p> : null}
     {workflows.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load workflow runs: {workflows.error.message}</p></CardContent></Card> : null}
-    {filteredWorkflows.length ? <div className="grid gap-4">{filteredWorkflows.map((workflow) => <WorkflowRunCard key={workflow.workflowId} workflow={workflow} />)}</div> : null}
-    {!workflows.isLoading && !workflows.isError && hasRuns && !filteredWorkflows.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={RefreshCw} title="No runs match" description="Choose another lifecycle status." /></CardContent></Card> : null}
-    {!workflows.isLoading && !workflows.isError && !hasRuns ? <Card><CardContent className="pt-6"><EmptyPanel icon={CircleDashed} title="No workflow runs yet" description="A workflow run will appear here when an authorized member starts one." /></CardContent></Card> : null}
+    {visibleWorkflows.length ? <ListCollection items={visibleWorkflows} view="list" getKey={(workflow) => workflow.workflowId} renderItem={(workflow) => <WorkflowRunCard workflow={workflow} />} /> : null}
+    {!workflows.isLoading && !workflows.isError && !visibleWorkflows.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={workflows.data ? RefreshCw : CircleDashed} title={workflows.data ? 'No runs match' : 'No workflow runs yet'} description={workflows.data ? 'Choose another search or lifecycle status.' : 'A workflow run will appear here when an authorized member starts one.'} /></CardContent></Card> : null}
+    {!workflows.isLoading && !workflows.isError && visibleWorkflows.length ? <ListPagination hasMore={Boolean(workflows.hasNextPage)} loading={workflows.isFetchingNextPage} onLoadMore={() => void workflows.fetchNextPage()} /> : null}
   </div>
 }
 

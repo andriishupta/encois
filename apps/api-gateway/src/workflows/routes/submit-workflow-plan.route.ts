@@ -12,7 +12,12 @@ export function submitWorkflowPlanRoute(): Handler<GatewayEnv> {
     const plan = parseWorkflowPlan(await context.req.json().catch(() => null));
     if (!plan) {
       return context.json(
-        { error: { code: "INVALID_REQUEST", message: "A valid workflow-change-plan.v1 is required." } },
+        {
+          error: {
+            code: "INVALID_REQUEST",
+            message: "A valid workflow-change-plan.v1 is required.",
+          },
+        },
         400,
       );
     }
@@ -22,7 +27,10 @@ export function submitWorkflowPlanRoute(): Handler<GatewayEnv> {
       return context.json({ data }, workflowResponseStatus(data.status));
     } catch (error) {
       if (isWorkflowPlanServiceError(error)) {
-        return context.json({ error: { code: error.code, message: error.message } }, workflowPlanErrorStatus(error.code, 422));
+        return context.json(
+          { error: { code: error.code, message: error.message } },
+          workflowPlanErrorStatus(error.code, 422),
+        );
       }
       throw error;
     }

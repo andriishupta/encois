@@ -40,13 +40,21 @@ export function createExecutionCapability(input: {
   now?: Date;
   ttlMs?: number;
 }): string {
-  if (!input.secret) throw new Error("execution capability secret is not configured");
-  if (!input.organizationId || !input.workflowId || !input.actorId || !input.policyVersion || input.scope.ids.length === 0) {
+  if (!input.secret)
+    throw new Error("execution capability secret is not configured");
+  if (
+    !input.organizationId ||
+    !input.workflowId ||
+    !input.actorId ||
+    !input.policyVersion ||
+    input.scope.ids.length === 0
+  ) {
     throw new Error("execution capability claims are incomplete");
   }
   const issuedAt = Math.floor((input.now ?? new Date()).getTime() / 1000);
   const ttlMs = input.ttlMs ?? DEFAULT_EXECUTION_CAPABILITY_TTL_MS;
-  if (!Number.isInteger(ttlMs) || ttlMs <= 0) throw new Error("execution capability TTL must be positive");
+  if (!Number.isInteger(ttlMs) || ttlMs <= 0)
+    throw new Error("execution capability TTL must be positive");
   const claims: CapabilityClaims = {
     v: EXECUTION_CAPABILITY_VERSION,
     aud: EXECUTION_CAPABILITY_AUDIENCE,
@@ -58,7 +66,9 @@ export function createExecutionCapability(input: {
     issuedAt,
     expiresAt: issuedAt + Math.ceil(ttlMs / 1000),
   };
-  const header = encode(JSON.stringify({ alg: "HS256", typ: EXECUTION_CAPABILITY_VERSION }));
+  const header = encode(
+    JSON.stringify({ alg: "HS256", typ: EXECUTION_CAPABILITY_VERSION }),
+  );
   const payload = encode(JSON.stringify(claims));
   const signingInput = `${header}.${payload}`;
   return `${signingInput}.${sign(signingInput, input.secret)}`;

@@ -1,14 +1,14 @@
-import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
-import {
+import type {
   ContractVersion,
+  CoordinationMode,
+  CoordinatorEvent,
+  ExecutionScope,
+  JsonObject,
+  KnowledgeSourceScope,
   TemporalWorkflowType,
-  type CoordinatorEvent,
-  type CoordinationMode,
-  type ExecutionScope,
-  type KnowledgeSourceScope,
-  type JsonObject,
-  type WorkflowBlueprint,
+  WorkflowBlueprint,
 } from "@encois/contracts";
+import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
 
 export type WorkflowRunStatus = PersistenceWorkflowRunStatus;
 
@@ -17,7 +17,10 @@ export type WorkflowStartCommand = {
   workflowId: string;
   taskQueue: string;
   input: {
-    contractVersion: typeof ContractVersion.WorkflowBlueprint | typeof ContractVersion.SourceIngestion | typeof ContractVersion.Coordinator;
+    contractVersion:
+      | typeof ContractVersion.WorkflowBlueprint
+      | typeof ContractVersion.SourceIngestion
+      | typeof ContractVersion.Coordinator;
     actorId: string;
     organizationId: string;
     requestId: string;
@@ -48,7 +51,13 @@ export type WorkflowStartCommand = {
     selectedWorkflowRefs?: readonly string[];
     scopeType?: "organization" | "project";
     state?: {
-      status: "ONBOARDING" | "BOOTSTRAPPING" | "READY" | "RECONCILING" | "WAITING" | "SUSPENDED";
+      status:
+        | "ONBOARDING"
+        | "BOOTSTRAPPING"
+        | "READY"
+        | "RECONCILING"
+        | "WAITING"
+        | "SUSPENDED";
       version: number;
       onboardingComplete: boolean;
       connectedIntegrationIds?: readonly string[];
@@ -63,8 +72,8 @@ export type WorkflowStartCommand = {
 };
 
 export type {
-  WorkflowExecutionProjection,
   WorkflowEventProjection,
+  WorkflowExecutionProjection,
   WorkflowRecentActivityProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
@@ -78,7 +87,10 @@ export type WorkflowIdentity = {
 };
 
 function safePart(value: string, fallback: string): string {
-  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-");
   return (normalized || fallback).slice(0, 96);
 }
 
@@ -100,7 +112,10 @@ export function buildWorkflowId(identity: WorkflowIdentity): string {
 }
 
 /** Stable Temporal id for the long-lived organization/project Coordinator. */
-export function buildCoordinatorWorkflowId(organizationId: string, coordinatorId: string): string {
+export function buildCoordinatorWorkflowId(
+  organizationId: string,
+  coordinatorId: string,
+): string {
   return buildWorkflowId({
     organizationId,
     organizationUnitId: organizationId,

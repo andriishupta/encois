@@ -1,10 +1,19 @@
-import { ContractVersion, Permission, type GraphInspectionProjection, type GraphInspectionQueryRequest, type GraphQueryRequest } from "@encois/contracts";
+import {
+  ContractVersion,
+  type GraphInspectionProjection,
+  type GraphInspectionQueryRequest,
+  type GraphQueryRequest,
+  Permission,
+} from "@encois/contracts";
 import { withOrganizationContext } from "@encois/persistence";
+import { hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
 import type { AosPrincipal } from "../middleware/aos.js";
-import { hasPermission } from "../auth/authorization.js";
 import { createExecutionCapability } from "../security/execution-capability.js";
-import { GraphGatewayClientError, type GraphGatewayClient } from "./graph-client.js";
+import {
+  type GraphGatewayClient,
+  GraphGatewayClientError,
+} from "./graph-client.js";
 
 export type GraphServiceOptions = {
   client?: GraphGatewayClient;
@@ -23,10 +32,26 @@ export class GraphServiceError extends Error {
   }
 }
 
-function resolvedScope(principal: AosPrincipal, requested: GraphInspectionQueryRequest["scope"]): { ids: string[] } {
-  const ids = [...new Set(requested?.ids ?? principal.scope)].filter(Boolean).sort();
-  if (ids.length === 0) throw new GraphServiceError("INVALID_SCOPE", "At least one organization-unit scope is required.");
-  if (!principal.scope.includes("*") && ids.some((id) => !principal.scope.includes(id))) throw new GraphServiceError("SCOPE_DENIED", "The requested graph scope exceeds the caller's organization-unit scope.");
+function resolvedScope(
+  principal: AosPrincipal,
+  requested: GraphInspectionQueryRequest["scope"],
+): { ids: string[] } {
+  const ids = [...new Set(requested?.ids ?? principal.scope)]
+    .filter(Boolean)
+    .sort();
+  if (ids.length === 0)
+    throw new GraphServiceError(
+      "INVALID_SCOPE",
+      "At least one organization-unit scope is required.",
+    );
+  if (
+    !principal.scope.includes("*") &&
+    ids.some((id) => !principal.scope.includes(id))
+  )
+    throw new GraphServiceError(
+      "SCOPE_DENIED",
+      "The requested graph scope exceeds the caller's organization-unit scope.",
+    );
   return { ids };
 }
 
@@ -37,15 +62,33 @@ export async function queryGraphForPrincipal(
   traceId: string,
   options: GraphServiceOptions,
 ): Promise<GraphInspectionProjection> {
-  if (!database) throw new GraphServiceError("PERSISTENCE_UNAVAILABLE", "Database access is not configured.");
-  if (!options.client) throw new GraphServiceError("GRAPH_UNAVAILABLE", "Graph inspection is not configured for this environment.");
-  if (!options.capabilitySecret) throw new GraphServiceError("CAPABILITY_NOT_CONFIGURED", "Graph inspection capability signing is not configured.");
+  if (!database)
+    throw new GraphServiceError(
+      "PERSISTENCE_UNAVAILABLE",
+      "Database access is not configured.",
+    );
+  if (!options.client)
+    throw new GraphServiceError(
+      "GRAPH_UNAVAILABLE",
+      "Graph inspection is not configured for this environment.",
+    );
+  if (!options.capabilitySecret)
+    throw new GraphServiceError(
+      "CAPABILITY_NOT_CONFIGURED",
+      "Graph inspection capability signing is not configured.",
+    );
 
   const scope = resolvedScope(principal, input.scope);
-  const allowed = await withOrganizationContext(database, principal.organizationId, (db) =>
-    hasPermission(db, principal, Permission.ContextRead),
+  const allowed = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    (db) => hasPermission(db, principal, Permission.ContextRead),
   );
-  if (!allowed) throw new GraphServiceError("FORBIDDEN", "Context graph inspection permission is required.");
+  if (!allowed)
+    throw new GraphServiceError(
+      "FORBIDDEN",
+      "Context graph inspection permission is required.",
+    );
 
   const workflowId = `workflow:${principal.organizationId}:dashboard-graph:${requestId}`;
   const request: GraphQueryRequest = {
@@ -83,7 +126,8 @@ export async function queryGraphForPrincipal(
     };
   } catch (error) {
     if (error instanceof GraphGatewayClientError) {
-      if (error.code === "GRAPH_GATEWAY_TIMEOUT") throw new GraphServiceError("GRAPH_TIMEOUT", error.message);
+      if (error.code === "GRAPH_GATEWAY_TIMEOUT")
+        throw new GraphServiceError("GRAPH_TIMEOUT", error.message);
       throw new GraphServiceError("GRAPH_GATEWAY_ERROR", error.message);
     }
     throw error;

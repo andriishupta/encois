@@ -1,6 +1,10 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { validateWebhookHeaders, verifyWebhookSignature, webhookRevisionId } from "./webhook.service.js";
+import {
+  validateWebhookHeaders,
+  verifyWebhookSignature,
+  webhookRevisionId,
+} from "./webhook.service.js";
 
 describe("webhook boundary", () => {
   it("verifies the raw payload signature and rejects malformed signatures", () => {
@@ -13,13 +17,23 @@ describe("webhook boundary", () => {
   });
 
   it("requires bounded provider event and signature headers", () => {
-    expect(() => validateWebhookHeaders(undefined, undefined)).toThrow("Webhook event headers are invalid.");
-    expect(() => validateWebhookHeaders("event-1", "sha256=not-a-digest")).toThrow("Webhook signature headers are invalid.");
-    expect(validateWebhookHeaders("event-1", `sha256=${"a".repeat(64)}`)).toEqual({ eventId: "event-1", signature: `sha256=${"a".repeat(64)}` });
+    expect(() => validateWebhookHeaders(undefined, undefined)).toThrow(
+      "Webhook event headers are invalid.",
+    );
+    expect(() =>
+      validateWebhookHeaders("event-1", "sha256=not-a-digest"),
+    ).toThrow("Webhook signature headers are invalid.");
+    expect(
+      validateWebhookHeaders("event-1", `sha256=${"a".repeat(64)}`),
+    ).toEqual({ eventId: "event-1", signature: `sha256=${"a".repeat(64)}` });
   });
 
   it("derives a stable, bounded revision from a provider event id", () => {
-    expect(webhookRevisionId("github-delivery-1")).toBe(webhookRevisionId("github-delivery-1"));
-    expect(webhookRevisionId("github-delivery-1")).toMatch(/^webhook-[a-f0-9]{64}$/u);
+    expect(webhookRevisionId("github-delivery-1")).toBe(
+      webhookRevisionId("github-delivery-1"),
+    );
+    expect(webhookRevisionId("github-delivery-1")).toMatch(
+      /^webhook-[a-f0-9]{64}$/u,
+    );
   });
 });

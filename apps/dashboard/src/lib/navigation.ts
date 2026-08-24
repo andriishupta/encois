@@ -19,7 +19,7 @@ export type NavigationTarget =
   | '/settings/documentation'
 
 const workflowRunIdPath = /^\/workflows\/[^/]+$/u
-const workflowNonRunPaths = new Set(['/workflows/new', '/workflows/templates', '/workflows/blueprints', '/workflows/memory'])
+const workflowNonRunPaths = new Set(['/workflows/new', '/workflows/templates', '/workflows/blueprints', '/workflows/plans', '/workflows/memory'])
 
 export function isNavigationItemActive(pathname: string, target: NavigationTarget): boolean {
   if (target === '/') return pathname === '/'
@@ -27,8 +27,8 @@ export function isNavigationItemActive(pathname: string, target: NavigationTarge
   if (target === '/workflows/runs') {
     return pathname === '/workflows/runs' || (workflowRunIdPath.test(pathname) && !workflowNonRunPaths.has(pathname))
   }
-  if (target === '/workflows/blueprints') return pathname === target || pathname.startsWith(`${target}/`)
-  if (target === '/workflows/memory' || target === '/organization/memory') return pathname === target
+  if (target === '/workflows/blueprints' || target === '/workflows/plans') return pathname === target || pathname.startsWith(`${target}/`)
+  if (target === '/workflows/memory' || target === '/organization/memory') return pathname === target || pathname.startsWith(`${target}/`)
   if (target === '/organization/sources' || target === '/organization/integrations') return pathname === target || pathname.startsWith(`${target}/`)
   return pathname === target
 }

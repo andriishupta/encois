@@ -1,14 +1,19 @@
-import { Hono } from "hono";
 import { AuthAccessStatus, type AuthStatusResponse } from "@encois/contracts";
+import { Hono } from "hono";
 import type { GatewayEnv } from "../middleware/aos.js";
-import type { IdentityAccessResolver, IdentityPlatformVerifier } from "./identity-platform.js";
+import type {
+  IdentityAccessResolver,
+  IdentityPlatformVerifier,
+} from "./identity-platform.js";
 
 export type AuthRouterOptions = {
   resolveAccess?: IdentityAccessResolver;
   verifyIdentity?: IdentityPlatformVerifier;
 };
 
-export function createAuthRouter(options: AuthRouterOptions = {}): Hono<GatewayEnv> {
+export function createAuthRouter(
+  options: AuthRouterOptions = {},
+): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
 
   router.get("/me", async (context) => {
@@ -32,8 +37,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}): Hono<GatewayE
       return context.json(
         {
           error: {
-            code: identityResult.status === "unconfigured" ? "AUTHENTICATION_UNAVAILABLE" : "UNAUTHENTICATED",
-            message: identityResult.status === "unconfigured" ? "Authentication is not configured." : "Authentication is required.",
+            code:
+              identityResult.status === "unconfigured"
+                ? "AUTHENTICATION_UNAVAILABLE"
+                : "UNAUTHENTICATED",
+            message:
+              identityResult.status === "unconfigured"
+                ? "Authentication is not configured."
+                : "Authentication is required.",
             requestId: context.get("requestId"),
             traceId: context.get("traceId"),
           },
@@ -42,7 +53,10 @@ export function createAuthRouter(options: AuthRouterOptions = {}): Hono<GatewayE
       );
     }
 
-    const access = await options.resolveAccess(identityResult.identity, context);
+    const access = await options.resolveAccess(
+      identityResult.identity,
+      context,
+    );
     if (access.status === "unavailable") {
       return context.json(
         {

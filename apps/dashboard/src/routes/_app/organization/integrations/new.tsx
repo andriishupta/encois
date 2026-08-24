@@ -6,6 +6,8 @@ import { Permission, type IntegrationCreateRequest } from '@encois/contracts'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { createIntegration } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
@@ -71,8 +73,8 @@ function NewIntegrationPage() {
         <CardContent>{organizationAdmin ? <>
           <form className="flex flex-col gap-6" onSubmit={submit}>
             <div className="grid gap-5 sm:grid-cols-2">
-              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-name">Display name<input id="integration-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="GitHub Engineering" required minLength={2} maxLength={160} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></label>
-              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-provider">Provider<select id="integration-provider" value={provider} onChange={(event) => changeProvider(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="github">GitHub</option><option value="gitlab">GitLab</option><option value="jira">Jira</option><option value="linear">Linear</option><option value="slack">Slack</option><option value="google-drive">Google Drive</option></select></label>
+              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-name">Display name<Input id="integration-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="GitHub Engineering" required minLength={2} maxLength={160} /></label>
+              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="integration-provider">Provider<Select id="integration-provider" value={provider} onChange={(event) => changeProvider(event.target.value)} options={[{ value: 'github', label: 'GitHub' }, { value: 'gitlab', label: 'GitLab' }, { value: 'jira', label: 'Jira' }, { value: 'linear', label: 'Linear' }, { value: 'slack', label: 'Slack' }, { value: 'google-drive', label: 'Google Drive' }]} /></label>
             </div>
             <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
               <legend className="px-1 text-sm font-medium">Read capabilities</legend>

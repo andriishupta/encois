@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { GitBranch, Search } from 'lucide-react'
 import { useState } from 'react'
 import type { WorkflowBlueprintProjection, WorkflowBlueprintStatus } from '@encois/contracts'
@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
-import { listWorkflowBlueprints } from '@/lib/api'
+import { listWorkflowBlueprintsPage } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate } from '@/lib/formatters'
+import { ListCollection, ListFilter, ListMeta, ListPagination, ListSearch, ListToolbar, ListViewToggle, type ListViewMode } from '@/components/list-controls'
 
 export const Route = createFileRoute('/_app/workflows/blueprints')({
   beforeLoad: () => {
@@ -25,28 +26,29 @@ function WorkflowBlueprintsPage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   if (pathname !== '/workflows/blueprints') return <Outlet />
 
-  const blueprints = useQuery({ queryKey: queryKeys.workflowBlueprints(), queryFn: listWorkflowBlueprints, staleTime: 30_000 })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<WorkflowBlueprintStatus | 'all'>('all')
-  const filteredBlueprints = (blueprints.data ?? []).filter((blueprint) => {
-    const normalizedQuery = query.trim().toLowerCase()
-    return (status === 'all' || blueprint.status === status) && (!normalizedQuery || [blueprint.name, blueprint.purpose, blueprint.blueprintId].some((value) => value.toLowerCase().includes(normalizedQuery)))
+  const [sort, setSort] = useState<'updated-desc' | 'updated-asc' | 'name-asc' | 'status'>('updated-desc')
+  const [view, setView] = useState<ListViewMode>('grid')
+  const blueprints = useInfiniteQuery({
+    queryKey: queryKeys.workflowBlueprints(query, status, sort),
+    queryFn: ({ pageParam }) => listWorkflowBlueprintsPage({ query, status, sort, limit: 10, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.pagination.hasMore ? lastPage.pagination.offset + lastPage.pagination.limit : undefined,
+    staleTime: 30_000,
   })
+  const visibleBlueprints = blueprints.data?.pages.flatMap((page) => page.items) ?? []
 
   return <div className="flex flex-col gap-8">
     <PageHeader title="Workflow Blueprints" description="Immutable, organization-scoped execution definitions. A Run is created from a Blueprint snapshot; changing one never rewrites an existing Run." />
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Blueprints by name or purpose…" aria-label="Search workflow Blueprints" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>
-        <select value={status} onChange={(event) => setStatus(event.target.value as WorkflowBlueprintStatus | 'all')} aria-label="Filter Blueprints by lifecycle status" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All statuses</option><option value="draft">Draft</option><option value="approved">Published / approved</option><option value="retired">Archived / retired</option></select>
-        <span className="text-xs text-muted-foreground">{filteredBlueprints.length} visible Blueprints</span>
-      </CardContent>
-    </Card>
+    <ListToolbar><ListSearch value={query} onChange={setQuery} placeholder="Search Blueprints by name or purpose…" label="Search workflow Blueprints" /><ListFilter value={status} onChange={setStatus} label="Filter Blueprints by lifecycle status" options={[{ value: 'all', label: 'All statuses' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Published / approved' }, { value: 'retired', label: 'Archived / retired' }]} /><ListFilter value={sort} onChange={(value) => setSort(value as typeof sort)} label="Sort Blueprints" options={[{ value: 'updated-desc', label: 'Recently updated' }, { value: 'updated-asc', label: 'Oldest updated' }, { value: 'name-asc', label: 'Name A–Z' }, { value: 'status', label: 'Status' }]} /><ListViewToggle value={view} onChange={setView} /></ListToolbar>
+    <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">{visibleBlueprints.length} visible Blueprints</p><ListMeta>API-sorted revisions</ListMeta></div>
     {blueprints.isLoading ? <p className="text-sm text-muted-foreground">Loading Blueprints…</p> : null}
     {blueprints.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load Blueprints: {blueprints.error.message}</p></CardContent></Card> : null}
-    {filteredBlueprints.length ? <div className="grid gap-4 md:grid-cols-2">{filteredBlueprints.map((blueprint) => <BlueprintCard key={`${blueprint.blueprintId}:${blueprint.version}`} blueprint={blueprint} />)}</div> : null}
-    {!blueprints.isLoading && !blueprints.isError && blueprints.data?.length && !filteredBlueprints.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Blueprints match" description="Change the search or lifecycle filter." /></CardContent></Card> : null}
-    {!blueprints.isLoading && !blueprints.isError && !blueprints.data?.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No Blueprints" description={<>Create one from a published <ProductTerm term="template" /> and submit it through the <ProductTerm term="approvalBoundary" />.</>} /></CardContent></Card> : null}
+    {visibleBlueprints.length ? <ListCollection items={visibleBlueprints} view={view} getKey={(blueprint) => `${blueprint.blueprintId}:${blueprint.version}`} renderItem={(blueprint) => <BlueprintCard blueprint={blueprint} />} /> : null}
+    {!blueprints.isLoading && !blueprints.isError && blueprints.data && !visibleBlueprints.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Blueprints match" description="Change the search or lifecycle filter." /></CardContent></Card> : null}
+    {!blueprints.isLoading && !blueprints.isError && !blueprints.data ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No Blueprints" description={<>Create one from a published <ProductTerm term="template" /> and submit it through the <ProductTerm term="approvalBoundary" />.</>} /></CardContent></Card> : null}
+    {!blueprints.isLoading && !blueprints.isError && visibleBlueprints.length ? <ListPagination hasMore={Boolean(blueprints.hasNextPage)} loading={blueprints.isFetchingNextPage} onLoadMore={() => void blueprints.fetchNextPage()} /> : null}
   </div>
 }
 

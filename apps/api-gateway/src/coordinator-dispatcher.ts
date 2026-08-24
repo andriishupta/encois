@@ -1,10 +1,15 @@
-import { createCoordinatorEventSink, dispatchCoordinatorOutbox } from "./workflows/services/coordinator-outbox.service.js";
 import { loadConfig } from "./config.js";
+import {
+  createCoordinatorEventSink,
+  dispatchCoordinatorOutbox,
+} from "./workflows/services/coordinator-outbox.service.js";
 import { createWorkflowClient } from "./workflows/temporal-client.js";
 
 const organizationId = process.env.COORDINATOR_DISPATCH_ORGANIZATION_ID?.trim();
 if (!organizationId) {
-  throw new Error("COORDINATOR_DISPATCH_ORGANIZATION_ID is required for the dispatcher job.");
+  throw new Error(
+    "COORDINATOR_DISPATCH_ORGANIZATION_ID is required for the dispatcher job.",
+  );
 }
 
 const config = loadConfig();

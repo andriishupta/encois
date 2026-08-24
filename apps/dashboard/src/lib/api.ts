@@ -54,7 +54,7 @@ import { clearAuthSession, getAuthSessionToken, setAuthOrganizationId } from '@/
 const environment = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {}
 const apiBaseUrl = (environment.VITE_API_BASE_URL ?? '/api/v1').replace(/\/$/, '')
 
-type ApiEnvelope<T> = { data: T; pagination?: { limit?: unknown; offset?: unknown; hasMore?: unknown } }
+type ApiEnvelope<T> = { data: T; pagination?: { limit?: unknown; offset?: unknown; total?: unknown; hasMore?: unknown } }
 type ApiErrorPayload = { error?: { code?: string; message?: string } }
 
 export type ListQueryInput = {
@@ -70,6 +70,7 @@ export type ListPage<T> = {
   pagination: {
     limit: number
     offset: number
+    total: number
     hasMore: boolean
   }
 }
@@ -499,8 +500,9 @@ function parseListPage<T>(value: unknown, guard: (item: unknown) => item is T, n
   const pagination = isJsonObject(value.pagination) ? value.pagination : {}
   const limit = typeof pagination.limit === 'number' ? pagination.limit : value.data.length
   const offset = typeof pagination.offset === 'number' ? pagination.offset : 0
+  const total = typeof pagination.total === 'number' ? pagination.total : value.data.length
   const hasMore = typeof pagination.hasMore === 'boolean' ? pagination.hasMore : value.data.length === limit
-  return { items: value.data, pagination: { limit, offset, hasMore } }
+  return { items: value.data, pagination: { limit, offset, total, hasMore } }
 }
 
 function isAcceptedResponse(value: unknown): value is { accepted: true } {
@@ -587,7 +589,7 @@ function requestList<T>(path: string, guard: (item: unknown) => item is T, name:
 }
 
 export function listWorkflows(input: ListQueryInput = {}): Promise<readonly WorkflowExecutionProjection[]> {
-  return request<unknown>(`/workflows${listQuery(input)}`).then((value) => parseList(value, isWorkflowProjection, 'workflow list'))
+  return request<unknown>(`/workflows${listQuery({ ...input, limit: input.limit ?? 100 })}`).then((value) => parseList(value, isWorkflowProjection, 'workflow list'))
 }
 
 export function listWorkflowsPage(input: ListQueryInput = {}): Promise<ListPage<WorkflowExecutionProjection>> {
@@ -595,7 +597,7 @@ export function listWorkflowsPage(input: ListQueryInput = {}): Promise<ListPage<
 }
 
 export function listWorkflowTemplates(input: ListQueryInput & { category?: string } = {}): Promise<readonly WorkflowTemplateProjection[]> {
-  return listWorkflowTemplatesPage(input).then((page) => page.items)
+  return listWorkflowTemplatesPage({ ...input, limit: input.limit ?? 50 }).then((page) => page.items)
 }
 
 export function listWorkflowTemplatesPage(input: ListQueryInput & { category?: string } = {}): Promise<ListPage<WorkflowTemplateProjection>> {
@@ -605,7 +607,7 @@ export function listWorkflowTemplatesPage(input: ListQueryInput & { category?: s
 }
 
 export function listWorkflowBlueprints(input: ListQueryInput = {}): Promise<readonly WorkflowBlueprintProjection[]> {
-  return listWorkflowBlueprintsPage(input).then((page) => page.items)
+  return listWorkflowBlueprintsPage({ ...input, limit: input.limit ?? 100 }).then((page) => page.items)
 }
 
 export function listWorkflowBlueprintsPage(input: ListQueryInput = {}): Promise<ListPage<WorkflowBlueprintProjection>> {
@@ -746,8 +748,13 @@ export async function updateWorkflow(workflowId: string, input: WorkflowUpdateRe
 }
 
 export function listIntegrations(options: { scopeUnitId?: string } = {}): Promise<readonly IntegrationProjection[]> {
-  const query = options.scopeUnitId ? `?scopeUnitId=${encodeURIComponent(options.scopeUnitId)}` : ''
-  return request<unknown>(`/integrations${query}`).then((value) => parseList(value, isIntegrationProjection, 'integration list'))
+  return listIntegrationsPage({ ...options, limit: 100 }).then((page) => page.items)
+}
+
+export function listIntegrationsPage(input: ListQueryInput & { scopeUnitId?: string } = {}): Promise<ListPage<IntegrationProjection>> {
+  const params = new URLSearchParams(listQuery(input).replace(/^\?/u, ''))
+  if (input.scopeUnitId) params.set('scopeUnitId', input.scopeUnitId)
+  return requestList(`/integrations${params.size ? `?${params.toString()}` : ''}`, isIntegrationProjection, 'integration list')
 }
 
 export async function createIntegration(input: IntegrationCreateRequest): Promise<IntegrationProjection> {
@@ -757,8 +764,13 @@ export async function createIntegration(input: IntegrationCreateRequest): Promis
 }
 
 export function listKnowledgeSources(options: { scopeUnitId?: string } = {}): Promise<readonly KnowledgeSource[]> {
-  const query = options.scopeUnitId ? `?scopeUnitId=${encodeURIComponent(options.scopeUnitId)}` : ''
-  return request<unknown>(`/sources${query}`).then((value) => parseList(value, isKnowledgeSource, 'Source list'))
+  return listKnowledgeSourcesPage({ ...options, limit: 100 }).then((page) => page.items)
+}
+
+export function listKnowledgeSourcesPage(input: ListQueryInput & { scopeUnitId?: string } = {}): Promise<ListPage<KnowledgeSource>> {
+  const params = new URLSearchParams(listQuery(input).replace(/^\?/u, ''))
+  if (input.scopeUnitId) params.set('scopeUnitId', input.scopeUnitId)
+  return requestList(`/sources${params.size ? `?${params.toString()}` : ''}`, isKnowledgeSource, 'Source list')
 }
 
 export async function createKnowledgeSource(input: KnowledgeSourceCreateRequest): Promise<KnowledgeSource> {

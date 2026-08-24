@@ -1,7 +1,16 @@
+import {
+  ContractVersion,
+  validateContract,
+  WorkflowUpdateName,
+  type WorkflowUpdateRequest,
+} from "@encois/contracts";
 import type { Handler } from "hono";
-import { ContractVersion, validateContract, WorkflowUpdateName, type WorkflowUpdateRequest } from "@encois/contracts";
 import type { GatewayEnv } from "../../middleware/aos.js";
-import { isWorkflowServiceError, updateWorkflow, type WorkflowServiceOptions } from "../services/workflow.service.js";
+import {
+  isWorkflowServiceError,
+  updateWorkflow,
+  type WorkflowServiceOptions,
+} from "../services/workflow.service.js";
 import { workflowCommandErrorStatus } from "../utils.js";
 
 function parseUpdate(value: unknown): WorkflowUpdateRequest | null {
@@ -19,18 +28,48 @@ function parseUpdate(value: unknown): WorkflowUpdateRequest | null {
   };
 }
 
-export function updateWorkflowRoute(options: WorkflowServiceOptions): Handler<GatewayEnv> {
+export function updateWorkflowRoute(
+  options: WorkflowServiceOptions,
+): Handler<GatewayEnv> {
   return async (context) => {
     const request = parseUpdate(await context.req.json().catch(() => null));
-    if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid workflow Update is required." } }, 400);
+    if (!request)
+      return context.json(
+        {
+          error: {
+            code: "INVALID_REQUEST",
+            message: "A valid workflow Update is required.",
+          },
+        },
+        400,
+      );
     const workflowId = context.req.param("workflowId");
-    if (!workflowId) return context.json({ error: { code: "INVALID_REQUEST", message: "Workflow id is required." } }, 400);
+    if (!workflowId)
+      return context.json(
+        {
+          error: {
+            code: "INVALID_REQUEST",
+            message: "Workflow id is required.",
+          },
+        },
+        400,
+      );
     try {
-      await updateWorkflow(context.get("principal"), workflowId, request, options);
-      return context.json({ data: { accepted: true, updateId: request.updateId } });
+      await updateWorkflow(
+        context.get("principal"),
+        workflowId,
+        request,
+        options,
+      );
+      return context.json({
+        data: { accepted: true, updateId: request.updateId },
+      });
     } catch (error) {
       if (isWorkflowServiceError(error)) {
-        return context.json({ error: { code: error.code, message: error.message } }, workflowCommandErrorStatus(error.code));
+        return context.json(
+          { error: { code: error.code, message: error.message } },
+          workflowCommandErrorStatus(error.code),
+        );
       }
       throw error;
     }

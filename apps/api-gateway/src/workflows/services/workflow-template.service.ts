@@ -1,12 +1,22 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
-  workflowTemplateVersions,
-  workflowTemplates,
-  withOrganizationContext,
   type WorkflowTemplate,
+  withOrganizationContext,
+  workflowTemplates,
+  workflowTemplateVersions,
 } from "@encois/persistence";
-import type { AosPrincipal } from "../../middleware/aos.js";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { database } from "../../database.js";
+import type { AosPrincipal } from "../../middleware/aos.js";
 import type { ListPage, ListQuery, ListSort } from "../list-query.js";
 
 export const WORKFLOW_TEMPLATE_MAX_LIMIT = 50;
@@ -31,9 +41,13 @@ export type WorkflowTemplateProjection = {
   template: WorkflowTemplate;
 };
 
-export type WorkflowTemplateServiceError = Error & { code: "PERSISTENCE_UNAVAILABLE" };
+export type WorkflowTemplateServiceError = Error & {
+  code: "PERSISTENCE_UNAVAILABLE";
+};
 
-export function isWorkflowTemplateServiceError(error: unknown): error is WorkflowTemplateServiceError {
+export function isWorkflowTemplateServiceError(
+  error: unknown,
+): error is WorkflowTemplateServiceError {
   return error instanceof Error && error.message === "PERSISTENCE_UNAVAILABLE";
 }
 
@@ -51,8 +65,13 @@ export function parseWorkflowTemplateQuery(input: WorkflowTemplateQuery): {
 
   return {
     terms,
-    ...(input.category?.trim() ? { category: input.category.trim().toLowerCase().slice(0, 64) } : {}),
-    limit: Math.min(Math.max(input.limit ?? WORKFLOW_TEMPLATE_MAX_LIMIT, 1), WORKFLOW_TEMPLATE_MAX_LIMIT),
+    ...(input.category?.trim()
+      ? { category: input.category.trim().toLowerCase().slice(0, 64) }
+      : {}),
+    limit: Math.min(
+      Math.max(input.limit ?? WORKFLOW_TEMPLATE_MAX_LIMIT, 1),
+      WORKFLOW_TEMPLATE_MAX_LIMIT,
+    ),
   };
 }
 
@@ -82,11 +101,13 @@ export async function listWorkflowTemplatesForPrincipal(
   principal: AosPrincipal,
   input: WorkflowTemplateQuery = {},
 ): Promise<readonly WorkflowTemplateProjection[]> {
-  return (await listWorkflowTemplatesPageForPrincipal(principal, {
-    ...input,
-    sort: "updated-desc",
-    offset: 0,
-  })).items;
+  return (
+    await listWorkflowTemplatesPageForPrincipal(principal, {
+      ...input,
+      sort: "updated-desc",
+      offset: 0,
+    })
+  ).items;
 }
 
 export async function listWorkflowTemplatesPageForPrincipal(
@@ -96,44 +117,58 @@ export async function listWorkflowTemplatesPageForPrincipal(
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
 
   const query = parseWorkflowTemplateQuery(input);
-  const status = input.status === "disabled" ? ["disabled"] as const : input.status === "active" ? ["active"] as const : ["active", "disabled"] as const;
+  const status =
+    input.status === "disabled"
+      ? (["disabled"] as const)
+      : input.status === "active"
+        ? (["active"] as const)
+        : (["active", "disabled"] as const);
   const conditions = [
     inArray(workflowTemplates.status, status),
     eq(workflowTemplateVersions.status, "published" as const),
     eq(workflowTemplateVersions.version, workflowTemplates.publishedVersion),
     or(
-      and(isNull(workflowTemplateVersions.organizationId), isNull(workflowTemplates.organizationId)),
-      eq(workflowTemplateVersions.organizationId, workflowTemplates.organizationId),
+      and(
+        isNull(workflowTemplateVersions.organizationId),
+        isNull(workflowTemplates.organizationId),
+      ),
+      eq(
+        workflowTemplateVersions.organizationId,
+        workflowTemplates.organizationId,
+      ),
     ),
     ...(query.category ? [eq(workflowTemplates.category, query.category)] : []),
   ];
   const search = searchCondition(query.terms);
   if (search) conditions.push(search);
 
-  const rows = await withOrganizationContext(database, principal.organizationId, async (db) =>
-    db
-      .select({
-        id: workflowTemplates.id,
-        key: workflowTemplates.key,
-        category: workflowTemplates.category,
-        title: workflowTemplates.title,
-        description: workflowTemplates.description,
-        keywords: workflowTemplates.keywords,
-        requiredCapabilities: workflowTemplates.requiredCapabilities,
-        status: workflowTemplates.status,
-        version: workflowTemplateVersions.version,
-        schemaVersion: workflowTemplateVersions.schemaVersion,
-        template: workflowTemplateVersions.template,
-      })
-      .from(workflowTemplates)
-      .innerJoin(
-        workflowTemplateVersions,
-        eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id),
-      )
-      .where(and(...conditions))
-      .orderBy(...templateOrder(input.sort))
-      .limit(query.limit)
-      .offset(input.offset),
+  const rows = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) =>
+      db
+        .select({
+          id: workflowTemplates.id,
+          key: workflowTemplates.key,
+          category: workflowTemplates.category,
+          title: workflowTemplates.title,
+          description: workflowTemplates.description,
+          keywords: workflowTemplates.keywords,
+          requiredCapabilities: workflowTemplates.requiredCapabilities,
+          status: workflowTemplates.status,
+          version: workflowTemplateVersions.version,
+          schemaVersion: workflowTemplateVersions.schemaVersion,
+          template: workflowTemplateVersions.template,
+        })
+        .from(workflowTemplates)
+        .innerJoin(
+          workflowTemplateVersions,
+          eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id),
+        )
+        .where(and(...conditions))
+        .orderBy(...templateOrder(input.sort))
+        .limit(query.limit)
+        .offset(input.offset),
   );
 
   const items = rows.flatMap((row) => {
@@ -145,14 +180,32 @@ export async function listWorkflowTemplatesPageForPrincipal(
     pagination: {
       limit: query.limit,
       offset: input.offset,
+      total: input.offset + items.length,
       hasMore: items.length === query.limit,
     },
   };
 }
 
 function templateOrder(sort: ListSort) {
-  if (sort === "name-asc") return [asc(workflowTemplates.title), asc(workflowTemplates.key)] as const;
-  if (sort === "updated-asc") return [asc(workflowTemplates.updatedAt), asc(workflowTemplates.key)] as const;
-  if (sort === "status") return [asc(sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`), desc(workflowTemplates.updatedAt)] as const;
-  return [asc(sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`), desc(workflowTemplates.updatedAt), desc(workflowTemplates.key)] as const;
+  if (sort === "name-asc")
+    return [asc(workflowTemplates.title), asc(workflowTemplates.key)] as const;
+  if (sort === "updated-asc")
+    return [
+      asc(workflowTemplates.updatedAt),
+      asc(workflowTemplates.key),
+    ] as const;
+  if (sort === "status")
+    return [
+      asc(
+        sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`,
+      ),
+      desc(workflowTemplates.updatedAt),
+    ] as const;
+  return [
+    asc(
+      sql<number>`CASE WHEN ${workflowTemplates.status} = 'active' THEN 0 ELSE 1 END`,
+    ),
+    desc(workflowTemplates.updatedAt),
+    desc(workflowTemplates.key),
+  ] as const;
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { validateContract, type WorkflowChangePlan } from "@encois/contracts";
+import { describe, expect, it } from "vitest";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { createPlanCoordinatorEvent } from "./workflow-plan.service.js";
 
@@ -28,7 +28,10 @@ const plan: WorkflowChangePlan = {
         enabled: true,
         steps: [{ id: "jira", kind: "tool", tool: "jira.project_tasks" }],
       },
-      start: { key: "release:checkout:2026-08-30", businessInput: { releaseKey: "2026-08-30" } },
+      start: {
+        key: "release:checkout:2026-08-30",
+        businessInput: { releaseKey: "2026-08-30" },
+      },
       reason: "Create the approved release workflow.",
       requiresApproval: true,
     },
@@ -37,14 +40,22 @@ const plan: WorkflowChangePlan = {
 
 describe("workflow plan coordinator events", () => {
   it("does not request execution at approval time", () => {
-    const event = createPlanCoordinatorEvent(principal, planRecord(plan), "workflow-plan-approved");
+    const event = createPlanCoordinatorEvent(
+      principal,
+      planRecord(plan),
+      "workflow-plan-approved",
+    );
 
     expect(event.workflowStarts).toBeUndefined();
     expect(validateContract("coordinatorEvent", event).valid).toBe(true);
   });
 
   it("turns only explicit start intents into approved snapshot starts", () => {
-    const event = createPlanCoordinatorEvent(principal, planRecord(plan), "workflow-plan-applied");
+    const event = createPlanCoordinatorEvent(
+      principal,
+      planRecord(plan),
+      "workflow-plan-applied",
+    );
 
     expect(event.workflowStarts).toEqual([
       {
@@ -70,7 +81,11 @@ describe("workflow plan coordinator events", () => {
         },
       ],
     };
-    const event = createPlanCoordinatorEvent(principal, planRecord(registryOnlyPlan), "workflow-plan-applied");
+    const event = createPlanCoordinatorEvent(
+      principal,
+      planRecord(registryOnlyPlan),
+      "workflow-plan-applied",
+    );
 
     expect(event.workflowStarts).toBeUndefined();
     expect(validateContract("coordinatorEvent", event).valid).toBe(true);
@@ -92,7 +107,11 @@ describe("workflow plan coordinator events", () => {
         },
       ],
     };
-    const event = createPlanCoordinatorEvent(principal, planRecord(cancellationPlan), "workflow-plan-applied");
+    const event = createPlanCoordinatorEvent(
+      principal,
+      planRecord(cancellationPlan),
+      "workflow-plan-applied",
+    );
 
     expect(event.workflowStarts).toBeUndefined();
     expect(validateContract("coordinatorEvent", event).valid).toBe(true);
@@ -123,8 +142,14 @@ describe("workflow plan coordinator events", () => {
       ],
     };
 
-    expect(validateContract("workflowChangePlan", lifecyclePlan).valid).toBe(true);
-    const event = createPlanCoordinatorEvent(principal, planRecord(lifecyclePlan), "workflow-plan-applied");
+    expect(validateContract("workflowChangePlan", lifecyclePlan).valid).toBe(
+      true,
+    );
+    const event = createPlanCoordinatorEvent(
+      principal,
+      planRecord(lifecyclePlan),
+      "workflow-plan-applied",
+    );
     expect(event.workflowStarts).toBeUndefined();
   });
 });

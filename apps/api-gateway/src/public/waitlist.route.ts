@@ -1,9 +1,11 @@
-import type { Handler } from "hono";
-import type { Context } from "hono";
-import { validateWaitlistRequest, type WaitlistRequest } from "@encois/contracts";
+import {
+  validateWaitlistRequest,
+  type WaitlistRequest,
+} from "@encois/contracts";
 import { waitlistRequests } from "@encois/persistence";
-import type { GatewayEnv } from "../middleware/aos.js";
+import type { Context, Handler } from "hono";
 import { database } from "../database.js";
+import type { GatewayEnv } from "../middleware/aos.js";
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1_000;
 const RATE_LIMIT_MAX = 5;
@@ -12,7 +14,8 @@ const RATE_LIMIT_MAX = 5;
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 function clientKey(context: Context<GatewayEnv>, email: string): string {
-  const forwardedFor = context.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const forwardedFor =
+    context.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   return `${forwardedFor}:${email}`;
 }
 
@@ -88,7 +91,9 @@ export const submitWaitlistRoute: Handler<GatewayEnv> = async (context) => {
       emailNormalized: value.email,
       companyName: value.companyName,
       ...(value.companyWebsite ? { companyWebsite: value.companyWebsite } : {}),
-      ...(value.companyLinkedinUrl ? { companyLinkedinUrl: value.companyLinkedinUrl } : {}),
+      ...(value.companyLinkedinUrl
+        ? { companyLinkedinUrl: value.companyLinkedinUrl }
+        : {}),
       ...(value.displayName ? { displayName: value.displayName } : {}),
       ...(value.message ? { message: value.message } : {}),
     })

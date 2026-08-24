@@ -1,17 +1,22 @@
-import { and, eq } from "drizzle-orm";
-import { isPermission, permissionIncludes, type PermissionKey } from "@encois/contracts";
+import {
+  isPermission,
+  type PermissionKey,
+  permissionIncludes,
+} from "@encois/contracts";
 import {
   organizationMemberships,
-  roles,
-  rolePermissions,
   type PersistenceDatabase,
   type PersistenceTransaction,
+  rolePermissions,
+  roles,
 } from "@encois/persistence";
+import { and, eq } from "drizzle-orm";
 import type { AosPrincipal } from "../middleware/aos.js";
 
 type QueryDatabase = PersistenceDatabase | PersistenceTransaction;
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function localUserId(principal: AosPrincipal): string | null {
   const candidate = principal.userId ?? principal.actorId;
@@ -28,7 +33,10 @@ export async function getGrantedPermissions(
   const rows = await db
     .select({ permission: rolePermissions.permission })
     .from(organizationMemberships)
-    .innerJoin(rolePermissions, eq(rolePermissions.roleId, organizationMemberships.roleId))
+    .innerJoin(
+      rolePermissions,
+      eq(rolePermissions.roleId, organizationMemberships.roleId),
+    )
     .where(
       and(
         eq(organizationMemberships.organizationId, principal.organizationId),
@@ -45,7 +53,32 @@ export async function hasPermission(
   principal: AosPrincipal,
   required: PermissionKey,
 ): Promise<boolean> {
-  return permissionIncludes(await getGrantedPermissions(db, principal), required);
+  return permissionIncludes(
+    await getGrantedPermissions(db, principal),
+    required,
+  );
+}
+
+export async function hasPermissions(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+  required: readonly PermissionKey[],
+): Promise<boolean> {
+  if (required.length === 0) return true;
+  const granted = await getGrantedPermissions(db, principal);
+  return required.every((permission) =>
+    permissionIncludes(granted, permission),
+  );
+}
+
+export async function hasAnyPermission(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+  required: readonly PermissionKey[],
+): Promise<boolean> {
+  if (required.length === 0) return false;
+  const granted = await getGrantedPermissions(db, principal);
+  return required.some((permission) => permissionIncludes(granted, permission));
 }
 
 export function isOrganizationAdministratorRole(roleKey: string): boolean {
@@ -78,9 +111,14 @@ export async function isOrganizationAdministrator(
     )
     .limit(1);
 
-  return membership ? isOrganizationAdministratorRole(membership.roleKey) : false;
+  return membership
+    ? isOrganizationAdministratorRole(membership.roleKey)
+    : false;
 }
 
-export function hasPrincipalPermission(principal: AosPrincipal, required: PermissionKey): boolean {
+export function hasPrincipalPermission(
+  principal: AosPrincipal,
+  required: PermissionKey,
+): boolean {
   return permissionIncludes(principal.permissions ?? [], required);
 }

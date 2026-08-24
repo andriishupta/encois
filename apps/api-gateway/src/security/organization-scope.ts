@@ -1,6 +1,8 @@
 import type { OrganizationUnitNode } from "@encois/contracts";
 
-type ScopeUnit = Pick<OrganizationUnitNode, "id" | "type"> & { parentId?: string | null };
+type ScopeUnit = Pick<OrganizationUnitNode, "id" | "type"> & {
+  parentId?: string | null;
+};
 
 function knownUnitIds(units: readonly ScopeUnit[]): Set<string> {
   return new Set(units.map((unit) => unit.id));
@@ -15,7 +17,10 @@ export function expandOrganizationScope(
   const children = new Map<string, string[]>();
   for (const unit of units) {
     if (!unit.parentId) continue;
-    children.set(unit.parentId, [...(children.get(unit.parentId) ?? []), unit.id]);
+    children.set(unit.parentId, [
+      ...(children.get(unit.parentId) ?? []),
+      unit.id,
+    ]);
   }
 
   const expanded = new Set<string>();
@@ -29,7 +34,10 @@ export function expandOrganizationScope(
   return expanded;
 }
 
-export function isKnownOrganizationUnit(units: readonly ScopeUnit[], unitId: string): boolean {
+export function isKnownOrganizationUnit(
+  units: readonly ScopeUnit[],
+  unitId: string,
+): boolean {
   return knownUnitIds(units).has(unitId);
 }
 
@@ -40,7 +48,10 @@ export function organizationScopeCovers(
   targetUnitIds: readonly string[],
 ): boolean {
   if (targetUnitIds.length === 0) return false;
-  if (roots.includes("*")) return targetUnitIds.every((unitId) => isKnownOrganizationUnit(units, unitId));
+  if (roots.includes("*"))
+    return targetUnitIds.every((unitId) =>
+      isKnownOrganizationUnit(units, unitId),
+    );
   const expanded = expandOrganizationScope(units, roots);
   return targetUnitIds.every((unitId) => expanded.has(unitId));
 }

@@ -812,6 +812,12 @@ paths:
       summary: List workflow projections visible in the caller's effective scope
       security:
         - bearerAuth: []
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated-desc, updated-asc, name-asc, status] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         '200':
           description: Scoped workflow projections
@@ -1036,6 +1042,10 @@ paths:
         - name: category
           in: query
           schema: { type: string, maxLength: 80 }
+        - { name: status, in: query, schema: { type: string, enum: [all, active, disabled] } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated-desc, updated-asc, name-asc, status] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 25 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         '200':
           description: Active and disabled workflow Templates
@@ -1049,6 +1059,12 @@ paths:
       summary: List tenant-scoped Blueprint registry entries
       security:
         - bearerAuth: []
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: status, in: query, schema: { type: string, enum: [all, draft, approved, retired] } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated-desc, updated-asc, name-asc, status] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         '200':
           description: Blueprint registry projection
@@ -1150,14 +1166,11 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 100
+        - { name: q, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: status, in: query, schema: { type: string, enum: [all, proposed, approved, rejected, applied, expired] } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated-desc, updated-asc, name-asc, status] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         '200':
           description: Persisted proposals visible in the caller's organization and execution scope
@@ -2165,14 +2178,22 @@ components:
             reused: { type: boolean }
             createdAt: { type: string }
             updatedAt: { type: string }
+    ListPagination:
+      type: object
+      required: [limit, offset, hasMore]
+      properties:
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
     WorkflowExecutionListResponse:
       type: object
-      required: [data]
+      required: [data, pagination]
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowExecutionProjection'
+        pagination: { $ref: '#/components/schemas/ListPagination' }
     WorkflowEvent:
       type: object
       additionalProperties: false
@@ -2505,11 +2526,12 @@ components:
         template: { $ref: '#/components/schemas/WorkflowTemplate' }
     WorkflowTemplateListResponse:
       type: object
-      required: [data]
+      required: [data, pagination]
       properties:
         data:
           type: array
           items: { $ref: '#/components/schemas/WorkflowTemplateProjection' }
+        pagination: { $ref: '#/components/schemas/ListPagination' }
     WorkflowBlueprintProjection:
       type: object
       required: [blueprintId, version, name, purpose, workflowType, status, isCurrent, steps, createdAt, updatedAt]
@@ -2534,11 +2556,12 @@ components:
         approvedAt: { type: string, format: date-time }
     WorkflowBlueprintListResponse:
       type: object
-      required: [data]
+      required: [data, pagination]
       properties:
         data:
           type: array
           items: { $ref: '#/components/schemas/WorkflowBlueprintProjection' }
+        pagination: { $ref: '#/components/schemas/ListPagination' }
     WorkflowBlueprintLifecycleRequest:
       type: object
       additionalProperties: false
@@ -2693,11 +2716,12 @@ components:
         data: { $ref: '#/components/schemas/WorkflowPlanRecord' }
     WorkflowPlanListResponse:
       type: object
-      required: [data]
+      required: [data, pagination]
       properties:
         data:
           type: array
           items: { $ref: '#/components/schemas/WorkflowPlanRecord' }
+        pagination: { $ref: '#/components/schemas/ListPagination' }
     WorkflowPlanRecord:
       type: object
       required: [planId, organizationId, coordinatorId, status, approvalRequired, plan, createdAt, updatedAt]

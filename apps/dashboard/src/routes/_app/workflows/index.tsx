@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FilePlus2, GitBranch, Play, Search } from 'lucide-react'
 import type { WorkflowBlueprintProjection, WorkflowBlueprintStatus, WorkflowExecutionProjection } from '@encois/contracts'
 import { Permission, TemporalWorkflowType, WorkflowExecutionStatus } from '@encois/contracts'
@@ -10,11 +10,12 @@ import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
 import { ProductTerm } from '@/components/product-term'
 import { WorkflowStatusIndicator } from '@/components/workflow-status'
-import { listWorkflowBlueprints, listWorkflows, startWorkflow } from '@/lib/api'
+import { listWorkflowBlueprintsPage, listWorkflows, startWorkflow } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { useCan } from '@/lib/permissions'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate } from '@/lib/formatters'
+import { ListCollection, ListFilter, ListMeta, ListPagination, ListSearch, ListToolbar, ListViewToggle, type ListViewMode } from '@/components/list-controls'
 
 export const Route = createFileRoute('/_app/workflows/')({
   beforeLoad: () => {
@@ -26,28 +27,33 @@ export const Route = createFileRoute('/_app/workflows/')({
 function WorkflowsPage() {
   const canManage = useCan(Permission.WorkflowsManage)
   const canRun = useCan(Permission.WorkflowsRun)
-  const workflows = useQuery({ queryKey: queryKeys.workflowBlueprints(), queryFn: listWorkflowBlueprints, staleTime: 30_000 })
-  const runs = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, staleTime: 5_000 })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<WorkflowBlueprintStatus | 'all'>('all')
-  const definitions = useMemo(() => selectWorkflowDefinitions(workflows.data ?? []), [workflows.data])
-  const activeRuns = useMemo(() => selectActiveRuns(runs.data ?? []), [runs.data])
-  const filteredDefinitions = definitions.filter((workflow) => {
-    const normalizedQuery = query.trim().toLowerCase()
-    return (status === 'all' || workflow.status === status) && (!normalizedQuery || [workflow.name, workflow.purpose, workflow.blueprintId].some((value) => value.toLowerCase().includes(normalizedQuery)))
+  const [sort, setSort] = useState<'updated-desc' | 'updated-asc' | 'name-asc' | 'status'>('updated-desc')
+  const [view, setView] = useState<ListViewMode>('grid')
+  const workflows = useInfiniteQuery({
+    queryKey: queryKeys.workflowBlueprints(query, status, sort),
+    queryFn: ({ pageParam }) => listWorkflowBlueprintsPage({ query, status, sort, limit: 10, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.pagination.hasMore ? lastPage.pagination.offset + lastPage.pagination.limit : undefined,
+    staleTime: 30_000,
   })
+  const runs = useQuery({ queryKey: queryKeys.workflows(), queryFn: listWorkflows, staleTime: 5_000 })
+  const blueprintItems = workflows.data?.pages.flatMap((page) => page.items) ?? []
+  const definitions = useMemo(() => selectWorkflowDefinitions(blueprintItems), [blueprintItems])
+  const activeRuns = useMemo(() => selectActiveRuns(runs.data ?? []), [runs.data])
 
   return <div className="flex flex-col gap-8">
     <PageHeader title="Workflows" description="Browse the workflow definitions available to this organization. Open a definition to inspect its versioned Blueprint or create a new workflow." actions={canManage ? <Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />New workflow</Link></Button> : <span className="text-xs text-muted-foreground">Read-only access</span>} />
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workflows by name or purpose…" aria-label="Search workflows" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div><select value={status} onChange={(event) => setStatus(event.target.value as WorkflowBlueprintStatus | 'all')} aria-label="Filter workflows by status" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All statuses</option><option value="draft">Draft</option><option value="approved">Published</option><option value="retired">Archived</option></select><span className="text-xs text-muted-foreground">{filteredDefinitions.length} visible workflows</span></CardContent>
-    </Card>
+    <ListToolbar><ListSearch value={query} onChange={setQuery} placeholder="Search workflows by name or purpose…" label="Search workflows" /><ListFilter value={status} onChange={setStatus} label="Filter workflows by status" options={[{ value: 'all', label: 'All statuses' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Published' }]} /><ListFilter value={sort} onChange={(value) => setSort(value as typeof sort)} label="Sort workflows" options={[{ value: 'updated-desc', label: 'Recently updated' }, { value: 'updated-asc', label: 'Oldest updated' }, { value: 'name-asc', label: 'Name A–Z' }, { value: 'status', label: 'Status' }]} /><ListViewToggle value={view} onChange={setView} /></ListToolbar>
+    <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">{definitions.length} visible workflows</p><ListMeta>API-sorted results</ListMeta></div>
     {workflows.isLoading ? <p className="text-sm text-muted-foreground">Loading workflows…</p> : null}
     {workflows.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load workflows: {workflows.error.message}</p></CardContent></Card> : null}
     {runs.isError ? <p role="alert" className="text-sm text-muted-foreground">Run actions are unavailable because current runs could not be checked: {runs.error.message}</p> : null}
-    {filteredDefinitions.length ? <div className="grid gap-4 md:grid-cols-2">{filteredDefinitions.map((workflow) => <WorkflowDefinitionCard key={`${workflow.blueprintId}:${workflow.version}`} workflow={workflow} activeRun={activeRuns.get(workflow.blueprintId)} canRun={canRun} runsReady={!runs.isLoading && !runs.isError} />)}</div> : null}
-    {!workflows.isLoading && !workflows.isError && definitions.length > 0 && !filteredDefinitions.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No workflows match" description="Change the search or status filter." /></CardContent></Card> : null}
-    {!workflows.isLoading && !workflows.isError && definitions.length === 0 ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No workflows yet" description={<>Create one from a published <ProductTerm term="template" /> or an approved <ProductTerm term="blueprint" />.</>} action={canManage ? <Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />Create workflow</Link></Button> : null} /></CardContent></Card> : null}
+    {definitions.length ? <ListCollection items={definitions} view={view} getKey={(workflow) => `${workflow.blueprintId}:${workflow.version}`} renderItem={(workflow) => <WorkflowDefinitionCard workflow={workflow} activeRun={activeRuns.get(workflow.blueprintId)} canRun={canRun} runsReady={!runs.isLoading && !runs.isError} />} /> : null}
+    {!workflows.isLoading && !workflows.isError && blueprintItems.length > 0 && !definitions.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No workflows match" description="Change the search or status filter." /></CardContent></Card> : null}
+    {!workflows.isLoading && !workflows.isError && definitions.length ? <ListPagination hasMore={Boolean(workflows.hasNextPage)} loading={workflows.isFetchingNextPage} onLoadMore={() => void workflows.fetchNextPage()} /> : null}
+    {!workflows.isLoading && !workflows.isError && definitions.length === 0 ? <Card><CardContent className="pt-6"><EmptyPanel icon={GitBranch} title="No workflows yet" description={<>Create one from a published <ProductTerm term="template" /> or an approved <ProductTerm term="blueprint" />.</>} action={canManage ? <Button asChild><Link to="/workflows/new"><FilePlus2 data-icon="inline-start" />New workflow</Link></Button> : null} /></CardContent></Card> : null}
   </div>
 }
 

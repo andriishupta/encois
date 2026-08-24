@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, ClipboardCheck, GitBranch, Search } from 'lucide-react'
 import type { WorkflowPlanRecord } from '@encois/contracts'
 import { Permission } from '@encois/contracts'
@@ -8,12 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { EmptyPanel } from '@/components/empty-panel'
 import { PageHeader } from '@/components/page-header'
-import { listWorkflowPlans, approveWorkflowPlan, applyWorkflowPlan } from '@/lib/api'
+import { listWorkflowPlansPage, approveWorkflowPlan, applyWorkflowPlan } from '@/lib/api'
 import { getAuthSession, hasPermission } from '@/lib/auth'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDate } from '@/lib/formatters'
 import { formatUnitPath } from '@/lib/organization'
 import { useOrganization } from '@/lib/organization-context'
+import { ListCollection, ListFilter, ListMeta, ListPagination, ListSearch, ListToolbar, ListViewToggle, type ListViewMode } from '@/components/list-controls'
 
 export const Route = createFileRoute('/_app/workflows/plans')({
   beforeLoad: () => {
@@ -27,39 +28,36 @@ type PlanFilter = WorkflowPlanRecord['status'] | 'all'
 function WorkflowPlansPage() {
   const queryClient = useQueryClient()
   const { units } = useOrganization()
-  const plans = useQuery({ queryKey: queryKeys.workflowPlans(), queryFn: () => listWorkflowPlans(), refetchInterval: 15_000 })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<PlanFilter>('all')
+  const [sort, setSort] = useState<'updated-desc' | 'updated-asc' | 'name-asc' | 'status'>('updated-desc')
+  const [view, setView] = useState<ListViewMode>('list')
+  const plans = useInfiniteQuery({
+    queryKey: queryKeys.workflowPlans(query, status, sort),
+    queryFn: ({ pageParam }) => listWorkflowPlansPage({ query, status, sort, limit: 10, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.pagination.hasMore ? lastPage.pagination.offset + lastPage.pagination.limit : undefined,
+    refetchInterval: 15_000,
+  })
+  const visiblePlans = plans.data?.pages.flatMap((page) => page.items) ?? []
   const [actionError, setActionError] = useState<string | null>(null)
   const action = useMutation({
     mutationFn: async ({ planId, operation }: { planId: string; operation: 'approve' | 'apply' }) => operation === 'approve' ? approveWorkflowPlan(planId) : applyWorkflowPlan(planId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlans() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workflow-plans'] }),
     onError: (error) => setActionError(error.message),
   })
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredPlans = (plans.data ?? []).filter((plan) => {
-    const change = plan.plan.changes[0]
-    const blueprint = change?.blueprint
-    const searchable = [blueprint?.name, blueprint?.purpose, change?.reason, plan.planId].filter((value): value is string => Boolean(value)).join(' ').toLowerCase()
-    return (status === 'all' || plan.status === status) && (!normalizedQuery || searchable.includes(normalizedQuery))
-  })
-  const pendingCount = (plans.data ?? []).filter((plan) => plan.status === 'proposed' || plan.status === 'approved').length
+  const pendingCount = visiblePlans.filter((plan) => plan.status === 'proposed' || plan.status === 'approved').length
 
   return <div className="flex flex-col gap-8">
     <PageHeader title="Workflow Plans" description="Approval boundary for workflow proposals. Review the generated Blueprint, approve it, then apply it to make it available in Workflows." />
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Plans by workflow name or purpose…" aria-label="Search workflow Plans" className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50" /></div>
-        <select value={status} onChange={(event) => setStatus(event.target.value as PlanFilter)} aria-label="Filter Plans by status" className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><option value="all">All statuses</option><option value="proposed">Awaiting approval</option><option value="approved">Ready to apply</option><option value="applied">Applied</option><option value="rejected">Rejected</option><option value="expired">Expired</option></select>
-        <span className="text-xs text-muted-foreground">{pendingCount} pending Plans</span>
-      </CardContent>
-    </Card>
+    <ListToolbar><ListSearch value={query} onChange={setQuery} placeholder="Search Plans by workflow name or purpose…" label="Search workflow Plans" /><ListFilter value={status} onChange={setStatus} label="Filter Plans by status" options={[{ value: 'all', label: 'All statuses' }, { value: 'proposed', label: 'Awaiting approval' }, { value: 'approved', label: 'Ready to apply' }, { value: 'applied', label: 'Applied' }, { value: 'rejected', label: 'Rejected' }, { value: 'expired', label: 'Expired' }]} /><ListFilter value={sort} onChange={(value) => setSort(value as typeof sort)} label="Sort Plans" options={[{ value: 'updated-desc', label: 'Recently updated' }, { value: 'updated-asc', label: 'Oldest updated' }, { value: 'name-asc', label: 'Name A–Z' }, { value: 'status', label: 'Status' }]} /><ListViewToggle value={view} onChange={setView} /><ListMeta>{pendingCount} pending Plans</ListMeta></ListToolbar>
     {actionError ? <Card className="border-destructive/30 bg-destructive/5"><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not update this Plan: {actionError}</p></CardContent></Card> : null}
     {plans.isLoading ? <p className="text-sm text-muted-foreground">Loading Plans…</p> : null}
     {plans.isError ? <Card><CardContent className="pt-6"><p role="alert" className="text-sm text-destructive">Could not load Plans: {plans.error.message}</p></CardContent></Card> : null}
-    {filteredPlans.length ? <div className="grid gap-4">{filteredPlans.map((plan) => <WorkflowPlanCard key={plan.planId} plan={plan} units={units} busy={action.isPending} onAction={(operation) => { setActionError(null); action.mutate({ planId: plan.planId, operation }) }} />)}</div> : null}
-    {!plans.isLoading && !plans.isError && plans.data?.length && !filteredPlans.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Plans match" description="Change the search or status filter." /></CardContent></Card> : null}
-    {!plans.isLoading && !plans.isError && !plans.data?.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={ClipboardCheck} title="No workflow Plans" description="Submitted workflow proposals will appear here before they become Blueprints." /></CardContent></Card> : null}
+    {visiblePlans.length ? <ListCollection items={visiblePlans} view={view} getKey={(plan) => plan.planId} renderItem={(plan) => <WorkflowPlanCard plan={plan} units={units} busy={action.isPending} onAction={(operation) => { setActionError(null); action.mutate({ planId: plan.planId, operation }) }} />} /> : null}
+    {!plans.isLoading && !plans.isError && plans.data && !visiblePlans.length ? <Card><CardContent className="pt-6"><EmptyPanel icon={Search} title="No Plans match" description="Change the search or status filter." /></CardContent></Card> : null}
+    {!plans.isLoading && !plans.isError && !plans.data ? <Card><CardContent className="pt-6"><EmptyPanel icon={ClipboardCheck} title="No workflow Plans" description="Submitted workflow proposals will appear here before they become Blueprints." /></CardContent></Card> : null}
+    {!plans.isLoading && !plans.isError && visiblePlans.length ? <ListPagination hasMore={Boolean(plans.hasNextPage)} loading={plans.isFetchingNextPage} onLoadMore={() => void plans.fetchNextPage()} /> : null}
   </div>
 }
 

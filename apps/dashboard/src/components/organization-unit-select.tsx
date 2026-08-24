@@ -1,4 +1,5 @@
 import { flattenUnitOptions, type OrganizationUnit } from '@/lib/organization'
+import { Select } from '@/components/ui/select'
 
 type OrganizationUnitSelectProps = {
   id: string
@@ -15,15 +16,25 @@ type OrganizationUnitSelectProps = {
 
 /** Shared hierarchy-aware selector for every unit-scoped form. */
 export function OrganizationUnitSelect({ id, label, value, units, onChange, filter = () => true, isDisabled = () => false, description, required, disabled }: OrganizationUnitSelectProps) {
-  const options = flattenUnitOptions(units).filter(({ unit }) => filter(unit))
+  const options = flattenUnitOptions(units)
+    .filter(({ unit }) => filter(unit))
+    .map(({ unit, depth }) => ({
+      value: unit.id,
+      label: `${'— '.repeat(depth)}${unit.name}`,
+      disabled: isDisabled(unit),
+    }))
 
   return (
     <label className="flex flex-col gap-2 text-sm font-medium" htmlFor={id}>
       {label}
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} required={required} disabled={disabled || options.length === 0} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60">
-        <option value="" disabled>Select an organization unit</option>
-        {options.map(({ unit, depth }) => <option key={unit.id} value={unit.id} disabled={isDisabled(unit)}>{`${'— '.repeat(depth)}${unit.name}`}</option>)}
-      </select>
+      <Select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+        disabled={disabled || options.length === 0}
+        options={[{ value: '', label: 'Select an organization unit', disabled: true }, ...options]}
+      />
       {description ? <span className="text-xs font-normal text-muted-foreground">{description}</span> : null}
     </label>
   )

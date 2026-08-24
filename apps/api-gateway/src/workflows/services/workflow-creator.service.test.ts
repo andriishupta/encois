@@ -3,15 +3,37 @@ import { assertWorkflowProviderBindingsReady } from "./workflow-creator.service.
 
 describe("workflow provider bindings", () => {
   it("allows a plan when all required slots are resolved", () => {
-    expect(() => assertWorkflowProviderBindingsReady([
-      { slotKey: "code", required: true, status: "ready", provider: "github", capabilities: ["code.read"] },
-      { slotKey: "chat", required: false, status: "missing", capabilities: ["messages.read"] },
-    ])).not.toThrow();
+    expect(() =>
+      assertWorkflowProviderBindingsReady([
+        {
+          slotKey: "code",
+          required: true,
+          status: "ready",
+          provider: "github",
+          capabilities: ["code.read"],
+        },
+        {
+          slotKey: "chat",
+          required: false,
+          status: "missing",
+          capabilities: ["messages.read"],
+        },
+      ]),
+    ).not.toThrow();
   });
 
   it("blocks submission when a required slot is missing", () => {
-    expect(() => assertWorkflowProviderBindingsReady([
-      { slotKey: "code", required: true, status: "missing", capabilities: ["code.read"] },
-    ])).toThrowError("Connect an active integration for the required code capability before submitting this workflow plan.");
+    expect(() =>
+      assertWorkflowProviderBindingsReady([
+        {
+          slotKey: "code",
+          required: true,
+          status: "missing",
+          capabilities: ["code.read"],
+        },
+      ]),
+    ).toThrowError(
+      "Connect an active integration for the required code capability before submitting this workflow plan.",
+    );
   });
 });

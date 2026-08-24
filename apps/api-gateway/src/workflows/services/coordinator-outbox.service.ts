@@ -1,10 +1,10 @@
-import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
-import { validateContract, type CoordinatorEvent } from "@encois/contracts";
+import { type CoordinatorEvent, validateContract } from "@encois/contracts";
 import {
   coordinatorEventOutbox,
   type PersistenceTransaction,
   withOrganizationContext,
 } from "@encois/persistence";
+import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { WorkflowClient } from "../temporal-client.js";
 
@@ -29,8 +29,17 @@ export type CoordinatorOutboxDispatchResult = {
 const defaultLeaseMs = 30_000;
 const defaultMaxAttempts = 8;
 
-export function createCoordinatorEventSink(workflowClient: WorkflowClient, namespace: string): CoordinatorEventSink {
-  return (event) => workflowClient.signalCoordinator(event.coordinatorId, event.organizationId, namespace, event);
+export function createCoordinatorEventSink(
+  workflowClient: WorkflowClient,
+  namespace: string,
+): CoordinatorEventSink {
+  return (event) =>
+    workflowClient.signalCoordinator(
+      event.coordinatorId,
+      event.organizationId,
+      namespace,
+      event,
+    );
 }
 
 function boundedError(error: unknown): string {
@@ -65,7 +74,10 @@ async function claimEvent(
         or(
           eq(coordinatorEventOutbox.status, "pending"),
           eq(coordinatorEventOutbox.status, "failed"),
-          and(eq(coordinatorEventOutbox.status, "delivering"), lte(coordinatorEventOutbox.leaseUntil, now)),
+          and(
+            eq(coordinatorEventOutbox.status, "delivering"),
+            lte(coordinatorEventOutbox.leaseUntil, now),
+          ),
         ),
       ),
     )
@@ -73,11 +85,27 @@ async function claimEvent(
   return claimed ?? null;
 }
 
-async function markDelivered(db: PersistenceTransaction, tenantId: string, eventId: string, now: Date): Promise<void> {
+async function markDelivered(
+  db: PersistenceTransaction,
+  tenantId: string,
+  eventId: string,
+  now: Date,
+): Promise<void> {
   await db
     .update(coordinatorEventOutbox)
-    .set({ status: "delivered", deliveredAt: now, leaseUntil: null, updatedAt: now, lastError: null })
-    .where(and(eq(coordinatorEventOutbox.organizationId, tenantId), eq(coordinatorEventOutbox.eventId, eventId)));
+    .set({
+      status: "delivered",
+      deliveredAt: now,
+      leaseUntil: null,
+      updatedAt: now,
+      lastError: null,
+    })
+    .where(
+      and(
+        eq(coordinatorEventOutbox.organizationId, tenantId),
+        eq(coordinatorEventOutbox.eventId, eventId),
+      ),
+    );
 }
 
 async function markFailed(
@@ -96,10 +124,17 @@ async function markFailed(
       status: "failed",
       leaseUntil: null,
       lastError: boundedError(error),
-      availableAt: terminal ? now : new Date(now.getTime() + retryDelayMs(attempts)),
+      availableAt: terminal
+        ? now
+        : new Date(now.getTime() + retryDelayMs(attempts)),
       updatedAt: now,
     })
-    .where(and(eq(coordinatorEventOutbox.organizationId, tenantId), eq(coordinatorEventOutbox.eventId, eventId)));
+    .where(
+      and(
+        eq(coordinatorEventOutbox.organizationId, tenantId),
+        eq(coordinatorEventOutbox.eventId, eventId),
+      ),
+    );
 }
 
 /**
@@ -111,32 +146,47 @@ async function markFailed(
 export async function dispatchCoordinatorOutbox(
   options: CoordinatorOutboxDispatchOptions,
 ): Promise<CoordinatorOutboxDispatchResult> {
-  if (!database) return { status: "persistence-unavailable", claimed: 0, delivered: 0, failed: 0 };
+  if (!database)
+    return {
+      status: "persistence-unavailable",
+      claimed: 0,
+      delivered: 0,
+      failed: 0,
+    };
 
   const tenantId = options.organizationId;
   const now = options.now ?? new Date();
   const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
   const leaseMs = Math.max(1_000, options.leaseMs ?? defaultLeaseMs);
   const maxAttempts = Math.max(1, options.maxAttempts ?? defaultMaxAttempts);
-  const candidates = await withOrganizationContext(database, tenantId, async (db) =>
-    db
-      .select()
-      .from(coordinatorEventOutbox)
-      .where(
-        and(
-          eq(coordinatorEventOutbox.organizationId, tenantId),
-          lt(coordinatorEventOutbox.attempts, maxAttempts),
-          or(
-            and(
-              or(eq(coordinatorEventOutbox.status, "pending"), eq(coordinatorEventOutbox.status, "failed")),
-              lte(coordinatorEventOutbox.availableAt, now),
+  const candidates = await withOrganizationContext(
+    database,
+    tenantId,
+    async (db) =>
+      db
+        .select()
+        .from(coordinatorEventOutbox)
+        .where(
+          and(
+            eq(coordinatorEventOutbox.organizationId, tenantId),
+            lt(coordinatorEventOutbox.attempts, maxAttempts),
+            or(
+              and(
+                or(
+                  eq(coordinatorEventOutbox.status, "pending"),
+                  eq(coordinatorEventOutbox.status, "failed"),
+                ),
+                lte(coordinatorEventOutbox.availableAt, now),
+              ),
+              and(
+                eq(coordinatorEventOutbox.status, "delivering"),
+                lte(coordinatorEventOutbox.leaseUntil, now),
+              ),
             ),
-            and(eq(coordinatorEventOutbox.status, "delivering"), lte(coordinatorEventOutbox.leaseUntil, now)),
           ),
-        ),
-      )
-      .orderBy(asc(coordinatorEventOutbox.availableAt))
-      .limit(limit),
+        )
+        .orderBy(asc(coordinatorEventOutbox.availableAt))
+        .limit(limit),
   );
 
   let claimedCount = 0;
@@ -144,7 +194,13 @@ export async function dispatchCoordinatorOutbox(
   let failedCount = 0;
   for (const candidate of candidates) {
     const claimed = await withOrganizationContext(database, tenantId, (db) =>
-      claimEvent(db, tenantId, candidate.eventId, now, new Date(now.getTime() + leaseMs)),
+      claimEvent(
+        db,
+        tenantId,
+        candidate.eventId,
+        now,
+        new Date(now.getTime() + leaseMs),
+      ),
     );
     if (!claimed) continue;
     claimedCount += 1;
@@ -152,7 +208,15 @@ export async function dispatchCoordinatorOutbox(
     const validation = validateContract("coordinatorEvent", claimed.payload);
     if (!validation.valid) {
       await withOrganizationContext(database, tenantId, (db) =>
-        markFailed(db, tenantId, claimed.eventId, claimed.attempts, now, `invalid coordinator event: ${validation.errors.join(", ")}`, maxAttempts),
+        markFailed(
+          db,
+          tenantId,
+          claimed.eventId,
+          claimed.attempts,
+          now,
+          `invalid coordinator event: ${validation.errors.join(", ")}`,
+          maxAttempts,
+        ),
       );
       failedCount += 1;
       continue;
@@ -160,15 +224,30 @@ export async function dispatchCoordinatorOutbox(
 
     try {
       await options.sink(claimed.payload as unknown as CoordinatorEvent);
-      await withOrganizationContext(database, tenantId, (db) => markDelivered(db, tenantId, claimed.eventId, now));
+      await withOrganizationContext(database, tenantId, (db) =>
+        markDelivered(db, tenantId, claimed.eventId, now),
+      );
       deliveredCount += 1;
     } catch (error) {
       await withOrganizationContext(database, tenantId, (db) =>
-        markFailed(db, tenantId, claimed.eventId, claimed.attempts, now, error, maxAttempts),
+        markFailed(
+          db,
+          tenantId,
+          claimed.eventId,
+          claimed.attempts,
+          now,
+          error,
+          maxAttempts,
+        ),
       );
       failedCount += 1;
     }
   }
 
-  return { status: "dispatched", claimed: claimedCount, delivered: deliveredCount, failed: failedCount };
+  return {
+    status: "dispatched",
+    claimed: claimedCount,
+    delivered: deliveredCount,
+    failed: failedCount,
+  };
 }

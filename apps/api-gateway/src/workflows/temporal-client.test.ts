@@ -21,11 +21,16 @@ const config: AppConfig = {
 
 describe("Temporal workflow client", () => {
   it("requires a real Temporal address", () => {
-    expect(() => createWorkflowClient(config)).toThrow("TEMPORAL_ADDRESS is required");
+    expect(() => createWorkflowClient(config)).toThrow(
+      "TEMPORAL_ADDRESS is required",
+    );
   });
 
   it("constructs only the Temporal adapter when configured", () => {
-    const client = createWorkflowClient({ ...config, temporalAddress: "temporal.test:7233" });
+    const client = createWorkflowClient({
+      ...config,
+      temporalAddress: "temporal.test:7233",
+    });
     expect(client).toBeDefined();
   });
 });

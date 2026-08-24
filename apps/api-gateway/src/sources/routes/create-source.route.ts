@@ -1,10 +1,10 @@
-import type { Handler } from "hono";
 import {
-  KnowledgeSourceKind,
   isJsonObject,
-  type KnowledgeSourceCreateRequest,
   type JsonObject,
+  type KnowledgeSourceCreateRequest,
+  KnowledgeSourceKind,
 } from "@encois/contracts";
+import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import {
   createKnowledgeSource,
@@ -12,10 +12,15 @@ import {
   parseSourceScope,
 } from "../services/source.service.js";
 
-function optionalString(value: Record<string, unknown>, key: string): string | undefined | null {
+function optionalString(
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined | null {
   const candidate = value[key];
   if (candidate === undefined) return undefined;
-  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate.trim() : null;
+  return typeof candidate === "string" && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
 }
 
 function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
@@ -36,8 +41,13 @@ function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
     contentType === null ||
     !readScope ||
     !visibilityScope
-  ) return null;
-  if (value.configuration !== undefined && (!isJsonObject(value.configuration) || Array.isArray(value.configuration))) return null;
+  )
+    return null;
+  if (
+    value.configuration !== undefined &&
+    (!isJsonObject(value.configuration) || Array.isArray(value.configuration))
+  )
+    return null;
   return {
     name,
     kind: kind as KnowledgeSourceKind,
@@ -46,27 +56,56 @@ function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
     readScope,
     visibilityScope,
     ...(contentType ? { contentType } : {}),
-    ...(value.configuration ? { configuration: value.configuration as JsonObject } : {}),
+    ...(value.configuration
+      ? { configuration: value.configuration as JsonObject }
+      : {}),
   };
 }
 
-function statusForSourceError(code: string): 400 | 403 | 404 | 409 | 422 | 500 | 503 {
+function statusForSourceError(
+  code: string,
+): 400 | 403 | 404 | 409 | 422 | 500 | 503 {
   if (code === "PERSISTENCE_UNAVAILABLE") return 503;
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "SOURCE_CREATE_FAILED") return 500;
   if (code.endsWith("_NOT_FOUND")) return 404;
-  if (["INTEGRATION_CREDENTIAL_REQUIRED", "INTEGRATION_NOT_ACTIVE", "INTEGRATION_SCOPE_UNAVAILABLE"].includes(code)) return 409;
+  if (
+    [
+      "INTEGRATION_CREDENTIAL_REQUIRED",
+      "INTEGRATION_NOT_ACTIVE",
+      "INTEGRATION_SCOPE_UNAVAILABLE",
+    ].includes(code)
+  )
+    return 409;
   if (code.includes("MISMATCH") || code.includes("CONFLICT")) return 409;
   return 422;
 }
 
-export const createKnowledgeSourceRoute: Handler<GatewayEnv> = async (context) => {
+export const createKnowledgeSourceRoute: Handler<GatewayEnv> = async (
+  context,
+) => {
   const request = parseRequest(await context.req.json().catch(() => null));
-  if (!request) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid Source payload is required." } }, 400);
+  if (!request)
+    return context.json(
+      {
+        error: {
+          code: "INVALID_REQUEST",
+          message: "A valid Source payload is required.",
+        },
+      },
+      400,
+    );
   try {
-    return context.json({ data: await createKnowledgeSource(context.get("principal"), request) }, 201);
+    return context.json(
+      { data: await createKnowledgeSource(context.get("principal"), request) },
+      201,
+    );
   } catch (error) {
-    if (isSourceServiceError(error)) return context.json({ error: { code: error.code, message: error.message } }, statusForSourceError(error.code));
+    if (isSourceServiceError(error))
+      return context.json(
+        { error: { code: error.code, message: error.message } },
+        statusForSourceError(error.code),
+      );
     throw error;
   }
 };

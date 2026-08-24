@@ -1,5 +1,5 @@
-import type { Context, MiddlewareHandler } from "hono";
 import type { PermissionKey } from "@encois/contracts";
+import type { Context, MiddlewareHandler } from "hono";
 
 export type AosPrincipal = {
   actorId: string;
@@ -15,7 +15,9 @@ export type AosAuthenticationResult =
   | { principal: AosPrincipal; status: "authenticated" }
   | { reason?: string; status: "unauthenticated" | "unconfigured" };
 
-export type AosAuthenticator = (context: Context<GatewayEnv>) => Promise<AosAuthenticationResult>;
+export type AosAuthenticator = (
+  context: Context<GatewayEnv>,
+) => Promise<AosAuthenticationResult>;
 
 export type GatewayEnv = {
   Variables: {
@@ -29,7 +31,9 @@ export type AosOptions = {
   authenticate?: AosAuthenticator;
 };
 
-export function aosMiddleware(options: AosOptions = {}): MiddlewareHandler<GatewayEnv> {
+export function aosMiddleware(
+  options: AosOptions = {},
+): MiddlewareHandler<GatewayEnv> {
   return async (context, next) => {
     const result = options.authenticate
       ? await options.authenticate(context)
@@ -42,7 +46,10 @@ export function aosMiddleware(options: AosOptions = {}): MiddlewareHandler<Gatew
     }
 
     const status = result.status === "unconfigured" ? 503 : 401;
-    const code = result.status === "unconfigured" ? "AUTHENTICATION_UNAVAILABLE" : "UNAUTHENTICATED";
+    const code =
+      result.status === "unconfigured"
+        ? "AUTHENTICATION_UNAVAILABLE"
+        : "UNAUTHENTICATED";
     const message =
       result.status === "unconfigured"
         ? "Authentication is not configured."

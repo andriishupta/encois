@@ -9,7 +9,12 @@ export type IntegrationAuthorizationAdapterRequest = {
 };
 
 export type IntegrationAuthorizationAdapterResult =
-  | { status: "redirect"; authorizationUrl: string; expiresAt?: string; stateHash?: string }
+  | {
+      status: "redirect";
+      authorizationUrl: string;
+      expiresAt?: string;
+      stateHash?: string;
+    }
   | { status: "pending"; expiresAt?: string };
 
 export type IntegrationAuthorizationCompleteRequest = {
@@ -28,15 +33,24 @@ export type IntegrationAuthorizationCompleteResult = {
   status?: "authorized" | "active";
 };
 
-export type IntegrationAuthorizationState = Omit<IntegrationAuthorizationCompleteResult, "credentialRef" | "status">;
+export type IntegrationAuthorizationState = Omit<
+  IntegrationAuthorizationCompleteResult,
+  "credentialRef" | "status"
+>;
 
 /**
  * Provider-specific OAuth/Secret Manager work belongs outside the control
  * plane. The adapter receives metadata only and must never return credentials.
  */
 export type IntegrationAuthorizationAdapter = {
-  start: (request: IntegrationAuthorizationAdapterRequest) => Promise<IntegrationAuthorizationAdapterResult>;
+  start: (
+    request: IntegrationAuthorizationAdapterRequest,
+  ) => Promise<IntegrationAuthorizationAdapterResult>;
   /** Validate and decode callback state without exchanging the provider code. */
-  inspectState?: (request: IntegrationAuthorizationCompleteRequest) => Promise<IntegrationAuthorizationState>;
-  complete?: (request: IntegrationAuthorizationCompleteRequest) => Promise<IntegrationAuthorizationCompleteResult>;
+  inspectState?: (
+    request: IntegrationAuthorizationCompleteRequest,
+  ) => Promise<IntegrationAuthorizationState>;
+  complete?: (
+    request: IntegrationAuthorizationCompleteRequest,
+  ) => Promise<IntegrationAuthorizationCompleteResult>;
 };

@@ -1,5 +1,11 @@
-import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
-import { IntegrationStatus, Permission, resolveEffectiveScope, type IntegrationCreateRequest, type IntegrationProjection, type IntegrationUpdateRequest } from "@encois/contracts";
+import {
+  type IntegrationCreateRequest,
+  type IntegrationProjection,
+  IntegrationStatus,
+  type IntegrationUpdateRequest,
+  Permission,
+  resolveEffectiveScope,
+} from "@encois/contracts";
 import {
   auditEvents,
   integrationAuthorizationStates,
@@ -11,12 +17,28 @@ import {
   type PersistenceTransaction,
   withOrganizationContext,
 } from "@encois/persistence";
-import type { AosPrincipal } from "../../middleware/aos.js";
+import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import {
+  hasPermission,
+  isOrganizationAdministrator,
+} from "../../auth/authorization.js";
 import { database } from "../../database.js";
-import { hasPermission, isOrganizationAdministrator } from "../../auth/authorization.js";
+import {
+  filterListPage,
+  type ListPage,
+  type ListQuery,
+} from "../../list-query.js";
+import type { AosPrincipal } from "../../middleware/aos.js";
 import { fetchCloudRunIdentityToken } from "../../security/cloud-run-identity-token.js";
-import { organizationScopeCovers, organizationScopesOverlap } from "../../security/organization-scope.js";
-import type { IntegrationAuthorizationAdapter, IntegrationAuthorizationAdapterResult, IntegrationAuthorizationCompleteResult } from "../authorization-adapter.js";
+import {
+  organizationScopeCovers,
+  organizationScopesOverlap,
+} from "../../security/organization-scope.js";
+import type {
+  IntegrationAuthorizationAdapter,
+  IntegrationAuthorizationAdapterResult,
+  IntegrationAuthorizationCompleteResult,
+} from "../authorization-adapter.js";
 
 export type IntegrationSummary = IntegrationProjection;
 
@@ -24,7 +46,10 @@ export type IntegrationCreate = IntegrationCreateRequest;
 export type IntegrationUpdate = IntegrationUpdateRequest;
 export type IntegrationAuthorizationUpdate = {
   credentialRef: string;
-  status?: Extract<IntegrationStatus, "authorized" | "active" | "degraded" | "needs_reauth" | "error">;
+  status?: Extract<
+    IntegrationStatus,
+    "authorized" | "active" | "degraded" | "needs_reauth" | "error"
+  >;
   lastError?: string;
 };
 
@@ -34,7 +59,10 @@ export type IntegrationAuthorizationServiceOptions = {
 
 export type IntegrationHealthUpdate = {
   integrationId: string;
-  status: Extract<IntegrationStatus, "active" | "degraded" | "needs_reauth" | "error">;
+  status: Extract<
+    IntegrationStatus,
+    "active" | "degraded" | "needs_reauth" | "error"
+  >;
   lastError?: string;
 };
 
@@ -67,10 +95,18 @@ function localUserId(principal: AosPrincipal): string | null {
 
 function providerCapabilities(provider: string): readonly string[] {
   const normalized = provider.trim().toLowerCase();
-  if (["github", "gitlab"].includes(normalized)) return ["code.read", "pull-requests.read", "activity.read"];
-  if (["jira", "linear"].includes(normalized)) return ["issues.read", "activity.read"];
-  if (["slack", "teams"].includes(normalized)) return ["messages.read", "activity.read"];
-  if (["notion", "google-drive", "google-workspace", "confluence"].includes(normalized)) return ["documents.read"];
+  if (["github", "gitlab"].includes(normalized))
+    return ["code.read", "pull-requests.read", "activity.read"];
+  if (["jira", "linear"].includes(normalized))
+    return ["issues.read", "activity.read"];
+  if (["slack", "teams"].includes(normalized))
+    return ["messages.read", "activity.read"];
+  if (
+    ["notion", "google-drive", "google-workspace", "confluence"].includes(
+      normalized,
+    )
+  )
+    return ["documents.read"];
   return [];
 }
 
@@ -86,53 +122,99 @@ export async function resolveIntegrationCredentialForService(
 ): Promise<IntegrationCredentialResolution | null> {
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
   const provider = request.provider.trim().toLowerCase();
-  const capabilities = [...new Set(request.capabilities.map((value) => value.trim()).filter(Boolean))];
-  if (!provider || capabilities.length === 0 || !capabilities.every((capability) => providerCapabilities(provider).includes(capability))) return null;
+  const capabilities = [
+    ...new Set(
+      request.capabilities.map((value) => value.trim()).filter(Boolean),
+    ),
+  ];
+  if (
+    !provider ||
+    capabilities.length === 0 ||
+    !capabilities.every((capability) =>
+      providerCapabilities(provider).includes(capability),
+    )
+  )
+    return null;
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    const userId = localUserId(principal);
-    if (!userId || !(await hasPermission(db, principal, Permission.IntegrationsRead))) return null;
-    const filters = [
-      eq(integrations.organizationId, principal.organizationId),
-      eq(integrations.provider, provider),
-      eq(integrations.status, "active" as const),
-    ];
-    if (request.integrationId) filters.push(eq(integrations.id, request.integrationId));
-    const [units, rows, organizationWide] = await Promise.all([
-      db
-        .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
-        .from(organizationUnits)
-        .where(eq(organizationUnits.organizationId, principal.organizationId)),
-      db
-        .select({
-          integrationId: integrations.id,
-          provider: integrations.provider,
-          credentialRef: integrations.credentialRef,
-          displayName: integrations.displayName,
-          organizationUnitId: integrationBindings.organizationUnitId,
-          grantedScopes: integrationBindings.grantedScopes,
-        })
-        .from(integrations)
-        .innerJoin(
-          integrationBindings,
-          and(
-            eq(integrationBindings.integrationId, integrations.id),
-            eq(integrationBindings.organizationId, principal.organizationId),
-            eq(integrationBindings.status, "active"),
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      const userId = localUserId(principal);
+      if (
+        !userId ||
+        !(await hasPermission(db, principal, Permission.IntegrationsRead))
+      )
+        return null;
+      const filters = [
+        eq(integrations.organizationId, principal.organizationId),
+        eq(integrations.provider, provider),
+        eq(integrations.status, "active" as const),
+      ];
+      if (request.integrationId)
+        filters.push(eq(integrations.id, request.integrationId));
+      const [units, rows, organizationWide] = await Promise.all([
+        db
+          .select({
+            id: organizationUnits.id,
+            parentId: organizationUnits.parentId,
+            type: organizationUnits.type,
+          })
+          .from(organizationUnits)
+          .where(
+            eq(organizationUnits.organizationId, principal.organizationId),
+          ),
+        db
+          .select({
+            integrationId: integrations.id,
+            provider: integrations.provider,
+            credentialRef: integrations.credentialRef,
+            displayName: integrations.displayName,
+            organizationUnitId: integrationBindings.organizationUnitId,
+            grantedScopes: integrationBindings.grantedScopes,
+          })
+          .from(integrations)
+          .innerJoin(
+            integrationBindings,
+            and(
+              eq(integrationBindings.integrationId, integrations.id),
+              eq(integrationBindings.organizationId, principal.organizationId),
+              eq(integrationBindings.status, "active"),
+            ),
+          )
+          .where(and(...filters)),
+        isOrganizationAdministrator(db, principal),
+      ]);
+
+      const resolverScope = organizationWide
+        ? units.map((unit) => unit.id)
+        : principal.scope;
+      const match = rows
+        .filter((row) => Boolean(row.credentialRef))
+        .filter((row) =>
+          organizationScopesOverlap(
+            units,
+            [row.organizationUnitId],
+            resolverScope,
           ),
         )
-        .where(and(...filters)),
-      isOrganizationAdministrator(db, principal),
-    ]);
-
-    const resolverScope = organizationWide ? units.map((unit) => unit.id) : principal.scope;
-    const match = rows
-      .filter((row) => Boolean(row.credentialRef))
-      .filter((row) => organizationScopesOverlap(units, [row.organizationUnitId], resolverScope))
-      .filter((row) => capabilities.every((capability) => row.grantedScopes.includes(capability)))
-      .sort((left, right) => left.displayName.localeCompare(right.displayName))[0];
-    return match?.credentialRef ? { integrationId: match.integrationId, provider: match.provider, credentialRef: match.credentialRef } : null;
-  });
+        .filter((row) =>
+          capabilities.every((capability) =>
+            row.grantedScopes.includes(capability),
+          ),
+        )
+        .sort((left, right) =>
+          left.displayName.localeCompare(right.displayName),
+        )[0];
+      return match?.credentialRef
+        ? {
+            integrationId: match.integrationId,
+            provider: match.provider,
+            credentialRef: match.credentialRef,
+          }
+        : null;
+    },
+  );
 }
 
 export type IntegrationHealthCheckServiceOptions = {
@@ -159,53 +241,80 @@ export async function runIntegrationHealthChecksForService(
   options: IntegrationHealthCheckServiceOptions,
 ): Promise<IntegrationHealthCheckResult> {
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
-  if (!options.agentGatewayUrl || !options.agentGatewayServiceToken) throw new Error("AGENT_GATEWAY_UNAVAILABLE");
+  if (!options.agentGatewayUrl || !options.agentGatewayServiceToken)
+    throw new Error("AGENT_GATEWAY_UNAVAILABLE");
   const fetchImpl = options.fetchImpl ?? fetch;
-  const rows = await withOrganizationContext(database, principal.organizationId, async (db) => {
-    const userId = localUserId(principal);
-    if (!userId || !(await hasPermission(db, principal, Permission.IntegrationsRead))) throw new Error("FORBIDDEN");
-    const organizationWide = await isOrganizationAdministrator(db, principal);
-    const accessible = await accessibleIntegrations(
-      db,
-      principal.organizationId,
-      userId,
-      "read",
-      integrationId,
-      undefined,
-      organizationWide,
-    );
-    const accessibleIds = new Set(accessible.map((row) => row.id));
-    const candidates = await db
-      .select({ id: integrations.id, provider: integrations.provider })
-      .from(integrations)
-      .where(and(
-        eq(integrations.organizationId, principal.organizationId),
-        eq(integrations.status, IntegrationStatus.Active),
-        isNotNull(integrations.credentialRef),
-      ));
-    return candidates.filter((row) => accessibleIds.has(row.id))
-      .filter((row) => ["github", "jira"].includes(row.provider.toLowerCase()))
-      .filter((row) => !integrationId || row.id === integrationId);
-  });
+  const rows = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      const userId = localUserId(principal);
+      if (
+        !userId ||
+        !(await hasPermission(db, principal, Permission.IntegrationsRead))
+      )
+        throw new Error("FORBIDDEN");
+      const organizationWide = await isOrganizationAdministrator(db, principal);
+      const accessible = await accessibleIntegrations(
+        db,
+        principal.organizationId,
+        userId,
+        "read",
+        integrationId,
+        undefined,
+        organizationWide,
+      );
+      const accessibleIds = new Set(accessible.map((row) => row.id));
+      const candidates = await db
+        .select({ id: integrations.id, provider: integrations.provider })
+        .from(integrations)
+        .where(
+          and(
+            eq(integrations.organizationId, principal.organizationId),
+            eq(integrations.status, IntegrationStatus.Active),
+            isNotNull(integrations.credentialRef),
+          ),
+        );
+      return candidates
+        .filter((row) => accessibleIds.has(row.id))
+        .filter((row) =>
+          ["github", "jira"].includes(row.provider.toLowerCase()),
+        )
+        .filter((row) => !integrationId || row.id === integrationId);
+    },
+  );
 
   let succeeded = 0;
   for (const row of rows.slice(0, 50)) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
     try {
-      const identityToken = options.agentGatewayAudience ? await fetchCloudRunIdentityToken(options.agentGatewayAudience, fetchImpl) : undefined;
-      const response = await fetchImpl(`${options.agentGatewayUrl.replace(/\/$/u, "")}/v1/provider-health/check`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "X-Encois-Service-Token": options.agentGatewayServiceToken,
-          "X-Organization-ID": principal.organizationId,
-          ...(identityToken ? { Authorization: `Bearer ${identityToken}` } : {}),
+      const identityToken = options.agentGatewayAudience
+        ? await fetchCloudRunIdentityToken(
+            options.agentGatewayAudience,
+            fetchImpl,
+          )
+        : undefined;
+      const response = await fetchImpl(
+        `${options.agentGatewayUrl.replace(/\/$/u, "")}/v1/provider-health/check`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-Encois-Service-Token": options.agentGatewayServiceToken,
+            "X-Organization-ID": principal.organizationId,
+            ...(identityToken
+              ? { Authorization: `Bearer ${identityToken}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            integrationId: row.id,
+            provider: row.provider,
+          }),
+          signal: controller.signal,
         },
-        body: JSON.stringify({ integrationId: row.id, provider: row.provider }),
-        signal: controller.signal,
-      });
+      );
       if (response.ok) succeeded += 1;
     } catch {
       // The Agent Gateway records provider-level failures. A transport failure
@@ -214,7 +323,11 @@ export async function runIntegrationHealthChecksForService(
       clearTimeout(timeout);
     }
   }
-  return { checked: rows.slice(0, 50).length, succeeded, failed: rows.slice(0, 50).length - succeeded };
+  return {
+    checked: rows.slice(0, 50).length,
+    succeeded,
+    failed: rows.slice(0, 50).length - succeeded,
+  };
 }
 
 /**
@@ -229,66 +342,107 @@ export async function reportIntegrationHealthForService(
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
   const lastError = update.lastError?.trim() || null;
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await canManageIntegrationForPrincipal(db, principal, update.integrationId))) return null;
-    const [existing] = await db
-      .select({
-        id: integrations.id,
-        displayName: integrations.displayName,
-        provider: integrations.provider,
-      })
-      .from(integrations)
-      .where(and(eq(integrations.id, update.integrationId), eq(integrations.organizationId, principal.organizationId)))
-      .limit(1);
-    if (!existing) return null;
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (
+        !(await canManageIntegrationForPrincipal(
+          db,
+          principal,
+          update.integrationId,
+        ))
+      )
+        return null;
+      const [existing] = await db
+        .select({
+          id: integrations.id,
+          displayName: integrations.displayName,
+          provider: integrations.provider,
+        })
+        .from(integrations)
+        .where(
+          and(
+            eq(integrations.id, update.integrationId),
+            eq(integrations.organizationId, principal.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!existing) return null;
 
-    const checkedAt = new Date();
-    const [row] = await db
-      .update(integrations)
-      .set({
-        status: update.status,
-        lastHealthCheckAt: checkedAt,
-        lastError: update.status === IntegrationStatus.Active ? null : lastError,
-        updatedAt: checkedAt,
-      })
-      .where(and(eq(integrations.id, update.integrationId), eq(integrations.organizationId, principal.organizationId)))
-      .returning();
-    if (!row) return null;
+      const checkedAt = new Date();
+      const [row] = await db
+        .update(integrations)
+        .set({
+          status: update.status,
+          lastHealthCheckAt: checkedAt,
+          lastError:
+            update.status === IntegrationStatus.Active ? null : lastError,
+          updatedAt: checkedAt,
+        })
+        .where(
+          and(
+            eq(integrations.id, update.integrationId),
+            eq(integrations.organizationId, principal.organizationId),
+          ),
+        )
+        .returning();
+      if (!row) return null;
 
-    const bindings = await db
-      .select({ organizationUnitId: integrationBindings.organizationUnitId, grantedScopes: integrationBindings.grantedScopes })
-      .from(integrationBindings)
-      .where(and(eq(integrationBindings.integrationId, update.integrationId), eq(integrationBindings.organizationId, principal.organizationId), eq(integrationBindings.status, "active")));
-    await db.insert(auditEvents).values({
-      organizationId: principal.organizationId,
-      actorUserId: localUserId(principal),
-      action: "integration_health_reported",
-      outcome: "accepted",
-      resourceType: "integration",
-      resourceId: update.integrationId,
-      scope: { ids: bindings.map((binding) => binding.organizationUnitId) },
-      metadata: {
-        provider: existing.provider,
-        status: update.status,
-        healthCheckedAt: checkedAt.toISOString(),
-        ...(lastError ? { errorReported: true } : {}),
-      },
-    });
+      const bindings = await db
+        .select({
+          organizationUnitId: integrationBindings.organizationUnitId,
+          grantedScopes: integrationBindings.grantedScopes,
+        })
+        .from(integrationBindings)
+        .where(
+          and(
+            eq(integrationBindings.integrationId, update.integrationId),
+            eq(integrationBindings.organizationId, principal.organizationId),
+            eq(integrationBindings.status, "active"),
+          ),
+        );
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: localUserId(principal),
+        action: "integration_health_reported",
+        outcome: "accepted",
+        resourceType: "integration",
+        resourceId: update.integrationId,
+        scope: { ids: bindings.map((binding) => binding.organizationUnitId) },
+        metadata: {
+          provider: existing.provider,
+          status: update.status,
+          healthCheckedAt: checkedAt.toISOString(),
+          ...(lastError ? { errorReported: true } : {}),
+        },
+      });
 
-    return {
-      id: row.id,
-      name: row.displayName,
-      provider: row.provider,
-      status: row.status,
-      scopeIds: [...new Set(bindings.map((binding) => binding.organizationUnitId))],
-      grantedScopes: [...new Set(bindings.flatMap((binding) => binding.grantedScopes ?? []))],
-      credentialConfigured: Boolean(row.credentialRef),
-      ...(row.authorizedAt ? { authorizedAt: row.authorizedAt.toISOString() } : {}),
-      ...(row.lastHealthCheckAt ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() } : {}),
-      ...(row.lastError ? { lastError: row.lastError } : {}),
-      updatedAt: row.updatedAt.toISOString(),
-    };
-  });
+      return {
+        id: row.id,
+        name: row.displayName,
+        provider: row.provider,
+        status: row.status,
+        scopeIds: [
+          ...new Set(bindings.map((binding) => binding.organizationUnitId)),
+        ],
+        grantedScopes: [
+          ...new Set(
+            bindings.flatMap((binding) => binding.grantedScopes ?? []),
+          ),
+        ],
+        credentialConfigured: Boolean(row.credentialRef),
+        ...(row.authorizedAt
+          ? { authorizedAt: row.authorizedAt.toISOString() }
+          : {}),
+        ...(row.lastHealthCheckAt
+          ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() }
+          : {}),
+        ...(row.lastError ? { lastError: row.lastError } : {}),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    },
+  );
 }
 
 export async function listIntegrationsForPrincipal(
@@ -300,29 +454,88 @@ export async function listIntegrationsForPrincipal(
   const userId = localUserId(principal);
   if (!userId) return [];
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.IntegrationsRead))) return [];
-    const organizationWide = await isOrganizationAdministrator(db, principal);
-    const rows = await accessibleIntegrations(db, principal.organizationId, userId, "read", undefined, options.scopeUnitId, organizationWide);
-    const projections = new Map<string, IntegrationSummary>();
-    for (const row of rows) {
-      const previous = projections.get(row.id);
-      projections.set(row.id, {
-        id: row.id,
-        name: row.displayName,
-        provider: row.provider,
-        status: row.status,
-        scopeIds: [...new Set([...(previous?.scopeIds ?? []), row.organizationUnitId])],
-        grantedScopes: [...new Set([...(previous?.grantedScopes ?? []), ...(row.grantedScopes ?? [])])],
-        credentialConfigured: previous?.credentialConfigured || Boolean(row.credentialRef),
-        ...(row.authorizedAt ? { authorizedAt: row.authorizedAt.toISOString() } : {}),
-        ...(row.lastHealthCheckAt ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() } : {}),
-        ...(row.lastError ? { lastError: row.lastError } : {}),
-        updatedAt: row.updatedAt.toISOString(),
-      });
-    }
-    return [...projections.values()];
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.IntegrationsRead)))
+        return [];
+      const organizationWide = await isOrganizationAdministrator(db, principal);
+      const rows = await accessibleIntegrations(
+        db,
+        principal.organizationId,
+        userId,
+        "read",
+        undefined,
+        options.scopeUnitId,
+        organizationWide,
+      );
+      const projections = new Map<string, IntegrationSummary>();
+      for (const row of rows) {
+        const previous = projections.get(row.id);
+        projections.set(row.id, {
+          id: row.id,
+          name: row.displayName,
+          provider: row.provider,
+          status: row.status,
+          scopeIds: [
+            ...new Set([...(previous?.scopeIds ?? []), row.organizationUnitId]),
+          ],
+          grantedScopes: [
+            ...new Set([
+              ...(previous?.grantedScopes ?? []),
+              ...(row.grantedScopes ?? []),
+            ]),
+          ],
+          credentialConfigured:
+            previous?.credentialConfigured || Boolean(row.credentialRef),
+          ...(row.authorizedAt
+            ? { authorizedAt: row.authorizedAt.toISOString() }
+            : {}),
+          ...(row.lastHealthCheckAt
+            ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() }
+            : {}),
+          ...(row.lastError ? { lastError: row.lastError } : {}),
+          updatedAt: row.updatedAt.toISOString(),
+        });
+      }
+      return [...projections.values()];
+    },
+  );
+}
+
+export async function listIntegrationsPageForPrincipal(
+  principal: AosPrincipal,
+  options: { scopeUnitId?: string; query: ListQuery },
+): Promise<ListPage<IntegrationSummary>> {
+  const integrations = await listIntegrationsForPrincipal(principal, {
+    scopeUnitId: options.scopeUnitId,
   });
+  return filterListPage(integrations, options.query, {
+    matches: (integration, query) =>
+      [integration.name, integration.provider, integration.status].some(
+        (value) => value.toLowerCase().includes(query),
+      ),
+    getStatus: (integration) => integration.status,
+    compare: compareIntegrations,
+  });
+}
+
+function compareIntegrations(
+  left: IntegrationSummary,
+  right: IntegrationSummary,
+  sort: ListQuery["sort"],
+): number {
+  if (sort === "name-asc") return left.name.localeCompare(right.name);
+  if (sort === "status")
+    return (
+      left.status.localeCompare(right.status) ||
+      left.name.localeCompare(right.name)
+    );
+  const comparison = (left.updatedAt ?? "").localeCompare(
+    right.updatedAt ?? "",
+  );
+  return sort === "updated-asc" ? comparison : -comparison;
 }
 
 export async function updateIntegrationForPrincipal(
@@ -335,74 +548,108 @@ export async function updateIntegrationForPrincipal(
   const userId = localUserId(principal);
   if (!userId) return null;
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.IntegrationsManage))) return null;
-    const organizationWide = await isOrganizationAdministrator(db, principal);
-    const accessible = await accessibleIntegrations(
-      db,
-      principal.organizationId,
-      userId,
-      "manage",
-      integrationId,
-      undefined,
-      organizationWide,
-    );
-    if (accessible.length === 0) return null;
-    const [row] = await db
-      .update(integrations)
-      .set({
-        ...(update.displayName === undefined ? {} : { displayName: update.displayName }),
-        ...(update.status === undefined ? {} : { status: update.status }),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(integrations.id, integrationId), eq(integrations.organizationId, principal.organizationId)))
-      .returning({
-        id: integrations.id,
-        displayName: integrations.displayName,
-        provider: integrations.provider,
-        status: integrations.status,
-        authorizedAt: integrations.authorizedAt,
-        lastHealthCheckAt: integrations.lastHealthCheckAt,
-        lastError: integrations.lastError,
-        updatedAt: integrations.updatedAt,
-      });
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.IntegrationsManage)))
+        return null;
+      const organizationWide = await isOrganizationAdministrator(db, principal);
+      const accessible = await accessibleIntegrations(
+        db,
+        principal.organizationId,
+        userId,
+        "manage",
+        integrationId,
+        undefined,
+        organizationWide,
+      );
+      if (accessible.length === 0) return null;
+      const [row] = await db
+        .update(integrations)
+        .set({
+          ...(update.displayName === undefined
+            ? {}
+            : { displayName: update.displayName }),
+          ...(update.status === undefined ? {} : { status: update.status }),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(integrations.id, integrationId),
+            eq(integrations.organizationId, principal.organizationId),
+          ),
+        )
+        .returning({
+          id: integrations.id,
+          displayName: integrations.displayName,
+          provider: integrations.provider,
+          status: integrations.status,
+          authorizedAt: integrations.authorizedAt,
+          lastHealthCheckAt: integrations.lastHealthCheckAt,
+          lastError: integrations.lastError,
+          updatedAt: integrations.updatedAt,
+        });
 
-    if (row) {
-      await db.insert(auditEvents).values({
-        organizationId: principal.organizationId,
-        actorUserId: userId,
-        action: "integration_updated",
-        outcome: "accepted",
-        resourceType: "integration",
-        resourceId: integrationId,
-        scope: { ids: accessible.map((item) => item.organizationUnitId) },
-        metadata: { changedFields: Object.keys(update), status: row.status },
-      });
-    }
+      if (row) {
+        await db.insert(auditEvents).values({
+          organizationId: principal.organizationId,
+          actorUserId: userId,
+          action: "integration_updated",
+          outcome: "accepted",
+          resourceType: "integration",
+          resourceId: integrationId,
+          scope: { ids: accessible.map((item) => item.organizationUnitId) },
+          metadata: { changedFields: Object.keys(update), status: row.status },
+        });
+      }
 
-    return row
-      ? {
-          id: row.id,
-          name: row.displayName,
-          provider: row.provider,
-          status: row.status,
-          scopeIds: [...new Set(accessible.map((item) => item.organizationUnitId))],
-          grantedScopes: [...new Set(accessible.flatMap((item) => item.grantedScopes ?? []))],
-          credentialConfigured: accessible.some((item) => Boolean(item.credentialRef)),
-          ...(row.authorizedAt ? { authorizedAt: row.authorizedAt.toISOString() } : {}),
-          ...(row.lastHealthCheckAt ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() } : {}),
-          ...(row.lastError ? { lastError: row.lastError } : {}),
-          updatedAt: row.updatedAt.toISOString(),
-        }
-      : null;
-  });
+      return row
+        ? {
+            id: row.id,
+            name: row.displayName,
+            provider: row.provider,
+            status: row.status,
+            scopeIds: [
+              ...new Set(accessible.map((item) => item.organizationUnitId)),
+            ],
+            grantedScopes: [
+              ...new Set(
+                accessible.flatMap((item) => item.grantedScopes ?? []),
+              ),
+            ],
+            credentialConfigured: accessible.some((item) =>
+              Boolean(item.credentialRef),
+            ),
+            ...(row.authorizedAt
+              ? { authorizedAt: row.authorizedAt.toISOString() }
+              : {}),
+            ...(row.lastHealthCheckAt
+              ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() }
+              : {}),
+            ...(row.lastError ? { lastError: row.lastError } : {}),
+            updatedAt: row.updatedAt.toISOString(),
+          }
+        : null;
+    },
+  );
 }
 
-function assertCredentialReference(value: string, options: IntegrationAuthorizationServiceOptions = {}): string {
+function assertCredentialReference(
+  value: string,
+  options: IntegrationAuthorizationServiceOptions = {},
+): string {
   const reference = value.trim();
   const allowsLocal = options.allowLocalCredentialReferences ?? true;
-  const pattern = allowsLocal ? /^(secretmanager|local):\/\/[^\s]+$/i : /^secretmanager:\/\/[^\s]+$/i;
-  if (reference.length === 0 || reference.length > 1024 || /[\u0000-\u001f\u007f\s]/.test(reference) || !pattern.test(reference)) {
+  const pattern = allowsLocal
+    ? /^(secretmanager|local):\/\/[^\s]+$/i
+    : /^secretmanager:\/\/[^\s]+$/i;
+  if (
+    reference.length === 0 ||
+    reference.length > 1024 ||
+    /[\u0000-\u001f\u007f\s]/.test(reference) ||
+    !pattern.test(reference)
+  ) {
     throw new Error("INVALID_CREDENTIAL_REFERENCE");
   }
   return reference;
@@ -418,69 +665,108 @@ export async function authorizeIntegrationForService(
   update: IntegrationAuthorizationUpdate,
   options: IntegrationAuthorizationServiceOptions = {},
 ): Promise<IntegrationSummary | null> {
-  const credentialRef = assertCredentialReference(update.credentialRef, options);
+  const credentialRef = assertCredentialReference(
+    update.credentialRef,
+    options,
+  );
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
   const status = update.status ?? IntegrationStatus.Authorized;
   const lastError = update.lastError?.trim() || null;
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await canManageIntegrationForPrincipal(db, principal, integrationId))) return null;
-    const [existing] = await db
-      .select()
-      .from(integrations)
-      .where(and(eq(integrations.id, integrationId), eq(integrations.organizationId, principal.organizationId)))
-      .limit(1);
-    if (!existing) return null;
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (
+        !(await canManageIntegrationForPrincipal(db, principal, integrationId))
+      )
+        return null;
+      const [existing] = await db
+        .select()
+        .from(integrations)
+        .where(
+          and(
+            eq(integrations.id, integrationId),
+            eq(integrations.organizationId, principal.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!existing) return null;
 
-    const checkedAt = new Date();
-    const [row] = await db
-      .update(integrations)
-      .set({
-        credentialRef,
-        status,
-        authorizedAt: existing.authorizedAt ?? checkedAt,
-        lastHealthCheckAt: checkedAt,
-        lastError,
-        updatedAt: checkedAt,
-      })
-      .where(and(eq(integrations.id, integrationId), eq(integrations.organizationId, principal.organizationId)))
-      .returning();
-    if (!row) return null;
+      const checkedAt = new Date();
+      const [row] = await db
+        .update(integrations)
+        .set({
+          credentialRef,
+          status,
+          authorizedAt: existing.authorizedAt ?? checkedAt,
+          lastHealthCheckAt: checkedAt,
+          lastError,
+          updatedAt: checkedAt,
+        })
+        .where(
+          and(
+            eq(integrations.id, integrationId),
+            eq(integrations.organizationId, principal.organizationId),
+          ),
+        )
+        .returning();
+      if (!row) return null;
 
-    const bindings = await db
-      .select({ organizationUnitId: integrationBindings.organizationUnitId, grantedScopes: integrationBindings.grantedScopes })
-      .from(integrationBindings)
-      .where(and(eq(integrationBindings.integrationId, integrationId), eq(integrationBindings.organizationId, principal.organizationId), eq(integrationBindings.status, "active")));
-    await db.insert(auditEvents).values({
-      organizationId: principal.organizationId,
-      actorUserId: localUserId(principal),
-      action: "integration_authorization_updated",
-      outcome: "accepted",
-      resourceType: "integration",
-      resourceId: integrationId,
-      scope: { ids: bindings.map((binding) => binding.organizationUnitId) },
-      metadata: {
-        status,
-        credentialRefScheme: credentialRef.split(":", 1)[0],
-        healthCheckedAt: checkedAt.toISOString(),
-        ...(lastError ? { errorReported: true } : {}),
-      },
-    });
+      const bindings = await db
+        .select({
+          organizationUnitId: integrationBindings.organizationUnitId,
+          grantedScopes: integrationBindings.grantedScopes,
+        })
+        .from(integrationBindings)
+        .where(
+          and(
+            eq(integrationBindings.integrationId, integrationId),
+            eq(integrationBindings.organizationId, principal.organizationId),
+            eq(integrationBindings.status, "active"),
+          ),
+        );
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: localUserId(principal),
+        action: "integration_authorization_updated",
+        outcome: "accepted",
+        resourceType: "integration",
+        resourceId: integrationId,
+        scope: { ids: bindings.map((binding) => binding.organizationUnitId) },
+        metadata: {
+          status,
+          credentialRefScheme: credentialRef.split(":", 1)[0],
+          healthCheckedAt: checkedAt.toISOString(),
+          ...(lastError ? { errorReported: true } : {}),
+        },
+      });
 
-    return {
-      id: row.id,
-      name: row.displayName,
-      provider: row.provider,
-      status: row.status,
-      scopeIds: [...new Set(bindings.map((binding) => binding.organizationUnitId))],
-      grantedScopes: [...new Set(bindings.flatMap((binding) => binding.grantedScopes ?? []))],
-      credentialConfigured: true,
-      ...(row.authorizedAt ? { authorizedAt: row.authorizedAt.toISOString() } : {}),
-      ...(row.lastHealthCheckAt ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() } : {}),
-      ...(row.lastError ? { lastError: row.lastError } : {}),
-      updatedAt: row.updatedAt.toISOString(),
-    };
-  });
+      return {
+        id: row.id,
+        name: row.displayName,
+        provider: row.provider,
+        status: row.status,
+        scopeIds: [
+          ...new Set(bindings.map((binding) => binding.organizationUnitId)),
+        ],
+        grantedScopes: [
+          ...new Set(
+            bindings.flatMap((binding) => binding.grantedScopes ?? []),
+          ),
+        ],
+        credentialConfigured: true,
+        ...(row.authorizedAt
+          ? { authorizedAt: row.authorizedAt.toISOString() }
+          : {}),
+        ...(row.lastHealthCheckAt
+          ? { lastHealthCheckAt: row.lastHealthCheckAt.toISOString() }
+          : {}),
+        ...(row.lastError ? { lastError: row.lastError } : {}),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    },
+  );
 }
 
 function safeAuthorizationUrl(value: string): string {
@@ -503,19 +789,34 @@ export async function startIntegrationAuthorizationForPrincipal(
 
   const userId = localUserId(principal);
   if (!userId) return null;
-  const integration = await withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.IntegrationsManage))) return null;
-    const organizationWide = await isOrganizationAdministrator(db, principal);
-    const rows = await accessibleIntegrations(db, principal.organizationId, userId, "manage", integrationId, undefined, organizationWide);
-    const [first] = rows;
-    if (!first) return null;
-    return {
-      id: first.id,
-      provider: first.provider,
-      scopeIds: [...new Set(rows.map((row) => row.organizationUnitId))],
-      grantedScopes: [...new Set(rows.flatMap((row) => row.grantedScopes ?? []))],
-    };
-  });
+  const integration = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.IntegrationsManage)))
+        return null;
+      const organizationWide = await isOrganizationAdministrator(db, principal);
+      const rows = await accessibleIntegrations(
+        db,
+        principal.organizationId,
+        userId,
+        "manage",
+        integrationId,
+        undefined,
+        organizationWide,
+      );
+      const [first] = rows;
+      if (!first) return null;
+      return {
+        id: first.id,
+        provider: first.provider,
+        scopeIds: [...new Set(rows.map((row) => row.organizationUnitId))],
+        grantedScopes: [
+          ...new Set(rows.flatMap((row) => row.grantedScopes ?? [])),
+        ],
+      };
+    },
+  );
   if (!integration) return null;
 
   let result: IntegrationAuthorizationAdapterResult;
@@ -534,31 +835,38 @@ export async function startIntegrationAuthorizationForPrincipal(
   }
 
   if (result.status === "redirect" && result.stateHash && result.expiresAt) {
-    await withOrganizationContext(database, principal.organizationId, (db) => db.insert(integrationAuthorizationStates).values({
-      organizationId: principal.organizationId,
-      integrationId: integration.id,
-      actorUserId: userId,
-      provider: integration.provider,
-      stateHash: result.stateHash!,
-      expiresAt: new Date(result.expiresAt!),
-    }));
+    await withOrganizationContext(database, principal.organizationId, (db) =>
+      db.insert(integrationAuthorizationStates).values({
+        organizationId: principal.organizationId,
+        integrationId: integration.id,
+        actorUserId: userId,
+        provider: integration.provider,
+        stateHash: result.stateHash!,
+        expiresAt: new Date(result.expiresAt!),
+      }),
+    );
   }
 
-  const authorizationUrl = result.status === "redirect" ? safeAuthorizationUrl(result.authorizationUrl) : undefined;
-  await withOrganizationContext(database, principal.organizationId, (db) => db.insert(auditEvents).values({
-    organizationId: principal.organizationId,
-    actorUserId: userId,
-    action: "integration_authorization_started",
-    outcome: "accepted",
-    resourceType: "integration",
-    resourceId: integration.id,
-    scope: { ids: integration.scopeIds },
-    metadata: {
-      provider: integration.provider,
-      status: result.status,
-      ...(result.expiresAt ? { expiresAt: result.expiresAt } : {}),
-    },
-  }));
+  const authorizationUrl =
+    result.status === "redirect"
+      ? safeAuthorizationUrl(result.authorizationUrl)
+      : undefined;
+  await withOrganizationContext(database, principal.organizationId, (db) =>
+    db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: userId,
+      action: "integration_authorization_started",
+      outcome: "accepted",
+      resourceType: "integration",
+      resourceId: integration.id,
+      scope: { ids: integration.scopeIds },
+      metadata: {
+        provider: integration.provider,
+        status: result.status,
+        ...(result.expiresAt ? { expiresAt: result.expiresAt } : {}),
+      },
+    }),
+  );
 
   return {
     integrationId: integration.id,
@@ -573,10 +881,13 @@ export async function completeIntegrationAuthorization(
   adapter: IntegrationAuthorizationAdapter | undefined,
   request: { code: string; state: string },
 ): Promise<IntegrationSummary | null> {
-  if (!adapter?.complete || !adapter.inspectState) throw new Error("INTEGRATION_AUTHORIZATION_UNAVAILABLE");
+  if (!adapter?.complete || !adapter.inspectState)
+    throw new Error("INTEGRATION_AUTHORIZATION_UNAVAILABLE");
   if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
 
-  let inspected: Awaited<ReturnType<NonNullable<IntegrationAuthorizationAdapter["inspectState"]>>>;
+  let inspected: Awaited<
+    ReturnType<NonNullable<IntegrationAuthorizationAdapter["inspectState"]>>
+  >;
   try {
     inspected = await adapter.inspectState(request);
   } catch {
@@ -584,31 +895,50 @@ export async function completeIntegrationAuthorization(
   }
 
   const now = new Date();
-  const pendingState = await withOrganizationContext(database, inspected.organizationId, async (db) => {
-    const [row] = await db
-      .select({ actorUserId: integrationAuthorizationStates.actorUserId })
-      .from(integrationAuthorizationStates)
-      .where(and(
-        eq(integrationAuthorizationStates.stateHash, inspected.stateHash),
-        eq(integrationAuthorizationStates.organizationId, inspected.organizationId),
-        eq(integrationAuthorizationStates.integrationId, inspected.integrationId),
-        eq(integrationAuthorizationStates.provider, inspected.provider),
-        isNull(integrationAuthorizationStates.consumedAt),
-        gt(integrationAuthorizationStates.expiresAt, now),
-      ))
-      .limit(1);
-    if (!row) return null;
-    const actorUserId = row.actorUserId ?? inspected.userId;
-    if (!actorUserId) return null;
-    const callbackPrincipal: AosPrincipal = {
-      actorId: inspected.actorId,
-      userId: actorUserId,
-      organizationId: inspected.organizationId,
-      scope: [],
-    };
-    if (!(await canManageIntegrationForPrincipal(db, callbackPrincipal, inspected.integrationId))) return false;
-    return { actorUserId };
-  });
+  const pendingState = await withOrganizationContext(
+    database,
+    inspected.organizationId,
+    async (db) => {
+      const [row] = await db
+        .select({ actorUserId: integrationAuthorizationStates.actorUserId })
+        .from(integrationAuthorizationStates)
+        .where(
+          and(
+            eq(integrationAuthorizationStates.stateHash, inspected.stateHash),
+            eq(
+              integrationAuthorizationStates.organizationId,
+              inspected.organizationId,
+            ),
+            eq(
+              integrationAuthorizationStates.integrationId,
+              inspected.integrationId,
+            ),
+            eq(integrationAuthorizationStates.provider, inspected.provider),
+            isNull(integrationAuthorizationStates.consumedAt),
+            gt(integrationAuthorizationStates.expiresAt, now),
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
+      const actorUserId = row.actorUserId ?? inspected.userId;
+      if (!actorUserId) return null;
+      const callbackPrincipal: AosPrincipal = {
+        actorId: inspected.actorId,
+        userId: actorUserId,
+        organizationId: inspected.organizationId,
+        scope: [],
+      };
+      if (
+        !(await canManageIntegrationForPrincipal(
+          db,
+          callbackPrincipal,
+          inspected.integrationId,
+        ))
+      )
+        return false;
+      return { actorUserId };
+    },
+  );
   if (pendingState === false) throw new Error("FORBIDDEN");
   if (!pendingState) throw new Error("INTEGRATION_AUTHORIZATION_STATE_INVALID");
   if (inspected.userId && inspected.userId !== pendingState.actorUserId) {
@@ -621,34 +951,63 @@ export async function completeIntegrationAuthorization(
   } catch {
     throw new Error("INTEGRATION_AUTHORIZATION_FAILED");
   }
-  if (completed.stateHash !== inspected.stateHash || completed.integrationId !== inspected.integrationId || completed.organizationId !== inspected.organizationId || completed.provider !== inspected.provider || completed.actorId !== inspected.actorId || (completed.userId ?? pendingState.actorUserId) !== pendingState.actorUserId) {
+  if (
+    completed.stateHash !== inspected.stateHash ||
+    completed.integrationId !== inspected.integrationId ||
+    completed.organizationId !== inspected.organizationId ||
+    completed.provider !== inspected.provider ||
+    completed.actorId !== inspected.actorId ||
+    (completed.userId ?? pendingState.actorUserId) !== pendingState.actorUserId
+  ) {
     throw new Error("INTEGRATION_AUTHORIZATION_STATE_INVALID");
   }
 
   const completionNow = new Date();
-  const state = await withOrganizationContext(database, inspected.organizationId, async (db) => {
-    const callbackPrincipal: AosPrincipal = {
-      actorId: inspected.actorId,
-      userId: pendingState.actorUserId,
-      organizationId: inspected.organizationId,
-      scope: [],
-    };
-    if (!(await canManageIntegrationForPrincipal(db, callbackPrincipal, inspected.integrationId))) return null;
-    const [row] = await db
-      .update(integrationAuthorizationStates)
-      .set({ consumedAt: completionNow })
-      .where(and(
-        eq(integrationAuthorizationStates.stateHash, inspected.stateHash),
-        eq(integrationAuthorizationStates.organizationId, inspected.organizationId),
-        eq(integrationAuthorizationStates.integrationId, inspected.integrationId),
-        eq(integrationAuthorizationStates.provider, inspected.provider),
-        eq(integrationAuthorizationStates.actorUserId, pendingState.actorUserId),
-        isNull(integrationAuthorizationStates.consumedAt),
-        gt(integrationAuthorizationStates.expiresAt, completionNow),
-      ))
-      .returning({ actorUserId: integrationAuthorizationStates.actorUserId });
-    return row;
-  });
+  const state = await withOrganizationContext(
+    database,
+    inspected.organizationId,
+    async (db) => {
+      const callbackPrincipal: AosPrincipal = {
+        actorId: inspected.actorId,
+        userId: pendingState.actorUserId,
+        organizationId: inspected.organizationId,
+        scope: [],
+      };
+      if (
+        !(await canManageIntegrationForPrincipal(
+          db,
+          callbackPrincipal,
+          inspected.integrationId,
+        ))
+      )
+        return null;
+      const [row] = await db
+        .update(integrationAuthorizationStates)
+        .set({ consumedAt: completionNow })
+        .where(
+          and(
+            eq(integrationAuthorizationStates.stateHash, inspected.stateHash),
+            eq(
+              integrationAuthorizationStates.organizationId,
+              inspected.organizationId,
+            ),
+            eq(
+              integrationAuthorizationStates.integrationId,
+              inspected.integrationId,
+            ),
+            eq(integrationAuthorizationStates.provider, inspected.provider),
+            eq(
+              integrationAuthorizationStates.actorUserId,
+              pendingState.actorUserId,
+            ),
+            isNull(integrationAuthorizationStates.consumedAt),
+            gt(integrationAuthorizationStates.expiresAt, completionNow),
+          ),
+        )
+        .returning({ actorUserId: integrationAuthorizationStates.actorUserId });
+      return row;
+    },
+  );
   if (!state) throw new Error("FORBIDDEN");
 
   return authorizeIntegrationForService(
@@ -659,7 +1018,10 @@ export async function completeIntegrationAuthorization(
       scope: [],
     },
     inspected.integrationId,
-    { credentialRef: completed.credentialRef, status: completed.status ?? "authorized" },
+    {
+      credentialRef: completed.credentialRef,
+      status: completed.status ?? "authorized",
+    },
   );
 }
 
@@ -672,47 +1034,85 @@ export async function createIntegrationForPrincipal(
   if (!userId) throw new Error("IDENTITY_NOT_RESOLVED");
   const displayName = request.displayName.trim();
   const provider = request.provider.trim().toLowerCase();
-  if (displayName.length < 2 || displayName.length > 160) throw new Error("INVALID_INTEGRATION_NAME");
-  if (!provider || provider.length > 80) throw new Error("INVALID_INTEGRATION_PROVIDER");
+  if (displayName.length < 2 || displayName.length > 160)
+    throw new Error("INVALID_INTEGRATION_NAME");
+  if (!provider || provider.length > 80)
+    throw new Error("INVALID_INTEGRATION_PROVIDER");
 
-  return withOrganizationContext(database, principal.organizationId, async (db) => {
-    if (!(await hasPermission(db, principal, Permission.IntegrationsManage)) || !(await isOrganizationAdministrator(db, principal))) throw new Error("FORBIDDEN");
-    const units = await db
-      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
-      .from(organizationUnits)
-      .where(eq(organizationUnits.organizationId, principal.organizationId));
-    const rootUnit = units.find((unit) => unit.type === "organization" && unit.parentId === null);
-    if (!rootUnit) throw new Error("ORGANIZATION_ROOT_NOT_FOUND");
-    if (request.organizationUnitId && request.organizationUnitId !== rootUnit.id) throw new Error("INTEGRATION_ORGANIZATION_SCOPED");
-    const [integration] = await db.insert(integrations).values({
-      organizationId: principal.organizationId,
-      provider,
-      displayName,
-      status: "pending",
-      createdByUserId: userId,
-    }).returning({ id: integrations.id, displayName: integrations.displayName, provider: integrations.provider, status: integrations.status, updatedAt: integrations.updatedAt });
-    if (!integration) throw new Error("INTEGRATION_CREATE_FAILED");
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (
+        !(await hasPermission(db, principal, Permission.IntegrationsManage)) ||
+        !(await isOrganizationAdministrator(db, principal))
+      )
+        throw new Error("FORBIDDEN");
+      const units = await db
+        .select({
+          id: organizationUnits.id,
+          parentId: organizationUnits.parentId,
+          type: organizationUnits.type,
+        })
+        .from(organizationUnits)
+        .where(eq(organizationUnits.organizationId, principal.organizationId));
+      const rootUnit = units.find(
+        (unit) => unit.type === "organization" && unit.parentId === null,
+      );
+      if (!rootUnit) throw new Error("ORGANIZATION_ROOT_NOT_FOUND");
+      if (
+        request.organizationUnitId &&
+        request.organizationUnitId !== rootUnit.id
+      )
+        throw new Error("INTEGRATION_ORGANIZATION_SCOPED");
+      const [integration] = await db
+        .insert(integrations)
+        .values({
+          organizationId: principal.organizationId,
+          provider,
+          displayName,
+          status: "pending",
+          createdByUserId: userId,
+        })
+        .returning({
+          id: integrations.id,
+          displayName: integrations.displayName,
+          provider: integrations.provider,
+          status: integrations.status,
+          updatedAt: integrations.updatedAt,
+        });
+      if (!integration) throw new Error("INTEGRATION_CREATE_FAILED");
 
-    await db.insert(integrationBindings).values({
-      organizationId: principal.organizationId,
-      integrationId: integration.id,
-      organizationUnitId: rootUnit.id,
-      grantedScopes: request.grantedScopes ?? [],
-      grantedByUserId: userId,
-      status: "active",
-    });
-    await db.insert(auditEvents).values({
-      organizationId: principal.organizationId,
-      actorUserId: userId,
-      action: "integration_registered",
-      outcome: "accepted",
-      resourceType: "integration",
-      resourceId: integration.id,
-      scope: { ids: [rootUnit.id] },
-      metadata: { provider, status: "pending", scopeLevel: "organization" },
-    });
-    return { id: integration.id, name: integration.displayName, provider: integration.provider, status: integration.status, scopeIds: [rootUnit.id], grantedScopes: request.grantedScopes ?? [], credentialConfigured: false, updatedAt: new Date().toISOString() };
-  });
+      await db.insert(integrationBindings).values({
+        organizationId: principal.organizationId,
+        integrationId: integration.id,
+        organizationUnitId: rootUnit.id,
+        grantedScopes: request.grantedScopes ?? [],
+        grantedByUserId: userId,
+        status: "active",
+      });
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "integration_registered",
+        outcome: "accepted",
+        resourceType: "integration",
+        resourceId: integration.id,
+        scope: { ids: [rootUnit.id] },
+        metadata: { provider, status: "pending", scopeLevel: "organization" },
+      });
+      return {
+        id: integration.id,
+        name: integration.displayName,
+        provider: integration.provider,
+        status: integration.status,
+        scopeIds: [rootUnit.id],
+        grantedScopes: request.grantedScopes ?? [],
+        credentialConfigured: false,
+        updatedAt: new Date().toISOString(),
+      };
+    },
+  );
 }
 
 export async function accessibleIntegrations(
@@ -726,11 +1126,18 @@ export async function accessibleIntegrations(
 ) {
   const [units, membershipScopeRows] = await Promise.all([
     db
-      .select({ id: organizationUnits.id, parentId: organizationUnits.parentId, type: organizationUnits.type })
+      .select({
+        id: organizationUnits.id,
+        parentId: organizationUnits.parentId,
+        type: organizationUnits.type,
+      })
       .from(organizationUnits)
       .where(eq(organizationUnits.organizationId, organizationId)),
     db
-      .select({ unitId: membershipScopes.organizationUnitId, access: membershipScopes.access })
+      .select({
+        unitId: membershipScopes.organizationUnitId,
+        access: membershipScopes.access,
+      })
       .from(membershipScopes)
       .innerJoin(
         organizationMemberships,
@@ -746,14 +1153,27 @@ export async function accessibleIntegrations(
   const directUnitIds = organizationWide
     ? units.map((unit) => unit.id)
     : membershipScopeRows
-      .filter((row) => access === "read" || row.access === "manager" || row.access === "admin")
-      .map((row) => row.unitId);
+        .filter(
+          (row) =>
+            access === "read" ||
+            row.access === "manager" ||
+            row.access === "admin",
+        )
+        .map((row) => row.unitId);
   const resolvedScope = resolveEffectiveScope({
-    units: units.map((unit) => ({ id: unit.id, ...(unit.parentId ? { parentId: unit.parentId } : {}), type: unit.type })),
+    units: units.map((unit) => ({
+      id: unit.id,
+      ...(unit.parentId ? { parentId: unit.parentId } : {}),
+      type: unit.type,
+    })),
     directUnitIds,
   }).resolvedUnitIds;
   if (resolvedScope.length === 0) return [];
-  if (scopeUnitId && !organizationScopeCovers(units, resolvedScope, [scopeUnitId])) throw new Error("SCOPE_DENIED");
+  if (
+    scopeUnitId &&
+    !organizationScopeCovers(units, resolvedScope, [scopeUnitId])
+  )
+    throw new Error("SCOPE_DENIED");
 
   const rows = await db
     .selectDistinct({
@@ -785,10 +1205,17 @@ export async function accessibleIntegrations(
       ),
     );
   const visibleRows = rows.filter((row) => {
-    const principalCanRead = access === "read"
-      ? organizationScopesOverlap(units, [row.organizationUnitId], resolvedScope)
-      : resolvedScope.includes(row.organizationUnitId);
-    const selectedScopeMatches = !scopeUnitId || organizationScopesOverlap(units, [row.organizationUnitId], [scopeUnitId]);
+    const principalCanRead =
+      access === "read"
+        ? organizationScopesOverlap(
+            units,
+            [row.organizationUnitId],
+            resolvedScope,
+          )
+        : resolvedScope.includes(row.organizationUnitId);
+    const selectedScopeMatches =
+      !scopeUnitId ||
+      organizationScopesOverlap(units, [row.organizationUnitId], [scopeUnitId]);
     return principalCanRead && selectedScopeMatches;
   });
   if (access !== "manage" || organizationWide) return visibleRows;
@@ -801,7 +1228,10 @@ export async function accessibleIntegrations(
   }
   return visibleRows.filter((row) => {
     const bindingUnits = bindingUnitsByIntegration.get(row.id) ?? [];
-    return bindingUnits.length > 0 && bindingUnits.every((unitId) => resolvedScope.includes(unitId));
+    return (
+      bindingUnits.length > 0 &&
+      bindingUnits.every((unitId) => resolvedScope.includes(unitId))
+    );
   });
 }
 
@@ -811,15 +1241,23 @@ async function canManageIntegrationForPrincipal(
   integrationId: string,
 ): Promise<boolean> {
   const userId = localUserId(principal);
-  if (!userId || !(await hasPermission(db, principal, Permission.IntegrationsManage))) return false;
+  if (
+    !userId ||
+    !(await hasPermission(db, principal, Permission.IntegrationsManage))
+  )
+    return false;
   const organizationWide = await isOrganizationAdministrator(db, principal);
-  return (await accessibleIntegrations(
-    db,
-    principal.organizationId,
-    userId,
-    "manage",
-    integrationId,
-    undefined,
-    organizationWide,
-  )).length > 0;
+  return (
+    (
+      await accessibleIntegrations(
+        db,
+        principal.organizationId,
+        userId,
+        "manage",
+        integrationId,
+        undefined,
+        organizationWide,
+      )
+    ).length > 0
+  );
 }

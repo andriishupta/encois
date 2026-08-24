@@ -10,14 +10,21 @@ export type WebhookPayloadReference = {
 };
 
 export type WebhookPayloadStore = {
-  reference(input: { organizationId: string; endpointKey: string; providerEventId: string; contentType: string }): WebhookPayloadReference;
-  write(input: WebhookPayloadReference & {
+  reference(input: {
     organizationId: string;
     endpointKey: string;
     providerEventId: string;
     contentType: string;
-    bytes: Uint8Array;
-  }): Promise<void>;
+  }): WebhookPayloadReference;
+  write(
+    input: WebhookPayloadReference & {
+      organizationId: string;
+      endpointKey: string;
+      providerEventId: string;
+      contentType: string;
+      bytes: Uint8Array;
+    },
+  ): Promise<void>;
 };
 
 type WebhookPayloadStoreOptions = {
@@ -26,14 +33,23 @@ type WebhookPayloadStoreOptions = {
   nodeEnv: string;
 };
 
-function objectKey(input: { organizationId: string; endpointKey: string; providerEventId: string }): string {
-  const eventHash = createHash("sha256").update(input.providerEventId).digest("hex");
-  const endpoint = input.endpointKey.replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 96) || "endpoint";
+function objectKey(input: {
+  organizationId: string;
+  endpointKey: string;
+  providerEventId: string;
+}): string {
+  const eventHash = createHash("sha256")
+    .update(input.providerEventId)
+    .digest("hex");
+  const endpoint =
+    input.endpointKey.replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 96) ||
+    "endpoint";
   return `organizations/${input.organizationId}/webhooks/${endpoint}/${eventHash}.json`;
 }
 
 function assertPayloadSize(bytes: Uint8Array): void {
-  if (bytes.length === 0 || bytes.length > MAX_WEBHOOK_PAYLOAD_BYTES) throw new Error("WEBHOOK_PAYLOAD_TOO_LARGE");
+  if (bytes.length === 0 || bytes.length > MAX_WEBHOOK_PAYLOAD_BYTES)
+    throw new Error("WEBHOOK_PAYLOAD_TOO_LARGE");
 }
 
 function createMemoryWebhookPayloadStore(): WebhookPayloadStore {
@@ -50,17 +66,28 @@ function createMemoryWebhookPayloadStore(): WebhookPayloadStore {
   };
 }
 
-function createCloudStorageWebhookPayloadStore(options: { bucketName: string; projectId?: string }): WebhookPayloadStore {
+function createCloudStorageWebhookPayloadStore(options: {
+  bucketName: string;
+  projectId?: string;
+}): WebhookPayloadStore {
   const appName = `encois-webhook-payloads-${options.bucketName}`;
-  const app = getApps().find((candidate) => candidate.name === appName) ?? initializeApp(
-    { credential: applicationDefault(), ...(options.projectId ? { projectId: options.projectId } : {}) },
-    appName,
-  );
+  const app =
+    getApps().find((candidate) => candidate.name === appName) ??
+    initializeApp(
+      {
+        credential: applicationDefault(),
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+      },
+      appName,
+    );
   const bucket = getStorage(app).bucket(options.bucketName);
   return {
     reference(input) {
       const key = objectKey(input);
-      return { objectKey: key, payloadRef: `gs://${options.bucketName}/${key}` };
+      return {
+        objectKey: key,
+        payloadRef: `gs://${options.bucketName}/${key}`,
+      };
     },
     async write(input) {
       assertPayloadSize(input.bytes);
@@ -80,8 +107,15 @@ function createCloudStorageWebhookPayloadStore(options: { bucketName: string; pr
 }
 
 /** Raw webhook bytes are retained outside Postgres so ingestion can replay them. */
-export function createWebhookPayloadStore(options: WebhookPayloadStoreOptions): WebhookPayloadStore | undefined {
-  if (options.bucketName) return createCloudStorageWebhookPayloadStore({ bucketName: options.bucketName, projectId: options.projectId });
-  if (options.nodeEnv === "development" || options.nodeEnv === "test") return createMemoryWebhookPayloadStore();
+export function createWebhookPayloadStore(
+  options: WebhookPayloadStoreOptions,
+): WebhookPayloadStore | undefined {
+  if (options.bucketName)
+    return createCloudStorageWebhookPayloadStore({
+      bucketName: options.bucketName,
+      projectId: options.projectId,
+    });
+  if (options.nodeEnv === "development" || options.nodeEnv === "test")
+    return createMemoryWebhookPayloadStore();
   return undefined;
 }
