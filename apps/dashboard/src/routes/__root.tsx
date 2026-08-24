@@ -62,7 +62,6 @@ function DocumentTitle() {
     queryKey: queryKeys.organization(),
     queryFn: getOrganization,
     enabled: Boolean(getAuthSession()),
-    staleTime: 60_000,
   });
   const organizationName = organization.data?.organization.name;
   const branding = getBranding(organizationName);

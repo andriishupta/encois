@@ -86,12 +86,10 @@ function WorkflowsPage() {
       lastPage.pagination.hasMore
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
-    staleTime: 30_000,
   });
   const runs = useQuery({
     queryKey: queryKeys.workflows(),
     queryFn: listWorkflows,
-    staleTime: 5_000,
   });
   const blueprintItems =
     workflows.data?.pages.flatMap((page) => page.items) ?? [];

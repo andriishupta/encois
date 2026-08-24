@@ -63,7 +63,6 @@ function WorkflowTemplatesPage() {
       lastPage.pagination.hasMore
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
-    staleTime: 60_000,
   });
   const visibleTemplates =
     templates.data?.pages.flatMap((page) => page.items) ?? [];

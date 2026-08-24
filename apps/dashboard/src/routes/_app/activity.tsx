@@ -160,7 +160,6 @@ function ActivityPage() {
     queryKey: queryKeys.workflowBlueprints(),
     queryFn: listWorkflowBlueprints,
     enabled: canManageWorkflows,
-    staleTime: 30_000,
   });
   const [planActionError, setPlanActionError] = useState<string | null>(null);
   const approvePlan = useMutation({

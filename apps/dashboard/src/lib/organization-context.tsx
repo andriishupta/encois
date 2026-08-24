@@ -110,7 +110,6 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const query = useQuery<OrganizationProjection | null>({
     queryKey: queryKeys.organization(),
     queryFn: getOrganization,
-    staleTime: 30_000,
   });
   const [units, setUnits] = useState<OrganizationUnit[]>([]);
   const [members, setMembers] = useState<OrganizationMember[]>([]);

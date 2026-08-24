@@ -6,7 +6,18 @@ import { initializeBrowserAuth } from "@/lib/auth";
 import { router } from "@/router";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// 5 min
+const staleTime = 5 * 60 * 1000;
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 async function bootstrap() {
   await initializeBrowserAuth();

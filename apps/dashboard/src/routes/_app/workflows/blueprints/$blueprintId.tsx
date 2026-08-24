@@ -51,7 +51,6 @@ function BlueprintRevisionPage() {
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
     queryFn: listWorkflowBlueprints,
-    staleTime: 30_000,
   });
   const queryClient = useQueryClient();
   const canManage = useCan(Permission.WorkflowsManage);

@@ -129,13 +129,11 @@ function NewWorkflowPage() {
     queryKey: queryKeys.workflowTemplates(),
     queryFn: () => listWorkflowTemplates(),
     enabled: mode === "template",
-    staleTime: 60_000,
   });
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
     queryFn: listWorkflowBlueprints,
     enabled: mode === "blueprint",
-    staleTime: 30_000,
   });
 
   const selectedTemplate = useMemo(

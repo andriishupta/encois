@@ -73,7 +73,6 @@ function WorkflowBlueprintsPage() {
       lastPage.pagination.hasMore
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
-    staleTime: 30_000,
     enabled: pathname === "/workflows/blueprints",
   });
   if (pathname !== "/workflows/blueprints") return <Outlet />;

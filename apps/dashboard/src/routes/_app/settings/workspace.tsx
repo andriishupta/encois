@@ -196,13 +196,11 @@ function OnboardingConfigurationCard({
     queryKey: queryKeys.workflowTemplates("onboarding-catalog"),
     queryFn: () => listWorkflowTemplates({}),
     enabled: canReadCatalog,
-    staleTime: 60_000,
   });
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
     queryFn: listWorkflowBlueprints,
     enabled: canReadCatalog,
-    staleTime: 30_000,
   });
   const [mode, setMode] = useState(onboarding.coordinationMode);
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([
