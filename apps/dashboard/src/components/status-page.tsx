@@ -95,3 +95,33 @@ export function StatusPage({ code }: { code: StatusCode }) {
     </main>
   );
 }
+
+export function NotFoundPanel() {
+  const content = statusContent[404];
+  const Icon = content.icon;
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center px-6 py-12 text-center sm:px-10 sm:py-16">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+          <Icon className="size-7" aria-hidden="true" />
+        </div>
+        <p className="mt-5 text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          404 · {content.label}
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+          {content.title}
+        </h1>
+        <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+          {content.description}
+        </p>
+        <Button className="mt-7" asChild>
+          <Link to="/">
+            <Home data-icon="inline-start" />
+            Dashboard
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}

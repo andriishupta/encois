@@ -12,6 +12,7 @@ type OrganizationUnitSelectProps = {
   description?: string;
   required?: boolean;
   disabled?: boolean;
+  testId?: string;
 };
 
 /** Shared hierarchy-aware selector for every unit-scoped form. */
@@ -26,6 +27,7 @@ export function OrganizationUnitSelect({
   description,
   required,
   disabled,
+  testId,
 }: OrganizationUnitSelectProps) {
   const options = flattenUnitOptions(units)
     .filter(({ unit }) => filter(unit))
@@ -40,6 +42,7 @@ export function OrganizationUnitSelect({
       {label}
       <Select
         id={id}
+        data-testid={testId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         required={required}

@@ -9,15 +9,15 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Check, ClipboardCheck, GitBranch, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -118,7 +118,7 @@ function WorkflowPlansPage() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-testid="workflow-plans-page" className="flex flex-col gap-8">
       <PageHeader
         title="Workflow Plans"
         description="Approval boundary for workflow proposals. Review the generated Blueprint, approve it, then apply it to make it available in Workflows."
@@ -154,9 +154,14 @@ function WorkflowPlansPage() {
             { value: "status", label: "Status" },
           ]}
         />
-        <ListViewToggle value={view} onChange={setView} />
-        <ListMeta>{pendingCount} pending Plans</ListMeta>
       </ListToolbar>
+      <ListResultsHeader
+        count={visiblePlans.length}
+        label="visible plans"
+        meta={`${pendingCount} pending`}
+        view={view}
+        onViewChange={setView}
+      />
       {actionError ? (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="pt-6">
@@ -170,13 +175,12 @@ function WorkflowPlansPage() {
         <p className="text-sm text-muted-foreground">Loading Plans…</p>
       ) : null}
       {plans.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load Plans: {plans.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Plans unavailable"
+          message={plans.error.message}
+          onRetry={() => plans.refetch()}
+          retrying={plans.isFetching}
+        />
       ) : null}
       {visiblePlans.length ? (
         <ListCollection
@@ -255,6 +259,7 @@ function WorkflowPlanCard({
   const status = planStatusLabel(plan.status);
   return (
     <Card
+      data-testid="workflow-plan-card"
       className={
         highlighted ? "border-primary ring-2 ring-primary/20" : undefined
       }
@@ -262,7 +267,7 @@ function WorkflowPlanCard({
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle>
+            <CardTitle data-testid="workflow-plan-title">
               <Link
                 to="/workflows/plans/$planId"
                 params={{ planId: plan.planId }}
@@ -281,7 +286,10 @@ function WorkflowPlanCard({
               </p>
             ) : null}
           </div>
-          <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">
+          <span
+            data-testid="workflow-plan-status"
+            className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
+          >
             {status}
           </span>
         </div>
@@ -378,7 +386,11 @@ function WorkflowPlanCard({
               </Button>
             ) : null}
             {plan.status === "approved" ? (
-              <Button disabled={busy} onClick={() => onAction("apply")}>
+              <Button
+                data-testid="workflow-plan-apply"
+                disabled={busy}
+                onClick={() => onAction("apply")}
+              >
                 Apply plan
               </Button>
             ) : null}

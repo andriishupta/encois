@@ -16,15 +16,15 @@ import {
 import { GitBranch, Search } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -115,25 +115,23 @@ function WorkflowBlueprintsPage() {
             { value: "status", label: "Status" },
           ]}
         />
-        <ListViewToggle value={view} onChange={setView} />
       </ListToolbar>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium">
-          {visibleBlueprints.length} visible Blueprints
-        </p>
-        <ListMeta>API-sorted revisions</ListMeta>
-      </div>
+      <ListResultsHeader
+        count={visibleBlueprints.length}
+        label="visible blueprints"
+        view={view}
+        onViewChange={setView}
+      />
       {blueprints.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading Blueprints…</p>
       ) : null}
       {blueprints.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load Blueprints: {blueprints.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Blueprints unavailable"
+          message={blueprints.error.message}
+          onRetry={() => blueprints.refetch()}
+          retrying={blueprints.isFetching}
+        />
       ) : null}
       {visibleBlueprints.length ? (
         <ListCollection

@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
 } from "@/components/list-controls";
@@ -82,19 +83,18 @@ export function WorkflowRunList() {
             })),
           ]}
         />
-        <ListMeta>{visibleWorkflows.length} visible runs</ListMeta>
       </ListToolbar>
+      <ListResultsHeader count={visibleWorkflows.length} label="visible runs" />
       {workflows.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading workflow runs…</p>
       ) : null}
       {workflows.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load workflow runs: {workflows.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Workflow runs unavailable"
+          message={workflows.error.message}
+          onRetry={() => workflows.refetch()}
+          retrying={workflows.isFetching}
+        />
       ) : null}
       {visibleWorkflows.length ? (
         <ListCollection

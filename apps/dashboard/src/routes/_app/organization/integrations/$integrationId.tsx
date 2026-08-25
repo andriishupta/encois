@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -171,13 +172,12 @@ function IntegrationDetailPage() {
     );
   if (integrations.isError)
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p role="alert" className="text-sm text-destructive">
-            Could not load integration: {integrations.error.message}
-          </p>
-        </CardContent>
-      </Card>
+      <InlineError
+        title="Integration unavailable"
+        message={integrations.error.message}
+        onRetry={() => integrations.refetch()}
+        retrying={integrations.isFetching}
+      />
     );
   if (!integration)
     return (
@@ -556,10 +556,14 @@ function IntegrationDetailPage() {
           ) : null}
           {canViewSources &&
           sourceDetailQueries.some((query) => query.isError) ? (
-            <p role="alert" className="text-sm text-destructive">
-              Some source history is unavailable. Reload the page when the
-              service is available.
-            </p>
+            <InlineError
+              title="Some Source history is unavailable"
+              message="The Source details could not be loaded in this view."
+              onRetry={() =>
+                Promise.all(sourceDetailQueries.map((query) => query.refetch()))
+              }
+              retrying={sourceDetailQueries.some((query) => query.isFetching)}
+            />
           ) : null}
           {canViewSources &&
           !sources.isLoading &&
@@ -582,7 +586,7 @@ function IntegrationDetailPage() {
             >
               <div className="min-w-0">
                 <Link
-                  to="/organization/sources/$sourceId"
+                  to="/memory/sources/$sourceId"
                   params={{ sourceId: source.id }}
                   className="block truncate text-sm font-medium hover:underline"
                 >
@@ -620,9 +624,12 @@ function IntegrationDetailPage() {
               <p className="text-sm text-muted-foreground">Loading Sources…</p>
             ) : null}
             {sources.isError ? (
-              <p role="alert" className="text-sm text-destructive">
-                Could not load Sources: {sources.error.message}
-              </p>
+              <InlineError
+                title="Sources unavailable"
+                message={sources.error.message}
+                onRetry={() => sources.refetch()}
+                retrying={sources.isFetching}
+              />
             ) : null}
             {!sources.isLoading &&
             !sources.isError &&
@@ -636,7 +643,7 @@ function IntegrationDetailPage() {
             {integrationSources.map((source) => (
               <Link
                 key={source.id}
-                to="/organization/sources/$sourceId"
+                  to="/memory/sources/$sourceId"
                 params={{ sourceId: source.id }}
                 className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"
               >

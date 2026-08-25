@@ -4,16 +4,16 @@ export type NavigationTarget =
   | "/workflows/runs"
   | "/workflows/templates"
   | "/workflows/blueprints"
-  | "/workflows/memory"
-  | "/organization/sources"
+  | "/memory/workflow"
+  | "/memory/organization"
+  | "/memory/investigations"
+  | "/memory/sources"
   | "/organization/integrations"
   | "/activity"
   | "/organization"
-  | "/organization/members"
-  | "/organization/memory"
-  | "/organization/investigations"
-  | "/organization/permissions"
-  | "/organization/access"
+  | "/management/members"
+  | "/management/permissions"
+  | "/management/access"
   | "/settings"
   | "/settings/workspace"
   | "/settings/notifications"
@@ -25,7 +25,7 @@ const workflowNonRunPaths = new Set([
   "/workflows/templates",
   "/workflows/blueprints",
   "/workflows/plans",
-  "/workflows/memory",
+  "/memory/workflow",
 ]);
 
 export function isNavigationItemActive(
@@ -50,11 +50,19 @@ export function isNavigationItemActive(
   }
   if (target === "/workflows/blueprints" || target === "/workflows/plans")
     return pathname === target || pathname.startsWith(`${target}/`);
-  if (target === "/workflows/memory" || target === "/organization/memory")
+  if (
+    target === "/memory/workflow" ||
+    target === "/memory/organization" ||
+    target === "/memory/investigations" ||
+    target === "/memory/sources"
+  )
+    return pathname === target || pathname.startsWith(`${target}/`);
+  if (target === "/organization/integrations")
     return pathname === target || pathname.startsWith(`${target}/`);
   if (
-    target === "/organization/sources" ||
-    target === "/organization/integrations"
+    target === "/management/members" ||
+    target === "/management/permissions" ||
+    target === "/management/access"
   )
     return pathname === target || pathname.startsWith(`${target}/`);
   return pathname === target;

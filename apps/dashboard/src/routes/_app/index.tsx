@@ -57,14 +57,14 @@ function DashboardPage() {
   const workspaceLabel = organizationName ?? "your workspace";
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-testid="dashboard-page" className="flex flex-col gap-8">
       <PageHeader
         title={`Good morning, ${greetingName}`}
         description={`Pel AI, your workspace assistant for ${workspaceLabel}. Start with the latest context, then ask for more when you need it.`}
         actions={
           canViewWorkflows ? (
             <Button asChild>
-              <Link to="/workflows">
+              <Link data-testid="dashboard-run-workflow" to="/workflows">
                 <Play data-icon="inline-start" />
                 Run workflow
               </Link>

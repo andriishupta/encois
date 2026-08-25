@@ -42,7 +42,7 @@ import { useOrganization } from "@/lib/organization-context";
 import { usePermissions } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/organization/access")({
+export const Route = createFileRoute("/_app/management/access")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.OrganizationRead))
       throw redirect({ to: "/forbidden" });
@@ -154,7 +154,7 @@ function AccessSettingsPage() {
         actions={
           can(Permission.OrganizationManage) ? (
             <Button type="button" variant="outline" asChild>
-              <Link to="/organization/permissions">
+              <Link to="/management/permissions">
                 <LockKeyhole data-icon="inline-start" />
                 Open permission board
               </Link>

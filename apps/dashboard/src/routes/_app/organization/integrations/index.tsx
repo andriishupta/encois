@@ -25,15 +25,15 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -94,6 +94,7 @@ function IntegrationsPage() {
     "updated-desc" | "updated-asc" | "name-asc" | "status"
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
+  const [catalogView, setCatalogView] = useState<ListViewMode>("grid");
   const [catalogStatus, setCatalogStatus] = useState<
     IntegrationCatalogStatus | "all"
   >("all");
@@ -258,22 +259,24 @@ function IntegrationsPage() {
           options={sorts}
           label="Sort Integrations"
         />
-        <ListViewToggle value={view} onChange={setView} />
-        <ListMeta>
-          {items.length} loaded · {total} available
-        </ListMeta>
       </ListToolbar>
+      <ListResultsHeader
+        count={items.length}
+        label="visible integrations"
+        meta={`${total} available`}
+        view={view}
+        onViewChange={setView}
+      />
       {integrations.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading Integrations…</p>
       ) : null}
       {integrations.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load Integrations: {integrations.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Integrations unavailable"
+          message={integrations.error.message}
+          onRetry={() => integrations.refetch()}
+          retrying={integrations.isFetching}
+        />
       ) : null}
       {!integrations.isLoading && !integrations.isError && items.length ? (
         <ListCollection
@@ -408,35 +411,40 @@ function IntegrationsPage() {
             ]}
             label="Sort Integration Catalog"
           />
-          <ListMeta>
-            {catalogItems.length} loaded · {catalogTotal} available
-          </ListMeta>
         </ListToolbar>
+        <ListResultsHeader
+          count={catalogItems.length}
+          label="visible connectors"
+          meta={`${catalogTotal} available`}
+          view={catalogView}
+          onViewChange={setCatalogView}
+        />
         {catalog.isLoading ? (
           <p className="text-sm text-muted-foreground">
             Loading Integration Catalog…
           </p>
         ) : null}
         {catalog.isError ? (
-          <Card>
-            <CardContent className="pt-6">
-              <p role="alert" className="text-sm text-destructive">
-                Could not load Integration Catalog: {catalog.error.message}
-              </p>
-            </CardContent>
-          </Card>
+          <InlineError
+            title="Integration Catalog unavailable"
+            message={catalog.error.message}
+            onRetry={() => catalog.refetch()}
+            retrying={catalog.isFetching}
+          />
         ) : null}
         {!catalog.isLoading && !catalog.isError && catalogItems.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {catalogItems.map((entry) => (
+          <ListCollection
+            items={catalogItems}
+            view={catalogView}
+            getKey={(entry) => entry.key}
+            renderItem={(entry) => (
               <IntegrationCatalogCard
-                key={entry.key}
                 entry={entry}
                 integrations={items}
                 canManage={canManage}
               />
-            ))}
-          </div>
+            )}
+          />
         ) : null}
         {!catalog.isLoading && !catalog.isError && !catalogItems.length ? (
           <Card>

@@ -28,19 +28,19 @@ describe("isNavigationItemActive", () => {
     expect(
       isNavigationItemActive("/workflows/blueprints", "/workflows/runs"),
     ).toBe(false);
-    expect(isNavigationItemActive("/workflows/memory", "/workflows/runs")).toBe(
+    expect(isNavigationItemActive("/memory/workflow", "/workflows/runs")).toBe(
       false,
     );
     expect(
-      isNavigationItemActive("/workflows/memory", "/workflows/memory"),
+      isNavigationItemActive("/memory/workflow", "/memory/workflow"),
     ).toBe(true);
   });
 
   it("keeps nested organization source and integration pages active under their list item", () => {
     expect(
       isNavigationItemActive(
-        "/organization/sources/source-123",
-        "/organization/sources",
+        "/memory/sources/source-123",
+        "/memory/sources",
       ),
     ).toBe(true);
     expect(

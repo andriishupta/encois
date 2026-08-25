@@ -34,7 +34,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/organization/memory")({
+export const Route = createFileRoute("/_app/memory/organization")({
   validateSearch: (search: Record<string, unknown>) => ({
     savedId: typeof search.savedId === "string" ? search.savedId : undefined,
   }),

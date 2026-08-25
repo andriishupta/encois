@@ -9,15 +9,15 @@ import {
   unavailableCardClassName,
 } from "@/components/availability-state";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -106,27 +106,24 @@ function WorkflowTemplatesPage() {
             { value: "status", label: "Status" },
           ]}
         />
-        <ListViewToggle value={view} onChange={setView} />
       </ListToolbar>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <p className="font-medium">
-          {visibleTemplates.length} visible templates
-        </p>
-        <ListMeta>
-          {activeCount} active · {disabledCount} disabled
-        </ListMeta>
-      </div>
+      <ListResultsHeader
+        count={visibleTemplates.length}
+        label="visible templates"
+        meta={`${activeCount} active · ${disabledCount} disabled`}
+        view={view}
+        onViewChange={setView}
+      />
       {templates.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading templates…</p>
       ) : null}
       {templates.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load templates: {templates.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Workflow templates unavailable"
+          message={templates.error.message}
+          onRetry={() => templates.refetch()}
+          retrying={templates.isFetching}
+        />
       ) : null}
       {visibleTemplates.length ? (
         <ListCollection

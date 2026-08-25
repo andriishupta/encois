@@ -67,9 +67,35 @@ export function ListFilter({
   );
 }
 
-export function ListMeta({ children }: { children: ReactNode }) {
+export function ListResultsHeader({
+  count,
+  label,
+  meta,
+  view,
+  onViewChange,
+}: {
+  count: number;
+  label: string;
+  meta?: ReactNode;
+  view?: ListViewMode;
+  onViewChange?: (value: ListViewMode) => void;
+}) {
   return (
-    <span className="text-xs text-muted-foreground sm:ml-auto">{children}</span>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm font-medium" aria-live="polite">
+        {count} {label}
+      </p>
+      {meta || (view && onViewChange) ? (
+        <div className="flex items-center gap-3">
+          {meta ? (
+            <span className="text-xs text-muted-foreground">{meta}</span>
+          ) : null}
+          {view && onViewChange ? (
+            <ListViewToggle value={view} onChange={onViewChange} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -1,0 +1,20 @@
+{
+  "name": "@encois/e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm run typecheck",
+    "e2e": "cypress run",
+    "e2e:open": "cypress open",
+    "format": "biome format --write cypress cypress.config.ts",
+    "format:check": "biome format cypress cypress.config.ts",
+    "lint": "pnpm run typecheck",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "cypress": "^14.5.4",
+    "typescript": "~5.9.2"
+  }
+}

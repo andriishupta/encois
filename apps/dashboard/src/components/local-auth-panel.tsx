@@ -52,6 +52,7 @@ export default function LocalAuthPanel({
     <div className="flex flex-col gap-3 rounded-md border p-3">
       <p className="text-sm font-medium">Local Auth Emulator</p>
       <input
+        data-testid="local-auth-email"
         aria-label="Local email"
         type="email"
         value={email}
@@ -59,6 +60,7 @@ export default function LocalAuthPanel({
         className="rounded-md border bg-background px-3 py-2 text-sm"
       />
       <input
+        data-testid="local-auth-password"
         aria-label="Local password"
         type="password"
         value={password}
@@ -66,6 +68,7 @@ export default function LocalAuthPanel({
         className="rounded-md border bg-background px-3 py-2 text-sm"
       />
       <Button
+        data-testid="local-auth-submit"
         type="button"
         variant="outline"
         disabled={isSubmitting}

@@ -23,15 +23,15 @@ import {
 import { FilePlus2, GitBranch, Play, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -91,7 +91,8 @@ function WorkflowsPage() {
     queryKey: queryKeys.workflows(),
     queryFn: listWorkflows,
   });
-  const blueprintItems = workflows.data?.pages.flatMap((page) => page.items) ?? [];
+  const blueprintItems =
+    workflows.data?.pages.flatMap((page) => page.items) ?? [];
   const definitions = useMemo(
     () => selectWorkflowDefinitions(blueprintItems),
     [blueprintItems],
@@ -102,14 +103,14 @@ function WorkflowsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-testid="workflows-page" className="flex flex-col gap-8">
       <PageHeader
         title="Workflows"
         description="Browse the workflow definitions available to this organization. Open a definition to inspect its versioned Blueprint or create a new workflow."
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/workflows/new">
+              <Link data-testid="workflows-new" to="/workflows/new">
                 <FilePlus2 data-icon="inline-start" />
                 New workflow
               </Link>
@@ -149,31 +150,31 @@ function WorkflowsPage() {
             { value: "status", label: "Status" },
           ]}
         />
-        <ListViewToggle value={view} onChange={setView} />
       </ListToolbar>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium">
-          {definitions.length} visible workflows
-        </p>
-        <ListMeta>API-sorted results</ListMeta>
-      </div>
+      <ListResultsHeader
+        count={definitions.length}
+        label="visible workflows"
+        view={view}
+        onViewChange={setView}
+      />
       {workflows.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading workflows…</p>
       ) : null}
       {workflows.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load workflows: {workflows.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Workflows unavailable"
+          message={workflows.error.message}
+          onRetry={() => workflows.refetch()}
+          retrying={workflows.isFetching}
+        />
       ) : null}
       {runs.isError ? (
-        <p role="alert" className="text-sm text-muted-foreground">
-          Run actions are unavailable because current runs could not be checked:{" "}
-          {runs.error.message}
-        </p>
+        <InlineError
+          title="Current Runs unavailable"
+          message={`Run actions are unavailable because current Runs could not be checked: ${runs.error.message}`}
+          onRetry={() => runs.refetch()}
+          retrying={runs.isFetching}
+        />
       ) : null}
       {definitions.length ? (
         <ListCollection
@@ -299,7 +300,10 @@ function WorkflowDefinitionCard({
 }) {
   const statusLabel = workflow.status === "approved" ? "Published" : "Draft";
   return (
-    <Card className="flex h-full flex-col">
+    <Card
+      data-testid="workflow-definition-card"
+      className="flex h-full flex-col"
+    >
       <CardHeader>
         <Link
           to="/workflows/definitions/$workflowId"
@@ -307,7 +311,10 @@ function WorkflowDefinitionCard({
           className="group flex items-start justify-between gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <div>
-            <CardTitle className="group-hover:underline">
+            <CardTitle
+              data-testid="workflow-definition-title"
+              className="group-hover:underline"
+            >
               {workflow.name}
             </CardTitle>
             <CardDescription>
@@ -415,6 +422,7 @@ function WorkflowDefinitionActions({
           </Button>
         ) : (
           <Button
+            data-testid="workflow-definition-run"
             onClick={() => run.mutate()}
             disabled={!canStart}
             title={!runsReady ? "Checking current runs…" : undefined}

@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { CircleDashed, FileText, RefreshCw } from "lucide-react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
 import { Button } from "@/components/ui/button";
@@ -231,21 +232,21 @@ function WorkflowDetailPage() {
           title="Workflow run unavailable"
           description="The run could not be loaded in the current organization scope."
         />
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              {workflow.error?.message ??
-                "No workflow projection was returned."}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Workflow run unavailable"
+          message={
+            workflow.error?.message ?? "No workflow projection was returned."
+          }
+          onRetry={() => workflow.refetch()}
+          retrying={workflow.isFetching}
+        />
       </div>
     );
   const status = workflow.data.status;
   const isRefreshing = workflow.isFetching || events.isFetching;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-testid="workflow-run-page" className="flex flex-col gap-8">
       <PageHeader
         title={
           workflow.data
@@ -459,9 +460,12 @@ function WorkflowDetailPage() {
         </CardHeader>
         <CardContent>
           {events.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              Could not load step activity: {events.error.message}
-            </p>
+            <InlineError
+              title="Step activity unavailable"
+              message={events.error.message}
+              onRetry={() => events.refetch()}
+              retrying={events.isFetching}
+            />
           ) : null}
           {!events.isLoading && !events.isError && activityRows.length === 0 ? (
             <EmptyPanel
@@ -947,6 +951,7 @@ function RunDetailsCard({
           </CardDescription>
         </div>
         <WorkflowStatusIndicator
+          testId="workflow-run-status"
           status={workflow.status}
           reason={workflow.statusReason}
         />
@@ -1128,6 +1133,7 @@ function WorkflowOutputCard({
           </div>
         </div>
         <WorkflowStatusIndicator
+          testId="workflow-output-status"
           status={status}
           reason={statusReason}
           compact
@@ -1141,7 +1147,12 @@ function WorkflowOutputCard({
               : "rounded-lg border border-dashed bg-muted/20 p-4"
           }
         >
-          <p className="text-sm font-medium">{title}</p>
+          <p
+            data-testid="workflow-output-title"
+            className="text-sm font-medium"
+          >
+            {title}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           {output ? (
             <>

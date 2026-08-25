@@ -17,7 +17,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/organization/investigations")({
+export const Route = createFileRoute("/_app/memory/investigations")({
   beforeLoad: () => {
     const session = getAuthSession();
     if (
@@ -53,7 +53,7 @@ function InvestigationsPage() {
         description="Repeatable, scope-bound entry points into organization context, memory, and workflow review."
         actions={
           <Button asChild variant="outline">
-            <Link to="/organization/memory" search={{ savedId: undefined }}>
+            <Link to="/memory/organization" search={{ savedId: undefined }}>
               Open organization memory
             </Link>
           </Button>
@@ -95,7 +95,7 @@ function InvestigationsPage() {
               action={
                 <Button asChild>
                   <Link
-                    to="/organization/memory"
+                    to="/memory/organization"
                     search={{ savedId: undefined }}
                   >
                     Explore organization memory
@@ -128,7 +128,7 @@ function InvestigationsPage() {
                 {item.kind === "graph" ? (
                   <Button asChild type="button" variant="outline" size="sm">
                     <Link
-                      to="/organization/memory"
+                      to="/memory/organization"
                       search={{ savedId: item.id }}
                     >
                       Open

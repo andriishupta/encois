@@ -83,18 +83,6 @@ const workflowNavigation: readonly NavigationItem[] = [
     permission: Permission.WorkflowsRead,
   },
   {
-    label: "Memory",
-    to: "/workflows/memory",
-    icon: BrainCircuit,
-    permission: Permission.MemoryRead,
-  },
-  {
-    label: "Templates",
-    to: "/workflows/templates",
-    icon: FilePlus2,
-    permission: Permission.WorkflowsRead,
-  },
-  {
     label: "Blueprints",
     to: "/workflows/blueprints",
     icon: GitBranch,
@@ -106,6 +94,12 @@ const workflowNavigation: readonly NavigationItem[] = [
     icon: ClipboardCheck,
     permission: Permission.WorkflowsManage,
   },
+  {
+    label: "Templates",
+    to: "/workflows/templates",
+    icon: FilePlus2,
+    permission: Permission.WorkflowsRead,
+  },
 ] as const;
 
 const organizationNavigation: readonly NavigationItem[] = [
@@ -116,32 +110,29 @@ const organizationNavigation: readonly NavigationItem[] = [
     permission: Permission.OrganizationRead,
   },
   {
-    label: "Members",
-    to: "/organization/members",
-    icon: UserRound,
-    permission: Permission.OrganizationRead,
-  },
-  {
-    label: "Memory",
-    to: "/organization/memory",
-    icon: Network,
-    permission: Permission.ContextRead,
-  },
-  {
-    label: "Sources",
-    to: "/organization/sources",
-    icon: Waypoints,
-    permission: Permission.KnowledgeRead,
-  },
-  {
     label: "Integrations",
     to: "/organization/integrations",
     icon: PlugZap,
     permission: Permission.IntegrationsRead,
   },
+] as const;
+
+const memoryNavigation: readonly NavigationItem[] = [
+  {
+    label: "Workflow Memory",
+    to: "/memory/workflow",
+    icon: BrainCircuit,
+    permission: Permission.MemoryRead,
+  },
+  {
+    label: "Organization Memory",
+    to: "/memory/organization",
+    icon: Network,
+    permission: Permission.ContextRead,
+  },
   {
     label: "Investigations",
-    to: "/organization/investigations",
+    to: "/memory/investigations",
     icon: Bookmark,
     anyPermission: [
       Permission.OrganizationManage,
@@ -152,14 +143,29 @@ const organizationNavigation: readonly NavigationItem[] = [
     ],
   },
   {
+    label: "Sources",
+    to: "/memory/sources",
+    icon: Waypoints,
+    permission: Permission.KnowledgeRead,
+  },
+] as const;
+
+const managementNavigation: readonly NavigationItem[] = [
+  {
+    label: "Members",
+    to: "/management/members",
+    icon: UserRound,
+    permission: Permission.OrganizationRead,
+  },
+  {
     label: "Permissions",
-    to: "/organization/permissions",
+    to: "/management/permissions",
     icon: ClipboardCheck,
     permission: Permission.OrganizationManage,
   },
   {
     label: "Access",
-    to: "/organization/access",
+    to: "/management/access",
     icon: UserRound,
     permission: Permission.OrganizationRead,
   },
@@ -379,6 +385,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               onNavigate={closeNavigation}
             />
             <NavSection
+              label="Memory"
+              pathname={pathname}
+              items={visibleNavigation(memoryNavigation, can)}
+              onNavigate={closeNavigation}
+            />
+            <NavSection
+              label="Management"
+              pathname={pathname}
+              items={visibleNavigation(managementNavigation, can)}
+              onNavigate={closeNavigation}
+            />
+            <NavSection
               label="Settings"
               pathname={pathname}
               items={visibleNavigation(settingsNavigation, can)}
@@ -530,6 +548,9 @@ function NavSection({
           return (
             <Link
               key={item.to}
+              data-testid={
+                item.to === "/workflows" ? "nav-workflows" : undefined
+              }
               to={item.to}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
@@ -603,15 +624,16 @@ type BreadcrumbRoute =
   | "/workflows/templates"
   | "/workflows/blueprints"
   | "/workflows/plans"
-  | "/workflows/memory"
+  | "/memory/workflow"
   | "/organization"
-  | "/organization/memory"
-  | "/organization/sources"
+  | "/memory/organization"
+  | "/memory/sources"
   | "/organization/units/new"
   | "/organization/integrations"
-  | "/organization/investigations"
-  | "/organization/permissions"
-  | "/organization/access"
+  | "/memory/investigations"
+  | "/management/members"
+  | "/management/permissions"
+  | "/management/access"
   | "/activity"
   | "/settings"
   | "/settings/workspace"
@@ -655,19 +677,28 @@ function getBreadcrumbItems(
       { label: "Workflows", to: "/workflows" },
       { label: "New workflow" },
     ];
-  if (pathname === "/workflows/memory")
-    return [{ label: "Workflows", to: "/workflows" }, { label: "Memory" }];
+  if (pathname === "/memory/workflow")
+    return [
+      { label: "Memory" },
+      { label: "Workflow Memory" },
+    ];
+  if (pathname.startsWith("/memory/workflow/"))
+    return [
+      { label: "Memory", to: "/memory/workflow" },
+      { label: "Workflow Memory", to: "/memory/workflow" },
+      { label: "Add memory" },
+    ];
   if (pathname.startsWith("/workflows/"))
     return [{ label: "Workflows", to: "/workflows" }, { label: "Runs" }];
   if (pathname === "/activity") return [{ label: "Activity" }];
-  if (pathname === "/organization/memory")
+  if (pathname === "/memory/organization")
     return [
-      { label: "Organization", to: "/organization" },
       { label: "Memory" },
+      { label: "Organization Memory" },
     ];
-  if (pathname === "/organization/sources")
+  if (pathname === "/memory/sources")
     return [
-      { label: "Organization", to: "/organization" },
+      { label: "Memory" },
       { label: "Sources" },
     ];
   if (pathname === "/organization/units/new")
@@ -675,16 +706,16 @@ function getBreadcrumbItems(
       { label: "Organization", to: "/organization" },
       { label: "Add organization unit" },
     ];
-  if (pathname === "/organization/sources/new")
+  if (pathname === "/memory/sources/new")
     return [
-      { label: "Organization", to: "/organization" },
-      { label: "Sources", to: "/organization/sources" },
+      { label: "Memory" },
+      { label: "Sources", to: "/memory/sources" },
       { label: "Add source" },
     ];
-  if (pathname.startsWith("/organization/sources/"))
+  if (pathname.startsWith("/memory/sources/"))
     return [
-      { label: "Organization", to: "/organization" },
-      { label: "Sources", to: "/organization/sources" },
+      { label: "Memory" },
+      { label: "Sources", to: "/memory/sources" },
       { label: "Source details" },
     ];
   if (pathname === "/organization/integrations")
@@ -704,20 +735,20 @@ function getBreadcrumbItems(
       { label: "Integrations", to: "/organization/integrations" },
       { label: getIntegrationLabel(pathname) },
     ];
-  if (pathname === "/organization/investigations")
+  if (pathname === "/memory/investigations")
     return [
-      { label: "Organization", to: "/organization" },
+      { label: "Memory" },
       { label: "Investigations" },
     ];
   if (pathname === "/organization") return [{ label: "Organization" }];
-  if (pathname === "/organization/members")
+  if (pathname === "/management/members")
     return [
-      { label: "Organization", to: "/organization" },
+      { label: "Management" },
       { label: "Members" },
     ];
-  if (pathname === "/organization/permissions")
+  if (pathname === "/management/permissions")
     return [
-      { label: "Organization", to: "/organization" },
+      { label: "Management" },
       { label: "Permissions" },
     ];
   if (pathname === "/settings") return [{ label: "Settings" }];
@@ -730,9 +761,9 @@ function getBreadcrumbItems(
       { label: "Settings", to: "/settings" },
       { label: `${productName} Documentation` },
     ];
-  if (pathname === "/organization/access")
+  if (pathname === "/management/access")
     return [
-      { label: "Organization", to: "/organization" },
+      { label: "Management" },
       { label: "Access" },
     ];
   if (pathname === "/profile") return [{ label: "Account" }];

@@ -44,10 +44,12 @@ export function WorkflowStatusIndicator({
   status,
   reason,
   compact = false,
+  testId,
 }: {
   status: WorkflowVisualStatus;
   reason?: WorkflowStatusReason;
   compact?: boolean;
+  testId?: string;
 }) {
   const visual = statusVisuals[status];
   const Icon = visual.icon;
@@ -56,6 +58,7 @@ export function WorkflowStatusIndicator({
 
   return (
     <span
+      data-testid={testId}
       className={`inline-flex items-center gap-1.5 font-medium ${compact ? "text-xs" : "text-sm"} ${visual.tone}`}
       role="status"
       aria-label={label}

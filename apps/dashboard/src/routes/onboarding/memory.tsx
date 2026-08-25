@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { type ChangeEvent, useState } from "react";
 import { ProductTerm } from "@/components/product-term";
+import { InlineError } from "@/components/inline-error";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -219,9 +220,12 @@ function MemorySetupPage() {
       </Card>
 
       {sources.isError ? (
-        <p className="text-sm text-muted-foreground">
-          Existing sources could not be listed. You can still upload a new PDF.
-        </p>
+        <InlineError
+          title="Existing Sources unavailable"
+          message="You can still upload a new PDF, or try loading existing Sources again."
+          onRetry={() => sources.refetch()}
+          retrying={sources.isFetching}
+        />
       ) : null}
       {error ? (
         <p className="text-sm text-destructive" role="alert">

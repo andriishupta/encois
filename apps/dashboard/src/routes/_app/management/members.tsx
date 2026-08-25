@@ -13,7 +13,7 @@ import {
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 
-export const Route = createFileRoute("/_app/organization/members")({
+export const Route = createFileRoute("/_app/management/members")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.OrganizationRead))
       throw redirect({ to: "/forbidden" });
@@ -31,7 +31,7 @@ function OrganizationMembersPage() {
         description="View members in this organization. Permission scopes are managed separately."
         actions={
           <Button variant="outline" asChild>
-            <Link to="/organization/permissions">Manage permissions</Link>
+            <Link to="/management/permissions">Manage permissions</Link>
           </Button>
         }
       />
@@ -56,7 +56,7 @@ function OrganizationMembersPage() {
               members.map((member) => (
                 <Link
                   key={member.id}
-                  to="/organization/permissions"
+                  to="/management/permissions"
                   search={{ memberId: member.id }}
                   className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
                 >

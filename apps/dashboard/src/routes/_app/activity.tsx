@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -343,7 +344,7 @@ function ActivityPage() {
             label="Sources & Integrations"
             value={environmentAttention}
             detail="Source health and connector setup"
-            to="/organization/sources"
+            to="/memory/sources"
             secondaryLinks={[
               { label: "Integrations", to: "/organization/integrations" },
             ]}
@@ -356,26 +357,22 @@ function ActivityPage() {
             to="/workflows/runs"
             secondaryLinks={[
               { label: "Plans", to: "/workflows/plans" },
-              { label: "Memory", to: "/workflows/memory" },
-              { label: "Access", to: "/organization/access" },
+              { label: "Memory", to: "/memory/workflow" },
+              { label: "Access", to: "/management/access" },
             ]}
           />
         </CardContent>
       </Card>
 
       {reviewUnavailable ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="flex items-start gap-3 p-5">
-            <AlertTriangle className="mt-0.5 size-5 text-destructive" />
-            <div>
-              <p className="font-medium">Activity unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Some operational data could not be loaded, so Activity is not
-                marked clear. Reload the page after the service is available.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Activity unavailable"
+          message="Some operational data could not be loaded, so Activity is not marked clear."
+          onRetry={() =>
+            Promise.all(reviewQueries.map((query) => query.refetch()))
+          }
+          retrying={reviewQueries.some((query) => query.isFetching)}
+        />
       ) : null}
       {!reviewUnavailable && !reviewLoading && attentionCount === 0 ? (
         <Card className="border-emerald-500/30 bg-emerald-500/5">
@@ -420,7 +417,7 @@ function ActivityPage() {
         >
           <ReviewSection
             title="Source attention"
-            to="/organization/sources"
+            to="/memory/sources"
             empty="All visible Sources are healthy."
           >
             {unhealthySources.map((source) => (
@@ -503,7 +500,7 @@ function ActivityPage() {
           {canManageMemory ? (
             <ReviewSection
               title="Memory changes"
-              to="/workflows/memory"
+              to="/memory/workflow"
               empty="No memory change is waiting for review."
             >
               {memoryActionError ? (
@@ -530,7 +527,7 @@ function ActivityPage() {
           {canViewOrganization ? (
             <ReviewSection
               title="Access requests"
-              to="/organization/access"
+              to="/management/access"
               empty="No access request is waiting for review."
             >
               {accessRequestActionError ? (
@@ -583,10 +580,10 @@ type ActivityRoute =
   | "/workflows"
   | "/workflows/runs"
   | "/workflows/plans"
-  | "/workflows/memory"
-  | "/organization/sources"
+  | "/memory/workflow"
+  | "/memory/sources"
   | "/organization/integrations"
-  | "/organization/access";
+  | "/management/access";
 
 function ActivityMetric({
   icon: Icon,
@@ -666,12 +663,12 @@ function ReviewCard({
   children: React.ReactNode;
   to?:
     | "/workflows/runs"
-    | "/organization/sources"
+    | "/memory/sources"
     | "/organization/integrations"
     | "/workflows"
     | "/workflows/plans"
-    | "/workflows/memory"
-    | "/organization/access";
+    | "/memory/workflow"
+    | "/management/access";
 }) {
   return (
     <Card className="min-w-0">
@@ -796,7 +793,7 @@ function WorkflowReviewRow({
 function SourceReviewRow({ source }: { source: KnowledgeSource }) {
   return (
     <Link
-      to="/organization/sources/$sourceId"
+      to="/memory/sources/$sourceId"
       params={{ sourceId: source.id }}
       className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
     >

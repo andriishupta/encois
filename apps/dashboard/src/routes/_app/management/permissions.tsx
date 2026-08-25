@@ -39,7 +39,7 @@ import {
 } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 
-export const Route = createFileRoute("/_app/organization/permissions")({
+export const Route = createFileRoute("/_app/management/permissions")({
   validateSearch: (search: Record<string, unknown>) => ({
     memberId: typeof search.memberId === "string" ? search.memberId : undefined,
   }),

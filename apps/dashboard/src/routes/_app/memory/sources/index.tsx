@@ -15,15 +15,15 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { InlineError } from "@/components/inline-error";
 import {
   ListCollection,
   ListFilter,
-  ListMeta,
   ListPagination,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
   type ListViewMode,
-  ListViewToggle,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -42,7 +42,7 @@ import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/organization/sources/")({
+export const Route = createFileRoute("/_app/memory/sources/")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeRead))
       throw redirect({ to: "/forbidden" });
@@ -124,7 +124,7 @@ function SourcesPage() {
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/organization/sources/new">
+              <Link to="/memory/sources/new">
                 <Plus data-icon="inline-start" />
                 Add source
               </Link>
@@ -151,22 +151,24 @@ function SourcesPage() {
           options={statuses}
           label="Filter Sources by status"
         />
-        <ListViewToggle value={view} onChange={setView} />
-        <ListMeta>
-          {items.length} loaded · {total} available
-        </ListMeta>
       </ListToolbar>
+      <ListResultsHeader
+        count={visibleItems.length}
+        label="visible sources"
+        meta={`${total} available`}
+        view={view}
+        onViewChange={setView}
+      />
       {sources.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading Sources…</p>
       ) : null}
       {sources.isError ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not load Sources: {sources.error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError
+          title="Sources unavailable"
+          message={sources.error.message}
+          onRetry={() => sources.refetch()}
+          retrying={sources.isFetching}
+        />
       ) : null}
       {!sources.isLoading && !sources.isError && visibleItems.length ? (
         <ListCollection
@@ -201,7 +203,7 @@ function SourcesPage() {
               action={
                 canManage ? (
                   <Button asChild>
-                    <Link to="/organization/sources/new">
+                    <Link to="/memory/sources/new">
                       <Plus data-icon="inline-start" />
                       Add source
                     </Link>
@@ -242,7 +244,7 @@ function SourceCard({
     : "Freshness unavailable";
   return (
     <Link
-      to="/organization/sources/$sourceId"
+      to="/memory/sources/$sourceId"
       params={{ sourceId: source.id }}
       className="group block"
     >

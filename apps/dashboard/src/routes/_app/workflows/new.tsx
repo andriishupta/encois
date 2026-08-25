@@ -278,7 +278,7 @@ function NewWorkflowPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div data-testid="workflow-create-page" className="flex flex-col gap-8">
       <PageHeader
         title="New workflow"
         description="Create a governed workflow from a catalog template or an approved Blueprint. Internal identifiers and execution details are managed for you."
@@ -441,6 +441,7 @@ function SourceStage({
           return (
             <CardButton
               key={option.mode}
+              data-testid={`workflow-source-${option.mode}`}
               type="button"
               disabled={option.disabled}
               onClick={() => onModeChange(option.mode)}
@@ -478,6 +479,7 @@ function SourceStage({
           items={templates}
           selectedKey={selectedTemplateKey}
           getKey={(item) => item.key}
+          itemTestId={(item) => `workflow-template-${item.key}`}
           isDisabled={(item) => item.status !== "active"}
           onSelect={onTemplateChange}
           renderItem={(item, selected) => (
@@ -577,6 +579,7 @@ function ConfigureStage({
           >
             Workflow name
             <input
+              data-testid="workflow-name"
               id="workflow-name"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
@@ -601,6 +604,7 @@ function ConfigureStage({
         </div>
         <OrganizationUnitSelect
           id="workflow-execution-scope"
+          testId="workflow-execution-scope"
           label="Organization scope"
           value={executionScopeId}
           units={units}
@@ -617,6 +621,7 @@ function ConfigureStage({
             Back
           </Button>
           <Button
+            data-testid="workflow-preview-plan"
             disabled={!canPreview || !executionScopeId}
             onClick={onPreview}
           >
@@ -705,7 +710,7 @@ function ReviewStage({
     (binding) => binding.required && binding.status === "missing",
   );
   return (
-    <Card>
+    <Card data-testid="workflow-review-stage">
       <CardHeader>
         <CardTitle>Review and apply</CardTitle>
         <CardDescription>
@@ -818,7 +823,7 @@ function ReviewStage({
             </div>
             <Button variant="outline" asChild>
               <Link
-                to="/organization/sources/new"
+                to="/memory/sources/new"
                 search={{ sourceType: "integration" }}
               >
                 <PlugZap data-icon="inline-start" />
@@ -833,6 +838,7 @@ function ReviewStage({
             <p className="text-sm font-medium">After approval</p>
             <label className="flex cursor-pointer items-start gap-3 text-sm">
               <input
+                data-testid="workflow-save-approved"
                 type="radio"
                 checked={!runAfterApply}
                 onChange={() => onRunChange(false)}
@@ -879,6 +885,7 @@ function ReviewStage({
         ) : null}
         {planStatus === "approved" ? (
           <div
+            data-testid="workflow-plan-approved"
             role="status"
             className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"
           >
@@ -891,7 +898,10 @@ function ReviewStage({
         ) : null}
 
         {completed ? (
-          <div className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
+          <div
+            data-testid="workflow-plan-applied"
+            className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"
+          >
             <CheckCircle2 className="mt-0.5 size-5 text-emerald-600" />
             <div>
               <p className="font-medium">Workflow plan applied</p>
@@ -915,7 +925,7 @@ function ReviewStage({
             Back
           </Button>
           {completed ? (
-            <Button onClick={onOpenWorkflows}>
+            <Button data-testid="workflow-open-list" onClick={onOpenWorkflows}>
               Open workflows <ArrowRight data-icon="inline-end" />
             </Button>
           ) : creatingAndApproving ? (
@@ -947,6 +957,7 @@ function ReviewStage({
                     : "Create plan"}
               </Button>
               <Button
+                data-testid="workflow-create-and-approve"
                 onClick={onCreateAndApprove}
                 disabled={
                   submitting || creatingAndApproving || missingRequiredProvider
@@ -979,6 +990,7 @@ function ReviewStage({
             </Button>
           ) : (
             <Button
+              data-testid="workflow-apply-plan"
               onClick={onApply}
               disabled={applying || planStatus !== "approved"}
             >
@@ -1084,6 +1096,7 @@ function SelectionList<T>({
   items,
   selectedKey,
   getKey,
+  itemTestId,
   isDisabled,
   onSelect,
   renderItem,
@@ -1096,6 +1109,7 @@ function SelectionList<T>({
   items: readonly T[];
   selectedKey?: string;
   getKey: (item: T) => string;
+  itemTestId?: (item: T) => string;
   isDisabled?: (item: T) => boolean;
   onSelect: (key: string) => void;
   renderItem: (item: T, selected: boolean) => ReactNode;
@@ -1133,6 +1147,7 @@ function SelectionList<T>({
               return (
                 <CardButton
                   key={key}
+                  data-testid={itemTestId?.(item)}
                   type="button"
                   disabled={disabled}
                   onClick={() => onSelect(key)}

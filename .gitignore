@@ -62,6 +62,8 @@ test-results/
 blob-report/
 cypress/videos/
 cypress/screenshots/
+**/cypress/videos/
+**/cypress/screenshots/
 
 # Go build, test, and tooling artifacts
 bin/

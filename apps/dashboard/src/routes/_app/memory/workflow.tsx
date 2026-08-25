@@ -18,7 +18,7 @@ import { EmptyPanel } from "@/components/empty-panel";
 import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import {
   ListFilter,
-  ListMeta,
+  ListResultsHeader,
   ListSearch,
   ListToolbar,
 } from "@/components/list-controls";
@@ -49,7 +49,7 @@ import { useOrganization } from "@/lib/organization-context";
 import { usePermissions } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/workflows/memory")({
+export const Route = createFileRoute("/_app/memory/workflow")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.MemoryRead))
       throw redirect({ to: "/forbidden" });
@@ -67,7 +67,7 @@ function MemoryRoute() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  return pathname !== "/workflows/memory" ? <Outlet /> : <MemoryPage />;
+  return pathname !== "/memory/workflow" ? <Outlet /> : <MemoryPage />;
 }
 
 function MemoryPage() {
@@ -145,7 +145,7 @@ function MemoryPage() {
         actions={
           <>
             <Button asChild>
-              <Link to="/workflows/memory/add">
+              <Link to="/memory/workflow/add">
                 <FilePlus2 data-icon="inline-start" />
                 Add Workflow memory
               </Link>
@@ -199,8 +199,11 @@ function MemoryPage() {
           onChange={(value) => setScope(value || "all")}
           description="All available units when no unit is selected."
         />
-        <ListMeta>{memory.data?.memories?.length ?? 0} matches</ListMeta>
       </ListToolbar>
+      <ListResultsHeader
+        count={memory.data?.memories?.length ?? 0}
+        label="visible memory records"
+      />
       <Card>
         <CardHeader>
           <CardTitle>Memory results</CardTitle>

@@ -172,7 +172,7 @@ function OrganizationPage() {
             )}
             {selectedUnit?.canManage ? (
               <Button variant="outline" asChild>
-                <Link to="/organization/permissions">
+                <Link to="/management/permissions">
                   <Users data-icon="inline-start" />
                   Manage permissions
                 </Link>
