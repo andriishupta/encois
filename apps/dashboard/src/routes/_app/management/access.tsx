@@ -170,7 +170,7 @@ function AccessSettingsPage() {
         </p>
       ) : null}
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-start">
         <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -207,16 +207,13 @@ function AccessSettingsPage() {
               </div>
             )}
           </CardContent>
-        </Card>
-
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Access</CardTitle>
-            <CardDescription>
-              Identity and scope resolved for this session.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent className="flex flex-col gap-4 border-t pt-6">
+            <div>
+              <h3 className="text-sm font-semibold">Access</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Identity and scope resolved for this session.
+              </p>
+            </div>
             <div className="grid gap-2 text-sm">
               <DetailRow
                 label="Identity"
@@ -271,43 +268,43 @@ function AccessSettingsPage() {
             ) : null}
           </CardContent>
         </Card>
-      </div>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle>Capabilities</CardTitle>
-          <CardDescription>
-            Product capabilities granted by the active organization role.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {capabilities.length ? (
-            sortedCapabilities.map((permission) => (
-              <div
-                key={permission}
-                className="flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm"
-              >
-                <span className="flex size-6 items-center justify-center rounded-full bg-muted">
-                  <Check
-                    className="size-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </span>
-                <div className="min-w-0">
-                  <p>{humanizeKey(permission)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {describePermission(permission)}
-                  </p>
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>Capabilities</CardTitle>
+            <CardDescription>
+              Product capabilities granted by the active organization role.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {capabilities.length ? (
+              sortedCapabilities.map((permission) => (
+                <div
+                  key={permission}
+                  className="flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm"
+                >
+                  <span className="flex size-6 items-center justify-center rounded-full bg-muted">
+                    <Check
+                      className="size-3.5 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p>{humanizeKey(permission)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {describePermission(permission)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No capabilities are available in this session.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+              ))
+            ) : (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No capabilities are available in this session.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
