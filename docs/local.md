@@ -54,10 +54,10 @@ does not necessarily rebuild the image, so it can run an older migration
 bundle.
 
 `local-auth-seed` runs after migrations. It creates one deterministic local
-dataset for `Organization Sun`. It includes hierarchical units, users with
+dataset for `Sun Inc`. It includes hierarchical units, users with
 different roles and scopes, organization Integrations, unit-scoped Sources with revisions and
 ingestion runs, webhook deliveries, and persisted workflow runs/events.
-It also ensures the Organization Sun onboarding row is explicitly `ready` for
+It also ensures the Sun Inc onboarding row is explicitly `ready` for
 the pre-bootstrapped demo organization. That fixture is intentionally ready so
 the standard local dashboard can be used immediately; it is not a substitute
 for testing the incomplete onboarding lifecycle. It is idempotent and only
@@ -78,10 +78,10 @@ Existing-workspace users:
 
 | Email | Password | Organization | Role | Scope |
 | --- | --- | --- | --- | --- |
-| `owner@local.test` | `local-password-1234` | Organization Sun | organization admin | All units |
-| `manager@local.test` | `local-manager-1234` | Organization Sun | manager | Engineering and descendants |
-| `dev@local.test` | `local-dev-1234` | Organization Sun | manager | Development and descendants |
-| `viewer@local.test` | `local-viewer-1234` | Organization Sun | viewer | Checkout only; read-only |
+| `owner@local.test` | `local-password-1234` | Sun Inc | organization admin | All units |
+| `manager@local.test` | `local-manager-1234` | Sun Inc | manager | Engineering and descendants |
+| `dev@local.test` | `local-dev-1234` | Sun Inc | manager | Development and descendants |
+| `viewer@local.test` | `local-viewer-1234` | Sun Inc | viewer | Checkout only; read-only |
 
 The three `onboarding1..3@local.test` users are verified Firebase Emulator
 accounts with organization invites. On first sign-in the invite is accepted

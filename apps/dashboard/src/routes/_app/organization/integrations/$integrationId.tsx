@@ -586,7 +586,7 @@ function IntegrationDetailPage() {
             >
               <div className="min-w-0">
                 <Link
-                  to="/memory/sources/$sourceId"
+                  to="/organization/sources/$sourceId"
                   params={{ sourceId: source.id }}
                   className="block truncate text-sm font-medium hover:underline"
                 >
@@ -643,7 +643,7 @@ function IntegrationDetailPage() {
             {integrationSources.map((source) => (
               <Link
                 key={source.id}
-                  to="/memory/sources/$sourceId"
+                to="/organization/sources/$sourceId"
                 params={{ sourceId: source.id }}
                 className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm transition-colors hover:bg-accent"
               >

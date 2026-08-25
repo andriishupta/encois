@@ -823,7 +823,7 @@ function ReviewStage({
             </div>
             <Button variant="outline" asChild>
               <Link
-                to="/memory/sources/new"
+                to="/organization/sources/new"
                 search={{ sourceType: "integration" }}
               >
                 <PlugZap data-icon="inline-start" />

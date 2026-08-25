@@ -107,8 +107,7 @@ export async function queryMemoryForPrincipal(
     : dashboardMemoryAgentDefinitions;
   const projectId = input.projectId?.trim();
   const maxResults = Math.min(Math.max(input.maxResults ?? 10, 1), 20);
-  const baseWorkflowId =
-    `workflow:${principal.organizationId}:dashboard-memory:${requestId}`;
+  const baseWorkflowId = `workflow:${principal.organizationId}:dashboard-memory:${requestId}`;
   const requests: AgentMemoryRequest[] = agentDefinitions.map(
     (agentDefinition) => {
       const workflowId = `${baseWorkflowId}:${agentDefinition}`;

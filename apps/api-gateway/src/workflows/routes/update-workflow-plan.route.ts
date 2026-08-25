@@ -27,7 +27,11 @@ export const updateWorkflowPlanRoute: Handler<GatewayEnv> = async (context) => {
     );
 
   try {
-    const data = await updateWorkflowPlan(context.get("principal"), planId, plan);
+    const data = await updateWorkflowPlan(
+      context.get("principal"),
+      planId,
+      plan,
+    );
     return context.json({ data });
   } catch (error) {
     if (isWorkflowPlanServiceError(error))

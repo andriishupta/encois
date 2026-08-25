@@ -6,8 +6,8 @@ import { approveWorkflowPlanRoute } from "./routes/approve-workflow-plan.route.j
 import { cancelWorkflowRoute } from "./routes/cancel-workflow.route.js";
 import { createBlueprintLifecyclePlanRoute } from "./routes/create-blueprint-lifecycle-plan.route.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
-import { deleteWorkflowDefinitionRoute } from "./routes/delete-workflow-definition.route.js";
 import { deleteWorkflowBlueprintRoute } from "./routes/delete-workflow-blueprint.route.js";
+import { deleteWorkflowDefinitionRoute } from "./routes/delete-workflow-definition.route.js";
 import { deleteWorkflowPlanRoute } from "./routes/delete-workflow-plan.route.js";
 import { getWorkflowRoute } from "./routes/get-workflow.route.js";
 import { getWorkflowEventsRoute } from "./routes/get-workflow-events.route.js";

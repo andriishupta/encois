@@ -328,14 +328,26 @@ function ActivityPage() {
           <ActivityMetric
             icon={ActivityIcon}
             label="Running"
-            value={workflows.isError ? "—" : workflows.isLoading ? "…" : runningRuns.length}
+            value={
+              workflows.isError
+                ? "—"
+                : workflows.isLoading
+                  ? "…"
+                  : runningRuns.length
+            }
             detail="Queued, running, or paused Runs"
             to="/workflows/runs"
           />
           <ActivityMetric
             icon={AlertTriangle}
             label="Run attention"
-            value={workflows.isError ? "—" : workflows.isLoading ? "…" : failedRuns.length}
+            value={
+              workflows.isError
+                ? "—"
+                : workflows.isLoading
+                  ? "…"
+                  : failedRuns.length
+            }
             detail="Failed or partial investigations"
             to="/workflows/runs"
           />
@@ -344,7 +356,7 @@ function ActivityPage() {
             label="Sources & Integrations"
             value={environmentAttention}
             detail="Source health and connector setup"
-            to="/memory/sources"
+            to="/organization/sources"
             secondaryLinks={[
               { label: "Integrations", to: "/organization/integrations" },
             ]}
@@ -357,7 +369,7 @@ function ActivityPage() {
             to="/workflows/runs"
             secondaryLinks={[
               { label: "Plans", to: "/workflows/plans" },
-              { label: "Memory", to: "/memory/workflow" },
+              { label: "Workflows", to: "/workflows" },
               { label: "Access", to: "/management/access" },
             ]}
           />
@@ -417,7 +429,7 @@ function ActivityPage() {
         >
           <ReviewSection
             title="Source attention"
-            to="/memory/sources"
+            to="/organization/sources"
             empty="All visible Sources are healthy."
           >
             {unhealthySources.map((source) => (
@@ -500,7 +512,7 @@ function ActivityPage() {
           {canManageMemory ? (
             <ReviewSection
               title="Memory changes"
-              to="/memory/workflow"
+              to="/workflows/memory"
               empty="No memory change is waiting for review."
             >
               {memoryActionError ? (
@@ -580,8 +592,8 @@ type ActivityRoute =
   | "/workflows"
   | "/workflows/runs"
   | "/workflows/plans"
-  | "/memory/workflow"
-  | "/memory/sources"
+  | "/workflows/memory"
+  | "/organization/sources"
   | "/organization/integrations"
   | "/management/access";
 
@@ -663,11 +675,11 @@ function ReviewCard({
   children: React.ReactNode;
   to?:
     | "/workflows/runs"
-    | "/memory/sources"
+    | "/organization/sources"
     | "/organization/integrations"
     | "/workflows"
     | "/workflows/plans"
-    | "/memory/workflow"
+    | "/workflows/memory"
     | "/management/access";
 }) {
   return (
@@ -793,7 +805,7 @@ function WorkflowReviewRow({
 function SourceReviewRow({ source }: { source: KnowledgeSource }) {
   return (
     <Link
-      to="/memory/sources/$sourceId"
+      to="/organization/sources/$sourceId"
       params={{ sourceId: source.id }}
       className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent"
     >

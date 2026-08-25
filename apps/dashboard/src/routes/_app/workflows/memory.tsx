@@ -15,13 +15,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
-import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import {
   ListFilter,
   ListResultsHeader,
   ListSearch,
   ListToolbar,
 } from "@/components/list-controls";
+import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ import { useOrganization } from "@/lib/organization-context";
 import { usePermissions } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/workflow")({
+export const Route = createFileRoute("/_app/workflows/memory")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.MemoryRead))
       throw redirect({ to: "/forbidden" });
@@ -67,7 +67,7 @@ function MemoryRoute() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  return pathname !== "/memory/workflow" ? <Outlet /> : <MemoryPage />;
+  return pathname !== "/workflows/memory" ? <Outlet /> : <MemoryPage />;
 }
 
 function MemoryPage() {
@@ -138,14 +138,13 @@ function MemoryPage() {
             Review scoped distilled context available to authorized workflows.
             Leave search empty to show all available memories; search narrows
             the results. Changes are proposed, approved, audited, and applied
-            through the runtime to{" "}
-            <ProductTerm term="memoryBank" />.
+            through the runtime to <ProductTerm term="memoryBank" />.
           </>
         }
         actions={
           <>
             <Button asChild>
-              <Link to="/memory/workflow/add">
+              <Link to="/workflows/memory/add">
                 <FilePlus2 data-icon="inline-start" />
                 Add Workflow memory
               </Link>

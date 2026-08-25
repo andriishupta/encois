@@ -3,9 +3,7 @@ import type {
   WorkflowBlueprintStatus,
 } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
-import {
-  useInfiniteQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -140,9 +138,7 @@ function WorkflowBlueprintsPage() {
           getKey={(blueprint) =>
             `${blueprint.blueprintId}:${blueprint.version}`
           }
-          renderItem={(blueprint) => (
-            <BlueprintCard blueprint={blueprint} />
-          )}
+          renderItem={(blueprint) => <BlueprintCard blueprint={blueprint} />}
         />
       ) : null}
       {!blueprints.isLoading &&
@@ -201,36 +197,36 @@ function BlueprintCard({
       className="group block h-full"
     >
       <Card className="flex h-full flex-col transition-colors group-hover:border-foreground/30">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle>{blueprint.name}</CardTitle>
-            <CardDescription>
-              v{blueprint.version} · {blueprint.status}
-              {blueprint.isCurrent ? " · current" : ""}
-            </CardDescription>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>{blueprint.name}</CardTitle>
+              <CardDescription>
+                v{blueprint.version} · {blueprint.status}
+                {blueprint.isCurrent ? " · current" : ""}
+              </CardDescription>
+            </div>
+            <GitBranch
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
-          <GitBranch
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{blueprint.purpose}</p>
-        <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Steps:</span>{" "}
-            {blueprint.steps?.length ?? 0} ·{" "}
-            <span className="font-medium text-foreground">Approval:</span>{" "}
-            {blueprint.requiresApproval ? "required" : "not required"}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Updated:</span>{" "}
-            {formatDate(blueprint.updatedAt)}
-          </p>
-        </div>
-      </CardContent>
+        </CardHeader>
+        <CardContent className="flex flex-1 flex-col gap-4">
+          <p className="text-sm text-muted-foreground">{blueprint.purpose}</p>
+          <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">Steps:</span>{" "}
+              {blueprint.steps?.length ?? 0} ·{" "}
+              <span className="font-medium text-foreground">Approval:</span>{" "}
+              {blueprint.requiresApproval ? "required" : "not required"}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Updated:</span>{" "}
+              {formatDate(blueprint.updatedAt)}
+            </p>
+          </div>
+        </CardContent>
       </Card>
     </Link>
   );

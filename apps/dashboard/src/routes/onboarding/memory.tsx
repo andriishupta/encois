@@ -13,8 +13,8 @@ import {
   Workflow,
 } from "lucide-react";
 import { type ChangeEvent, useState } from "react";
-import { ProductTerm } from "@/components/product-term";
 import { InlineError } from "@/components/inline-error";
+import { ProductTerm } from "@/components/product-term";
 import { Button } from "@/components/ui/button";
 import {
   Card,

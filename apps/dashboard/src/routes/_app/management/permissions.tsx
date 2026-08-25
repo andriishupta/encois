@@ -230,176 +230,176 @@ function OrganizationPermissionsPage() {
 
       <Card className="w-full">
         <CardHeader>
-            <label
-              className="flex max-w-md flex-col gap-2 text-sm font-medium"
-              htmlFor="permission-member"
-            >
-              Member
-              <Select
-                id="permission-member"
-                value={selectedMember.id}
-                onChange={(event) =>
-                  void navigate({
-                    search: (current) => ({
-                      ...current,
-                      memberId: event.target.value,
-                    }),
-                  })
-                }
-                options={members.map((member) => ({
-                  value: member.id,
-                  label: member.name,
-                }))}
-              />
-            </label>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <UserRound
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  {selectedMember.name}
-                </CardTitle>
-                <CardDescription>
-                  {selectedMember.email} · {selectedMember.role}
-                </CardDescription>
-              </div>
-              <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                {selectedMember.status}
-              </span>
+          <label
+            className="flex max-w-md flex-col gap-2 text-sm font-medium"
+            htmlFor="permission-member"
+          >
+            Member
+            <Select
+              id="permission-member"
+              value={selectedMember.id}
+              onChange={(event) =>
+                void navigate({
+                  search: (current) => ({
+                    ...current,
+                    memberId: event.target.value,
+                  }),
+                })
+              }
+              options={members.map((member) => ({
+                value: member.id,
+                label: member.name,
+              }))}
+            />
+          </label>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <UserRound
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                {selectedMember.name}
+              </CardTitle>
+              <CardDescription>
+                {selectedMember.email} · {selectedMember.role}
+              </CardDescription>
             </div>
+            <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
+              {selectedMember.status}
+            </span>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-            <div className="rounded-lg border bg-muted/20 p-3 text-sm">
-              <p className="font-medium">Home unit</p>
-              <p className="mt-1 text-muted-foreground">
-                {formatUnitPath(units, selectedMember.homeUnitId)}
-              </p>
-            </div>
+          <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+            <p className="font-medium">Home unit</p>
+            <p className="mt-1 text-muted-foreground">
+              {formatUnitPath(units, selectedMember.homeUnitId)}
+            </p>
+          </div>
 
-            <div className="rounded-lg border p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">Management scope</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Managers can administer their assigned unit and propagated
-                    descendants, never sibling branches.
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                  {managedUnits.length ? "Can manage" : "Read-only"}
-                </span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {managedUnits.length ? (
-                  managedUnits.map((unit) => (
-                    <span
-                      key={unit.id}
-                      className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-                    >
-                      {unit.name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    No manager or administrator scope assigned.
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold">Direct permissions</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Each direct scope includes all descendant units.
-                  </p>
-                </div>
-                {manageableUnits.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAddPermissionOpen((value) => !value)}
-                  >
-                    <Plus data-icon="inline-start" />
-                    Add scope
-                  </Button>
-                ) : null}
-              </div>
-
-              {memberPermissions.length ? (
-                memberPermissions.map((permission) => (
-                  <PermissionRow
-                    key={permission.id}
-                    permission={permission}
-                    units={units}
-                    canManage={
-                      getOrganizationUnit(units, permission.unitId)
-                        ?.canManage === true
-                    }
-                    canAssignAdministrator={canAssignAdministrator}
-                    busy={pendingAction !== null}
-                    removalPending={pendingRemovalId === permission.id}
-                    onAccessChange={(access) => {
-                      void runMutation(`update:${permission.id}`, async () => {
-                        await updatePermission(permission.id, access);
-                      });
-                    }}
-                    onRemove={() => handleRemovePermission(permission.id)}
-                    onCancelRemove={() => setPendingRemovalId(null)}
-                  />
-                ))
-              ) : (
-                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  No direct permissions assigned.
-                </p>
-              )}
-            </div>
-
-            {addPermissionOpen ? (
-              <AddPermissionForm
-                units={units}
-                accessLevels={
-                  canAssignAdministrator
-                    ? accessLevels
-                    : accessLevels.filter((level) => level !== "admin")
-                }
-                unitId={newUnitId}
-                access={newAccess}
-                onUnitChange={setNewUnitId}
-                onAccessChange={setNewAccess}
-                onCancel={() => setAddPermissionOpen(false)}
-                onSubmit={handleAddPermission}
-                busy={pendingAction !== null}
-              />
-            ) : null}
-
-            <div className="flex flex-col gap-3 border-t pt-5">
+          <div className="rounded-lg border p-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold">Effective visibility</h2>
-                <p className="text-xs text-muted-foreground">
-                  Preview of units visible after descendant propagation.
+                <p className="font-medium">Management scope</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Managers can administer their assigned unit and propagated
+                  descendants, never sibling branches.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {effectiveUnits.map((unit) => (
+              <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
+                {managedUnits.length ? "Can manage" : "Read-only"}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {managedUnits.length ? (
+                managedUnits.map((unit) => (
                   <span
                     key={unit.id}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
+                    className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
                   >
-                    <Check className="size-3" aria-hidden="true" />
                     {unit.name}
                   </span>
-                ))}
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  No manager or administrator scope assigned.
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Direct permissions</h2>
+                <p className="text-xs text-muted-foreground">
+                  Each direct scope includes all descendant units.
+                </p>
               </div>
+              {manageableUnits.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddPermissionOpen((value) => !value)}
+                >
+                  <Plus data-icon="inline-start" />
+                  Add scope
+                </Button>
+              ) : null}
+            </div>
+
+            {memberPermissions.length ? (
+              memberPermissions.map((permission) => (
+                <PermissionRow
+                  key={permission.id}
+                  permission={permission}
+                  units={units}
+                  canManage={
+                    getOrganizationUnit(units, permission.unitId)?.canManage ===
+                    true
+                  }
+                  canAssignAdministrator={canAssignAdministrator}
+                  busy={pendingAction !== null}
+                  removalPending={pendingRemovalId === permission.id}
+                  onAccessChange={(access) => {
+                    void runMutation(`update:${permission.id}`, async () => {
+                      await updatePermission(permission.id, access);
+                    });
+                  }}
+                  onRemove={() => handleRemovePermission(permission.id)}
+                  onCancelRemove={() => setPendingRemovalId(null)}
+                />
+              ))
+            ) : (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No direct permissions assigned.
+              </p>
+            )}
+          </div>
+
+          {addPermissionOpen ? (
+            <AddPermissionForm
+              units={units}
+              accessLevels={
+                canAssignAdministrator
+                  ? accessLevels
+                  : accessLevels.filter((level) => level !== "admin")
+              }
+              unitId={newUnitId}
+              access={newAccess}
+              onUnitChange={setNewUnitId}
+              onAccessChange={setNewAccess}
+              onCancel={() => setAddPermissionOpen(false)}
+              onSubmit={handleAddPermission}
+              busy={pendingAction !== null}
+            />
+          ) : null}
+
+          <div className="flex flex-col gap-3 border-t pt-5">
+            <div>
+              <h2 className="text-sm font-semibold">Effective visibility</h2>
               <p className="text-xs text-muted-foreground">
-                A manager can manage their assigned unit and descendants, but
-                does not receive access to sibling branches.
+                Preview of units visible after descendant propagation.
               </p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {effectiveUnits.map((unit) => (
+                <span
+                  key={unit.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
+                >
+                  <Check className="size-3" aria-hidden="true" />
+                  {unit.name}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A manager can manage their assigned unit and descendants, but does
+              not receive access to sibling branches.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -43,7 +43,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/sources/new")({
+export const Route = createFileRoute("/_app/organization/sources/new")({
   validateSearch: (search: Record<string, unknown>) => ({
     sourceType:
       search.sourceType === KnowledgeSourceKind.Integration
@@ -150,7 +150,7 @@ function NewSourcePage() {
           queryKey: queryKeys.sourcesRoot(),
         });
         await navigate({
-          to: "/memory/sources/$sourceId",
+          to: "/organization/sources/$sourceId",
           params: { sourceId: uploaded.source.id },
         });
         return;
@@ -167,7 +167,7 @@ function NewSourcePage() {
         queryKey: queryKeys.sourcesRoot(),
       });
       await navigate({
-        to: "/memory/sources/$sourceId",
+        to: "/organization/sources/$sourceId",
         params: { sourceId: source.id },
       });
     } catch (cause) {
@@ -192,7 +192,7 @@ function NewSourcePage() {
         }
         actions={
           <Button variant="outline" asChild>
-            <Link to="/memory/sources">
+            <Link to="/organization/sources">
               <ArrowLeft data-icon="inline-start" />
               Back to Sources
             </Link>
@@ -379,7 +379,7 @@ function NewSourcePage() {
             ) : null}
             <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
               <Button variant="ghost" asChild>
-                <Link to="/memory/sources">Cancel</Link>
+                <Link to="/organization/sources">Cancel</Link>
               </Button>
               <Button
                 type="submit"

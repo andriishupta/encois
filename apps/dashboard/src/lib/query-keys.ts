@@ -177,11 +177,7 @@ export const queryKeys = {
       nodeType,
       relationship,
     ] as const,
-  agentMemory: (
-    agentDefinition: string,
-    query: string,
-    scope = "",
-  ) =>
+  agentMemory: (agentDefinition: string, query: string, scope = "") =>
     [
       "agent-memory",
       currentOrganizationId(),

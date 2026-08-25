@@ -15,7 +15,9 @@ function readString(value: unknown): string | undefined {
 }
 
 function readInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+  return typeof value === "number" && Number.isInteger(value)
+    ? value
+    : undefined;
 }
 
 function parseRequest(value: unknown): MemoryInspectionQueryRequest | null {
@@ -24,8 +26,7 @@ function parseRequest(value: unknown): MemoryInspectionQueryRequest | null {
     value.agentDefinition === undefined
       ? undefined
       : readString(value.agentDefinition);
-  const query =
-    value.query === undefined ? undefined : readString(value.query);
+  const query = value.query === undefined ? undefined : readString(value.query);
   const projectId =
     value.projectId === undefined ? undefined : readString(value.projectId);
   const maxResults =

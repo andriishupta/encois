@@ -83,6 +83,15 @@ const workflowNavigation: readonly NavigationItem[] = [
     permission: Permission.WorkflowsRead,
   },
   {
+    label: "Memory",
+    to: "/workflows/memory",
+    icon: BrainCircuit,
+    permission: Permission.MemoryRead,
+  },
+] as const;
+
+const workflowManagementNavigation: readonly NavigationItem[] = [
+  {
     label: "Blueprints",
     to: "/workflows/blueprints",
     icon: GitBranch,
@@ -110,43 +119,28 @@ const organizationNavigation: readonly NavigationItem[] = [
     permission: Permission.OrganizationRead,
   },
   {
+    label: "Memory",
+    to: "/organization/memory",
+    icon: Network,
+    permission: Permission.ContextRead,
+  },
+  {
+    label: "Sources",
+    to: "/organization/sources",
+    icon: Waypoints,
+    permission: Permission.KnowledgeRead,
+  },
+  {
     label: "Integrations",
     to: "/organization/integrations",
     icon: PlugZap,
     permission: Permission.IntegrationsRead,
   },
-] as const;
-
-const memoryNavigation: readonly NavigationItem[] = [
   {
-    label: "Workflow Memory",
-    to: "/memory/workflow",
-    icon: BrainCircuit,
-    permission: Permission.MemoryRead,
-  },
-  {
-    label: "Organization Memory",
-    to: "/memory/organization",
-    icon: Network,
-    permission: Permission.ContextRead,
-  },
-  {
-    label: "Investigations",
-    to: "/memory/investigations",
-    icon: Bookmark,
-    anyPermission: [
-      Permission.OrganizationManage,
-      Permission.WorkflowsRead,
-      Permission.KnowledgeRead,
-      Permission.ContextRead,
-      Permission.MemoryRead,
-    ],
-  },
-  {
-    label: "Sources",
-    to: "/memory/sources",
-    icon: Waypoints,
-    permission: Permission.KnowledgeRead,
+    label: "Integration Catalog",
+    to: "/organization/integrations/catalog",
+    icon: PlugZap,
+    permission: Permission.IntegrationsRead,
   },
 ] as const;
 
@@ -168,6 +162,18 @@ const managementNavigation: readonly NavigationItem[] = [
     to: "/management/access",
     icon: UserRound,
     permission: Permission.OrganizationRead,
+  },
+  {
+    label: "Investigations",
+    to: "/management/investigations",
+    icon: Bookmark,
+    anyPermission: [
+      Permission.OrganizationManage,
+      Permission.WorkflowsRead,
+      Permission.KnowledgeRead,
+      Permission.ContextRead,
+      Permission.MemoryRead,
+    ],
   },
 ] as const;
 
@@ -379,19 +385,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               onNavigate={closeNavigation}
             />
             <NavSection
+              label="Workflow Management"
+              pathname={pathname}
+              items={visibleNavigation(workflowManagementNavigation, can)}
+              onNavigate={closeNavigation}
+            />
+            <NavSection
               label="Organization"
               pathname={pathname}
               items={visibleNavigation(organizationNavigation, can)}
               onNavigate={closeNavigation}
             />
             <NavSection
-              label="Memory"
-              pathname={pathname}
-              items={visibleNavigation(memoryNavigation, can)}
-              onNavigate={closeNavigation}
-            />
-            <NavSection
-              label="Management"
+              label="Organization Management"
               pathname={pathname}
               items={visibleNavigation(managementNavigation, can)}
               onNavigate={closeNavigation}
@@ -624,16 +630,20 @@ type BreadcrumbRoute =
   | "/workflows/templates"
   | "/workflows/blueprints"
   | "/workflows/plans"
-  | "/memory/workflow"
+  | "/workflows/memory"
+  | "/workflows/memory/add"
   | "/organization"
-  | "/memory/organization"
-  | "/memory/sources"
+  | "/organization/memory"
+  | "/organization/sources"
+  | "/organization/sources/new"
+  | "/organization/sources/$sourceId"
   | "/organization/units/new"
   | "/organization/integrations"
-  | "/memory/investigations"
+  | "/organization/integrations/catalog"
   | "/management/members"
   | "/management/permissions"
   | "/management/access"
+  | "/management/investigations"
   | "/activity"
   | "/settings"
   | "/settings/workspace"
@@ -677,28 +687,25 @@ function getBreadcrumbItems(
       { label: "Workflows", to: "/workflows" },
       { label: "New workflow" },
     ];
-  if (pathname === "/memory/workflow")
+  if (pathname === "/workflows/memory")
+    return [{ label: "Workflows", to: "/workflows" }, { label: "Memory" }];
+  if (pathname.startsWith("/workflows/memory/"))
     return [
-      { label: "Memory" },
-      { label: "Workflow Memory" },
-    ];
-  if (pathname.startsWith("/memory/workflow/"))
-    return [
-      { label: "Memory", to: "/memory/workflow" },
-      { label: "Workflow Memory", to: "/memory/workflow" },
+      { label: "Workflows", to: "/workflows" },
+      { label: "Memory", to: "/workflows/memory" },
       { label: "Add memory" },
     ];
   if (pathname.startsWith("/workflows/"))
     return [{ label: "Workflows", to: "/workflows" }, { label: "Runs" }];
   if (pathname === "/activity") return [{ label: "Activity" }];
-  if (pathname === "/memory/organization")
+  if (pathname === "/organization/memory")
     return [
+      { label: "Organization", to: "/organization" },
       { label: "Memory" },
-      { label: "Organization Memory" },
     ];
-  if (pathname === "/memory/sources")
+  if (pathname === "/organization/sources")
     return [
-      { label: "Memory" },
+      { label: "Organization", to: "/organization" },
       { label: "Sources" },
     ];
   if (pathname === "/organization/units/new")
@@ -706,22 +713,27 @@ function getBreadcrumbItems(
       { label: "Organization", to: "/organization" },
       { label: "Add organization unit" },
     ];
-  if (pathname === "/memory/sources/new")
+  if (pathname === "/organization/sources/new")
     return [
-      { label: "Memory" },
-      { label: "Sources", to: "/memory/sources" },
+      { label: "Organization", to: "/organization" },
+      { label: "Sources", to: "/organization/sources" },
       { label: "Add source" },
     ];
-  if (pathname.startsWith("/memory/sources/"))
+  if (pathname.startsWith("/organization/sources/"))
     return [
-      { label: "Memory" },
-      { label: "Sources", to: "/memory/sources" },
+      { label: "Organization", to: "/organization" },
+      { label: "Sources", to: "/organization/sources" },
       { label: "Source details" },
     ];
   if (pathname === "/organization/integrations")
     return [
       { label: "Organization", to: "/organization" },
       { label: "Integrations" },
+    ];
+  if (pathname === "/organization/integrations/catalog")
+    return [
+      { label: "Organization", to: "/organization" },
+      { label: "Integration Catalog" },
     ];
   if (pathname === "/organization/integrations/new")
     return [
@@ -735,22 +747,13 @@ function getBreadcrumbItems(
       { label: "Integrations", to: "/organization/integrations" },
       { label: getIntegrationLabel(pathname) },
     ];
-  if (pathname === "/memory/investigations")
-    return [
-      { label: "Memory" },
-      { label: "Investigations" },
-    ];
   if (pathname === "/organization") return [{ label: "Organization" }];
   if (pathname === "/management/members")
-    return [
-      { label: "Management" },
-      { label: "Members" },
-    ];
+    return [{ label: "Organization Management" }, { label: "Members" }];
   if (pathname === "/management/permissions")
-    return [
-      { label: "Management" },
-      { label: "Permissions" },
-    ];
+    return [{ label: "Organization Management" }, { label: "Permissions" }];
+  if (pathname === "/management/investigations")
+    return [{ label: "Organization Management" }, { label: "Investigations" }];
   if (pathname === "/settings") return [{ label: "Settings" }];
   if (pathname === "/settings/workspace")
     return [{ label: "Settings", to: "/settings" }, { label: "Workspace" }];
@@ -762,10 +765,7 @@ function getBreadcrumbItems(
       { label: `${productName} Documentation` },
     ];
   if (pathname === "/management/access")
-    return [
-      { label: "Management" },
-      { label: "Access" },
-    ];
+    return [{ label: "Organization Management" }, { label: "Access" }];
   if (pathname === "/profile") return [{ label: "Account" }];
   return [{ label: "Dashboard", to: "/" }];
 }

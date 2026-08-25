@@ -52,7 +52,7 @@ from `0000_initial_control_plane_schema` and `0001_seed_control_plane_data`.
 The schema and fresh-database seed are kept as two migrations until the first
 production baseline.
 
-The initial migration is generated from `src/schema` and then extends the generated DDL with role grants and RLS policies. System roles, permissions, workflow templates, and onboarding seed data live in `0001_seed_control_plane_data`. Both migrations must be reviewed like application code.
+The initial migration is generated from `src/schema` and then extends the generated DDL with role grants and RLS policies. System roles, permissions, workflow templates, and onboarding seed data live in `0001_seed_control_plane_data`. Both migrations must be reviewed like application code. The Drizzle journal is intentionally retained because the standard migrator requires it; generated snapshots are not committed.
 
 `db:verify` is a non-production verification helper. It checks the command
 receipt table, tenant policy, unique command key, restricted runtime grants,

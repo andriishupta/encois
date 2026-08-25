@@ -57,6 +57,14 @@ CREATE TYPE "public"."integration_status" AS ENUM('pending', 'active', 'disabled
 
 --> statement-breakpoint
 
+CREATE TYPE "public"."integration_type" AS ENUM('api', 'ai', 'mcp', 'custom');
+
+--> statement-breakpoint
+
+CREATE TYPE "public"."integration_catalog_status" AS ENUM('active', 'pending', 'disabled');
+
+--> statement-breakpoint
+
 CREATE TYPE "public"."access_level" AS ENUM('viewer', 'contributor', 'manager', 'admin');
 
 --> statement-breakpoint
@@ -69,7 +77,7 @@ CREATE TYPE "public"."organization_unit_type" AS ENUM('organization', 'departmen
 
 --> statement-breakpoint
 
-CREATE TYPE "public"."workflow_template_status" AS ENUM('draft', 'published', 'disabled', 'retired');
+CREATE TYPE "public"."workflow_template_status" AS ENUM('draft', 'published', 'active', 'disabled', 'deleted', 'retired');
 
 --> statement-breakpoint
 
@@ -170,7 +178,8 @@ CREATE TABLE "workflow_blueprints" (
 	"source_plan_id" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"approved_at" timestamp with time zone
+	"approved_at" timestamp with time zone,
+	"deleted_at" timestamp with time zone
 );
 
 --> statement-breakpoint
@@ -243,10 +252,26 @@ CREATE TABLE "integrations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid NOT NULL,
 	"provider" text NOT NULL,
+	"integration_type" "integration_type" DEFAULT 'api' NOT NULL,
 	"display_name" text NOT NULL,
 	"status" "integration_status" DEFAULT 'pending' NOT NULL,
 	"credential_ref" text,
 	"created_by_user_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+--> statement-breakpoint
+
+CREATE TABLE "integration_catalog" (
+	"key" text PRIMARY KEY NOT NULL,
+	"provider" text NOT NULL,
+	"display_name" text NOT NULL,
+	"description" text NOT NULL,
+	"integration_type" "integration_type" NOT NULL,
+	"status" "integration_catalog_status" DEFAULT 'disabled' NOT NULL,
+	"capabilities" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -461,7 +486,8 @@ CREATE TABLE "workflow_change_plans" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"approved_at" timestamp with time zone,
-	"applied_at" timestamp with time zone
+	"applied_at" timestamp with time zone,
+	"deleted_at" timestamp with time zone
 );
 
 --> statement-breakpoint
@@ -540,6 +566,10 @@ CREATE UNIQUE INDEX "workflow_blueprints_id_organization_idx" ON "workflow_bluep
 
 --> statement-breakpoint
 
+CREATE INDEX "workflow_blueprints_organization_deleted_idx" ON "workflow_blueprints" USING btree ("organization_id","deleted_at");
+
+--> statement-breakpoint
+
 CREATE UNIQUE INDEX "coordinator_event_outbox_organization_event_idx" ON "coordinator_event_outbox" USING btree ("organization_id","event_id");
 
 --> statement-breakpoint
@@ -569,6 +599,14 @@ CREATE UNIQUE INDEX "integration_bindings_unique_idx" ON "integration_bindings" 
 --> statement-breakpoint
 
 CREATE UNIQUE INDEX "integrations_id_organization_id_idx" ON "integrations" USING btree ("id","organization_id");
+
+--> statement-breakpoint
+
+CREATE UNIQUE INDEX "integration_catalog_provider_type_idx" ON "integration_catalog" USING btree ("provider","integration_type");
+
+--> statement-breakpoint
+
+CREATE UNIQUE INDEX "integration_catalog_status_sort_idx" ON "integration_catalog" USING btree ("status","sort_order");
 
 --> statement-breakpoint
 
@@ -661,6 +699,10 @@ CREATE UNIQUE INDEX "workflow_change_plans_organization_plan_idx" ON "workflow_c
 --> statement-breakpoint
 
 CREATE UNIQUE INDEX "workflow_change_plans_id_organization_idx" ON "workflow_change_plans" USING btree ("id","organization_id");
+
+--> statement-breakpoint
+
+CREATE INDEX "workflow_change_plans_organization_deleted_idx" ON "workflow_change_plans" USING btree ("organization_id","deleted_at");
 
 --> statement-breakpoint
 
@@ -1679,3 +1721,74 @@ ALTER TABLE "organization_onboarding" ENABLE ROW LEVEL SECURITY;
 CREATE POLICY organization_onboarding_tenant_isolation ON "organization_onboarding"
   USING (organization_id = public.current_organization_id())
   WITH CHECK (organization_id = public.current_organization_id());
+
+--> statement-breakpoint
+
+-- System roles and permissions are part of the control-plane baseline.
+INSERT INTO "roles" ("organization_id", "key", "name", "description", "is_system")
+VALUES
+  (NULL, 'organization_admin', 'Organization administrator', 'Full control within one organization.', true),
+  (NULL, 'manager', 'Manager', 'Read and manage assigned organizational scope.', true),
+  (NULL, 'member', 'Member', 'Read and contribute within assigned scope.', true),
+  (NULL, 'viewer', 'Viewer', 'Read-only access within assigned scope.', true);
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", permissions.permission
+FROM "roles"
+JOIN (VALUES
+  ('organization_admin', 'integrations:read'),
+  ('organization_admin', 'integrations:manage'),
+  ('organization_admin', 'onboarding:manage'),
+  ('organization_admin', 'organization:read'),
+  ('organization_admin', 'organization:manage'),
+  ('organization_admin', 'settings:read'),
+  ('organization_admin', 'settings:manage'),
+  ('organization_admin', 'workflows:read'),
+  ('organization_admin', 'workflows:run'),
+  ('organization_admin', 'workflows:manage'),
+  ('organization_admin', 'knowledge:read'),
+  ('organization_admin', 'knowledge:manage'),
+  ('manager', 'integrations:read'),
+  ('manager', 'organization:read'),
+  ('manager', 'organization:manage'),
+  ('manager', 'settings:read'),
+  ('manager', 'workflows:read'),
+  ('manager', 'workflows:run'),
+  ('manager', 'knowledge:read'),
+  ('manager', 'knowledge:manage'),
+  ('member', 'integrations:read'),
+  ('member', 'organization:read'),
+  ('member', 'settings:read'),
+  ('member', 'workflows:read'),
+  ('member', 'workflows:run'),
+  ('member', 'knowledge:read'),
+  ('member', 'knowledge:manage'),
+  ('viewer', 'integrations:read'),
+  ('viewer', 'organization:read'),
+  ('viewer', 'settings:read'),
+  ('viewer', 'workflows:read'),
+  ('viewer', 'knowledge:read')
+) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
+WHERE "roles"."organization_id" IS NULL;
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", permissions.permission
+FROM "roles"
+JOIN (VALUES
+  ('organization_admin', 'context:read'),
+  ('organization_admin', 'memory:read')
+) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
+WHERE "roles"."organization_id" IS NULL
+ON CONFLICT ("role_id", "permission") DO NOTHING;
+
+--> statement-breakpoint
+
+INSERT INTO "role_permissions" ("role_id", "permission")
+SELECT "roles"."id", 'memory:manage'
+FROM "roles"
+WHERE "roles"."organization_id" IS NULL AND "roles"."key" = 'organization_admin'
+ON CONFLICT ("role_id", "permission") DO NOTHING;

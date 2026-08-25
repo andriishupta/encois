@@ -41,7 +41,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate, humanizeKey } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/sources/$sourceId")({
+export const Route = createFileRoute("/_app/organization/sources/$sourceId")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeRead))
       throw redirect({ to: "/forbidden" });
@@ -202,7 +202,7 @@ function SourceDetailPage() {
         description={`${source.data.source.provider ?? source.data.source.contentType ?? source.data.source.kind} · ${source.data.source.status.replace("_", " ")}`}
         actions={
           <Button variant="outline" asChild>
-            <Link to="/memory/sources">
+            <Link to="/organization/sources">
               <ArrowLeft data-icon="inline-start" />
               All sources
             </Link>

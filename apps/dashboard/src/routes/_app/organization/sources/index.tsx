@@ -42,7 +42,7 @@ import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/sources/")({
+export const Route = createFileRoute("/_app/organization/sources/")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.KnowledgeRead))
       throw redirect({ to: "/forbidden" });
@@ -124,7 +124,7 @@ function SourcesPage() {
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/memory/sources/new">
+              <Link to="/organization/sources/new">
                 <Plus data-icon="inline-start" />
                 Add source
               </Link>
@@ -203,7 +203,7 @@ function SourcesPage() {
               action={
                 canManage ? (
                   <Button asChild>
-                    <Link to="/memory/sources/new">
+                    <Link to="/organization/sources/new">
                       <Plus data-icon="inline-start" />
                       Add source
                     </Link>
@@ -244,7 +244,7 @@ function SourceCard({
     : "Freshness unavailable";
   return (
     <Link
-      to="/memory/sources/$sourceId"
+      to="/organization/sources/$sourceId"
       params={{ sourceId: source.id }}
       className="group block"
     >

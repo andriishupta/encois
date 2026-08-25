@@ -1,68 +1,18 @@
--- Consolidated system seed data and permissions for a fresh control-plane database.
-
-INSERT INTO "roles" ("organization_id", "key", "name", "description", "is_system")
-VALUES
-  (NULL, 'organization_admin', 'Organization administrator', 'Full control within one organization.', true),
-  (NULL, 'manager', 'Manager', 'Read and manage assigned organizational scope.', true),
-  (NULL, 'member', 'Member', 'Read and contribute within assigned scope.', true),
-  (NULL, 'viewer', 'Viewer', 'Read-only access within assigned scope.', true);
-
---> statement-breakpoint
-
-INSERT INTO "role_permissions" ("role_id", "permission")
-SELECT "roles"."id", permissions.permission
-FROM "roles"
-JOIN (VALUES
-  ('organization_admin', 'integrations:read'),
-  ('organization_admin', 'integrations:manage'),
-  ('organization_admin', 'onboarding:manage'),
-  ('organization_admin', 'organization:read'),
-  ('organization_admin', 'organization:manage'),
-  ('organization_admin', 'settings:read'),
-  ('organization_admin', 'settings:manage'),
-  ('organization_admin', 'workflows:read'),
-  ('organization_admin', 'workflows:run'),
-  ('organization_admin', 'workflows:manage'),
-  ('organization_admin', 'knowledge:read'),
-  ('organization_admin', 'knowledge:manage'),
-  ('manager', 'integrations:read'),
-  ('manager', 'organization:read'),
-  ('manager', 'organization:manage'),
-  ('manager', 'settings:read'),
-  ('manager', 'workflows:read'),
-  ('manager', 'workflows:run'),
-  ('manager', 'knowledge:read'),
-  ('manager', 'knowledge:manage'),
-  ('member', 'integrations:read'),
-  ('member', 'organization:read'),
-  ('member', 'settings:read'),
-  ('member', 'workflows:read'),
-  ('member', 'workflows:run'),
-  ('member', 'knowledge:read'),
-  ('member', 'knowledge:manage'),
-  ('viewer', 'integrations:read'),
-  ('viewer', 'organization:read'),
-  ('viewer', 'settings:read'),
-  ('viewer', 'workflows:read'),
-  ('viewer', 'knowledge:read')
-) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
-WHERE "roles"."organization_id" IS NULL;
-
---> statement-breakpoint
+-- Fresh database catalog and onboarding seed data.
 
 INSERT INTO "workflow_templates" (
   "key", "category", "title", "description", "keywords", "required_capabilities", "published_version", "status"
 ) VALUES
-  ('release-readiness', 'engineering', 'Release Readiness Workflow', 'Review code changes, tracked work, and team communication before a release.', ARRAY['release', 'github', 'gitlab', 'jira', 'linear', 'slack', 'teams', 'pull-request'], ARRAY['code.read', 'pull-requests.read', 'issues.read', 'messages.read'], '1.0.0', 'published'),
-  ('general-company-state', 'management', 'General Company State Workflow', 'Build a current, evidence-linked view of company delivery, risks, and team activity.', ARRAY['company', 'state', 'management', 'github', 'jira', 'slack', 'teams'], ARRAY['issues.read', 'code.read', 'messages.read', 'documents.read'], '1.0.0', 'published'),
-  ('todays-status', 'management', 'Today''s Status Workflow', 'Summarize the most important activity and unresolved work from the current day.', ARRAY['today', 'status', 'daily', 'github', 'jira', 'slack', 'teams'], ARRAY['activity.read', 'issues.read', 'code.read', 'messages.read'], '1.0.0', 'published'),
-  ('critical-issues', 'operations', 'Critical Issues Workflow', 'Find high-impact unresolved issues and explain their owners, age, and current risk.', ARRAY['critical', 'issues', 'incidents', 'jira', 'linear', 'slack', 'teams'], ARRAY['issues.read', 'incidents.read', 'messages.read'], '1.0.0', 'published'),
-  ('automation-test-readiness', 'quality', 'Automation Test Readiness Workflow', 'Assess whether automated tests and recent CI runs provide enough confidence for a change.', ARRAY['testing', 'qa', 'automation', 'ci', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'ci.read', 'issues.read'], '1.0.0', 'published'),
-  ('prototype-readiness', 'design', 'Prototype Readiness Workflow', 'Check whether a product prototype has the evidence, decisions, and implementation context needed for review.', ARRAY['prototype', 'design', 'ux', 'figma', 'github', 'jira', 'linear'], ARRAY['design.read', 'code.read', 'issues.read'], '1.0.0', 'published'),
-  ('documentation-state', 'documentation', 'Documentation State Workflow', 'Compare documentation changes with implementation and tracked work to identify drift.', ARRAY['documentation', 'docs', 'architecture', 'github', 'gitlab', 'jira', 'notion'], ARRAY['documents.read', 'code.read', 'issues.read'], '1.0.0', 'published'),
-  ('engineering-delivery-health', 'engineering', 'Engineering Delivery Health Workflow', 'Explain delivery throughput, blockers, and aging work across engineering teams.', ARRAY['engineering', 'delivery', 'throughput', 'blockers', 'github', 'jira', 'linear'], ARRAY['code.read', 'issues.read', 'ci.read'], '1.0.0', 'published'),
-  ('customer-escalations', 'customer-success', 'Customer Escalations Workflow', 'Connect customer escalations with tracked engineering work and team responses.', ARRAY['customer', 'support', 'escalations', 'zendesk', 'intercom', 'jira', 'slack'], ARRAY['support.read', 'issues.read', 'messages.read'], '1.0.0', 'published'),
-  ('security-risk-review', 'security', 'Security Risk Review Workflow', 'Identify security-relevant changes, unresolved findings, and evidence gaps for review.', ARRAY['security', 'risk', 'vulnerability', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'security-findings.read', 'issues.read'], '1.0.0', 'published');
+  ('release-readiness', 'engineering', 'Release Readiness Workflow', 'Review code changes, tracked work, and team communication before a release.', ARRAY['release', 'github', 'gitlab', 'jira', 'linear', 'slack', 'teams', 'pull-request'], ARRAY['code.read', 'pull-requests.read', 'issues.read', 'messages.read'], '1.0.0', 'disabled'),
+  ('general-company-state', 'management', 'General Company State Workflow', 'Build a current, evidence-linked view of company delivery, risks, and team activity.', ARRAY['company', 'state', 'management', 'github', 'jira', 'slack', 'teams'], ARRAY['issues.read', 'code.read', 'messages.read', 'documents.read'], '1.0.0', 'disabled'),
+  ('todays-status', 'management', 'Today''s Status Workflow', 'Summarize the most important activity and unresolved work from the current day.', ARRAY['today', 'status', 'daily', 'github', 'jira', 'slack', 'teams'], ARRAY['activity.read', 'issues.read', 'code.read', 'messages.read'], '1.0.0', 'disabled'),
+  ('critical-issues', 'operations', 'Critical Issues Workflow', 'Find high-impact unresolved issues and explain their owners, age, and current risk.', ARRAY['critical', 'issues', 'incidents', 'jira', 'linear', 'slack', 'teams'], ARRAY['issues.read', 'incidents.read', 'messages.read'], '1.0.0', 'disabled'),
+  ('automation-test-readiness', 'quality', 'Automation Test Readiness Workflow', 'Assess whether automated tests and recent CI runs provide enough confidence for a change.', ARRAY['testing', 'qa', 'automation', 'ci', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'ci.read', 'issues.read'], '1.0.0', 'disabled'),
+  ('prototype-readiness', 'design', 'Prototype Readiness Workflow', 'Check whether a product prototype has the evidence, decisions, and implementation context needed for review.', ARRAY['prototype', 'design', 'ux', 'figma', 'github', 'jira', 'linear'], ARRAY['design.read', 'code.read', 'issues.read'], '1.0.0', 'disabled'),
+  ('documentation-state', 'documentation', 'Documentation State Workflow', 'Compare documentation changes with implementation and tracked work to identify drift.', ARRAY['documentation', 'docs', 'architecture', 'github', 'gitlab', 'jira', 'notion'], ARRAY['documents.read', 'code.read', 'issues.read'], '1.0.0', 'disabled'),
+  ('engineering-delivery-health', 'engineering', 'Engineering Delivery Health Workflow', 'Explain delivery throughput, blockers, and aging work across engineering teams.', ARRAY['engineering', 'delivery', 'throughput', 'blockers', 'github', 'jira', 'linear'], ARRAY['code.read', 'issues.read', 'ci.read'], '1.0.0', 'disabled'),
+  ('customer-escalations', 'customer-success', 'Customer Escalations Workflow', 'Connect customer escalations with tracked engineering work and team responses.', ARRAY['customer', 'support', 'escalations', 'zendesk', 'intercom', 'jira', 'slack'], ARRAY['support.read', 'issues.read', 'messages.read'], '1.0.0', 'disabled'),
+  ('security-risk-review', 'security', 'Security Risk Review Workflow', 'Identify security-relevant changes, unresolved findings, and evidence gaps for review.', ARRAY['security', 'risk', 'vulnerability', 'github', 'gitlab', 'jira'], ARRAY['code.read', 'security-findings.read', 'issues.read'], '1.0.0', 'disabled');
 
 --> statement-breakpoint
 
@@ -116,48 +66,37 @@ COMMENT ON TABLE "workflow_template_versions" IS 'Immutable versioned JSONB snap
 
 --> statement-breakpoint
 
-INSERT INTO "role_permissions" ("role_id", "permission")
-SELECT "roles"."id", permissions.permission
-FROM "roles"
-JOIN (VALUES
-  ('organization_admin', 'onboarding:manage'),
-  ('organization_admin', 'organization:read'),
-  ('organization_admin', 'organization:manage'),
-  ('organization_admin', 'settings:read'),
-  ('organization_admin', 'settings:manage'),
-  ('manager', 'organization:read'),
-  ('manager', 'organization:manage'),
-  ('manager', 'settings:read'),
-  ('member', 'organization:read'),
-  ('member', 'settings:read'),
-  ('viewer', 'organization:read'),
-  ('viewer', 'settings:read')
-) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
-WHERE "roles"."organization_id" IS NULL
-ON CONFLICT ("role_id", "permission") DO NOTHING;
-
---> statement-breakpoint
-
-INSERT INTO "role_permissions" ("role_id", "permission")
-SELECT "roles"."id", permissions.permission
-FROM "roles"
-JOIN (VALUES
-  ('organization_admin', 'context:read'),
-  ('organization_admin', 'memory:read')
-) AS permissions(role_key, permission) ON permissions.role_key = "roles"."key"
-WHERE "roles"."organization_id" IS NULL
-ON CONFLICT ("role_id", "permission") DO NOTHING;
-
---> statement-breakpoint
-
-INSERT INTO "role_permissions" ("role_id", "permission")
-SELECT "roles"."id", 'memory:manage'
-FROM "roles"
-WHERE "roles"."organization_id" IS NULL AND "roles"."key" = 'organization_admin'
-ON CONFLICT ("role_id", "permission") DO NOTHING;
-
---> statement-breakpoint
-
 INSERT INTO "organization_onboarding" ("organization_id", "coordinator_id")
 SELECT "id", 'organization:' || "id" FROM "organizations"
 ON CONFLICT ("organization_id") DO NOTHING;
+
+--> statement-breakpoint
+
+INSERT INTO "workflow_templates" (
+  "key", "category", "title", "description", "keywords", "required_capabilities", "published_version", "status"
+)
+VALUES
+  ('github-project-activity', 'engineering', 'GitHub Project Activity', 'Collect pull requests, checks, and commits for a project scope, then summarize the observed delivery context.', ARRAY['github', 'project', 'pull-request', 'checks', 'commits'], ARRAY['code.read'], '1.0.0', 'active'),
+  ('github-repository-activity', 'engineering', 'GitHub Repository Activity', 'Collect pull requests, checks, and commits for a repository scope, then summarize the observed delivery context.', ARRAY['github', 'repository', 'pull-request', 'checks', 'commits'], ARRAY['code.read'], '1.0.0', 'active'),
+  ('jira-project-tasks', 'planning', 'Jira Project Tasks', 'Read task status for a Jira project scope and summarize completed, remaining, and blocked work.', ARRAY['jira', 'project', 'tasks', 'issues', 'planning'], ARRAY['issues.read'], '1.0.0', 'active');
+
+--> statement-breakpoint
+
+INSERT INTO "workflow_template_versions" (
+  "workflow_template_id", "version", "schema_version", "template", "status"
+)
+SELECT workflows.id, '1.0.0', 'workflow-template.v1', templates.template, 'published'
+FROM "workflow_templates" AS workflows
+JOIN (
+  VALUES
+    ('github-project-activity', $$
+      {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.dynamic.v1","purpose":"Collect pull requests, checks, and commits for a project scope, then summarize the observed delivery context.","inputs":{"scope":{"type":"execution-scope","description":"Organization-unit scope for the project activity review.","required":true}},"providerSlots":[{"key":"github-project","capabilities":["code.read"],"preferredProviders":["github"],"required":true}],"steps":[{"id":"collect-project-activity","kind":"tool","tool":"github.project_activity","providerSlot":"github-project"},{"id":"summarize-project-activity","kind":"agent","agentDefinition":"context.synthesizer@1","dependsOn":["collect-project-activity"]}],"output":{"type":"github-project-activity-report","description":"Evidence-linked GitHub project activity with freshness and unresolved gaps."}}
+    $$::jsonb),
+    ('github-repository-activity', $$
+      {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.dynamic.v1","purpose":"Collect pull requests, checks, and commits for a repository scope, then summarize the observed delivery context.","inputs":{"scope":{"type":"execution-scope","description":"Organization-unit scope for the repository activity review.","required":true}},"providerSlots":[{"key":"github-repository","capabilities":["code.read"],"preferredProviders":["github"],"required":true}],"steps":[{"id":"collect-repository-activity","kind":"tool","tool":"github.repository_activity","providerSlot":"github-repository"},{"id":"summarize-repository-activity","kind":"agent","agentDefinition":"context.synthesizer@1","dependsOn":["collect-repository-activity"]}],"output":{"type":"github-repository-activity-report","description":"Evidence-linked GitHub repository activity with freshness and unresolved gaps."}}
+    $$::jsonb),
+    ('jira-project-tasks', $$
+      {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.dynamic.v1","purpose":"Read task status for a Jira project scope and summarize completed, remaining, and blocked work.","inputs":{"scope":{"type":"execution-scope","description":"Organization-unit scope for the Jira project review.","required":true}},"providerSlots":[{"key":"jira-project","capabilities":["issues.read"],"preferredProviders":["jira"],"required":true}],"steps":[{"id":"collect-project-tasks","kind":"tool","tool":"jira.project_tasks","providerSlot":"jira-project"},{"id":"summarize-project-tasks","kind":"agent","agentDefinition":"context.synthesizer@1","dependsOn":["collect-project-tasks"]}],"output":{"type":"jira-project-task-report","description":"Evidence-linked Jira task status with freshness and unresolved gaps."}}
+    $$::jsonb)
+) AS templates(key, template) ON templates.key = workflows.key
+WHERE workflows.organization_id IS NULL;

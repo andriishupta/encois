@@ -25,7 +25,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/workflow/add")({
+export const Route = createFileRoute("/_app/workflows/memory/add")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.MemoryManage))
       throw redirect({ to: "/forbidden" });
@@ -55,7 +55,7 @@ function AddWorkflowMemoryPage() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.memoryChanges(),
       });
-      await navigate({ to: "/memory/workflow" });
+      await navigate({ to: "/workflows/memory" });
     },
   });
 
@@ -90,7 +90,7 @@ function AddWorkflowMemoryPage() {
         description="Create an evidence-linked memory proposal for one authorized organization scope. It will remain subject to review and approval."
         actions={
           <Button variant="outline" asChild>
-            <Link to="/memory/workflow">
+            <Link to="/workflows/memory">
               <ArrowLeft data-icon="inline-start" />
               Back to memory
             </Link>
@@ -182,7 +182,7 @@ function AddWorkflowMemoryPage() {
             ) : null}
             <div className="flex justify-end gap-2 border-t pt-5">
               <Button type="button" variant="ghost" asChild>
-                <Link to="/memory/workflow">Cancel</Link>
+                <Link to="/workflows/memory">Cancel</Link>
               </Button>
               <Button
                 type="submit"

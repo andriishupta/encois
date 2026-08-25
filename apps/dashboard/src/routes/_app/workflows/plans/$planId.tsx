@@ -68,20 +68,20 @@ function WorkflowPlanDetailPage() {
     mutationFn: () => {
       if (!plan || !change?.blueprint || !editable)
         throw new Error("This Plan is not editable.");
-      return updateWorkflowPlan(planId, buildEditedPlan(
-        plan.plan,
-        change,
-        name,
-        purpose,
-        reason,
-        scopeId,
-      ));
+      return updateWorkflowPlan(
+        planId,
+        buildEditedPlan(plan.plan, change, name, purpose, reason, scopeId),
+      );
     },
     onSuccess: async () => {
       setSuccess("Plan changes saved. It remains awaiting approval.");
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlan(planId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlansRoot() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowPlan(planId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowPlansRoot(),
+        }),
       ]);
     },
   });
@@ -96,16 +96,22 @@ function WorkflowPlanDetailPage() {
     onSuccess: async () => {
       await Promise.all([
         invalidatePlanQueries(queryClient, planId),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflowBlueprintsRoot() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowBlueprintsRoot(),
+        }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflowRunListRoot() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
       ]);
     },
   });
   const remove = useMutation({
     mutationFn: () => deleteWorkflowPlan(planId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlansRoot() });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      });
       await navigate({ to: "/workflows/plans" });
     },
   });
@@ -155,12 +161,17 @@ function WorkflowPlanDetailPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>{editable ? "Edit proposal" : "Proposal details"}</CardTitle>
+              <CardTitle>
+                {editable ? "Edit proposal" : "Proposal details"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               {editable ? (
                 <>
-                  <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="plan-name">
+                  <label
+                    className="flex flex-col gap-2 text-sm font-medium"
+                    htmlFor="plan-name"
+                  >
                     Workflow name
                     <input
                       id="plan-name"
@@ -169,7 +180,10 @@ function WorkflowPlanDetailPage() {
                       className="h-9 rounded-md border border-input bg-background px-3 text-sm font-normal text-foreground"
                     />
                   </label>
-                  <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="plan-purpose">
+                  <label
+                    className="flex flex-col gap-2 text-sm font-medium"
+                    htmlFor="plan-purpose"
+                  >
                     Purpose
                     <Textarea
                       id="plan-purpose"
@@ -187,7 +201,10 @@ function WorkflowPlanDetailPage() {
                     onChange={setScopeId}
                     description="Leave unchanged if this proposal uses a broader or multi-unit scope."
                   />
-                  <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="plan-reason">
+                  <label
+                    className="flex flex-col gap-2 text-sm font-medium"
+                    htmlFor="plan-reason"
+                  >
                     Reason
                     <Textarea
                       id="plan-reason"
@@ -199,7 +216,12 @@ function WorkflowPlanDetailPage() {
                   </label>
                   <Button
                     className="self-start"
-                    disabled={save.isPending || !name.trim() || !purpose.trim() || reason.trim().length < 3}
+                    disabled={
+                      save.isPending ||
+                      !name.trim() ||
+                      !purpose.trim() ||
+                      reason.trim().length < 3
+                    }
                     onClick={() => {
                       setSuccess("");
                       save.mutate();
@@ -232,13 +254,20 @@ function WorkflowPlanDetailPage() {
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-2">
               {plan.status === "proposed" ? (
-                <Button variant="outline" disabled={approve.isPending} onClick={() => approve.mutate()}>
+                <Button
+                  variant="outline"
+                  disabled={approve.isPending}
+                  onClick={() => approve.mutate()}
+                >
                   <Check data-icon="inline-start" />
                   {approve.isPending ? "Approving…" : "Approve"}
                 </Button>
               ) : null}
               {plan.status === "approved" ? (
-                <Button disabled={apply.isPending} onClick={() => apply.mutate()}>
+                <Button
+                  disabled={apply.isPending}
+                  onClick={() => apply.mutate()}
+                >
                   {apply.isPending ? "Applying…" : "Apply plan"}
                 </Button>
               ) : null}
@@ -247,7 +276,8 @@ function WorkflowPlanDetailPage() {
                   variant="destructive"
                   disabled={remove.isPending}
                   onClick={() => {
-                    if (window.confirm("Delete this workflow Plan?")) remove.mutate();
+                    if (window.confirm("Delete this workflow Plan?"))
+                      remove.mutate();
                   }}
                 >
                   <Trash2 data-icon="inline-start" />
@@ -255,12 +285,21 @@ function WorkflowPlanDetailPage() {
                 </Button>
               ) : null}
               <span className="ml-auto text-sm text-muted-foreground">
-                {planStatusLabel(plan.status)} · updated {formatDate(plan.updatedAt)}
+                {planStatusLabel(plan.status)} · updated{" "}
+                {formatDate(plan.updatedAt)}
               </span>
             </CardContent>
           </Card>
-          {actionError ? <p role="alert" className="text-sm text-destructive">{actionError}</p> : null}
-          {success ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{success}</p> : null}
+          {actionError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {actionError}
+            </p>
+          ) : null}
+          {success ? (
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
+              {success}
+            </p>
+          ) : null}
           <details className="text-sm text-muted-foreground">
             <summary className="cursor-pointer">Technical details</summary>
             <div className="mt-2 flex flex-col gap-1 font-mono text-xs">
@@ -316,8 +355,14 @@ function ReadOnlyPlanDetails({
     .join(", ");
   return (
     <div className="grid gap-4 text-sm sm:grid-cols-2">
-      <PlanValue label="Workflow" value={change?.blueprint?.name ?? change?.kind ?? "Change"} />
-      <PlanValue label="Purpose" value={change?.blueprint?.purpose ?? "Not provided"} />
+      <PlanValue
+        label="Workflow"
+        value={change?.blueprint?.name ?? change?.kind ?? "Change"}
+      />
+      <PlanValue
+        label="Purpose"
+        value={change?.blueprint?.purpose ?? "Not provided"}
+      />
       <PlanValue label="Scope" value={scope || "Organization scope"} />
       <PlanValue label="Reason" value={change?.reason ?? "Not provided"} />
     </div>
@@ -327,7 +372,9 @@ function ReadOnlyPlanDetails({
 function PlanValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 break-words">{value}</p>
     </div>
   );

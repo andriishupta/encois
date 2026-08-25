@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_app/memory/sources")({
+export const Route = createFileRoute("/_app/organization/sources")({
   component: SourcesLayout,
 });
 

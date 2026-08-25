@@ -102,30 +102,31 @@ function getPageTitle(pathname: string, productName: string) {
     return "Blueprint revision";
   if (pathname.startsWith("/workflows/definitions/"))
     return "Workflow definition";
-  if (pathname === "/memory/workflow") return "Workflow memory";
-  if (pathname.startsWith("/memory/workflow/")) return "Add workflow memory";
+  if (pathname === "/workflows/memory") return "Workflow memory";
+  if (pathname.startsWith("/workflows/memory/")) return "Add workflow memory";
   if (pathname.startsWith("/workflows/")) return "Workflow execution";
-  if (pathname === "/memory/sources") return "Sources";
-  if (pathname === "/memory/sources/new") return "Add Source";
+  if (pathname === "/organization/sources") return "Sources";
+  if (pathname === "/organization/sources/new") return "Add Source";
   if (pathname === "/organization/units/new") return "Add organization unit";
-  if (pathname.startsWith("/memory/sources/")) return "Source";
+  if (pathname.startsWith("/organization/sources/")) return "Source";
   if (pathname === "/organization/integrations") return "Integrations";
+  if (pathname === "/organization/integrations/catalog")
+    return "Integration Catalog";
   if (pathname === "/organization/integrations/new") return "Add integration";
   if (pathname.startsWith("/organization/integrations/"))
     return getIntegrationTitle(pathname);
   if (pathname === "/activity") return "Activity";
-  if (pathname === "/memory/organization") return "Organization memory graph";
-  if (pathname === "/memory/investigations") return "Investigations";
+  if (pathname === "/organization/memory") return "Organization memory graph";
   if (pathname === "/organization") return "Organization";
   if (pathname === "/management/members") return "Organization members";
-  if (pathname === "/management/permissions")
-    return "Organization permissions";
+  if (pathname === "/management/permissions") return "Organization permissions";
   if (pathname === "/settings") return "Settings";
   if (pathname === "/settings/workspace") return "Workspace settings";
   if (pathname === "/settings/notifications") return "Notifications";
   if (pathname === "/settings/documentation")
     return `${productName} Documentation`;
   if (pathname === "/management/access") return "Organization access";
+  if (pathname === "/management/investigations") return "Investigations";
   if (pathname === "/profile") return "Account";
   if (pathname === "/forbidden") return "Access denied";
   return "Page not found";

@@ -34,7 +34,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/memory/organization")({
+export const Route = createFileRoute("/_app/organization/memory")({
   validateSearch: (search: Record<string, unknown>) => ({
     savedId: typeof search.savedId === "string" ? search.savedId : undefined,
   }),
@@ -217,86 +217,86 @@ function ContextGraphPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-            <div className="flex gap-2">
-              <input
-                value={savedName}
-                onChange={(event) => setSavedName(event.target.value)}
-                placeholder="e.g. Release blockers"
-                maxLength={120}
-                className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-              />
-              <Button
-                type="button"
-                onClick={() => saveInvestigation.mutate()}
-                disabled={!savedName.trim() || saveInvestigation.isPending}
-              >
-                {saveInvestigation.isPending ? (
-                  "Saving…"
-                ) : (
-                  <>
-                    <Save data-icon="inline-start" />
-                    Save
-                  </>
-                )}
-              </Button>
-            </div>
-            {saveInvestigation.isError ? (
-              <p role="alert" className="text-xs text-destructive">
-                Could not save: {saveInvestigation.error.message}
-              </p>
-            ) : null}
-            {saved.isError ? (
-              <p
-                role="alert"
-                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
-              >
-                Saved investigations are unavailable: {saved.error.message}
-              </p>
-            ) : null}
-            {removeInvestigation.isError ? (
-              <p role="alert" className="text-xs text-destructive">
-                Could not delete the saved investigation:{" "}
-                {removeInvestigation.error.message}
-              </p>
-            ) : null}
-            {saved.data?.length ? (
-              <div className="flex flex-col gap-2">
-                {saved.data.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 rounded-md border p-2 text-xs"
+          <div className="flex gap-2">
+            <input
+              value={savedName}
+              onChange={(event) => setSavedName(event.target.value)}
+              placeholder="e.g. Release blockers"
+              maxLength={120}
+              className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+            />
+            <Button
+              type="button"
+              onClick={() => saveInvestigation.mutate()}
+              disabled={!savedName.trim() || saveInvestigation.isPending}
+            >
+              {saveInvestigation.isPending ? (
+                "Saving…"
+              ) : (
+                <>
+                  <Save data-icon="inline-start" />
+                  Save
+                </>
+              )}
+            </Button>
+          </div>
+          {saveInvestigation.isError ? (
+            <p role="alert" className="text-xs text-destructive">
+              Could not save: {saveInvestigation.error.message}
+            </p>
+          ) : null}
+          {saved.isError ? (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+            >
+              Saved investigations are unavailable: {saved.error.message}
+            </p>
+          ) : null}
+          {removeInvestigation.isError ? (
+            <p role="alert" className="text-xs text-destructive">
+              Could not delete the saved investigation:{" "}
+              {removeInvestigation.error.message}
+            </p>
+          ) : null}
+          {saved.data?.length ? (
+            <div className="flex flex-col gap-2">
+              {saved.data.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 rounded-md border p-2 text-xs"
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-w-0 flex-1 justify-start truncate px-1 text-left"
+                    onClick={() => loadSavedInvestigation(item)}
+                    disabled={item.kind !== "graph"}
                   >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="min-w-0 flex-1 justify-start truncate px-1 text-left"
-                      onClick={() => loadSavedInvestigation(item)}
-                      disabled={item.kind !== "graph"}
-                    >
-                      {item.name}
-                    </Button>
-                    <span className="text-muted-foreground">{item.query}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Delete ${item.name}`}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete saved investigation “${item.name}”? This cannot be undone.`,
-                          )
+                    {item.name}
+                  </Button>
+                  <span className="text-muted-foreground">{item.query}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Delete ${item.name}`}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete saved investigation “${item.name}”? This cannot be undone.`,
                         )
-                          removeInvestigation.mutate(item.id);
-                      }}
-                      disabled={removeInvestigation.isPending}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+                      )
+                        removeInvestigation.mutate(item.id);
+                    }}
+                    disabled={removeInvestigation.isPending}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       <Card className="min-w-0">

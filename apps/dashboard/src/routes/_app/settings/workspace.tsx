@@ -2,12 +2,7 @@ import type { OrganizationOnboardingProjection } from "@encois/contracts";
 import { CoordinationMode, Permission } from "@encois/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import {
-  CircleAlert,
-  Radio,
-  SlidersHorizontal,
-  Sparkles,
-} from "lucide-react";
+import { CircleAlert, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -74,58 +69,58 @@ function WorkspaceSettingsPage() {
         </div>
       ) : null}
       <Card className="max-w-3xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SlidersHorizontal
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <SlidersHorizontal
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            Workspace
+          </CardTitle>
+          <CardDescription>
+            Workspace preferences are managed by your organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-3 text-sm">
+            <span className="text-muted-foreground">Organization name</span>
+            <span className="font-medium">
+              {organizationName ?? "Not available"}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Scope and investigation context are resolved by the organization
+            control plane for the active session.
+          </p>
+          <div className="border-t pt-5">
+            <p className="text-sm font-medium">Product term explanations</p>
+            <label
+              className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm"
+              htmlFor="settings-product-tooltips"
+            >
+              <input
+                id="settings-product-tooltips"
+                type="checkbox"
+                checked={productTooltipsEnabled}
+                onChange={(event) =>
+                  setProductTooltipsEnabled(event.target.checked)
+                }
+                className="mt-0.5 size-4 accent-primary"
               />
-              Workspace
-            </CardTitle>
-            <CardDescription>
-              Workspace preferences are managed by your organization.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-3 text-sm">
-              <span className="text-muted-foreground">Organization name</span>
-              <span className="font-medium">
-                {organizationName ?? "Not available"}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Scope and investigation context are resolved by the organization
-              control plane for the active session.
-            </p>
-            <div className="border-t pt-5">
-              <p className="text-sm font-medium">Product term explanations</p>
-              <label
-                className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm"
-                htmlFor="settings-product-tooltips"
-              >
-                <input
-                  id="settings-product-tooltips"
-                  type="checkbox"
-                  checked={productTooltipsEnabled}
-                  onChange={(event) =>
-                    setProductTooltipsEnabled(event.target.checked)
-                  }
-                  className="mt-0.5 size-4 accent-primary"
-                />
-                <span>
-                  <span className="block font-medium">
-                    Explain product terms on hover
-                  </span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    Show definitions for terms such as{" "}
-                    <ProductTerm term="coordinator" /> and{" "}
-                    <ProductTerm term="knowledgeSource" />. This preference is
-                    saved in this browser.
-                  </span>
+              <span>
+                <span className="block font-medium">
+                  Explain product terms on hover
                 </span>
-              </label>
-            </div>
-          </CardContent>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Show definitions for terms such as{" "}
+                  <ProductTerm term="coordinator" /> and{" "}
+                  <ProductTerm term="knowledgeSource" />. This preference is
+                  saved in this browser.
+                </span>
+              </span>
+            </label>
+          </div>
+        </CardContent>
       </Card>
 
       {onboarding && onboarding.status !== "ready" ? (

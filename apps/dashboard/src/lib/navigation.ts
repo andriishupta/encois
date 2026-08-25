@@ -4,16 +4,17 @@ export type NavigationTarget =
   | "/workflows/runs"
   | "/workflows/templates"
   | "/workflows/blueprints"
-  | "/memory/workflow"
-  | "/memory/organization"
-  | "/memory/investigations"
-  | "/memory/sources"
+  | "/workflows/memory"
+  | "/organization/memory"
+  | "/organization/sources"
   | "/organization/integrations"
+  | "/organization/integrations/catalog"
   | "/activity"
   | "/organization"
   | "/management/members"
   | "/management/permissions"
   | "/management/access"
+  | "/management/investigations"
   | "/settings"
   | "/settings/workspace"
   | "/settings/notifications"
@@ -25,7 +26,7 @@ const workflowNonRunPaths = new Set([
   "/workflows/templates",
   "/workflows/blueprints",
   "/workflows/plans",
-  "/memory/workflow",
+  "/workflows/memory",
 ]);
 
 export function isNavigationItemActive(
@@ -48,21 +49,30 @@ export function isNavigationItemActive(
         !pathname.startsWith("/workflows/plans/"))
     );
   }
-  if (target === "/workflows/blueprints" || target === "/workflows/plans")
+  if (
+    target === "/workflows/blueprints" ||
+    target === "/workflows/plans" ||
+    target === "/workflows/templates"
+  )
     return pathname === target || pathname.startsWith(`${target}/`);
   if (
-    target === "/memory/workflow" ||
-    target === "/memory/organization" ||
-    target === "/memory/investigations" ||
-    target === "/memory/sources"
+    target === "/workflows/memory" ||
+    target === "/organization/memory" ||
+    target === "/organization/sources"
   )
     return pathname === target || pathname.startsWith(`${target}/`);
   if (target === "/organization/integrations")
+    return (
+      (pathname === target || pathname.startsWith(`${target}/`)) &&
+      pathname !== "/organization/integrations/catalog"
+    );
+  if (target === "/organization/integrations/catalog")
     return pathname === target || pathname.startsWith(`${target}/`);
   if (
     target === "/management/members" ||
     target === "/management/permissions" ||
-    target === "/management/access"
+    target === "/management/access" ||
+    target === "/management/investigations"
   )
     return pathname === target || pathname.startsWith(`${target}/`);
   return pathname === target;

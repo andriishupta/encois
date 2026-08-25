@@ -18,22 +18,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  deleteWorkflowDefinition,
-  listWorkflowBlueprints,
-} from "@/lib/api";
+import { deleteWorkflowDefinition, listWorkflowBlueprints } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
 import { useCan } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/workflows/definitions/$workflowId")({
-  beforeLoad: () => {
-    if (!hasPermission(getAuthSession(), Permission.WorkflowsRead))
-      throw redirect({ to: "/forbidden" });
+export const Route = createFileRoute("/_app/workflows/definitions/$workflowId")(
+  {
+    beforeLoad: () => {
+      if (!hasPermission(getAuthSession(), Permission.WorkflowsRead))
+        throw redirect({ to: "/forbidden" });
+    },
+    component: WorkflowDefinitionPage,
   },
-  component: WorkflowDefinitionPage,
-});
+);
 
 function WorkflowDefinitionPage() {
   const { workflowId } = Route.useParams();
@@ -168,13 +167,19 @@ function WorkflowDefinitionContent({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <DefinitionValue label="Steps" value={String(workflow.steps.length)} />
+          <DefinitionValue
+            label="Steps"
+            value={String(workflow.steps.length)}
+          />
           <DefinitionValue
             label="Approval"
             value={workflow.requiresApproval ? "Required" : "Not required"}
           />
           <DefinitionValue label="Revisions" value={String(revisions.length)} />
-          <DefinitionValue label="Updated" value={formatDate(workflow.updatedAt)} />
+          <DefinitionValue
+            label="Updated"
+            value={formatDate(workflow.updatedAt)}
+          />
         </CardContent>
       </Card>
       <Card>
@@ -207,7 +212,9 @@ function WorkflowDefinitionContent({
                   {formatDate(revision.updatedAt)}
                 </span>
               </span>
-              <span className="text-xs text-muted-foreground">Open Blueprint</span>
+              <span className="text-xs text-muted-foreground">
+                Open Blueprint
+              </span>
             </Link>
           ))}
         </CardContent>

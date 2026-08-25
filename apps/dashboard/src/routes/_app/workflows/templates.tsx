@@ -64,7 +64,8 @@ function WorkflowTemplatesPage() {
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
   });
-  const visibleTemplates = templates.data?.pages.flatMap((page) => page.items) ?? [];
+  const visibleTemplates =
+    templates.data?.pages.flatMap((page) => page.items) ?? [];
   const activeCount = visibleTemplates.filter(
     (template) => template.status === "active",
   ).length;
@@ -193,10 +194,12 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
           </summary>
           <div className="mt-2 grid gap-2">
             <p>
-              Provider slots: {template.template.providerSlots?.length || "None"}
+              Provider slots:{" "}
+              {template.template.providerSlots?.length || "None"}
             </p>
             <p>
-              Steps: {template.template.steps?.length ?? 0} · Output: {template.template.output.type}
+              Steps: {template.template.steps?.length ?? 0} · Output:{" "}
+              {template.template.output.type}
             </p>
             <p>Estimated duration: Not reported by Template</p>
             <p>Risk: Review approval requirements in the plan preview</p>

@@ -63,7 +63,7 @@ type OrganizationFixture = {
 const organizationsFixture: readonly OrganizationFixture[] = [
   {
     slug: "organization-sun",
-    name: "Organization Sun",
+    name: "Sun Inc",
     units: [
       {
         slug: "engineering",
@@ -123,7 +123,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     uid: ownerUid,
     email: ownerEmail,
     password: ownerPassword,
-    displayName: "Organization Sun Owner",
+    displayName: "John Smith",
     organizationSlug: "organization-sun",
     roleKey: "organization_admin",
     unitSlug: "root",
@@ -134,7 +134,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     uid: "local-manager",
     email: "manager@local.test",
     password: "local-manager-1234",
-    displayName: "Engineering Manager",
+    displayName: "Sarah Johnson",
     organizationSlug: "organization-sun",
     roleKey: "manager",
     unitSlug: "engineering",
@@ -145,7 +145,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     uid: "local-dev",
     email: "dev@local.test",
     password: "local-dev-1234",
-    displayName: "Dev Manager",
+    displayName: "Devin Brooks",
     organizationSlug: "organization-sun",
     roleKey: "manager",
     unitSlug: "development",
@@ -156,7 +156,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     uid: "local-viewer",
     email: "viewer@local.test",
     password: "local-viewer-1234",
-    displayName: "Viewer",
+    displayName: "Alex Carter",
     organizationSlug: "organization-sun",
     roleKey: "viewer",
     unitSlug: "checkout",
@@ -178,7 +178,7 @@ const onboardingUsers: readonly OnboardingFixture[] = [
   {
     email: "onboarding1@local.test",
     password: "local-onboarding-1",
-    displayName: "Onboarding One",
+    displayName: "Taylor Reed",
     uid: "local-onboarding-1",
     organizationSlug: "organization-sun",
     unitSlug: "root",
@@ -187,7 +187,7 @@ const onboardingUsers: readonly OnboardingFixture[] = [
   {
     email: "onboarding2@local.test",
     password: "local-onboarding-2",
-    displayName: "Onboarding Two",
+    displayName: "Morgan Lee",
     uid: "local-onboarding-2",
     organizationSlug: "organization-sun",
     unitSlug: "engineering",
@@ -196,7 +196,7 @@ const onboardingUsers: readonly OnboardingFixture[] = [
   {
     email: "onboarding3@local.test",
     password: "local-onboarding-3",
-    displayName: "Onboarding Three",
+    displayName: "Jordan Kim",
     uid: "local-onboarding-3",
     organizationSlug: "organization-sun",
     unitSlug: "checkout",

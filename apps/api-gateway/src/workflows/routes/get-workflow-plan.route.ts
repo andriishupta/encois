@@ -18,7 +18,12 @@ export const getWorkflowPlanRoute: Handler<GatewayEnv> = async (context) => {
     const data = await getWorkflowPlan(context.get("principal"), planId);
     if (!data)
       return context.json(
-        { error: { code: "WORKFLOW_PLAN_NOT_FOUND", message: "Workflow change plan not found." } },
+        {
+          error: {
+            code: "WORKFLOW_PLAN_NOT_FOUND",
+            message: "Workflow change plan not found.",
+          },
+        },
         404,
       );
     return context.json({ data });
