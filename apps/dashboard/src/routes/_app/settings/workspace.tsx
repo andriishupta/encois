@@ -5,6 +5,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { CircleAlert, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/pill";
 import {
   ProductTerm,
   setProductTooltipsEnabled,
@@ -58,17 +59,7 @@ function WorkspaceSettingsPage() {
           Loading organization-managed workspace state…
         </p>
       ) : null}
-      {!isLoading && !error ? (
-        <div
-          role="status"
-          className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground"
-        >
-          Workspace name, scope, and investigation defaults are managed by the
-          organization control plane. Onboarding configuration can be edited
-          below when your session has the required permission.
-        </div>
-      ) : null}
-      <Card className="max-w-3xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <SlidersHorizontal
@@ -177,9 +168,10 @@ function OnboardingConfigurationCard({
               Choose how the organization Coordinator should begin.
             </CardDescription>
           </div>
-          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">
-            {onboardingStatusLabel(onboarding.status)}
-          </span>
+          <StatusPill
+            status={onboarding.status}
+            label={onboardingStatusLabel(onboarding.status)}
+          />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">

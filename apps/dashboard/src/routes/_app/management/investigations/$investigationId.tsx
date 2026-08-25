@@ -1,0 +1,196 @@
+import { Permission } from "@encois/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
+import { ArrowLeft, CircleAlert, Trash2 } from "lucide-react";
+import { EmptyPanel } from "@/components/empty-panel";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { deleteSavedInvestigation, getSavedInvestigation } from "@/lib/api";
+import { getAuthSession, hasPermission } from "@/lib/auth";
+import { formatDate, humanizeKey } from "@/lib/formatters";
+import { formatUnitPath } from "@/lib/organization";
+import { useOrganization } from "@/lib/organization-context";
+import { queryKeys } from "@/lib/query-keys";
+
+export const Route = createFileRoute(
+  "/_app/management/investigations/$investigationId",
+)({
+  beforeLoad: ({ params }) => {
+    const session = getAuthSession();
+    if (
+      !hasPermission(session, Permission.OrganizationManage) &&
+      !hasPermission(session, Permission.WorkflowsRead) &&
+      !hasPermission(session, Permission.KnowledgeRead) &&
+      !hasPermission(session, Permission.ContextRead) &&
+      !hasPermission(session, Permission.MemoryRead)
+    )
+      throw redirect({ to: "/forbidden" });
+    throw redirect({
+      to: "/organization/investigations/$investigationId",
+      params,
+      search: { q: undefined },
+    });
+  },
+  component: LegacyInvestigationDetailPage,
+});
+
+function LegacyInvestigationDetailPage() {
+  const { investigationId } = Route.useParams();
+  return (
+    <InvestigationDetailPage
+      investigationId={investigationId}
+      listPath="/management/investigations"
+    />
+  );
+}
+
+export function InvestigationDetailPage({
+  investigationId,
+  listPath,
+}: {
+  investigationId: string;
+  listPath: "/management/investigations" | "/organization/investigations";
+}) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { units } = useOrganization();
+  const investigation = useQuery({
+    queryKey: queryKeys.savedInvestigation(investigationId),
+    queryFn: () => getSavedInvestigation(investigationId),
+  });
+  const remove = useMutation({
+    mutationFn: () => deleteSavedInvestigation(investigationId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.savedInvestigationPages(),
+      });
+      await navigate({ to: listPath, search: { q: undefined } });
+    },
+  });
+
+  if (investigation.isLoading)
+    return (
+      <p className="text-sm text-muted-foreground">Loading investigation…</p>
+    );
+  if (investigation.isError)
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <EmptyPanel
+            icon={CircleAlert}
+            title="Investigation unavailable"
+            description={investigation.error.message}
+            action={
+              <Button asChild variant="outline">
+                <Link to={listPath} search={{ q: undefined }}>
+                  <ArrowLeft data-icon="inline-start" />
+                  Back to investigations
+                </Link>
+              </Button>
+            }
+          />
+        </CardContent>
+      </Card>
+    );
+
+  const item = investigation.data;
+  if (!item) return null;
+  const contextLabel = item.scope.ids
+    .map((id) => formatUnitPath(units, id) || id)
+    .join(", ");
+
+  return (
+    <div className="flex flex-col gap-8">
+      <PageHeader
+        title={item.name}
+        description="Saved investigation definition and its organization context."
+        actions={
+          <Button asChild variant="outline">
+            <Link to={listPath} search={{ q: undefined }}>
+              <ArrowLeft data-icon="inline-start" />
+              Investigations
+            </Link>
+          </Button>
+        }
+      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Investigation</CardTitle>
+          <CardDescription>
+            This definition remains separate from the live Organization Memory
+            Graph view.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-2">
+          <DetailRow label="Query" value={humanizeKey(item.query)} />
+          <DetailRow label="Type" value={humanizeKey(item.kind)} />
+          <DetailRow label="Context" value={contextLabel} />
+          <DetailRow label="Created" value={formatDate(item.createdAt)} />
+          <DetailRow label="Updated" value={formatDate(item.updatedAt)} />
+        </CardContent>
+      </Card>
+      {Object.keys(item.params).length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Query parameters</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {Object.entries(item.params).map(([key, value]) => (
+              <DetailRow
+                key={key}
+                label={humanizeKey(key)}
+                value={String(value)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={remove.isPending}
+          onClick={() => {
+            if (
+              window.confirm(
+                `Delete saved investigation “${item.name}”? This cannot be undone.`,
+              )
+            )
+              remove.mutate();
+          }}
+        >
+          <Trash2 data-icon="inline-start" />
+          Delete investigation
+        </Button>
+      </div>
+      {remove.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          Could not delete the investigation: {remove.error.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 border-b pb-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="truncate text-sm font-medium" title={value}>
+        {value}
+      </span>
+    </div>
+  );
+}

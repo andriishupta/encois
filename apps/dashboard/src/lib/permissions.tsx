@@ -8,6 +8,32 @@ import {
 } from "react";
 import { authSessionEventName, getAuthSession } from "@/lib/auth";
 
+const permissionDescriptions: Readonly<Record<PermissionKey, string>> = {
+  "onboarding:manage": "Set up the initial workspace foundation and defaults.",
+  "workflows:read": "View workflow definitions, plans, and execution history.",
+  "workflows:run": "Start an approved workflow within your authorized scope.",
+  "workflows:manage": "Create, configure, approve, and manage workflows.",
+  "integrations:read": "View organization integrations and their availability.",
+  "integrations:manage":
+    "Register, configure, and manage provider integrations.",
+  "knowledge:read": "View Sources and the knowledge available to your scope.",
+  "knowledge:manage": "Create and manage Sources and their revisions.",
+  "context:read":
+    "Inspect organization context and graph-backed relationships.",
+  "memory:read":
+    "View workflow and organization memory available to your scope.",
+  "memory:manage": "Create and manage memory changes and investigations.",
+  "organization:read":
+    "View the organization structure, members, and access state.",
+  "organization:manage": "Manage organization units, members, and permissions.",
+  "settings:read": "View workspace settings and product documentation.",
+  "settings:manage": "Update workspace and notification settings.",
+};
+
+export function describePermission(permission: PermissionKey): string {
+  return permissionDescriptions[permission];
+}
+
 type PermissionContextValue = {
   permissions: readonly PermissionKey[];
   can: (permission: PermissionKey) => boolean;
@@ -60,5 +86,5 @@ export function Can({
   children: ReactNode;
   fallback?: ReactNode;
 }) {
-  return useCan(permission) ? <>{children}</> : <>{fallback}</>;
+  return useCan(permission) ? children : fallback;
 }

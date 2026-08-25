@@ -17,7 +17,10 @@
     "generate:permissions": "node scripts/generate-permissions.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node test-contracts.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "biome:check": "biome check ./src",
+    "biome:write": "biome check --write ./src",
+    "biome:format": "biome format --write ./src"
   },
   "dependencies": {
     "ajv": "^8.20.0"

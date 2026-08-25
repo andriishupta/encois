@@ -3,7 +3,7 @@ import { flattenUnitOptions, type OrganizationUnit } from "@/lib/organization";
 
 type OrganizationUnitSelectProps = {
   id: string;
-  label: string;
+  label?: string;
   value: string;
   units: readonly OrganizationUnit[];
   onChange: (value: string) => void;
@@ -37,11 +37,11 @@ export function OrganizationUnitSelect({
       disabled: isDisabled(unit),
     }));
 
-  return (
-    <label className="flex flex-col gap-2 text-sm font-medium" htmlFor={id}>
-      {label}
+  const field = (
+    <>
       <Select
         id={id}
+        aria-label={label || "Organization unit"}
         data-testid={testId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -57,6 +57,15 @@ export function OrganizationUnitSelect({
           {description}
         </span>
       ) : null}
+    </>
+  );
+
+  return label ? (
+    <label className="flex flex-col gap-2 text-sm font-medium" htmlFor={id}>
+      {label}
+      {field}
     </label>
+  ) : (
+    <div className="min-w-0">{field}</div>
   );
 }

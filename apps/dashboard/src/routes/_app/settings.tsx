@@ -5,7 +5,8 @@ import {
   Outlet,
   redirect,
 } from "@tanstack/react-router";
-import { Bell, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { Bell, SlidersHorizontal } from "lucide-react";
+import { LinkCardIndicator } from "@/components/link-card";
 import { PageHeader } from "@/components/page-header";
 import {
   Card,
@@ -65,7 +66,7 @@ function SettingsCard({
 }) {
   return (
     <Link to={to} className="group">
-      <Card className="h-full transition-colors group-hover:border-foreground/30">
+      <Card className="relative h-full transition-colors group-hover:border-foreground/30">
         <CardHeader>
           <Icon
             className="mb-2 size-5 text-muted-foreground"
@@ -74,13 +75,10 @@ function SettingsCard({
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-between text-sm text-muted-foreground">
+        <CardContent className="flex items-center justify-between pr-14 text-sm text-muted-foreground">
           <span>Open settings</span>
-          <ChevronRight
-            className="size-4 transition-transform group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
         </CardContent>
+        <LinkCardIndicator />
       </Card>
     </Link>
   );

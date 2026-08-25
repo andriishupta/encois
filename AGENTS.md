@@ -188,6 +188,7 @@ Prefer the narrowest filter while iterating, then run the full checks before han
 - Keep credentials and provider SDKs out of browser bundles. Browser code calls the API through typed contracts.
 - Handle loading, empty, error, and stale-data states for every intelligence view.
 - Make evidence and freshness visible in the UI. A model conclusion without sources, timestamps, and scope is not a trustworthy insight.
+- Do not create standalone explanatory or documentation cards in product pages. Put secondary explanations in the page subtitle or a small local subtitle near the relevant control; reserve cards for useful product content or actions.
 
 ### Hono API
 

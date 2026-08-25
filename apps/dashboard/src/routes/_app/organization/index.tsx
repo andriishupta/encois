@@ -1,6 +1,6 @@
 import { Permission } from "@encois/contracts";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { Building2, Plus, ShieldCheck, Users } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 import { OrganizationCanvas } from "@/components/organization-canvas";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -61,19 +61,6 @@ function OrganizationPage() {
         }
       />
 
-      <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
-        <ShieldCheck
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">
-            Organization structure.
-          </span>{" "}
-          The complete hierarchy is visible, while unit details and management
-          actions follow your effective scope.
-        </p>
-      </div>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">
           Loading organization scope…
@@ -85,24 +72,23 @@ function OrganizationPage() {
         </p>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>General</CardTitle>
-          <CardDescription>
-            {selectedUnit
-              ? formatUnitPath(units, selectedUnit.id)
-              : "Organization structure is not available yet."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-3">
-          <div className="flex flex-col gap-3">
-            <p className="flex items-center gap-2 text-sm font-medium">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <Building2
                 className="size-4 text-muted-foreground"
                 aria-hidden="true"
               />
               {selectedUnit?.name ?? "Organization scope"}
-            </p>
+            </CardTitle>
+            <CardDescription>
+              {selectedUnit
+                ? formatUnitPath(units, selectedUnit.id)
+                : "Organization structure is not available yet."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
             {selectedUnit ? (
               <>
                 <p className="text-sm text-muted-foreground">
@@ -128,59 +114,34 @@ function OrganizationPage() {
                 </div>
               </>
             ) : null}
-          </div>
-          {selectedUnit ? (
-            <div className="flex flex-col gap-3 text-sm">
-              <p className="font-medium">
+          </CardContent>
+        </Card>
+
+        {selectedUnit ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>
                 <ProductTerm term="scope" /> inheritance
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Membership roots include descendants; restrictions narrow the
-                effective <ProductTerm term="scope" />.
-              </p>
-              <ScopeRow
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 text-sm">
+              <DetailRow
                 label="Parent units"
                 value={String(
                   Math.max(0, getUnitPath(units, selectedUnit.id).length - 1),
                 )}
               />
-              <ScopeRow
+              <DetailRow
                 label="Child units"
                 value={String(
                   units.filter((unit) => unit.parentId === selectedUnit.id)
                     .length,
                 )}
               />
-            </div>
-          ) : null}
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">Actions</p>
-            {selectedUnit?.canManage ? (
-              <Button variant="outline" asChild>
-                <Link
-                  to="/organization/units/new"
-                  search={{ parentId: selectedUnit.id }}
-                >
-                  <Plus data-icon="inline-start" />
-                  Add related unit
-                </Link>
-              </Button>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Management is restricted for this unit.
-              </p>
-            )}
-            {selectedUnit?.canManage ? (
-              <Button variant="outline" asChild>
-                <Link to="/management/permissions">
-                  <Users data-icon="inline-start" />
-                  Manage permissions
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
 
       <Card className="min-w-0">
         <CardHeader>
@@ -209,15 +170,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-4 border-b py-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
-    </div>
-  );
-}
-
-function ScopeRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right text-xs font-medium">{value}</span>
     </div>
   );
 }

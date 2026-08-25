@@ -199,7 +199,7 @@ function NewSourcePage() {
           </Button>
         }
       />
-      <form className="max-w-3xl" onSubmit={handleSubmit}>
+      <form className="w-full" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
             <div className="flex size-10 items-center justify-center rounded-md border bg-muted/30">

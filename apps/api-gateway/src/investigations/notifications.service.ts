@@ -19,9 +19,20 @@ import {
   withOrganizationContext,
   workflowRuns,
 } from "@encois/persistence";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+} from "drizzle-orm";
 import { hasAnyPermission, hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
+import type { ListPage, ListQuery } from "../list-query.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 
 export type NotificationServiceError = Error & { code: string };
@@ -422,9 +433,10 @@ export async function updateNotificationPreferences(
   );
 }
 
-export async function listNotifications(
+export async function listNotificationsPage(
   principal: AosPrincipal,
-): Promise<readonly NotificationProjection[]> {
+  query: ListQuery,
+): Promise<ListPage<NotificationProjection>> {
   if (!database)
     throw error(
       "PERSISTENCE_UNAVAILABLE",
@@ -457,18 +469,46 @@ export async function listNotifications(
         ownerUserId,
         preferences,
       );
+      const conditions = [
+        eq(notifications.organizationId, principal.organizationId),
+        eq(notifications.userId, ownerUserId),
+      ];
+      if (query.query) {
+        const pattern = `%${query.query}%`;
+        const search = or(
+          ilike(notifications.title, pattern),
+          ilike(notifications.message, pattern),
+          ilike(notifications.type, pattern),
+        );
+        if (search) conditions.push(search);
+      }
+      if (query.status === "read")
+        conditions.push(isNotNull(notifications.readAt));
+      if (query.status === "unread")
+        conditions.push(isNull(notifications.readAt));
+
       const rows = await db
         .select()
         .from(notifications)
-        .where(
-          and(
-            eq(notifications.organizationId, principal.organizationId),
-            eq(notifications.userId, ownerUserId),
-          ),
-        )
-        .orderBy(desc(notifications.createdAt))
-        .limit(100);
-      return rows.map(toNotification);
+        .where(and(...conditions))
+        .orderBy(desc(notifications.createdAt), desc(notifications.id))
+        .limit(query.limit)
+        .offset(query.offset);
+      const [totalRow] = await db
+        .select({ total: count() })
+        .from(notifications)
+        .where(and(...conditions));
+      const total = Number(totalRow?.total ?? 0);
+      const items = rows.map(toNotification);
+      return {
+        items,
+        pagination: {
+          limit: query.limit,
+          offset: query.offset,
+          total,
+          hasMore: query.offset + items.length < total,
+        },
+      };
     },
   );
 }

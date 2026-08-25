@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.title="Encois Node Development Runtime" \
 
 WORKDIR /workspace
 RUN corepack enable
+ENV CI=true
 
 # Dependencies live in the image; Compose mounts the source tree at runtime.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

@@ -1,17 +1,19 @@
 import { isJsonObject } from "@encois/contracts";
 import { Hono } from "hono";
+import { parseListQuery } from "../list-query.js";
 import type { GatewayEnv } from "../middleware/aos.js";
 import type { WorkflowServiceOptions } from "../workflows/services/workflow.service.js";
 import {
   createSavedInvestigation,
   deleteSavedInvestigation,
+  getSavedInvestigation,
   isInvestigationServiceError,
-  listSavedInvestigations,
+  listSavedInvestigationsPage,
 } from "./investigations.service.js";
 import {
   getNotificationPreferences,
   isNotificationServiceError,
-  listNotifications,
+  listNotificationsPage,
   markNotificationRead,
   updateNotificationPreferences,
 } from "./notifications.service.js";
@@ -48,9 +50,45 @@ export function createInvestigationsRouter(
 ): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
   router.get("/", async (context) => {
+    const parsed = parseListQuery(
+      {
+        query: context.req.query("q"),
+        sort: context.req.query("sort"),
+        limit: context.req.query("limit"),
+        offset: context.req.query("offset"),
+      },
+      { maxLimit: 100 },
+    );
+    if ("error" in parsed)
+      return context.json(
+        { error: { code: "INVALID_QUERY", message: parsed.error } },
+        400,
+      );
+    try {
+      const page = await listSavedInvestigationsPage(
+        context.get("principal"),
+        parsed.value,
+      );
+      return context.json({
+        data: page.items,
+        pagination: page.pagination,
+      });
+    } catch (cause) {
+      if (isInvestigationServiceError(cause))
+        return context.json(
+          { error: { code: cause.code, message: cause.message } },
+          statusFor(cause.code),
+        );
+      throw cause;
+    }
+  });
+  router.get("/:investigationId", async (context) => {
     try {
       return context.json({
-        data: await listSavedInvestigations(context.get("principal")),
+        data: await getSavedInvestigation(
+          context.get("principal"),
+          context.req.param("investigationId") ?? "",
+        ),
       });
     } catch (cause) {
       if (isInvestigationServiceError(cause))
@@ -189,9 +227,29 @@ export function createInvestigationsRouter(
 export function createNotificationsRouter(): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
   router.get("/", async (context) => {
+    const parsed = parseListQuery(
+      {
+        query: context.req.query("q"),
+        status: context.req.query("status"),
+        sort: context.req.query("sort"),
+        limit: context.req.query("limit"),
+        offset: context.req.query("offset"),
+      },
+      { maxLimit: 100, statuses: ["read", "unread"] },
+    );
+    if ("error" in parsed)
+      return context.json(
+        { error: { code: "INVALID_QUERY", message: parsed.error } },
+        400,
+      );
     try {
+      const page = await listNotificationsPage(
+        context.get("principal"),
+        parsed.value,
+      );
       return context.json({
-        data: await listNotifications(context.get("principal")),
+        data: page.items,
+        pagination: page.pagination,
       });
     } catch (cause) {
       if (isNotificationServiceError(cause))

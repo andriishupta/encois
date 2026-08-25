@@ -2,17 +2,10 @@ import type { OrganizationAccessRequestRecord } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import {
-  Check,
-  CircleAlert,
-  Clock3,
-  LockKeyhole,
-  Send,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { Check, CircleAlert, Clock3, Send, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,7 +32,7 @@ import {
   humanizeAccessLevel,
 } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
-import { usePermissions } from "@/lib/permissions";
+import { describePermission, usePermissions } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/management/access")({
@@ -87,7 +80,6 @@ function AccessSettingsPage() {
     queryKey: queryKeys.organizationAccessRequests(),
     queryFn: listOrganizationAccessRequests,
     enabled: isLoaded && can(Permission.OrganizationRead),
-    refetchInterval: 15_000,
   });
   const [requestUnitId, setRequestUnitId] = useState("");
   const [requestAccess, setRequestAccess] = useState<
@@ -154,9 +146,9 @@ function AccessSettingsPage() {
         actions={
           can(Permission.OrganizationManage) ? (
             <Button type="button" variant="outline" asChild>
-              <Link to="/management/permissions">
-                <LockKeyhole data-icon="inline-start" />
-                Open permission board
+              <Link to="/management/members">
+                <ShieldCheck data-icon="inline-start" />
+                Manage members
               </Link>
             </Button>
           ) : null
@@ -178,7 +170,7 @@ function AccessSettingsPage() {
         </p>
       ) : null}
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -186,14 +178,13 @@ function AccessSettingsPage() {
                 className="size-4 text-muted-foreground"
                 aria-hidden="true"
               />
-              Your access
+              Effective access
             </CardTitle>
             <CardDescription>
-              Resolved from the current organization membership and permission
-              session.
+              Your current organization membership and role.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+          <CardContent>
             {currentMember ? (
               <div className="flex items-center gap-3 rounded-lg border p-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
@@ -207,9 +198,7 @@ function AccessSettingsPage() {
                     {currentMember.email}
                   </p>
                 </div>
-                <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                  {currentMember.role}
-                </span>
+                <DescriptionPill>{currentMember.role}</DescriptionPill>
               </div>
             ) : (
               <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -217,6 +206,17 @@ function AccessSettingsPage() {
                 scope.
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>Access</CardTitle>
+            <CardDescription>
+              Identity and scope resolved for this session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
             <div className="grid gap-2 text-sm">
               <DetailRow
                 label="Identity"
@@ -251,9 +251,9 @@ function AccessSettingsPage() {
                           getOrganizationUnit(units, permission.unitId)?.name ||
                           "Organization unit"}
                       </span>
-                      <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
+                      <DescriptionPill>
                         {humanizeKey(permission.access)}
-                      </span>
+                      </DescriptionPill>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Includes descendant units
@@ -271,38 +271,43 @@ function AccessSettingsPage() {
             ) : null}
           </CardContent>
         </Card>
-
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle>Capabilities</CardTitle>
-            <CardDescription>
-              Product capabilities granted by the active organization role.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {capabilities.length ? (
-              sortedCapabilities.map((permission) => (
-                <div
-                  key={permission}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm"
-                >
-                  <span className="flex size-6 items-center justify-center rounded-full bg-muted">
-                    <Check
-                      className="size-3.5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  </span>
-                  <span>{humanizeKey(permission)}</span>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No capabilities are available in this session.
-              </p>
-            )}
-          </CardContent>
-        </Card>
       </div>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle>Capabilities</CardTitle>
+          <CardDescription>
+            Product capabilities granted by the active organization role.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {capabilities.length ? (
+            sortedCapabilities.map((permission) => (
+              <div
+                key={permission}
+                className="flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm"
+              >
+                <span className="flex size-6 items-center justify-center rounded-full bg-muted">
+                  <Check
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </span>
+                <div className="min-w-0">
+                  <p>{humanizeKey(permission)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {describePermission(permission)}
+                  </p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No capabilities are available in this session.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -449,30 +454,6 @@ function AccessSettingsPage() {
           ) : null}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Information boundaries</CardTitle>
-          <CardDescription>
-            How access is enforced across the product.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <BoundaryRow label="Organization scope enforced" />
-          <BoundaryRow label="Read-only provider access by default" />
-          <BoundaryRow label="Evidence stays linked to source and timestamp" />
-          <div className="mt-2 flex items-start gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
-            <ShieldCheck
-              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span className="text-muted-foreground">
-              Provider credentials, writes, and permission changes stay behind
-              the Gateway approval boundaries.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -498,12 +479,10 @@ function AccessRequestRow({
           <p className="text-sm font-medium">
             {request.requesterName} · {request.unitName}
           </p>
-          <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
+          <DescriptionPill>
             {humanizeAccessLevel(request.access)}
-          </span>
-          <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-            {request.status}
-          </span>
+          </DescriptionPill>
+          <StatusPill status={request.status} label={request.status} />
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {request.reason} · {formatDate(request.updatedAt)}
@@ -563,17 +542,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-4 border-b py-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
-    </div>
-  );
-}
-
-function BoundaryRow({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border px-3 py-3 text-sm">
-      <span className="flex size-6 items-center justify-center rounded-full bg-muted">
-        <Check className="size-3.5 text-muted-foreground" aria-hidden="true" />
-      </span>
-      {label}
     </div>
   );
 }

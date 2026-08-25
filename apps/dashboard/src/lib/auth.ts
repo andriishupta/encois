@@ -1,7 +1,6 @@
 import {
   isJsonObject,
   isPermission,
-  Permission,
   type PermissionKey,
   permissionIncludes,
 } from "@encois/contracts";

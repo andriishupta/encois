@@ -5,17 +5,12 @@ import {
 } from "@encois/contracts";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  FileText,
-  Plus,
-  RefreshCw,
-  Search,
-  Waypoints,
-} from "lucide-react";
+import { FileText, Plus, Search, Waypoints } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CurrentScopeText, ScopePill } from "@/components/current-scope";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
+import { LinkCardIndicator } from "@/components/link-card";
 import {
   ListCollection,
   ListFilter,
@@ -26,6 +21,7 @@ import {
   type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { ProductTerm } from "@/components/product-term";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,15 +49,11 @@ export const Route = createFileRoute("/_app/organization/sources/")({
 const pageSize = 10;
 
 function SourcesPage() {
-  const { organizationName, units, currentUnitId } = useOrganization();
+  const { units, currentUnitId } = useOrganization();
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId)
     ? currentUnitId
     : undefined;
   const currentUnit = units.find((unit) => unit.id === selectedScopeUnitId);
-  const scopeLabel =
-    currentUnit?.type === "organization"
-      ? (organizationName ?? currentUnit.name)
-      : (currentUnit?.name ?? "current scope");
   const canManage = hasPermission(getAuthSession(), Permission.KnowledgeManage);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<KnowledgeSourceStatus | "all">("all");
@@ -94,15 +86,6 @@ function SourcesPage() {
   );
   const firstPage = sources.data?.pages[0];
   const total = firstPage?.pagination.total ?? 0;
-  const visibleItems = useMemo(
-    () =>
-      [...items].sort((left, right) =>
-        formatSourceScope(left.visibilityScope.ids, units).localeCompare(
-          formatSourceScope(right.visibilityScope.ids, units),
-        ),
-      ),
-    [items, units],
-  );
   const statuses = [
     { value: "all", label: "All statuses" },
     ...Object.values(KnowledgeSourceStatus).map((value) => ({
@@ -112,13 +95,13 @@ function SourcesPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title={<ProductTerm term="knowledgeSource" plural />}
         description={
           <>
-            Scoped inputs available in {scopeLabel}. Integration Sources and
-            uploaded documents use the same permission-aware pipeline.
+            Scoped inputs available in <CurrentScopeText />. Integration Sources
+            and uploaded documents use the same permission-aware pipeline.
           </>
         }
         actions={
@@ -153,9 +136,9 @@ function SourcesPage() {
         />
       </ListToolbar>
       <ListResultsHeader
-        count={visibleItems.length}
+        count={items.length}
+        total={total}
         label="visible sources"
-        meta={`${total} available`}
         view={view}
         onViewChange={setView}
       />
@@ -170,14 +153,12 @@ function SourcesPage() {
           retrying={sources.isFetching}
         />
       ) : null}
-      {!sources.isLoading && !sources.isError && visibleItems.length ? (
+      {!sources.isLoading && !sources.isError && items.length ? (
         <ListCollection
-          items={visibleItems}
+          items={items}
           view={view}
           getKey={(source) => source.id}
-          renderItem={(source) => (
-            <SourceCard source={source} units={units} view={view} />
-          )}
+          renderItem={(source) => <SourceCard source={source} units={units} />}
         />
       ) : null}
       {!sources.isLoading && !sources.isError && !items.length ? (
@@ -190,15 +171,20 @@ function SourcesPage() {
                   "No Sources match"
                 ) : (
                   <>
-                    No Sources in {scopeLabel}
+                    No Sources in <CurrentScopeText />
                     {currentUnit?.type === "organization" ? "" : " scope"}
                   </>
                 )
               }
               description={
-                query || status !== "all"
-                  ? "Change the search or status filter."
-                  : `No Sources are available in ${scopeLabel}${currentUnit?.type === "organization" ? "" : " scope"}.`
+                query || status !== "all" ? (
+                  "Change the search or status filter."
+                ) : (
+                  <>
+                    No Sources are available in <CurrentScopeText />
+                    {currentUnit?.type === "organization" ? "" : " scope"}.
+                  </>
+                )
               }
               action={
                 canManage ? (
@@ -214,7 +200,7 @@ function SourcesPage() {
           </CardContent>
         </Card>
       ) : null}
-      {!sources.isLoading && !sources.isError && visibleItems.length ? (
+      {!sources.isLoading && !sources.isError && items.length ? (
         <ListPagination
           hasMore={Boolean(sources.hasNextPage)}
           loading={sources.isFetchingNextPage}
@@ -228,11 +214,9 @@ function SourcesPage() {
 function SourceCard({
   source,
   units,
-  view,
 }: {
   source: KnowledgeSource;
   units: ReturnType<typeof useOrganization>["units"];
-  view: ListViewMode;
 }) {
   const Icon = source.kind === "uploaded_document" ? FileText : Waypoints;
   const statusLabel =
@@ -248,14 +232,8 @@ function SourceCard({
       params={{ sourceId: source.id }}
       className="group block"
     >
-      <Card
-        className={
-          view === "list"
-            ? "transition-colors group-hover:border-foreground/30 md:flex md:items-center md:justify-between"
-            : "h-full transition-colors group-hover:border-foreground/30"
-        }
-      >
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <Card className="relative flex h-full min-h-[170px] flex-col transition-colors group-hover:border-foreground/30">
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/30">
               <Icon
@@ -264,7 +242,7 @@ function SourceCard({
               />
             </span>
             <div className="min-w-0">
-              <CardTitle className="truncate">{source.name}</CardTitle>
+              <CardTitle className="min-w-0 truncate">{source.name}</CardTitle>
               <CardDescription className="mt-1">
                 {source.provider ??
                   source.contentType ??
@@ -272,31 +250,28 @@ function SourceCard({
               </CardDescription>
             </div>
           </div>
-          <ArrowUpRight
-            className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+            <StatusPill
+              status={source.currentRevisionId ? "ready" : "not ready"}
+              label={source.currentRevisionId ? "Ready" : "Not ready"}
+            />
+            <StatusPill status={source.status} label={statusLabel} />
+          </div>
         </CardHeader>
-        <CardContent className="grid gap-1 border-t pt-0 text-xs text-muted-foreground">
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-secondary px-2 py-1">
-              Read: {formatSourceScope(source.readScope.ids, units)}
-            </span>
-            <span className="rounded-full bg-muted px-2 py-1">
-              Visible: {formatSourceScope(source.visibilityScope.ids, units)}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-secondary-foreground">
-              <RefreshCw className="size-3" aria-hidden="true" />
-              {statusLabel}
-            </span>
-            <span className="rounded-full bg-muted px-2 py-1">
-              {freshnessLabel}
-            </span>
-            <span className="ml-auto truncate font-mono">
-              {source.currentRevisionId ? "revision ready" : "no revision"}
-            </span>
+        <CardContent className="flex flex-1 flex-col gap-3 pr-14 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopePill
+              label="Read"
+              name={formatSourceScope(source.readScope.ids, units)}
+            />
+            <ScopePill
+              label="Visible"
+              name={formatSourceScope(source.visibilityScope.ids, units)}
+            />
+            <DescriptionPill>{freshnessLabel}</DescriptionPill>
           </div>
         </CardContent>
+        <LinkCardIndicator />
       </Card>
     </Link>
   );

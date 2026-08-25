@@ -30,6 +30,7 @@ import {
   ListPagination,
   ListResultsHeader,
   ListSearch,
+  ListSort,
   ListToolbar,
   type ListViewMode,
 } from "@/components/list-controls";
@@ -103,7 +104,7 @@ function WorkflowsPage() {
   );
 
   return (
-    <div data-testid="workflows-page" className="flex flex-col gap-8">
+    <div data-testid="workflows-page" className="flex flex-col gap-4">
       <PageHeader
         title="Workflows"
         description="Browse the workflow definitions available to this organization. Open a definition to inspect its versioned Blueprint or create a new workflow."
@@ -139,7 +140,7 @@ function WorkflowsPage() {
             { value: "approved", label: "Published" },
           ]}
         />
-        <ListFilter
+        <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
           label="Sort workflows"

@@ -16,10 +16,12 @@ import {
   ListPagination,
   ListResultsHeader,
   ListSearch,
+  ListSort,
   ListToolbar,
   type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -66,6 +68,7 @@ function WorkflowTemplatesPage() {
   });
   const visibleTemplates =
     templates.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = templates.data?.pages[0]?.pagination.total;
   const activeCount = visibleTemplates.filter(
     (template) => template.status === "active",
   ).length;
@@ -74,7 +77,7 @@ function WorkflowTemplatesPage() {
   ).length;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Workflow templates"
         description="Provider-neutral patterns that can be resolved into an independent Blueprint. Active templates can be used now; disabled templates remain visible but cannot be used."
@@ -96,7 +99,7 @@ function WorkflowTemplatesPage() {
             { value: "disabled", label: "Disabled" },
           ]}
         />
-        <ListFilter
+        <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
           label="Sort workflow templates"
@@ -110,6 +113,7 @@ function WorkflowTemplatesPage() {
       </ListToolbar>
       <ListResultsHeader
         count={visibleTemplates.length}
+        total={total}
         label="visible templates"
         meta={`${activeCount} active · ${disabledCount} disabled`}
         view={view}
@@ -170,7 +174,16 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <CardTitle>{template.title}</CardTitle>
-          {disabled ? <AvailabilityBadge label="Disabled" /> : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {disabled ? <AvailabilityBadge label="Disabled" /> : null}
+            {!disabled ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/workflows/new" search={{ template: template.key }}>
+                  Use in Workflow
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </div>
         <CardDescription>
           {template.category} · v{template.version}
@@ -180,12 +193,9 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
         <p className="text-sm text-muted-foreground">{template.description}</p>
         <div className="flex flex-wrap gap-1.5">
           {template.requiredCapabilities.map((capability) => (
-            <span
-              key={capability}
-              className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground"
-            >
+            <DescriptionPill key={capability} className="text-[11px]">
               {capability}
-            </span>
+            </DescriptionPill>
           ))}
         </div>
         <details className="mt-auto rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
@@ -205,17 +215,6 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
             <p>Risk: Review approval requirements in the plan preview</p>
           </div>
         </details>
-        {disabled ? (
-          <Button variant="outline" disabled>
-            Disabled
-          </Button>
-        ) : (
-          <Button variant="outline" asChild>
-            <Link to="/workflows/new" search={{ template: template.key }}>
-              Use in workflow creation
-            </Link>
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

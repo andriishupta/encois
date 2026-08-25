@@ -6,15 +6,15 @@ export type NavigationTarget =
   | "/workflows/blueprints"
   | "/workflows/memory"
   | "/organization/memory"
+  | "/organization/investigations"
   | "/organization/sources"
   | "/organization/integrations"
   | "/organization/integrations/catalog"
   | "/activity"
   | "/organization"
   | "/management/members"
-  | "/management/permissions"
+  | "/management/members/$memberId"
   | "/management/access"
-  | "/management/investigations"
   | "/settings"
   | "/settings/workspace"
   | "/settings/notifications"
@@ -58,6 +58,7 @@ export function isNavigationItemActive(
   if (
     target === "/workflows/memory" ||
     target === "/organization/memory" ||
+    target === "/organization/investigations" ||
     target === "/organization/sources"
   )
     return pathname === target || pathname.startsWith(`${target}/`);
@@ -70,9 +71,8 @@ export function isNavigationItemActive(
     return pathname === target || pathname.startsWith(`${target}/`);
   if (
     target === "/management/members" ||
-    target === "/management/permissions" ||
-    target === "/management/access" ||
-    target === "/management/investigations"
+    target === "/management/members/$memberId" ||
+    target === "/management/access"
   )
     return pathname === target || pathname.startsWith(`${target}/`);
   return pathname === target;

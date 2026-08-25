@@ -51,7 +51,6 @@ function DashboardPage() {
     queryKey: queryKeys.workflowActivity(),
     queryFn: listWorkflowActivity,
     enabled: canViewWorkflows,
-    refetchInterval: 15_000,
   });
   const greetingName = account.name === "Account" ? "there" : account.name;
   const workspaceLabel = organizationName ?? "your workspace";

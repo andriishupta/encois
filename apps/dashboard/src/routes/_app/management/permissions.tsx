@@ -1,12 +1,6 @@
 import { Permission } from "@encois/contracts";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
-  createFileRoute,
-  Link,
-  redirect,
-  useNavigate,
-} from "@tanstack/react-router";
-import {
-  Check,
   ChevronRight,
   CircleAlert,
   LockKeyhole,
@@ -17,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,15 +35,17 @@ import {
 import { useOrganization } from "@/lib/organization-context";
 
 export const Route = createFileRoute("/_app/management/permissions")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    memberId: typeof search.memberId === "string" ? search.memberId : undefined,
-  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.OrganizationManage))
       throw redirect({ to: "/forbidden" });
+    throw redirect({ to: "/management/members" });
   },
-  component: OrganizationPermissionsPage,
+  component: LegacyPermissionsRedirect,
 });
+
+function LegacyPermissionsRedirect() {
+  return null;
+}
 
 const accessLevels: AccessLevel[] = [
   "viewer",
@@ -57,9 +54,13 @@ const accessLevels: AccessLevel[] = [
   "admin",
 ];
 
-function OrganizationPermissionsPage() {
-  const navigate = useNavigate();
-  const { memberId } = Route.useSearch();
+export function OrganizationPermissionsPage({
+  memberId,
+  onMemberChange,
+}: {
+  memberId?: string;
+  onMemberChange: (memberId: string) => void;
+}) {
   const {
     units,
     members,
@@ -100,13 +101,13 @@ function OrganizationPermissionsPage() {
     return (
       <div className="flex flex-col gap-8">
         <PageHeader
-          title="Organization permissions"
-          description="Assign organization-unit access while keeping visibility scoped to the user’s effective tree."
+          title="Member"
+          description="Member permissions are unavailable until organization members load."
           actions={
             <Button type="button" variant="outline" asChild>
-              <Link to="/organization">
+              <Link to="/management/members">
                 <ChevronRight className="rotate-180" data-icon="inline-start" />
-                Organization tree
+                Members
               </Link>
             </Button>
           }
@@ -196,13 +197,13 @@ function OrganizationPermissionsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Organization permissions"
-        description="Assign organization-unit access while keeping visibility scoped to the user’s effective tree."
+        title={selectedMember.name}
+        description="Member profile and organization-unit permission scopes."
         actions={
           <Button type="button" variant="outline" asChild>
-            <Link to="/organization">
+            <Link to="/management/members">
               <ChevronRight className="rotate-180" data-icon="inline-start" />
-              Organization tree
+              Members
             </Link>
           </Button>
         }
@@ -238,14 +239,7 @@ function OrganizationPermissionsPage() {
             <Select
               id="permission-member"
               value={selectedMember.id}
-              onChange={(event) =>
-                void navigate({
-                  search: (current) => ({
-                    ...current,
-                    memberId: event.target.value,
-                  }),
-                })
-              }
+              onChange={(event) => onMemberChange(event.target.value)}
               options={members.map((member) => ({
                 value: member.id,
                 label: member.name,
@@ -265,9 +259,10 @@ function OrganizationPermissionsPage() {
                 {selectedMember.email} · {selectedMember.role}
               </CardDescription>
             </div>
-            <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-              {selectedMember.status}
-            </span>
+            <StatusPill
+              status={selectedMember.status}
+              label={selectedMember.status}
+            />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -287,19 +282,16 @@ function OrganizationPermissionsPage() {
                   descendants, never sibling branches.
                 </p>
               </div>
-              <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                {managedUnits.length ? "Can manage" : "Read-only"}
-              </span>
+              <StatusPill
+                status={managedUnits.length ? "active" : "read-only"}
+                label={managedUnits.length ? "Can manage" : "Read-only"}
+                className="shrink-0"
+              />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {managedUnits.length ? (
                 managedUnits.map((unit) => (
-                  <span
-                    key={unit.id}
-                    className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-                  >
-                    {unit.name}
-                  </span>
+                  <DescriptionPill key={unit.id}>{unit.name}</DescriptionPill>
                 ))
               ) : (
                 <span className="text-xs text-muted-foreground">
@@ -386,13 +378,7 @@ function OrganizationPermissionsPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {effectiveUnits.map((unit) => (
-                <span
-                  key={unit.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
-                >
-                  <Check className="size-3" aria-hidden="true" />
-                  {unit.name}
-                </span>
+                <StatusPill key={unit.id} status="active" label={unit.name} />
               ))}
             </div>
             <p className="text-xs text-muted-foreground">

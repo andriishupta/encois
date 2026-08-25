@@ -104,7 +104,6 @@ export const queryKeys = {
     ] as const,
   integrationsRoot: () => ["integrations", currentOrganizationId()] as const,
   integrationCatalog: (
-    channel = "api",
     type = "all",
     query = "",
     status = "all",
@@ -113,7 +112,6 @@ export const queryKeys = {
     [
       "integration-catalog",
       currentOrganizationId(),
-      channel,
       type,
       query,
       status,
@@ -186,9 +184,19 @@ export const queryKeys = {
       scope,
     ] as const,
   memoryChanges: () => ["memory-changes", currentOrganizationId()] as const,
-  savedInvestigations: () =>
-    ["saved-investigations", currentOrganizationId()] as const,
-  notifications: () => ["notifications", currentOrganizationId()] as const,
+  savedInvestigationPages: (query = "", sort = "updated-desc") =>
+    [
+      "saved-investigations",
+      currentOrganizationId(),
+      "__pages__",
+      query,
+      sort,
+    ] as const,
+  savedInvestigation: (investigationId: string) =>
+    ["saved-investigation", currentOrganizationId(), investigationId] as const,
+  notificationsRoot: () => ["notifications", currentOrganizationId()] as const,
+  notifications: (query = "", status = "all") =>
+    ["notifications", currentOrganizationId(), query, status] as const,
   recommendations: () => ["recommendations", currentOrganizationId()] as const,
   notificationPreferences: () =>
     ["notification-preferences", currentOrganizationId()] as const,

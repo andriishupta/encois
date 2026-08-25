@@ -10,27 +10,24 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  Github,
-  PlugZap,
-  Plus,
-  Search,
-} from "lucide-react";
+import { Github, PlugZap, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CurrentScopePill, CurrentScopeText } from "@/components/current-scope";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
+import { LinkCardIndicator } from "@/components/link-card";
 import {
   ListCollection,
   ListFilter,
   ListPagination,
   ListResultsHeader,
   ListSearch,
+  ListSort,
   ListToolbar,
   type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/pill";
 import { ProductTerm } from "@/components/product-term";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +39,7 @@ import {
 } from "@/components/ui/card";
 import { listIntegrationsPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
-import { humanizeKey, shortIdentifier } from "@/lib/formatters";
+import { humanizeKey } from "@/lib/formatters";
 import { useOrganization } from "@/lib/organization-context";
 import { useCan } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
@@ -63,15 +60,11 @@ const pageSize = 10;
 function IntegrationsPage() {
   const navigate = useNavigate();
   const { q } = Route.useSearch();
-  const { organizationName, units, currentUnitId, members } = useOrganization();
+  const { units, currentUnitId, members } = useOrganization();
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId)
     ? currentUnitId
     : undefined;
   const currentUnit = units.find((unit) => unit.id === selectedScopeUnitId);
-  const scopeLabel =
-    currentUnit?.type === "organization"
-      ? (organizationName ?? currentUnit.name)
-      : (currentUnit?.name ?? "current scope");
   const actor = members.find(
     (member) => member.id === getAuthSession()?.userId,
   );
@@ -133,13 +126,13 @@ function IntegrationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title={<ProductTerm term="integration" plural />}
         description={
           <>
             Organization-level provider integrations are available to authorized
-            unit-scoped Sources. Current scope: {scopeLabel}.
+            unit-scoped Sources.
           </>
         }
         actions={
@@ -157,17 +150,6 @@ function IntegrationsPage() {
           )
         }
       />
-      <div className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">
-            Existing Integrations
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Configured provider connections visible in the current organization
-            scope.
-          </p>
-        </div>
-      </div>
       <ListToolbar>
         <ListSearch
           value={q ?? ""}
@@ -181,7 +163,7 @@ function IntegrationsPage() {
           options={statuses}
           label="Filter Integrations by status"
         />
-        <ListFilter
+        <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
           options={sorts}
@@ -190,8 +172,8 @@ function IntegrationsPage() {
       </ListToolbar>
       <ListResultsHeader
         count={items.length}
+        total={total}
         label="visible integrations"
-        meta={`${total} available`}
         view={view}
         onViewChange={setView}
       />
@@ -212,11 +194,7 @@ function IntegrationsPage() {
           view={view}
           getKey={(integration) => integration.id}
           renderItem={(integration) => (
-            <IntegrationPreviewCard
-              integration={integration}
-              view={view}
-              scopeLabel={scopeLabel}
-            />
+            <IntegrationPreviewCard integration={integration} view={view} />
           )}
         />
       ) : null}
@@ -230,15 +208,21 @@ function IntegrationsPage() {
                   "No Integrations match"
                 ) : (
                   <>
-                    No Integrations in {scopeLabel}
+                    No Integrations in <CurrentScopeText />
                     {currentUnit?.type === "organization" ? "" : " scope"}
                   </>
                 )
               }
               description={
-                q || status !== "all"
-                  ? "Change the search or status filter."
-                  : `No connected Integrations are available in ${scopeLabel}${currentUnit?.type === "organization" ? "" : " scope"}.`
+                q || status !== "all" ? (
+                  "Change the search or status filter."
+                ) : (
+                  <>
+                    No connected Integrations are available in{" "}
+                    <CurrentScopeText />
+                    {currentUnit?.type === "organization" ? "" : " scope"}.
+                  </>
+                )
               }
             />
           </CardContent>
@@ -258,11 +242,9 @@ function IntegrationsPage() {
 function IntegrationPreviewCard({
   integration,
   view,
-  scopeLabel,
 }: {
   integration: IntegrationProjection;
   view: ListViewMode;
-  scopeLabel: string;
 }) {
   const Icon =
     integration.provider.toLowerCase() === "github" ? Github : PlugZap;
@@ -275,45 +257,43 @@ function IntegrationPreviewCard({
       <Card
         className={
           view === "list"
-            ? "transition-colors group-hover:border-foreground/30 md:flex md:items-center md:justify-between"
-            : "h-full transition-colors group-hover:border-foreground/30"
+            ? "relative transition-colors group-hover:border-foreground/30 md:flex-row md:items-center md:justify-between"
+            : "relative h-full transition-colors group-hover:border-foreground/30"
         }
       >
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
+        <CardHeader className="flex min-w-0 flex-1 flex-row flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 items-center justify-center rounded-md border bg-muted/30">
               <Icon
                 className="size-4 text-muted-foreground"
                 aria-hidden="true"
               />
             </span>
-            <div className="flex flex-col gap-1.5">
-              <CardTitle>{integration.name}</CardTitle>
+            <div className="min-w-0 flex flex-col gap-1.5">
+              <CardTitle className="truncate">{integration.name}</CardTitle>
               <CardDescription>
                 {integration.provider} · {integration.type.toUpperCase()}
               </CardDescription>
             </div>
           </div>
-          <ArrowUpRight
-            className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <CurrentScopePill />
+            <StatusPill
+              status={integration.status}
+              label={humanizeKey(integration.status)}
+            />
+          </div>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {integration.status === IntegrationStatus.Active ? (
-            <CheckCircle2 className="size-3.5" aria-hidden="true" />
-          ) : (
-            <PlugZap className="size-3.5" aria-hidden="true" />
-          )}
-          <span>{humanizeKey(integration.status)}</span>
-          <span className="rounded-full bg-secondary px-2 py-1">
-            Visible in {scopeLabel}
-          </span>
-          <span className="ml-auto">
-            ID:{" "}
-            <span className="font-mono">{shortIdentifier(integration.id)}</span>
-          </span>
+        <CardContent
+          className={
+            view === "list"
+              ? "flex flex-wrap items-center justify-end gap-2 pr-14 text-xs text-muted-foreground md:shrink-0"
+              : "flex flex-wrap items-center gap-2 pr-14 text-xs text-muted-foreground"
+          }
+        >
+          <span>{integration.provider} integration</span>
         </CardContent>
+        <LinkCardIndicator />
       </Card>
     </Link>
   );

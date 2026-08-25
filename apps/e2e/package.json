@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "pnpm run typecheck",
+    "biome:check": "biome check cypress cypress.config.ts",
+    "biome:format": "biome format --write cypress cypress.config.ts",
+    "biome:write": "biome check --write cypress cypress.config.ts",
     "e2e": "cypress run",
     "e2e:open": "cypress open",
-    "format": "biome format --write cypress cypress.config.ts",
+    "format": "pnpm run biome:format",
     "format:check": "biome format cypress cypress.config.ts",
     "lint": "pnpm run typecheck",
     "typecheck": "tsc --noEmit"

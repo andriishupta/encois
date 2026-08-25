@@ -16,10 +16,12 @@ import {
   ListPagination,
   ListResultsHeader,
   ListSearch,
+  ListSort,
   ListToolbar,
   type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -78,9 +80,9 @@ function WorkflowPlansPage() {
       lastPage.pagination.hasMore
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
-    refetchInterval: 15_000,
   });
   const visiblePlans = plans.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = plans.data?.pages[0]?.pagination.total;
   const [actionError, setActionError] = useState<string | null>(null);
   const action = useMutation({
     mutationFn: async ({
@@ -118,7 +120,7 @@ function WorkflowPlansPage() {
   ).length;
 
   return (
-    <div data-testid="workflow-plans-page" className="flex flex-col gap-8">
+    <div data-testid="workflow-plans-page" className="flex flex-col gap-4">
       <PageHeader
         title="Workflow Plans"
         description="Approval boundary for workflow proposals. Review the generated Blueprint, approve it, then apply it to make it available in Workflows."
@@ -143,7 +145,7 @@ function WorkflowPlansPage() {
             { value: "expired", label: "Expired" },
           ]}
         />
-        <ListFilter
+        <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
           label="Sort Plans"
@@ -157,19 +159,14 @@ function WorkflowPlansPage() {
       </ListToolbar>
       <ListResultsHeader
         count={visiblePlans.length}
+        total={total}
         label="visible plans"
         meta={`${pendingCount} pending`}
         view={view}
         onViewChange={setView}
       />
       {actionError ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm text-destructive">
-              Could not update this Plan: {actionError}
-            </p>
-          </CardContent>
-        </Card>
+        <InlineError title="Could not update this Plan" message={actionError} />
       ) : null}
       {plans.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading Plans…</p>
@@ -286,12 +283,12 @@ function WorkflowPlanCard({
               </p>
             ) : null}
           </div>
-          <span
+          <StatusPill
             data-testid="workflow-plan-status"
-            className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
-          >
-            {status}
-          </span>
+            status={plan.status}
+            label={status}
+            className="shrink-0"
+          />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

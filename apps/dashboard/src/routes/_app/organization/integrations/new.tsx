@@ -129,7 +129,7 @@ function NewIntegrationPage() {
           </Button>
         }
       />
-      <Card className="max-w-3xl">
+      <Card className="w-full">
         <CardHeader>
           <div className="flex size-10 items-center justify-center rounded-md border bg-muted/30">
             <PlugZap
@@ -146,113 +146,111 @@ function NewIntegrationPage() {
         </CardHeader>
         <CardContent>
           {organizationAdmin ? (
-            <>
-              <form className="flex flex-col gap-6" onSubmit={submit}>
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <label
-                    className="flex flex-col gap-2 text-sm font-medium"
-                    htmlFor="integration-name"
-                  >
-                    Display name
-                    <Input
-                      id="integration-name"
-                      value={displayName}
-                      onChange={(event) => setDisplayName(event.target.value)}
-                      placeholder="GitHub Engineering"
-                      required
-                      minLength={2}
-                      maxLength={160}
-                    />
-                  </label>
-                  <label
-                    className="flex flex-col gap-2 text-sm font-medium"
-                    htmlFor="integration-provider"
-                  >
-                    Provider
-                    <Select
-                      id="integration-provider"
-                      value={provider}
-                      onChange={(event) => changeProvider(event.target.value)}
-                      options={providerOptions}
-                    />
-                  </label>
-                  <label
-                    className="flex flex-col gap-2 text-sm font-medium"
-                    htmlFor="integration-type"
-                  >
-                    Integration type
-                    <Select
-                      id="integration-type"
-                      value={type}
-                      onChange={(event) =>
-                        setType(event.target.value as IntegrationType)
-                      }
-                      options={Object.values(IntegrationType).map((value) => ({
-                        value,
-                        label: value.toUpperCase(),
-                      }))}
-                    />
-                  </label>
+            <form className="flex flex-col gap-6" onSubmit={submit}>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <label
+                  className="flex flex-col gap-2 text-sm font-medium"
+                  htmlFor="integration-name"
+                >
+                  Display name
+                  <Input
+                    id="integration-name"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="GitHub Engineering"
+                    required
+                    minLength={2}
+                    maxLength={160}
+                  />
+                </label>
+                <label
+                  className="flex flex-col gap-2 text-sm font-medium"
+                  htmlFor="integration-provider"
+                >
+                  Provider
+                  <Select
+                    id="integration-provider"
+                    value={provider}
+                    onChange={(event) => changeProvider(event.target.value)}
+                    options={providerOptions}
+                  />
+                </label>
+                <label
+                  className="flex flex-col gap-2 text-sm font-medium"
+                  htmlFor="integration-type"
+                >
+                  Integration type
+                  <Select
+                    id="integration-type"
+                    value={type}
+                    onChange={(event) =>
+                      setType(event.target.value as IntegrationType)
+                    }
+                    options={Object.values(IntegrationType).map((value) => ({
+                      value,
+                      label: value.toUpperCase(),
+                    }))}
+                  />
+                </label>
+              </div>
+              <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
+                <legend className="px-1 text-sm font-medium">
+                  Read capabilities
+                </legend>
+                <p className="text-xs text-muted-foreground">
+                  These capabilities are recorded on the binding and used by
+                  workflow provider preflight. Write capabilities are not
+                  available here.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(providerScopes[provider] ?? []).map((scope) => (
+                    <label
+                      key={scope}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={grantedScopes.includes(scope)}
+                        onChange={(event) =>
+                          setGrantedScopes((current) =>
+                            event.target.checked
+                              ? [...new Set([...current, scope])]
+                              : current.filter((item) => item !== scope),
+                          )
+                        }
+                      />
+                      {scope}
+                    </label>
+                  ))}
                 </div>
-                <fieldset className="flex flex-col gap-3 rounded-lg border p-4">
-                  <legend className="px-1 text-sm font-medium">
-                    Read capabilities
-                  </legend>
-                  <p className="text-xs text-muted-foreground">
-                    These capabilities are recorded on the binding and used by
-                    workflow provider preflight. Write capabilities are not
-                    available here.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {(providerScopes[provider] ?? []).map((scope) => (
-                      <label
-                        key={scope}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={grantedScopes.includes(scope)}
-                          onChange={(event) =>
-                            setGrantedScopes((current) =>
-                              event.target.checked
-                                ? [...new Set([...current, scope])]
-                                : current.filter((item) => item !== scope),
-                            )
-                          }
-                        />
-                        {scope}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                {mutation.isError ? (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
-                  >
-                    Could not register integration: {mutation.error.message}
-                  </div>
-                ) : null}
-                <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
-                  <Button variant="ghost" asChild>
-                    <Link to="/organization/integrations">Cancel</Link>
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={mutation.isPending || !displayName.trim()}
-                  >
-                    {mutation.isPending ? (
-                      "Registering…"
-                    ) : (
-                      <>
-                        <Save data-icon="inline-start" />
-                        Register organization integration
-                      </>
-                    )}
-                  </Button>
+              </fieldset>
+              {mutation.isError ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+                >
+                  Could not register integration: {mutation.error.message}
                 </div>
-              </form>
-            </>
+              ) : null}
+              <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
+                <Button variant="ghost" asChild>
+                  <Link to="/organization/integrations">Cancel</Link>
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={mutation.isPending || !displayName.trim()}
+                >
+                  {mutation.isPending ? (
+                    "Registering…"
+                  ) : (
+                    <>
+                      <Save data-icon="inline-start" />
+                      Register organization integration
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
           ) : (
             <p className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
               Only organization administrators can register provider

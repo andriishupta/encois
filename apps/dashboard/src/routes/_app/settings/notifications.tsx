@@ -1,9 +1,22 @@
 import { Permission } from "@encois/contracts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Bell, Check, CircleAlert, Mail, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  ListFilter,
+  ListPagination,
+  ListResultsHeader,
+  ListSearch,
+  ListToolbar,
+} from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +28,7 @@ import {
 import {
   getNotificationPreferences,
   isApiError,
-  listNotifications,
+  listNotificationsPage,
   markNotificationRead,
   updateNotificationPreferences,
 } from "@/lib/api";
@@ -23,7 +36,25 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query-keys";
 
+type NotificationStatusFilter = "all" | "read" | "unread";
+
+const notificationStatuses = [
+  { value: "all", label: "All notifications" },
+  { value: "unread", label: "Unread" },
+  { value: "read", label: "Read" },
+] as const;
+
+const pageSize = 10;
+
 export const Route = createFileRoute("/_app/settings/notifications")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: typeof search.q === "string" ? search.q : undefined,
+    status: notificationStatuses.some(
+      (option) => option.value === search.status,
+    )
+      ? (search.status as NotificationStatusFilter)
+      : ("all" as const),
+  }),
   beforeLoad: () => {
     const session = getAuthSession();
     if (
@@ -37,16 +68,33 @@ export const Route = createFileRoute("/_app/settings/notifications")({
 });
 
 function NotificationsSettingsPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { q, status } = Route.useSearch();
   const canManage = hasPermission(getAuthSession(), Permission.SettingsManage);
   const preferences = useQuery({
     queryKey: queryKeys.notificationPreferences(),
     queryFn: getNotificationPreferences,
   });
-  const notifications = useQuery({
-    queryKey: queryKeys.notifications(),
-    queryFn: listNotifications,
+  const notifications = useInfiniteQuery({
+    queryKey: queryKeys.notifications(q ?? "", status),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      listNotificationsPage({
+        query: q,
+        status,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.hasMore
+        ? lastPage.pagination.offset + lastPage.pagination.limit
+        : undefined,
   });
+  const notificationItems =
+    notifications.data?.pages.flatMap((page) => page.items) ?? [];
+  const firstNotificationPage = notifications.data?.pages[0];
+  const notificationTotal = firstNotificationPage?.pagination.total ?? 0;
   const [draft, setDraft] = useState({
     emailEnabled: false,
     pushEnabled: false,
@@ -76,10 +124,28 @@ function NotificationsSettingsPage() {
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.notifications(),
+        queryKey: queryKeys.notificationsRoot(),
       });
     },
   });
+  function updateSearch(value: string) {
+    void navigate({
+      replace: true,
+      resetScroll: false,
+      search: (current) => ({ ...current, q: value || undefined }),
+    });
+  }
+  function updateStatus(value: string) {
+    void navigate({
+      replace: true,
+      resetScroll: false,
+      search: (current) => ({
+        ...current,
+        status:
+          value === "all" ? undefined : (value as NotificationStatusFilter),
+      }),
+    });
+  }
   const toggle = (key: keyof typeof draft) =>
     setDraft((value) => ({ ...value, [key]: !value[key] }));
 
@@ -187,59 +253,96 @@ function NotificationsSettingsPage() {
           </CardContent>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>In-product notifications</CardTitle>
-          <CardDescription>
-            Operational attention generated from the current scoped workflow,
-            Source, and Integration state.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {notifications.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              Could not load notifications: {notifications.error.message}
-            </p>
-          ) : null}
-          {read.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              Could not mark notification as read: {read.error.message}
-            </p>
-          ) : null}
-          {notifications.isLoading ? (
-            <p className="text-sm text-muted-foreground">
-              Loading notifications…
-            </p>
-          ) : null}
-          {!notifications.isLoading &&
-          !notifications.isError &&
-          !notifications.data?.length ? (
-            <p className="text-sm text-muted-foreground">
-              No operational notifications in the current scope.
-            </p>
-          ) : null}
-          {notifications.data?.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => (item.readAt ? undefined : read.mutate(item.id))}
-              className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${item.readAt ? "opacity-60" : ""}`}
-            >
-              <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">{item.title}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {item.message}
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            In-product notifications
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Operational attention from the current workflow, Source, and
+            Integration state.
+          </p>
+        </div>
+        <ListToolbar>
+          <ListSearch
+            value={q ?? ""}
+            onChange={updateSearch}
+            placeholder="Search notifications by title, message, or type…"
+            label="Search notifications"
+          />
+          <ListFilter
+            value={status}
+            onChange={updateStatus}
+            options={notificationStatuses}
+            label="Filter notifications by read status"
+          />
+        </ListToolbar>
+        <ListResultsHeader
+          count={notificationItems.length}
+          total={notificationTotal}
+          label="visible notifications"
+          meta="Latest first"
+        />
+        {notifications.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            Could not load notifications: {notifications.error.message}
+          </p>
+        ) : null}
+        {read.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            Could not mark notification as read: {read.error.message}
+          </p>
+        ) : null}
+        {notifications.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            Loading notifications…
+          </p>
+        ) : null}
+        {!notifications.isLoading &&
+        !notifications.isError &&
+        !notificationItems.length ? (
+          <p className="text-sm text-muted-foreground">
+            {q || status !== "all"
+              ? "No notifications match the current filters."
+              : "No operational notifications in the current scope."}
+          </p>
+        ) : null}
+        {notificationItems.length ? (
+          <div className="flex flex-col gap-2">
+            {notificationItems.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => (item.readAt ? undefined : read.mutate(item.id))}
+                className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${item.readAt ? "opacity-60" : ""}`}
+              >
+                <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">
+                    {item.title}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {item.message}
+                  </span>
+                  <span className="mt-2 block text-[11px] text-muted-foreground">
+                    {formatDate(item.createdAt)} ·{" "}
+                    {item.readAt ? "Read" : "Mark read"}
+                  </span>
                 </span>
-                <span className="mt-2 block text-[11px] text-muted-foreground">
-                  {formatDate(item.createdAt)} ·{" "}
-                  {item.readAt ? "Read" : "Mark read"}
-                </span>
-              </span>
-            </button>
-          ))}
-        </CardContent>
-      </Card>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {!notifications.isLoading &&
+        !notifications.isError &&
+        notificationItems.length ? (
+          <ListPagination
+            hasMore={Boolean(notifications.hasNextPage)}
+            loading={notifications.isFetchingNextPage}
+            onLoadMore={() => void notifications.fetchNextPage()}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -283,15 +386,10 @@ function NotificationToggle({
           {description}
         </span>
       </span>
-      <span
-        className={
-          available && enabled
-            ? "rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground"
-            : "rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground"
-        }
-      >
-        {stateLabel}
-      </span>
+      <StatusPill
+        status={available && enabled ? "active" : "disabled"}
+        label={stateLabel}
+      />
     </button>
   );
 }

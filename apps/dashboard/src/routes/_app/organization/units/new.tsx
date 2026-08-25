@@ -120,7 +120,7 @@ function AddOrganizationUnitPage() {
           </Button>
         }
       />
-      <form className="max-w-3xl" onSubmit={handleSubmit}>
+      <form className="w-full" onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
             <CardTitle>Unit configuration</CardTitle>

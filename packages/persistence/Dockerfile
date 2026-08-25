@@ -7,6 +7,7 @@ LABEL org.opencontainers.image.title="Encois Persistence Migrations" \
 WORKDIR /workspace
 RUN corepack enable
 ENV ENCOIS_VERSION=${ENCOIS_VERSION}
+ENV CI=true
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/persistence/package.json packages/persistence/package.json

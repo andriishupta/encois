@@ -67,6 +67,18 @@ The CI workflow also checks `gofmt`, `go test`, and `go vet` independently for
 proves contract/runtime compilation and unit boundaries, but not a hosted
 Temporal or Cloud Run execution.
 
+For local commits, install the tracked pre-commit hook once:
+
+```bash
+pnpm hooks:install
+```
+
+The hook formats only staged TypeScript and Go files, stages those formatter
+changes into the commit being created, then runs workspace lint/type validation
+and Go `gofmt`, `go vet`, and `go test`. It does not invoke `git commit` or amend
+an existing commit, so the current commit message and `git commit -s` sign-off
+are preserved.
+
 The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
 privileged Drizzle migrations, creates the restricted `api_gateway_runtime`
 role, and checks the command-receipt table, tenant RLS policy, uniqueness

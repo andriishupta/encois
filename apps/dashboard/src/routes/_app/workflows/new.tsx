@@ -33,6 +33,7 @@ import {
 import { EmptyPanel } from "@/components/empty-panel";
 import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -762,9 +763,7 @@ function ReviewStage({
                     : "Can start from the resolved scope"}
                 </span>
               </span>
-              <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                {step.kind}
-              </span>
+              <DescriptionPill>{step.kind}</DescriptionPill>
             </div>
           ))}
         </div>
@@ -1048,16 +1047,11 @@ function ProviderBindingList({
                         "No capability constraint"}
                     </p>
                   </div>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-1 text-[11px] font-medium",
-                      ready
-                        ? "bg-emerald-500/10 text-emerald-700"
-                        : "bg-amber-500/10 text-amber-700",
-                    )}
-                  >
-                    {ready ? "Resolved" : "Missing"}
-                  </span>
+                  <StatusPill
+                    status={ready ? "resolved" : "missing"}
+                    label={ready ? "Resolved" : "Missing"}
+                    className="text-[11px] font-medium"
+                  />
                 </div>
                 {ready ? (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -1198,12 +1192,9 @@ function TemplateOption({
       </span>
       <span className="mt-auto flex flex-wrap gap-1.5">
         {item.requiredCapabilities.slice(0, 4).map((capability) => (
-          <span
-            key={capability}
-            className="rounded-full bg-secondary px-2 py-1 text-[11px] text-secondary-foreground"
-          >
+          <DescriptionPill key={capability} className="text-[11px]">
             {capability}
-          </span>
+          </DescriptionPill>
         ))}
       </span>
     </>

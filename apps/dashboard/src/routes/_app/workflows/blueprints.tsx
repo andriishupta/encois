@@ -15,16 +15,19 @@ import { GitBranch, Search } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
+import { LinkCardIndicator } from "@/components/link-card";
 import {
   ListCollection,
   ListFilter,
   ListPagination,
   ListResultsHeader,
   ListSearch,
+  ListSort,
   ListToolbar,
   type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
+import { StatusPill } from "@/components/pill";
 import { ProductTerm } from "@/components/product-term";
 import {
   Card,
@@ -35,7 +38,7 @@ import {
 } from "@/components/ui/card";
 import { listWorkflowBlueprintsPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, humanizeKey } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/blueprints")({
@@ -77,9 +80,10 @@ function WorkflowBlueprintsPage() {
   if (pathname !== "/workflows/blueprints") return <Outlet />;
   const visibleBlueprints =
     blueprints.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = blueprints.data?.pages[0]?.pagination.total;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Workflow Blueprints"
         description="Immutable, organization-scoped execution definitions. A Run is created from a Blueprint snapshot; changing one never rewrites an existing Run."
@@ -102,7 +106,7 @@ function WorkflowBlueprintsPage() {
             { value: "retired", label: "Archived / retired" },
           ]}
         />
-        <ListFilter
+        <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
           label="Sort Blueprints"
@@ -116,6 +120,7 @@ function WorkflowBlueprintsPage() {
       </ListToolbar>
       <ListResultsHeader
         count={visibleBlueprints.length}
+        total={total}
         label="visible blueprints"
         view={view}
         onViewChange={setView}
@@ -196,23 +201,23 @@ function BlueprintCard({
       params={{ blueprintId: blueprint.blueprintId }}
       className="group block h-full"
     >
-      <Card className="flex h-full flex-col transition-colors group-hover:border-foreground/30">
+      <Card className="relative flex h-full flex-col transition-colors group-hover:border-foreground/30">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle>{blueprint.name}</CardTitle>
               <CardDescription>
-                v{blueprint.version} · {blueprint.status}
+                v{blueprint.version}
                 {blueprint.isCurrent ? " · current" : ""}
               </CardDescription>
             </div>
-            <GitBranch
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
+            <StatusPill
+              status={blueprint.status}
+              label={humanizeKey(blueprint.status)}
             />
           </div>
         </CardHeader>
-        <CardContent className="flex flex-1 flex-col gap-4">
+        <CardContent className="flex flex-1 flex-col gap-4 pr-14">
           <p className="text-sm text-muted-foreground">{blueprint.purpose}</p>
           <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
             <p>
@@ -227,6 +232,7 @@ function BlueprintCard({
             </p>
           </div>
         </CardContent>
+        <LinkCardIndicator />
       </Card>
     </Link>
   );

@@ -12,9 +12,10 @@ import {
   savedInvestigations,
   withOrganizationContext,
 } from "@encois/persistence";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { hasAnyPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
+import { type ListPage, type ListQuery, listPage } from "../list-query.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 
 export type InvestigationServiceError = Error & { code: string };
@@ -134,6 +135,40 @@ export async function listSavedInvestigations(
         .map(toSavedInvestigation);
     },
   );
+}
+
+export async function listSavedInvestigationsPage(
+  principal: AosPrincipal,
+  query: ListQuery,
+): Promise<ListPage<SavedInvestigation>> {
+  const investigations = await listSavedInvestigations(principal);
+  const normalizedQuery = query.query?.toLowerCase();
+  const filtered = normalizedQuery
+    ? investigations.filter((item) =>
+        [item.name, item.kind, item.query]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery),
+      )
+    : investigations;
+  return listPage(
+    [...filtered].sort((left, right) =>
+      right.updatedAt.localeCompare(left.updatedAt),
+    ),
+    query,
+  );
+}
+
+export async function getSavedInvestigation(
+  principal: AosPrincipal,
+  investigationId: string,
+): Promise<SavedInvestigation> {
+  const investigation = (await listSavedInvestigations(principal)).find(
+    (item) => item.id === investigationId,
+  );
+  if (!investigation)
+    throw error("INVESTIGATION_NOT_FOUND", "Saved investigation not found.");
+  return investigation;
 }
 
 export async function createSavedInvestigation(

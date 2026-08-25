@@ -1,4 +1,9 @@
-import { Grid2X2, List as ListIcon, LoaderCircle } from "lucide-react";
+import {
+  ArrowUpDown,
+  Grid2X2,
+  List as ListIcon,
+  LoaderCircle,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,8 +15,8 @@ export type ListViewMode = "grid" | "list";
 
 export function ListToolbar({ children }: { children: ReactNode }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <Card className="p-4">
+      <CardContent className="flex flex-col gap-3 p-0 sm:flex-row sm:items-center">
         {children}
       </CardContent>
     </Card>
@@ -55,7 +60,58 @@ export function ListFilter({
   label: string;
 }) {
   return (
+    <ListSelectControl
+      value={value}
+      onChange={onChange}
+      options={options}
+      label={label}
+    />
+  );
+}
+
+export function ListSort({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly SelectOption[];
+  label: string;
+}) {
+  return (
+    <ListSelectControl
+      value={value}
+      onChange={onChange}
+      options={options}
+      label={label}
+      icon={ArrowUpDown}
+    />
+  );
+}
+
+function ListSelectControl({
+  value,
+  onChange,
+  options,
+  label,
+  icon: Icon,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly SelectOption[];
+  label: string;
+  icon?: typeof ArrowUpDown;
+}) {
+  return (
     <div className="flex min-w-36 items-center gap-2">
+      {Icon ? (
+        <Icon
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+      ) : null}
       <span className="sr-only">{label}</span>
       <Select
         value={value}
@@ -69,29 +125,36 @@ export function ListFilter({
 
 export function ListResultsHeader({
   count,
+  total,
   label,
   meta,
   view,
   onViewChange,
 }: {
   count: number;
+  total?: number;
   label: string;
   meta?: ReactNode;
   view?: ListViewMode;
   onViewChange?: (value: ListViewMode) => void;
 }) {
+  const resultLabel =
+    total !== undefined && total !== count
+      ? `${count} of ${total} ${label}`
+      : `${count} ${label}`;
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm font-medium" aria-live="polite">
-        {count} {label}
+        {resultLabel}
       </p>
-      {meta || (view && onViewChange) ? (
+      {meta || onViewChange ? (
         <div className="flex items-center gap-3">
           {meta ? (
             <span className="text-xs text-muted-foreground">{meta}</span>
           ) : null}
-          {view && onViewChange ? (
-            <ListViewToggle value={view} onChange={onViewChange} />
+          {onViewChange ? (
+            <ListViewToggle value={view ?? "grid"} onChange={onViewChange} />
           ) : null}
         </div>
       ) : null}

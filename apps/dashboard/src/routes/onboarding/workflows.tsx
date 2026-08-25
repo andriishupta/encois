@@ -7,7 +7,6 @@ import {
   Check,
   GitBranch,
   ListChecks,
-  ShieldCheck,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {

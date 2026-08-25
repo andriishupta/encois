@@ -34,6 +34,7 @@ import { Route as AppManagementMembersRouteImport } from './routes/_app/manageme
 import { Route as AppManagementPermissionsRouteImport } from './routes/_app/management/permissions'
 import { Route as AppOrganizationIndexRouteImport } from './routes/_app/organization/index'
 import { Route as AppOrganizationIntegrationsRouteImport } from './routes/_app/organization/integrations'
+import { Route as AppOrganizationInvestigationsRouteImport } from './routes/_app/organization/investigations'
 import { Route as AppOrganizationMemoryRouteImport } from './routes/_app/organization/memory'
 import { Route as AppOrganizationSourcesRouteImport } from './routes/_app/organization/sources'
 import { Route as AppOrganizationUnitsRouteImport } from './routes/_app/organization/units'
@@ -49,10 +50,14 @@ import { Route as AppWorkflowsNewRouteImport } from './routes/_app/workflows/new
 import { Route as AppWorkflowsPlansRouteImport } from './routes/_app/workflows/plans'
 import { Route as AppWorkflowsRunsRouteImport } from './routes/_app/workflows/runs'
 import { Route as AppWorkflowsTemplatesRouteImport } from './routes/_app/workflows/templates'
+import { Route as AppManagementInvestigationsInvestigationIdRouteImport } from './routes/_app/management/investigations/$investigationId'
+import { Route as AppManagementMembersMemberIdRouteImport } from './routes/_app/management/members/$memberId'
 import { Route as AppOrganizationIntegrationsIndexRouteImport } from './routes/_app/organization/integrations/index'
 import { Route as AppOrganizationIntegrationsIntegrationIdRouteImport } from './routes/_app/organization/integrations/$integrationId'
 import { Route as AppOrganizationIntegrationsCatalogRouteImport } from './routes/_app/organization/integrations/catalog'
 import { Route as AppOrganizationIntegrationsNewRouteImport } from './routes/_app/organization/integrations/new'
+import { Route as AppOrganizationInvestigationsInvestigationIdRouteImport } from './routes/_app/organization/investigations/$investigationId'
+import { Route as AppOrganizationInvestigationsNewRouteImport } from './routes/_app/organization/investigations/new'
 import { Route as AppOrganizationSourcesIndexRouteImport } from './routes/_app/organization/sources/index'
 import { Route as AppOrganizationSourcesSourceIdRouteImport } from './routes/_app/organization/sources/$sourceId'
 import { Route as AppOrganizationSourcesNewRouteImport } from './routes/_app/organization/sources/new'
@@ -189,6 +194,12 @@ const AppOrganizationIntegrationsRoute =
     path: '/integrations',
     getParentRoute: () => AppOrganizationRoute,
   } as any)
+const AppOrganizationInvestigationsRoute =
+  AppOrganizationInvestigationsRouteImport.update({
+    id: '/investigations',
+    path: '/investigations',
+    getParentRoute: () => AppOrganizationRoute,
+  } as any)
 const AppOrganizationMemoryRoute = AppOrganizationMemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
@@ -266,6 +277,18 @@ const AppWorkflowsTemplatesRoute = AppWorkflowsTemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => AppWorkflowsRoute,
 } as any)
+const AppManagementInvestigationsInvestigationIdRoute =
+  AppManagementInvestigationsInvestigationIdRouteImport.update({
+    id: '/$investigationId',
+    path: '/$investigationId',
+    getParentRoute: () => AppManagementInvestigationsRoute,
+  } as any)
+const AppManagementMembersMemberIdRoute =
+  AppManagementMembersMemberIdRouteImport.update({
+    id: '/$memberId',
+    path: '/$memberId',
+    getParentRoute: () => AppManagementMembersRoute,
+  } as any)
 const AppOrganizationIntegrationsIndexRoute =
   AppOrganizationIntegrationsIndexRouteImport.update({
     id: '/',
@@ -289,6 +312,18 @@ const AppOrganizationIntegrationsNewRoute =
     id: '/new',
     path: '/new',
     getParentRoute: () => AppOrganizationIntegrationsRoute,
+  } as any)
+const AppOrganizationInvestigationsInvestigationIdRoute =
+  AppOrganizationInvestigationsInvestigationIdRouteImport.update({
+    id: '/$investigationId',
+    path: '/$investigationId',
+    getParentRoute: () => AppOrganizationInvestigationsRoute,
+  } as any)
+const AppOrganizationInvestigationsNewRoute =
+  AppOrganizationInvestigationsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AppOrganizationInvestigationsRoute,
   } as any)
 const AppOrganizationSourcesIndexRoute =
   AppOrganizationSourcesIndexRouteImport.update({
@@ -356,10 +391,11 @@ export interface FileRoutesByFullPath {
   '/onboarding/workspace': typeof OnboardingWorkspaceRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/management/access': typeof AppManagementAccessRoute
-  '/management/investigations': typeof AppManagementInvestigationsRoute
-  '/management/members': typeof AppManagementMembersRoute
+  '/management/investigations': typeof AppManagementInvestigationsRouteWithChildren
+  '/management/members': typeof AppManagementMembersRouteWithChildren
   '/management/permissions': typeof AppManagementPermissionsRoute
   '/organization/integrations': typeof AppOrganizationIntegrationsRouteWithChildren
+  '/organization/investigations': typeof AppOrganizationInvestigationsRouteWithChildren
   '/organization/memory': typeof AppOrganizationMemoryRoute
   '/organization/sources': typeof AppOrganizationSourcesRouteWithChildren
   '/organization/units': typeof AppOrganizationUnitsRouteWithChildren
@@ -376,9 +412,13 @@ export interface FileRoutesByFullPath {
   '/organization/': typeof AppOrganizationIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/workflows/': typeof AppWorkflowsIndexRoute
+  '/management/investigations/$investigationId': typeof AppManagementInvestigationsInvestigationIdRoute
+  '/management/members/$memberId': typeof AppManagementMembersMemberIdRoute
   '/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
   '/organization/integrations/catalog': typeof AppOrganizationIntegrationsCatalogRoute
   '/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/organization/investigations/$investigationId': typeof AppOrganizationInvestigationsInvestigationIdRoute
+  '/organization/investigations/new': typeof AppOrganizationInvestigationsNewRoute
   '/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
   '/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/organization/units/new': typeof AppOrganizationUnitsNewRoute
@@ -405,9 +445,10 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/onboarding': typeof OnboardingIndexRoute
   '/management/access': typeof AppManagementAccessRoute
-  '/management/investigations': typeof AppManagementInvestigationsRoute
-  '/management/members': typeof AppManagementMembersRoute
+  '/management/investigations': typeof AppManagementInvestigationsRouteWithChildren
+  '/management/members': typeof AppManagementMembersRouteWithChildren
   '/management/permissions': typeof AppManagementPermissionsRoute
+  '/organization/investigations': typeof AppOrganizationInvestigationsRouteWithChildren
   '/organization/memory': typeof AppOrganizationMemoryRoute
   '/organization/units': typeof AppOrganizationUnitsRouteWithChildren
   '/settings/documentation': typeof AppSettingsDocumentationRoute
@@ -423,9 +464,13 @@ export interface FileRoutesByTo {
   '/organization': typeof AppOrganizationIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/workflows': typeof AppWorkflowsIndexRoute
+  '/management/investigations/$investigationId': typeof AppManagementInvestigationsInvestigationIdRoute
+  '/management/members/$memberId': typeof AppManagementMembersMemberIdRoute
   '/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
   '/organization/integrations/catalog': typeof AppOrganizationIntegrationsCatalogRoute
   '/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/organization/investigations/$investigationId': typeof AppOrganizationInvestigationsInvestigationIdRoute
+  '/organization/investigations/new': typeof AppOrganizationInvestigationsNewRoute
   '/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
   '/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/organization/units/new': typeof AppOrganizationUnitsNewRoute
@@ -458,10 +503,11 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/onboarding/': typeof OnboardingIndexRoute
   '/_app/management/access': typeof AppManagementAccessRoute
-  '/_app/management/investigations': typeof AppManagementInvestigationsRoute
-  '/_app/management/members': typeof AppManagementMembersRoute
+  '/_app/management/investigations': typeof AppManagementInvestigationsRouteWithChildren
+  '/_app/management/members': typeof AppManagementMembersRouteWithChildren
   '/_app/management/permissions': typeof AppManagementPermissionsRoute
   '/_app/organization/integrations': typeof AppOrganizationIntegrationsRouteWithChildren
+  '/_app/organization/investigations': typeof AppOrganizationInvestigationsRouteWithChildren
   '/_app/organization/memory': typeof AppOrganizationMemoryRoute
   '/_app/organization/sources': typeof AppOrganizationSourcesRouteWithChildren
   '/_app/organization/units': typeof AppOrganizationUnitsRouteWithChildren
@@ -478,9 +524,13 @@ export interface FileRoutesById {
   '/_app/organization/': typeof AppOrganizationIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/workflows/': typeof AppWorkflowsIndexRoute
+  '/_app/management/investigations/$investigationId': typeof AppManagementInvestigationsInvestigationIdRoute
+  '/_app/management/members/$memberId': typeof AppManagementMembersMemberIdRoute
   '/_app/organization/integrations/$integrationId': typeof AppOrganizationIntegrationsIntegrationIdRoute
   '/_app/organization/integrations/catalog': typeof AppOrganizationIntegrationsCatalogRoute
   '/_app/organization/integrations/new': typeof AppOrganizationIntegrationsNewRoute
+  '/_app/organization/investigations/$investigationId': typeof AppOrganizationInvestigationsInvestigationIdRoute
+  '/_app/organization/investigations/new': typeof AppOrganizationInvestigationsNewRoute
   '/_app/organization/sources/$sourceId': typeof AppOrganizationSourcesSourceIdRoute
   '/_app/organization/sources/new': typeof AppOrganizationSourcesNewRoute
   '/_app/organization/units/new': typeof AppOrganizationUnitsNewRoute
@@ -517,6 +567,7 @@ export interface FileRouteTypes {
     | '/management/members'
     | '/management/permissions'
     | '/organization/integrations'
+    | '/organization/investigations'
     | '/organization/memory'
     | '/organization/sources'
     | '/organization/units'
@@ -533,9 +584,13 @@ export interface FileRouteTypes {
     | '/organization/'
     | '/settings/'
     | '/workflows/'
+    | '/management/investigations/$investigationId'
+    | '/management/members/$memberId'
     | '/organization/integrations/$integrationId'
     | '/organization/integrations/catalog'
     | '/organization/integrations/new'
+    | '/organization/investigations/$investigationId'
+    | '/organization/investigations/new'
     | '/organization/sources/$sourceId'
     | '/organization/sources/new'
     | '/organization/units/new'
@@ -565,6 +620,7 @@ export interface FileRouteTypes {
     | '/management/investigations'
     | '/management/members'
     | '/management/permissions'
+    | '/organization/investigations'
     | '/organization/memory'
     | '/organization/units'
     | '/settings/documentation'
@@ -580,9 +636,13 @@ export interface FileRouteTypes {
     | '/organization'
     | '/settings'
     | '/workflows'
+    | '/management/investigations/$investigationId'
+    | '/management/members/$memberId'
     | '/organization/integrations/$integrationId'
     | '/organization/integrations/catalog'
     | '/organization/integrations/new'
+    | '/organization/investigations/$investigationId'
+    | '/organization/investigations/new'
     | '/organization/sources/$sourceId'
     | '/organization/sources/new'
     | '/organization/units/new'
@@ -618,6 +678,7 @@ export interface FileRouteTypes {
     | '/_app/management/members'
     | '/_app/management/permissions'
     | '/_app/organization/integrations'
+    | '/_app/organization/investigations'
     | '/_app/organization/memory'
     | '/_app/organization/sources'
     | '/_app/organization/units'
@@ -634,9 +695,13 @@ export interface FileRouteTypes {
     | '/_app/organization/'
     | '/_app/settings/'
     | '/_app/workflows/'
+    | '/_app/management/investigations/$investigationId'
+    | '/_app/management/members/$memberId'
     | '/_app/organization/integrations/$integrationId'
     | '/_app/organization/integrations/catalog'
     | '/_app/organization/integrations/new'
+    | '/_app/organization/investigations/$investigationId'
+    | '/_app/organization/investigations/new'
     | '/_app/organization/sources/$sourceId'
     | '/_app/organization/sources/new'
     | '/_app/organization/units/new'
@@ -834,6 +899,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrganizationIntegrationsRouteImport
       parentRoute: typeof AppOrganizationRoute
     }
+    '/_app/organization/investigations': {
+      id: '/_app/organization/investigations'
+      path: '/investigations'
+      fullPath: '/organization/investigations'
+      preLoaderRoute: typeof AppOrganizationInvestigationsRouteImport
+      parentRoute: typeof AppOrganizationRoute
+    }
     '/_app/organization/memory': {
       id: '/_app/organization/memory'
       path: '/memory'
@@ -939,6 +1011,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWorkflowsTemplatesRouteImport
       parentRoute: typeof AppWorkflowsRoute
     }
+    '/_app/management/investigations/$investigationId': {
+      id: '/_app/management/investigations/$investigationId'
+      path: '/$investigationId'
+      fullPath: '/management/investigations/$investigationId'
+      preLoaderRoute: typeof AppManagementInvestigationsInvestigationIdRouteImport
+      parentRoute: typeof AppManagementInvestigationsRoute
+    }
+    '/_app/management/members/$memberId': {
+      id: '/_app/management/members/$memberId'
+      path: '/$memberId'
+      fullPath: '/management/members/$memberId'
+      preLoaderRoute: typeof AppManagementMembersMemberIdRouteImport
+      parentRoute: typeof AppManagementMembersRoute
+    }
     '/_app/organization/integrations/': {
       id: '/_app/organization/integrations/'
       path: '/'
@@ -966,6 +1052,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/organization/integrations/new'
       preLoaderRoute: typeof AppOrganizationIntegrationsNewRouteImport
       parentRoute: typeof AppOrganizationIntegrationsRoute
+    }
+    '/_app/organization/investigations/$investigationId': {
+      id: '/_app/organization/investigations/$investigationId'
+      path: '/$investigationId'
+      fullPath: '/organization/investigations/$investigationId'
+      preLoaderRoute: typeof AppOrganizationInvestigationsInvestigationIdRouteImport
+      parentRoute: typeof AppOrganizationInvestigationsRoute
+    }
+    '/_app/organization/investigations/new': {
+      id: '/_app/organization/investigations/new'
+      path: '/new'
+      fullPath: '/organization/investigations/new'
+      preLoaderRoute: typeof AppOrganizationInvestigationsNewRouteImport
+      parentRoute: typeof AppOrganizationInvestigationsRoute
     }
     '/_app/organization/sources/': {
       id: '/_app/organization/sources/'
@@ -1026,17 +1126,44 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppManagementInvestigationsRouteChildren {
+  AppManagementInvestigationsInvestigationIdRoute: typeof AppManagementInvestigationsInvestigationIdRoute
+}
+
+const AppManagementInvestigationsRouteChildren: AppManagementInvestigationsRouteChildren =
+  {
+    AppManagementInvestigationsInvestigationIdRoute:
+      AppManagementInvestigationsInvestigationIdRoute,
+  }
+
+const AppManagementInvestigationsRouteWithChildren =
+  AppManagementInvestigationsRoute._addFileChildren(
+    AppManagementInvestigationsRouteChildren,
+  )
+
+interface AppManagementMembersRouteChildren {
+  AppManagementMembersMemberIdRoute: typeof AppManagementMembersMemberIdRoute
+}
+
+const AppManagementMembersRouteChildren: AppManagementMembersRouteChildren = {
+  AppManagementMembersMemberIdRoute: AppManagementMembersMemberIdRoute,
+}
+
+const AppManagementMembersRouteWithChildren =
+  AppManagementMembersRoute._addFileChildren(AppManagementMembersRouteChildren)
+
 interface AppManagementRouteChildren {
   AppManagementAccessRoute: typeof AppManagementAccessRoute
-  AppManagementInvestigationsRoute: typeof AppManagementInvestigationsRoute
-  AppManagementMembersRoute: typeof AppManagementMembersRoute
+  AppManagementInvestigationsRoute: typeof AppManagementInvestigationsRouteWithChildren
+  AppManagementMembersRoute: typeof AppManagementMembersRouteWithChildren
   AppManagementPermissionsRoute: typeof AppManagementPermissionsRoute
 }
 
 const AppManagementRouteChildren: AppManagementRouteChildren = {
   AppManagementAccessRoute: AppManagementAccessRoute,
-  AppManagementInvestigationsRoute: AppManagementInvestigationsRoute,
-  AppManagementMembersRoute: AppManagementMembersRoute,
+  AppManagementInvestigationsRoute:
+    AppManagementInvestigationsRouteWithChildren,
+  AppManagementMembersRoute: AppManagementMembersRouteWithChildren,
   AppManagementPermissionsRoute: AppManagementPermissionsRoute,
 }
 
@@ -1065,6 +1192,24 @@ const AppOrganizationIntegrationsRouteChildren: AppOrganizationIntegrationsRoute
 const AppOrganizationIntegrationsRouteWithChildren =
   AppOrganizationIntegrationsRoute._addFileChildren(
     AppOrganizationIntegrationsRouteChildren,
+  )
+
+interface AppOrganizationInvestigationsRouteChildren {
+  AppOrganizationInvestigationsInvestigationIdRoute: typeof AppOrganizationInvestigationsInvestigationIdRoute
+  AppOrganizationInvestigationsNewRoute: typeof AppOrganizationInvestigationsNewRoute
+}
+
+const AppOrganizationInvestigationsRouteChildren: AppOrganizationInvestigationsRouteChildren =
+  {
+    AppOrganizationInvestigationsInvestigationIdRoute:
+      AppOrganizationInvestigationsInvestigationIdRoute,
+    AppOrganizationInvestigationsNewRoute:
+      AppOrganizationInvestigationsNewRoute,
+  }
+
+const AppOrganizationInvestigationsRouteWithChildren =
+  AppOrganizationInvestigationsRoute._addFileChildren(
+    AppOrganizationInvestigationsRouteChildren,
   )
 
 interface AppOrganizationSourcesRouteChildren {
@@ -1098,6 +1243,7 @@ const AppOrganizationUnitsRouteWithChildren =
 
 interface AppOrganizationRouteChildren {
   AppOrganizationIntegrationsRoute: typeof AppOrganizationIntegrationsRouteWithChildren
+  AppOrganizationInvestigationsRoute: typeof AppOrganizationInvestigationsRouteWithChildren
   AppOrganizationMemoryRoute: typeof AppOrganizationMemoryRoute
   AppOrganizationSourcesRoute: typeof AppOrganizationSourcesRouteWithChildren
   AppOrganizationUnitsRoute: typeof AppOrganizationUnitsRouteWithChildren
@@ -1107,6 +1253,8 @@ interface AppOrganizationRouteChildren {
 const AppOrganizationRouteChildren: AppOrganizationRouteChildren = {
   AppOrganizationIntegrationsRoute:
     AppOrganizationIntegrationsRouteWithChildren,
+  AppOrganizationInvestigationsRoute:
+    AppOrganizationInvestigationsRouteWithChildren,
   AppOrganizationMemoryRoute: AppOrganizationMemoryRoute,
   AppOrganizationSourcesRoute: AppOrganizationSourcesRouteWithChildren,
   AppOrganizationUnitsRoute: AppOrganizationUnitsRouteWithChildren,

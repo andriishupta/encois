@@ -20,7 +20,7 @@ function CardButton({ className, ...props }: React.ComponentProps<"button">) {
       data-slot="card"
       className={cn(
         cardClassName,
-        "p-6 text-left transition-colors hover:border-foreground/30 hover:bg-accent/30 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-help disabled:opacity-[0.85] disabled:shadow-xs disabled:hover:border-muted disabled:hover:bg-card",
+        "p-6 text-left transition-colors hover:border-foreground/30 hover:bg-accent/30 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-help disabled:opacity-[0.75] disabled:shadow-xs disabled:hover:border-muted disabled:hover:bg-card",
         className,
       )}
       {...props}

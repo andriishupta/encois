@@ -2122,12 +2122,29 @@ export function applyMemoryChange(
   return decideMemoryChange(changeId, "apply");
 }
 
-export function listSavedInvestigations(): Promise<
-  readonly SavedInvestigation[]
-> {
-  return request<unknown>("/investigations").then((value) =>
-    parseList(value, isSavedInvestigation, "saved investigation list"),
+export function listSavedInvestigationsPage(
+  input: ListQueryInput = {},
+): Promise<ListPage<SavedInvestigation>> {
+  return requestList(
+    `/investigations${listQuery(input)}`,
+    isSavedInvestigation,
+    "saved investigation list",
   );
+}
+
+export async function getSavedInvestigation(
+  investigationId: string,
+): Promise<SavedInvestigation> {
+  const value = await request<unknown>(
+    `/investigations/${encodeURIComponent(investigationId)}`,
+  );
+  if (!isSavedInvestigation(value))
+    throw createApiError(
+      200,
+      "The service returned an invalid saved investigation response.",
+      "INVALID_RESPONSE",
+    );
+  return value;
 }
 
 export async function createSavedInvestigation(
@@ -2162,11 +2179,21 @@ export async function deleteSavedInvestigation(
   return { deleted: true };
 }
 
-export function listNotifications(): Promise<
-  readonly NotificationProjection[]
-> {
-  return request<unknown>("/notifications").then((value) =>
-    parseList(value, isNotification, "notification list"),
+export function listNotificationsPage(
+  input: ListQueryInput = {},
+): Promise<ListPage<NotificationProjection>> {
+  return requestList(
+    `/notifications${listQuery(input)}`,
+    isNotification,
+    "notification list",
+  );
+}
+
+export function listNotifications(
+  input: ListQueryInput = {},
+): Promise<readonly NotificationProjection[]> {
+  return listNotificationsPage({ ...input, limit: input.limit ?? 100 }).then(
+    (page) => page.items,
   );
 }
 

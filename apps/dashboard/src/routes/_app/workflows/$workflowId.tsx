@@ -39,7 +39,6 @@ import {
   humanizeKey,
   shortIdentifier,
   workflowLabel,
-  workflowStatusLabel,
 } from "@/lib/formatters";
 import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";

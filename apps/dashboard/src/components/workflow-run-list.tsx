@@ -6,7 +6,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   Activity,
-  ArrowUpRight,
   CircleDashed,
   Clock3,
   GitBranch,
@@ -15,6 +14,7 @@ import {
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
+import { LinkCardIndicator } from "@/components/link-card";
 import {
   ListCollection,
   ListFilter,
@@ -22,6 +22,7 @@ import {
   ListResultsHeader,
   ListSearch,
   ListToolbar,
+  type ListViewMode,
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
@@ -36,7 +37,6 @@ import { WorkflowStatusIndicator } from "@/components/workflow-status";
 import { listWorkflowsPage } from "@/lib/api";
 import {
   formatDate,
-  shortIdentifier,
   workflowLabel,
   workflowStatusLabel,
 } from "@/lib/formatters";
@@ -45,6 +45,7 @@ import { queryKeys } from "@/lib/query-keys";
 export function WorkflowRunList() {
   const [status, setStatus] = useState<WorkflowExecutionStatus | "all">("all");
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<ListViewMode>("grid");
   const workflows = useInfiniteQuery({
     queryKey: queryKeys.workflowRunList(query, status),
     queryFn: ({ pageParam }) =>
@@ -57,9 +58,10 @@ export function WorkflowRunList() {
   });
   const visibleWorkflows =
     workflows.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = workflows.data?.pages[0]?.pagination.total;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title={<ProductTerm term="run" plural />}
         description="Monitor each workflow execution, its current state, and the evidence it produces."
@@ -84,7 +86,13 @@ export function WorkflowRunList() {
           ]}
         />
       </ListToolbar>
-      <ListResultsHeader count={visibleWorkflows.length} label="visible runs" />
+      <ListResultsHeader
+        count={visibleWorkflows.length}
+        total={total}
+        label="visible runs"
+        view={view}
+        onViewChange={setView}
+      />
       {workflows.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading workflow runs…</p>
       ) : null}
@@ -99,7 +107,7 @@ export function WorkflowRunList() {
       {visibleWorkflows.length ? (
         <ListCollection
           items={visibleWorkflows}
-          view="list"
+          view={view}
           getKey={(workflow) => workflow.workflowId}
           renderItem={(workflow) => <WorkflowRunCard workflow={workflow} />}
         />
@@ -149,7 +157,7 @@ function WorkflowRunCard({
       params={{ workflowId: workflow.workflowId }}
       className="group"
     >
-      <Card className="transition-colors group-hover:border-foreground/30">
+      <Card className="relative transition-colors group-hover:border-foreground/30">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/30">
@@ -166,17 +174,13 @@ function WorkflowRunCard({
               </CardDescription>
             </div>
           </div>
-          <ArrowUpRight
-            className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <WorkflowStatusIndicator
             status={workflow.status}
             reason={workflow.statusReason}
             compact
           />
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4 pr-14 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock3 className="size-3.5" aria-hidden="true" />
             Updated {formatDate(workflow.updatedAt)}
@@ -184,13 +188,8 @@ function WorkflowRunCard({
           <span className="truncate text-muted-foreground">
             Trigger: {workflow.trigger ?? "Not reported"}
           </span>
-          <span className="truncate text-muted-foreground">
-            Technical ID:{" "}
-            <span className="font-mono">
-              {shortIdentifier(workflow.workflowId)}
-            </span>
-          </span>
         </CardContent>
+        <LinkCardIndicator />
       </Card>
     </Link>
   );

@@ -34,6 +34,7 @@ import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -109,53 +110,37 @@ function ActivityPage() {
     queryKey: queryKeys.workflows(),
     queryFn: listWorkflows,
     enabled: canViewWorkflows,
-    refetchInterval: (query) =>
-      query.state.data?.some(
-        (workflow) =>
-          workflow.status === WorkflowExecutionStatus.Queued ||
-          workflow.status === WorkflowExecutionStatus.Running ||
-          workflow.status === WorkflowExecutionStatus.Waiting ||
-          workflow.status === WorkflowExecutionStatus.Paused,
-      )
-        ? 5_000
-        : 30_000,
   });
   const sources = useQuery({
     queryKey: queryKeys.sources(),
     queryFn: listKnowledgeSources,
     enabled: canViewSources,
-    refetchInterval: 30_000,
   });
   const integrations = useQuery({
     queryKey: queryKeys.integrations(),
     queryFn: listIntegrations,
     enabled: canViewIntegrations,
-    refetchInterval: 30_000,
   });
   const plans = useQuery({
     queryKey: queryKeys.workflowPlans(),
     queryFn: () => listWorkflowPlans(),
     enabled: canManageWorkflows,
-    refetchInterval: 15_000,
   });
   const plannerVersions = useQuery({
     queryKey: queryKeys.workflowPlannerVersions(),
     queryFn: () => listWorkflowPlannerVersions(),
     enabled: canManageWorkflows,
-    refetchInterval: 30_000,
   });
   const memoryChanges = useQuery({
     queryKey: queryKeys.memoryChanges(),
     queryFn: () => listMemoryChanges(),
     enabled: canManageMemory,
-    refetchInterval: 15_000,
   });
   const canViewOrganization = can(Permission.OrganizationRead);
   const accessRequests = useQuery({
     queryKey: queryKeys.organizationAccessRequests(),
     queryFn: listOrganizationAccessRequests,
     enabled: canViewOrganization,
-    refetchInterval: 15_000,
   });
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
@@ -314,7 +299,7 @@ function ActivityPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Activity"
-        description="Technical activity that needs a decision or follow-up in the current scope. Each item links to the product surface that owns it; active Runs refresh automatically."
+        description="Technical activity that needs a decision or follow-up in the current scope. Each item links to the product surface that owns it. Data refreshes after reconnect or when you retry an unavailable request."
       />
 
       <Card>
@@ -439,7 +424,6 @@ function ActivityPage() {
           <ReviewSection
             title="Integration setup"
             to="/organization/integrations"
-            empty="All visible Integrations are active or disabled intentionally."
           >
             {pendingIntegrations.map((integration) => (
               <IntegrationReviewRow
@@ -670,7 +654,7 @@ function ReviewCard({
   icon: typeof Clock3;
   loading: boolean;
   error: Error | null;
-  empty: string;
+  empty?: string;
   hasItems: boolean;
   children: React.ReactNode;
   to?:
@@ -759,9 +743,9 @@ function ReviewSection({
       </div>
       {hasChildren ? (
         children
-      ) : (
+      ) : empty ? (
         <p className="text-xs text-muted-foreground">{empty}</p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -956,17 +940,15 @@ function PlannerVersionReviewRow({
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5 text-xs">
-        <span className="rounded-full bg-secondary px-2 py-1">
+        <DescriptionPill>
           Schema {version.sourceSchemaVersion ?? "Not reported"}
-        </span>
+        </DescriptionPill>
         {version.promptVersion ? (
-          <span className="rounded-full bg-secondary px-2 py-1">
-            Prompt {version.promptVersion}
-          </span>
+          <DescriptionPill>Prompt {version.promptVersion}</DescriptionPill>
         ) : null}
-        <span className="rounded-full bg-secondary px-2 py-1">
+        <DescriptionPill>
           Fingerprint {version.versionHash.slice(0, 12)}
-        </span>
+        </DescriptionPill>
       </div>
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer">Version history details</summary>
@@ -1184,29 +1166,25 @@ function PlanDiff({
       </summary>
       <div className="mt-2 flex flex-col gap-2">
         <div className="flex flex-wrap gap-1.5">
-          <span className="rounded-full bg-secondary px-2 py-1">
+          <DescriptionPill>
             {baseline
               ? `Compared with v${baseline.version}`
               : "New Blueprint revision"}
-          </span>
-          <span className="rounded-full bg-secondary px-2 py-1">
-            {target.steps.length} steps
-          </span>
+          </DescriptionPill>
+          <DescriptionPill>{target.steps.length} steps</DescriptionPill>
           {plan.plan.metadata?.planner ? (
-            <span className="rounded-full bg-secondary px-2 py-1">
+            <DescriptionPill>
               Planner {plan.plan.metadata.planner.name}@
               {plan.plan.metadata.planner.version}
-            </span>
+            </DescriptionPill>
           ) : null}
           {plan.plan.metadata?.sourceSchemaVersion ? (
-            <span className="rounded-full bg-secondary px-2 py-1">
+            <DescriptionPill>
               Schema {plan.plan.metadata.sourceSchemaVersion}
-            </span>
+            </DescriptionPill>
           ) : null}
           {plan.plan.metadata?.promptHash ? (
-            <span className="rounded-full bg-secondary px-2 py-1">
-              Prompt hash recorded
-            </span>
+            <DescriptionPill>Prompt hash recorded</DescriptionPill>
           ) : null}
         </div>
         {changedSteps.length ? (

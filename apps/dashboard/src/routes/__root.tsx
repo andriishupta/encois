@@ -117,16 +117,18 @@ function getPageTitle(pathname: string, productName: string) {
     return getIntegrationTitle(pathname);
   if (pathname === "/activity") return "Activity";
   if (pathname === "/organization/memory") return "Organization memory graph";
+  if (pathname === "/organization/investigations") return "Investigations";
+  if (pathname.startsWith("/organization/investigations/"))
+    return "Investigation";
   if (pathname === "/organization") return "Organization";
   if (pathname === "/management/members") return "Organization members";
-  if (pathname === "/management/permissions") return "Organization permissions";
+  if (pathname.startsWith("/management/members/")) return "Member";
   if (pathname === "/settings") return "Settings";
   if (pathname === "/settings/workspace") return "Workspace settings";
   if (pathname === "/settings/notifications") return "Notifications";
   if (pathname === "/settings/documentation")
     return `${productName} Documentation`;
   if (pathname === "/management/access") return "Organization access";
-  if (pathname === "/management/investigations") return "Investigations";
   if (pathname === "/profile") return "Account";
   if (pathname === "/forbidden") return "Access denied";
   return "Page not found";

@@ -1,4 +1,5 @@
 import { Permission, type PermissionKey } from "@encois/contracts";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
@@ -29,6 +30,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getAccountSummary } from "@/lib/account";
+import { listNotificationsPage } from "@/lib/api";
 import { clearAuthSession } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 import {
@@ -43,6 +45,7 @@ import {
 } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 import { usePermissions } from "@/lib/permissions";
+import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 
 type NavigationItem = {
@@ -125,6 +128,18 @@ const organizationNavigation: readonly NavigationItem[] = [
     permission: Permission.ContextRead,
   },
   {
+    label: "Investigations",
+    to: "/organization/investigations",
+    icon: Bookmark,
+    anyPermission: [
+      Permission.OrganizationManage,
+      Permission.WorkflowsRead,
+      Permission.KnowledgeRead,
+      Permission.ContextRead,
+      Permission.MemoryRead,
+    ],
+  },
+  {
     label: "Sources",
     to: "/organization/sources",
     icon: Waypoints,
@@ -152,28 +167,10 @@ const managementNavigation: readonly NavigationItem[] = [
     permission: Permission.OrganizationRead,
   },
   {
-    label: "Permissions",
-    to: "/management/permissions",
-    icon: ClipboardCheck,
-    permission: Permission.OrganizationManage,
-  },
-  {
     label: "Access",
     to: "/management/access",
     icon: UserRound,
     permission: Permission.OrganizationRead,
-  },
-  {
-    label: "Investigations",
-    to: "/management/investigations",
-    icon: Bookmark,
-    anyPermission: [
-      Permission.OrganizationManage,
-      Permission.WorkflowsRead,
-      Permission.KnowledgeRead,
-      Permission.ContextRead,
-      Permission.MemoryRead,
-    ],
   },
 ] as const;
 
@@ -228,6 +225,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     can(Permission.SettingsRead) ||
     can(Permission.WorkflowsRead) ||
     can(Permission.KnowledgeRead);
+  const unreadNotifications = useQuery({
+    queryKey: queryKeys.notifications("", "unread"),
+    queryFn: () => listNotificationsPage({ status: "unread", limit: 1 }),
+    enabled: canViewNotifications,
+  });
+  const unreadCount = unreadNotifications.data?.pagination.total ?? 0;
+  const notificationLabel = unreadCount
+    ? `Notifications, ${unreadCount} unread`
+    : "Notifications";
 
   useEffect(() => {
     if (!pathname) return;
@@ -451,8 +457,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           {canViewNotifications ? (
             <Button variant="ghost" size="icon" asChild>
-              <Link to="/settings/notifications" aria-label="Notifications">
+              <Link
+                to="/settings/notifications"
+                aria-label={notificationLabel}
+                className="relative"
+              >
                 <Bell />
+                {unreadCount > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-0.5 -top-0.5 flex min-h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-muted px-1 text-[9px] font-semibold leading-3.5 text-muted-foreground"
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                ) : null}
               </Link>
             </Button>
           ) : null}
@@ -633,6 +651,8 @@ type BreadcrumbRoute =
   | "/workflows/memory"
   | "/workflows/memory/add"
   | "/organization"
+  | "/organization/investigations"
+  | "/organization/investigations/$investigationId"
   | "/organization/memory"
   | "/organization/sources"
   | "/organization/sources/new"
@@ -641,9 +661,8 @@ type BreadcrumbRoute =
   | "/organization/integrations"
   | "/organization/integrations/catalog"
   | "/management/members"
-  | "/management/permissions"
+  | "/management/members/$memberId"
   | "/management/access"
-  | "/management/investigations"
   | "/activity"
   | "/settings"
   | "/settings/workspace"
@@ -748,12 +767,25 @@ function getBreadcrumbItems(
       { label: getIntegrationLabel(pathname) },
     ];
   if (pathname === "/organization") return [{ label: "Organization" }];
+  if (pathname.startsWith("/organization/investigations/"))
+    return [
+      { label: "Organization", to: "/organization" },
+      { label: "Investigations", to: "/organization/investigations" },
+      { label: "Investigation" },
+    ];
+  if (pathname === "/organization/investigations")
+    return [
+      { label: "Organization", to: "/organization" },
+      { label: "Investigations" },
+    ];
   if (pathname === "/management/members")
     return [{ label: "Organization Management" }, { label: "Members" }];
-  if (pathname === "/management/permissions")
-    return [{ label: "Organization Management" }, { label: "Permissions" }];
-  if (pathname === "/management/investigations")
-    return [{ label: "Organization Management" }, { label: "Investigations" }];
+  if (pathname.startsWith("/management/members/"))
+    return [
+      { label: "Organization Management" },
+      { label: "Members", to: "/management/members" },
+      { label: "Member" },
+    ];
   if (pathname === "/settings") return [{ label: "Settings" }];
   if (pathname === "/settings/workspace")
     return [{ label: "Settings", to: "/settings" }, { label: "Workspace" }];

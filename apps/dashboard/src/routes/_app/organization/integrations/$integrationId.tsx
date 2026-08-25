@@ -28,6 +28,7 @@ import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -303,9 +304,7 @@ function IntegrationDetailPage() {
                     </p>
                   </div>
                 </div>
-                <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-                  Enforced
-                </span>
+                <DescriptionPill>Enforced</DescriptionPill>
               </div>
               <div className="flex flex-col gap-3 rounded-lg border border-dashed bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
@@ -722,12 +721,7 @@ function IntegrationDetailPage() {
             <div className="flex flex-wrap gap-2">
               {integration.grantedScopes?.length ? (
                 integration.grantedScopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground"
-                  >
-                    {scope}
-                  </span>
+                  <DescriptionPill key={scope}>{scope}</DescriptionPill>
                 ))
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -868,11 +862,10 @@ function WebhookIngressCard({
             </CardDescription>
           </div>
           {endpoint ? (
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs ${endpoint.status === IntegrationStatus.Active ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-secondary text-secondary-foreground"}`}
-            >
-              {humanizeKey(endpoint.status)}
-            </span>
+            <StatusPill
+              status={endpoint.status}
+              label={humanizeKey(endpoint.status)}
+            />
           ) : null}
         </div>
       </CardHeader>

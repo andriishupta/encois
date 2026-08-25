@@ -23,6 +23,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { PageHeader } from "@/components/page-header";
+import { DescriptionPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -616,12 +617,7 @@ function BlueprintDiff({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
         {metadataChanges.map((change) => (
-          <span
-            key={change}
-            className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground"
-          >
-            {change}
-          </span>
+          <DescriptionPill key={change}>{change}</DescriptionPill>
         ))}
       </div>
       <div className="flex flex-col gap-2">
