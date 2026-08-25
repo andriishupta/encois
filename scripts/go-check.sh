@@ -18,7 +18,8 @@ for argument in "$@"; do
   fi
 done
 
-for module in "${GO_MODULES[@]}"; do
+run_module_checks() {
+  local module="$1"
   module_dir="$ROOT_DIR/$module"
   printf 'Go checks %s\n' "$module"
   (
@@ -47,4 +48,19 @@ for module in "${GO_MODULES[@]}"; do
     go vet ./...
     go test ./...
   )
+}
+
+declare -a PIDS=()
+for module in "${GO_MODULES[@]}"; do
+  run_module_checks "$module" &
+  PIDS+=("$!")
 done
+
+exit_code=0
+for pid in "${PIDS[@]}"; do
+  if ! wait "$pid"; then
+    exit_code=1
+  fi
+done
+
+exit "$exit_code"

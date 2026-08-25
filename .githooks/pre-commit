@@ -7,12 +7,10 @@ cd "$ROOT_DIR"
 
 printf '%s\n' 'Running TypeScript formatting and checks...'
 pnpm format:staged
-pnpm biome:check
-pnpm -r lint
-
-printf '%s\n' 'Running Go formatting and checks...'
-pnpm go:check -- --staged
+printf '%s\n' 'Running Biome, TypeScript, and Go checks in parallel...'
+pnpm checks:parallel
 
 git diff --check
+pnpm stage:formatted
 
 printf '%s\n' 'Pre-commit checks passed. Git will preserve the commit message and sign-off.'

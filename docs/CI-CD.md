@@ -73,11 +73,13 @@ For local commits, install the tracked pre-commit hook once:
 pnpm hooks:install
 ```
 
-The hook formats only staged TypeScript and Go files, stages those formatter
-changes into the commit being created, then runs workspace lint/type validation
-and Go `gofmt`, `go vet`, and `go test`. It does not invoke `git commit` or amend
-an existing commit, so the current commit message and `git commit -s` sign-off
-are preserved.
+The hook formats only staged TypeScript and Go files, runs workspace lint/type
+validation and Go `gofmt`, `go vet`, and `go test` in parallel, and performs one
+final `git add` only after every job succeeds. Failed jobs do not cancel the
+other parallel jobs; their exit codes are collected and any failure prevents
+the final staging step. It does not invoke `git commit` or amend an existing
+commit, so the current commit message and `git commit -s` sign-off are
+preserved.
 
 For manual Biome fixes, use `pnpm biome:write` for formatting and safe fixes.
 Use `pnpm biome:write:unsafe` only when you explicitly want Biome's unsafe

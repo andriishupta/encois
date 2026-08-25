@@ -42,18 +42,39 @@ if ((${#GO_FILES[@]} > 0)); then
   done
 fi
 
+format_typescript() {
+  if ((${#TS_FILES[@]} == 0)); then return; fi
+  printf 'Formatting %d TypeScript files...\n' "${#TS_FILES[@]}"
+  pnpm exec biome check --write --config-path "$ROOT_DIR/biome.json" "${TS_FILES[@]}"
+}
+
+format_go() {
+  if ((${#GO_FILES[@]} == 0)); then return; fi
+  printf 'Formatting %d Go files...\n' "${#GO_FILES[@]}"
+  gofmt -w "${GO_FILES[@]}"
+}
+
+declare -a FORMAT_PIDS=()
 if ((${#TS_FILES[@]} > 0)); then
-  for file in "${TS_FILES[@]}"; do
-    printf 'Biome format %s\n' "$file"
-    pnpm exec biome check --write --config-path "$ROOT_DIR/biome.json" "$file"
-    git add -- "$file"
-  done
+  format_typescript &
+  FORMAT_PIDS+=("$!")
+fi
+if ((${#GO_FILES[@]} > 0)); then
+  format_go &
+  FORMAT_PIDS+=("$!")
 fi
 
-if ((${#GO_FILES[@]} > 0)); then
-  for file in "${GO_FILES[@]}"; do
-    printf 'gofmt %s\n' "$file"
-    gofmt -w "$file"
-    git add -- "$file"
+if ((${#FORMAT_PIDS[@]} > 0)); then
+  format_exit_code=0
+  for index in "${!FORMAT_PIDS[@]}"; do
+    if wait "${FORMAT_PIDS[$index]}"; then
+      continue
+    fi
+    format_exit_code=1
+    printf 'Formatter %s failed; waiting for the other formatters.\n' "$index" >&2
   done
+  if ((format_exit_code != 0)); then
+    printf '%s\n' 'Formatting failed. No files were staged.' >&2
+    exit "$format_exit_code"
+  fi
 fi

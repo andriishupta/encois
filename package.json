@@ -26,6 +26,8 @@
     "e2e:open": "pnpm --filter @encois/e2e e2e:open",
     "hooks:install": "git config core.hooksPath .githooks",
     "format:staged": "bash scripts/format-staged.sh",
+    "checks:parallel": "bash scripts/checks-parallel.sh",
+    "stage:formatted": "bash scripts/stage-formatted.sh",
     "go:format": "bash scripts/go-format.sh",
     "go:check": "bash scripts/go-check.sh",
     "version:check": "node scripts/check-version.mjs",
