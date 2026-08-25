@@ -79,6 +79,10 @@ and Go `gofmt`, `go vet`, and `go test`. It does not invoke `git commit` or amen
 an existing commit, so the current commit message and `git commit -s` sign-off
 are preserved.
 
+For manual Biome fixes, use `pnpm biome:write` for formatting and safe fixes.
+Use `pnpm biome:write:unsafe` only when you explicitly want Biome's unsafe
+fixes, which can change code semantics.
+
 The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
 privileged Drizzle migrations, creates the restricted `api_gateway_runtime`
 role, and checks the command-receipt table, tenant RLS policy, uniqueness

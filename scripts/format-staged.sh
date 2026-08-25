@@ -24,21 +24,36 @@ while IFS= read -r -d '' file; do
   esac
 done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 
-for file in "${TS_FILES[@]}" "${GO_FILES[@]}"; do
-  if ! git diff --quiet -- "$file"; then
-    printf 'Refusing to format %s because it also has unstaged changes. Stage the file or separate the changes first.\n' "$file" >&2
-    exit 1
-  fi
-done
+if ((${#TS_FILES[@]} > 0)); then
+  for file in "${TS_FILES[@]}"; do
+    if ! git diff --quiet -- "$file"; then
+      printf 'Refusing to format %s because it also has unstaged changes. Stage the file or separate the changes first.\n' "$file" >&2
+      exit 1
+    fi
+  done
+fi
 
-for file in "${TS_FILES[@]}"; do
-  printf 'Biome format %s\n' "$file"
-  pnpm exec biome check --write --config-path "$ROOT_DIR/biome.json" "$file"
-  git add -- "$file"
-done
+if ((${#GO_FILES[@]} > 0)); then
+  for file in "${GO_FILES[@]}"; do
+    if ! git diff --quiet -- "$file"; then
+      printf 'Refusing to format %s because it also has unstaged changes. Stage the file or separate the changes first.\n' "$file" >&2
+      exit 1
+    fi
+  done
+fi
 
-for file in "${GO_FILES[@]}"; do
-  printf 'gofmt %s\n' "$file"
-  gofmt -w "$file"
-  git add -- "$file"
-done
+if ((${#TS_FILES[@]} > 0)); then
+  for file in "${TS_FILES[@]}"; do
+    printf 'Biome format %s\n' "$file"
+    pnpm exec biome check --write --config-path "$ROOT_DIR/biome.json" "$file"
+    git add -- "$file"
+  done
+fi
+
+if ((${#GO_FILES[@]} > 0)); then
+  for file in "${GO_FILES[@]}"; do
+    printf 'gofmt %s\n' "$file"
+    gofmt -w "$file"
+    git add -- "$file"
+  done
+fi

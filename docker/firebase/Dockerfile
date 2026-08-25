@@ -18,8 +18,8 @@ RUN apt-get update \
 
 WORKDIR /firebase
 ENV ENCOIS_VERSION=${ENCOIS_VERSION}
-COPY firebase.json ./firebase.json
-COPY storage.rules ./storage.rules
+COPY docker/firebase/firebase.json ./firebase.json
+COPY docker/firebase/storage.rules ./storage.rules
 
 EXPOSE 4000 9099 9199
 

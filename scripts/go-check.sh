@@ -11,9 +11,12 @@ GO_MODULES=(
 )
 
 STAGED_ONLY=false
-if [[ "${1:-}" == "--staged" ]]; then
-  STAGED_ONLY=true
-fi
+for argument in "$@"; do
+  if [[ "$argument" == "--staged" ]]; then
+    STAGED_ONLY=true
+    break
+  fi
+done
 
 for module in "${GO_MODULES[@]}"; do
   module_dir="$ROOT_DIR/$module"

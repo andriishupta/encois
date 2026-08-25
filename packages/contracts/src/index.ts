@@ -7,11 +7,11 @@ import {
   type ArtifactRetentionClass,
   type AuthAccessStatus,
   ContractVersion,
-  CoordinatorScopeType,
-  CoordinatorStatus,
   type CoordinationMode,
   type CoordinatorEventType,
+  type CoordinatorScopeType,
   CoordinatorSignalName,
+  type CoordinatorStatus,
   type FreshnessStatus,
   type GraphQueryStatus,
   type IntegrationCatalogStatus,
@@ -71,11 +71,11 @@ export {
   ArtifactRetentionClass,
   AuthAccessStatus,
   ContractVersion,
-  CoordinatorScopeType,
-  CoordinatorStatus,
   CoordinationMode,
   CoordinatorEventType,
+  CoordinatorScopeType,
   CoordinatorSignalName,
+  CoordinatorStatus,
   FreshnessStatus,
   GraphQueryStatus,
   IntegrationCatalogStatus,
@@ -1234,7 +1234,9 @@ export function parseWorkflowBlueprint(
   const steps: WorkflowStep[] = [];
   const allowedTools = new Set(
     Array.isArray(value.allowedTools)
-      ? value.allowedTools.filter((tool): tool is string => typeof tool === "string")
+      ? value.allowedTools.filter(
+          (tool): tool is string => typeof tool === "string",
+        )
       : [],
   );
   for (const stepCandidate of value.steps) {
@@ -1272,7 +1274,8 @@ export function parseWorkflowBlueprint(
       return null;
     if (
       stepCandidate.kind === WorkflowStepKind.Tool &&
-      (typeof stepCandidate.tool !== "string" || !allowedTools.has(stepCandidate.tool))
+      (typeof stepCandidate.tool !== "string" ||
+        !allowedTools.has(stepCandidate.tool))
     )
       return null;
     steps.push({

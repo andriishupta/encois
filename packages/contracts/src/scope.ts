@@ -1,4 +1,9 @@
-import { OrganizationUnitType, ScopeRuleMode, type OrganizationUnitType as OrganizationUnitTypeValue, type ScopeRuleMode as ScopeRuleModeValue } from "./values.js";
+import {
+  OrganizationUnitType,
+  type OrganizationUnitType as OrganizationUnitTypeValue,
+  ScopeRuleMode,
+  type ScopeRuleMode as ScopeRuleModeValue,
+} from "./values.js";
 
 export type OrganizationUnitNode = {
   id: string;
@@ -23,7 +28,10 @@ function unique(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
 
-function expandUnits(units: readonly OrganizationUnitNode[], starts: readonly string[]): string[] {
+function expandUnits(
+  units: readonly OrganizationUnitNode[],
+  starts: readonly string[],
+): string[] {
   const known = new Set(units.map((unit) => unit.id));
   const children = new Map<string, string[]>();
   for (const unit of units) {
@@ -57,18 +65,34 @@ export function resolveEffectiveScope(input: {
 }): EffectiveScope {
   const directUnitIds = unique(input.directUnitIds);
   const rules = input.rules ?? [];
-  const grantUnitIds = unique(rules.filter((rule) => rule.mode === ScopeRuleMode.Grant).map((rule) => rule.unitId));
-  const restrictionRoots = unique(rules.filter((rule) => rule.mode === ScopeRuleMode.Restrict).map((rule) => rule.unitId));
+  const grantUnitIds = unique(
+    rules
+      .filter((rule) => rule.mode === ScopeRuleMode.Grant)
+      .map((rule) => rule.unitId),
+  );
+  const restrictionRoots = unique(
+    rules
+      .filter((rule) => rule.mode === ScopeRuleMode.Restrict)
+      .map((rule) => rule.unitId),
+  );
   const directExpanded = expandUnits(input.units, directUnitIds);
   const grantExpanded = expandUnits(input.units, grantUnitIds);
   const restrictedExpanded = expandUnits(input.units, restrictionRoots);
   const restricted = new Set(restrictedExpanded);
-  const resolvedUnitIds = unique([...directExpanded, ...grantExpanded]).filter((unitId) => !restricted.has(unitId));
+  const resolvedUnitIds = unique([...directExpanded, ...grantExpanded]).filter(
+    (unitId) => !restricted.has(unitId),
+  );
 
   return {
-    directUnitIds: directExpanded.filter((unitId) => directUnitIds.includes(unitId)),
-    inheritedUnitIds: directExpanded.filter((unitId) => !directUnitIds.includes(unitId) && !restricted.has(unitId)),
-    explicitGrantUnitIds: grantExpanded.filter((unitId) => !restricted.has(unitId)),
+    directUnitIds: directExpanded.filter((unitId) =>
+      directUnitIds.includes(unitId),
+    ),
+    inheritedUnitIds: directExpanded.filter(
+      (unitId) => !directUnitIds.includes(unitId) && !restricted.has(unitId),
+    ),
+    explicitGrantUnitIds: grantExpanded.filter(
+      (unitId) => !restricted.has(unitId),
+    ),
     explicitRestrictionUnitIds: restrictedExpanded,
     resolvedUnitIds,
   };

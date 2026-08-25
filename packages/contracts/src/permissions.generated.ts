@@ -20,13 +20,20 @@ export const Permission = {
 
 export type Permission = (typeof Permission)[keyof typeof Permission];
 
-export const allPermissions = Object.values(Permission) as readonly Permission[];
+export const allPermissions = Object.values(
+  Permission,
+) as readonly Permission[];
 
-export const permissionImplications: Readonly<Record<Permission, readonly Permission[]>> = {
+export const permissionImplications: Readonly<
+  Record<Permission, readonly Permission[]>
+> = {
   [Permission.OnboardingManage]: [],
   [Permission.WorkflowsRead]: [],
   [Permission.WorkflowsRun]: [Permission.WorkflowsRead],
-  [Permission.WorkflowsManage]: [Permission.WorkflowsRead, Permission.WorkflowsRun],
+  [Permission.WorkflowsManage]: [
+    Permission.WorkflowsRead,
+    Permission.WorkflowsRun,
+  ],
   [Permission.IntegrationsRead]: [],
   [Permission.IntegrationsManage]: [Permission.IntegrationsRead],
   [Permission.KnowledgeRead]: [],
@@ -41,9 +48,19 @@ export const permissionImplications: Readonly<Record<Permission, readonly Permis
 };
 
 export function isPermission(value: unknown): value is Permission {
-  return typeof value === "string" && allPermissions.includes(value as Permission);
+  return (
+    typeof value === "string" && allPermissions.includes(value as Permission)
+  );
 }
 
-export function permissionIncludes(granted: readonly Permission[], required: Permission): boolean {
-  return granted.includes(required) || granted.some((permission) => permissionImplications[permission].includes(required));
+export function permissionIncludes(
+  granted: readonly Permission[],
+  required: Permission,
+): boolean {
+  return (
+    granted.includes(required) ||
+    granted.some((permission) =>
+      permissionImplications[permission].includes(required),
+    )
+  );
 }
