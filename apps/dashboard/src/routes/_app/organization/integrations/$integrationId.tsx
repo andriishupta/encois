@@ -126,7 +126,7 @@ function IntegrationDetailPage() {
       updateIntegration(integrationId, input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.integrations(),
+        queryKey: queryKeys.integrationsRoot(),
       });
     },
   });

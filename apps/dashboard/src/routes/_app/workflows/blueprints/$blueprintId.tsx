@@ -76,10 +76,10 @@ function BlueprintRevisionPage() {
       );
       setReason("");
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprints(),
+        queryKey: queryKeys.workflowBlueprintsRoot(),
       });
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlans(),
+        queryKey: queryKeys.workflowPlansRoot(),
       });
     },
   });
@@ -87,7 +87,7 @@ function BlueprintRevisionPage() {
     mutationFn: () => deleteWorkflowBlueprint(blueprintId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprints(),
+        queryKey: queryKeys.workflowBlueprintsRoot(),
       });
       await navigate({ to: "/workflows/blueprints" });
     },
@@ -207,7 +207,7 @@ function BlueprintRevisionPage() {
                       </span>
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {version.steps.length} steps
+                      {version.steps?.length ?? 0} steps
                     </span>
                   </button>
                 ))}
@@ -290,7 +290,10 @@ function BlueprintRevisionPage() {
                     : "No"
                 }
               />
-              <Detail label="Steps" value={String(selected.steps.length)} />
+              <Detail
+                label="Steps"
+                value={String(selected.steps?.length ?? 0)}
+              />
               <Detail label="Updated" value={formatDate(selected.updatedAt)} />
               <Detail
                 label="Approval"

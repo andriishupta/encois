@@ -126,11 +126,9 @@ function OrganizationReadinessGate() {
             >
               Check again
             </Button>
-            {authenticationError ? (
-              <Button type="button" onClick={() => void recoverClientSession()}>
-                Try to fix / clear storage
-              </Button>
-            ) : null}
+            <Button type="button" onClick={() => void recoverClientSession()}>
+              Log out / clear session
+            </Button>
           </div>
         </div>
       </ReadinessFrame>

@@ -101,7 +101,9 @@ function MemorySetupPage() {
       if (file) {
         const uploaded = await uploadKnowledgeSourcePdf(file, file.name);
         await startSourceIngestion(uploaded.source.id, uploaded.revision.id);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.sources() });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.sourcesRoot(),
+        });
       }
       await navigate({ to: "/onboarding/coordination" });
     } catch (cause) {

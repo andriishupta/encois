@@ -104,10 +104,12 @@ function createCloudStorageArtifactStore(
           file.download(),
           file.getMetadata(),
         ]);
+        const metadataFileName = metadata.metadata?.fileName;
         return {
           bytes: new Uint8Array(bytes),
           contentType: metadata.contentType ?? undefined,
-          fileName: metadata.metadata?.fileName ?? undefined,
+          fileName:
+            typeof metadataFileName === "string" ? metadataFileName : undefined,
         };
       } catch (error) {
         const status =

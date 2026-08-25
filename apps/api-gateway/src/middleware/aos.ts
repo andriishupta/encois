@@ -57,6 +57,7 @@ export function aosMiddleware(
 
     return context.json(
       {
+        data: null,
         error: {
           code,
           message,

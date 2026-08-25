@@ -9,6 +9,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
   if (error instanceof HTTPException) {
     return context.json(
       {
+        data: null,
         error: {
           code: "HTTP_ERROR",
           message: error.message,
@@ -32,6 +33,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
 
   return context.json(
     {
+      data: null,
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "Internal server error.",
@@ -46,6 +48,7 @@ export const errorHandler: ErrorHandler<GatewayEnv> = (error, context) => {
 export const notFoundHandler: NotFoundHandler<GatewayEnv> = (context) =>
   context.json(
     {
+      data: null,
       error: {
         code: "NOT_FOUND",
         message: "Route not found.",

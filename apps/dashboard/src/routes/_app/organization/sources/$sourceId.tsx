@@ -72,6 +72,9 @@ function SourceDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.source(sourceId),
       });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.sourcesRoot(),
+      });
       setError(null);
     },
     onError: (cause) =>
@@ -115,6 +118,9 @@ function SourceDetailPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.source(sourceId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.sourcesRoot(),
       });
       setRevision("");
       setArtifactRef("");

@@ -40,10 +40,7 @@ import {
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
-import {
-  localUserId,
-  workflowServiceError,
-} from "./workflow.service.js";
+import { localUserId, workflowServiceError } from "./workflow.service.js";
 import { listWorkflowTemplatesForPrincipal } from "./workflow-template.service.js";
 
 function slug(value: string, fallback: string): string {

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { initializeBrowserAuth } from "@/lib/auth";
 import { router } from "@/router";
 import "./index.css";
@@ -14,6 +15,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
       retry: 1,
     },
   },
@@ -21,10 +23,14 @@ const queryClient = new QueryClient({
 
 async function bootstrap() {
   await initializeBrowserAuth();
-  createRoot(document.getElementById("root")!).render(
+  const root = document.getElementById("root");
+  if (!root) throw new Error("Dashboard root element is missing.");
+  createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <AppErrorBoundary>
+          <RouterProvider router={router} />
+        </AppErrorBoundary>
       </QueryClientProvider>
     </StrictMode>,
   );

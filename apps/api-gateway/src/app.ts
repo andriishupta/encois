@@ -47,6 +47,7 @@ import {
   aosMiddleware,
   type GatewayEnv,
 } from "./middleware/aos.js";
+import { apiResponseEnvelopeMiddleware } from "./middleware/api-response-envelope.js";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import { onboardingReadinessMiddleware } from "./middleware/onboarding-readiness.js";
 import { requestLoggingMiddleware } from "./middleware/request-logging.js";
@@ -221,6 +222,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<GatewayEnv> {
   );
   app.use("*", bodyLimit({ maxSize: config.bodyLimitBytes }));
   app.use("*", timeout(config.requestTimeoutMs));
+  app.use("*", apiResponseEnvelopeMiddleware);
 
   app.get("/", (context) =>
     context.json({

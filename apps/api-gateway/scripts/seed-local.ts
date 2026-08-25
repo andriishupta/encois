@@ -1028,7 +1028,7 @@ const integrationCatalogFixtures = [
   {
     key: "github-mcp",
     provider: "github",
-    displayName: "GitHub",
+    displayName: "GitHub MCP",
     description: "GitHub tools exposed through an MCP connector.",
     type: "mcp",
     status: "pending",
@@ -1038,7 +1038,7 @@ const integrationCatalogFixtures = [
   {
     key: "jira-mcp",
     provider: "jira",
-    displayName: "Jira",
+    displayName: "Jira MCP",
     description: "Jira tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1048,7 +1048,7 @@ const integrationCatalogFixtures = [
   {
     key: "slack-mcp",
     provider: "slack",
-    displayName: "Slack",
+    displayName: "Slack MCP",
     description: "Slack tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1058,7 +1058,7 @@ const integrationCatalogFixtures = [
   {
     key: "google-drive-mcp",
     provider: "google-drive",
-    displayName: "Google Drive",
+    displayName: "Google Drive MCP",
     description: "Google Drive tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1068,7 +1068,7 @@ const integrationCatalogFixtures = [
   {
     key: "notion-mcp",
     provider: "notion",
-    displayName: "Notion",
+    displayName: "Notion MCP",
     description: "Notion tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1078,7 +1078,7 @@ const integrationCatalogFixtures = [
   {
     key: "linear-mcp",
     provider: "linear",
-    displayName: "Linear",
+    displayName: "Linear MCP",
     description: "Linear tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1088,7 +1088,7 @@ const integrationCatalogFixtures = [
   {
     key: "sentry-mcp",
     provider: "sentry",
-    displayName: "Sentry",
+    displayName: "Sentry MCP",
     description: "Errors and releases exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1098,7 +1098,7 @@ const integrationCatalogFixtures = [
   {
     key: "postgres-mcp",
     provider: "postgres",
-    displayName: "Postgres",
+    displayName: "Postgres MCP",
     description: "Approved database inspection tools exposed through MCP.",
     type: "mcp",
     status: "disabled",
@@ -1108,7 +1108,7 @@ const integrationCatalogFixtures = [
   {
     key: "cloud-storage-mcp",
     provider: "cloud-storage",
-    displayName: "Cloud Storage",
+    displayName: "Cloud Storage MCP",
     description: "Approved object inspection tools exposed through MCP.",
     type: "mcp",
     status: "disabled",
@@ -1118,7 +1118,7 @@ const integrationCatalogFixtures = [
   {
     key: "google-calendar-mcp",
     provider: "google-calendar",
-    displayName: "Google Calendar",
+    displayName: "Google Calendar MCP",
     description: "Calendar context exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1128,7 +1128,7 @@ const integrationCatalogFixtures = [
   {
     key: "confluence-mcp",
     provider: "confluence",
-    displayName: "Confluence",
+    displayName: "Confluence MCP",
     description: "Confluence knowledge tools exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",
@@ -1138,7 +1138,7 @@ const integrationCatalogFixtures = [
   {
     key: "figma-mcp",
     provider: "figma",
-    displayName: "Figma",
+    displayName: "Figma MCP",
     description: "Design context exposed through an MCP connector.",
     type: "mcp",
     status: "disabled",

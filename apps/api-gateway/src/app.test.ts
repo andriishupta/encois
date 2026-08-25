@@ -499,6 +499,7 @@ describe("API Gateway", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       data: { status: "pending" },
+      error: null,
     });
   });
 
@@ -538,6 +539,7 @@ describe("API Gateway", () => {
         organizationId: "org-1",
         permissions: ["onboarding:manage", "workflows:read"],
       },
+      error: null,
     });
   });
 

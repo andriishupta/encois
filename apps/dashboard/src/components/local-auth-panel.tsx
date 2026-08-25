@@ -1,6 +1,7 @@
 import type { User } from "firebase/auth";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { isApiError } from "@/lib/api";
 import { signInWithLocalEmail } from "@/lib/local-auth";
 
 type LocalAuthPanelProps = {
@@ -21,10 +22,27 @@ export default function LocalAuthPanel({
     try {
       const user = await signInWithLocalEmail(email, password);
       await onAuthenticated(user);
-    } catch {
-      setError(
-        "We could not complete local sign-in. Check the emulator credentials.",
-      );
+    } catch (cause) {
+      if (isApiError(cause) && cause.code === "INVALID_RESPONSE") {
+        setError(
+          "Local sign-in reached the API, but the authentication response is invalid. Restart the API Gateway and try again.",
+        );
+      } else if (
+        isApiError(cause) &&
+        cause.code === "PERSISTENCE_UNAVAILABLE"
+      ) {
+        setError(
+          "Local sign-in is unavailable while workspace access is offline.",
+        );
+      } else if (isApiError(cause) && cause.code === "UNAUTHENTICATED") {
+        setError(
+          "The local session was rejected. Check the emulator credentials and try again.",
+        );
+      } else {
+        setError(
+          "We could not complete local sign-in. Check the emulator credentials.",
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }

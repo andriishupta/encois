@@ -93,10 +93,7 @@ export type SourceArtifactStore = {
     contentType: string;
     bytes: Uint8Array;
   }): Promise<void>;
-  read(input: {
-    artifactRef: string;
-    objectKey: string;
-  }): Promise<{
+  read(input: { artifactRef: string; objectKey: string }): Promise<{
     bytes: Uint8Array;
     contentType?: string;
     fileName?: string;
@@ -982,7 +979,9 @@ export async function readSourceArtifact(
     );
 
   const detail = await getKnowledgeSource(principal, sourceId, options);
-  const revision = detail?.revisions.find((candidate) => candidate.id === revisionId);
+  const revision = detail?.revisions.find(
+    (candidate) => candidate.id === revisionId,
+  );
   if (!revision?.artifactRef || !revision.sourceObjectId) return null;
 
   const artifact = await options.artifactStore.read({
@@ -998,7 +997,10 @@ export async function readSourceArtifact(
       : `source-revision-${revision.revision}.pdf`;
   return {
     bytes: artifact.bytes,
-    contentType: artifact.contentType ?? revision.contentType ?? "application/octet-stream",
+    contentType:
+      artifact.contentType ??
+      revision.contentType ??
+      "application/octet-stream",
     fileName: artifact.fileName ?? fileName,
   };
 }

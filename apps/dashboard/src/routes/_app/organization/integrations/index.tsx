@@ -102,7 +102,7 @@ function IntegrationsPage() {
     "updated-desc" | "updated-asc" | "name-asc" | "status"
   >("status");
   const integrations = useInfiniteQuery({
-    queryKey: queryKeys.integrations(
+    queryKey: queryKeys.integrationPages(
       selectedScopeUnitId,
       q ?? "",
       status,
@@ -124,10 +124,18 @@ function IntegrationsPage() {
         : undefined,
   });
   const items = useMemo(
-    () => integrations.data?.pages.flatMap((page) => page.items) ?? [],
+    () =>
+      Array.isArray(integrations.data?.pages)
+        ? integrations.data.pages.flatMap((page) =>
+            Array.isArray(page.items) ? page.items : [],
+          )
+        : [],
     [integrations.data],
   );
-  const total = integrations.data?.pages[0]?.pagination.total ?? 0;
+  const firstIntegrationPage = Array.isArray(integrations.data?.pages)
+    ? integrations.data.pages[0]
+    : undefined;
+  const total = firstIntegrationPage?.pagination.total ?? 0;
   const catalog = useInfiniteQuery({
     queryKey: queryKeys.integrationCatalog(
       channel,
@@ -153,10 +161,18 @@ function IntegrationsPage() {
         : undefined,
   });
   const catalogItems = useMemo(
-    () => catalog.data?.pages.flatMap((page) => page.items) ?? [],
+    () =>
+      Array.isArray(catalog.data?.pages)
+        ? catalog.data.pages.flatMap((page) =>
+            Array.isArray(page.items) ? page.items : [],
+          )
+        : [],
     [catalog.data],
   );
-  const catalogTotal = catalog.data?.pages[0]?.pagination.total ?? 0;
+  const firstCatalogPage = Array.isArray(catalog.data?.pages)
+    ? catalog.data.pages[0]
+    : undefined;
+  const catalogTotal = firstCatalogPage?.pagination.total ?? 0;
   const statuses = [
     { value: "all", label: "All statuses" },
     ...Object.values(IntegrationStatus).map((value) => ({
@@ -172,12 +188,16 @@ function IntegrationsPage() {
   ] as const;
   function updateQuery(value: string) {
     void navigate({
+      replace: true,
+      resetScroll: false,
       search: (current) => ({ ...current, q: value || undefined }),
     });
   }
 
   function updateCatalogChannel(nextChannel: "api" | "ai") {
     void navigate({
+      replace: true,
+      resetScroll: false,
       search: (current) => ({
         ...current,
         channel: nextChannel,
@@ -188,6 +208,8 @@ function IntegrationsPage() {
 
   function updateCatalogType(nextType: IntegrationType | "all") {
     void navigate({
+      replace: true,
+      resetScroll: false,
       search: (current) => ({
         ...current,
         channel: "ai",
@@ -360,7 +382,7 @@ function IntegrationsPage() {
             aria-selected={channel === "ai"}
             onClick={() => updateCatalogChannel("ai")}
           >
-            AI
+            MCP
           </Button>
         </div>
         <ListToolbar>
@@ -373,7 +395,7 @@ function IntegrationsPage() {
           {channel === "ai" ? (
             <fieldset
               className="flex shrink-0 items-center gap-1 rounded-md border p-0.5"
-              aria-label="Filter AI connectors"
+              aria-label="Filter MCP connectors"
             >
               {(["all", IntegrationType.Ai, IntegrationType.Mcp] as const).map(
                 (type) => (

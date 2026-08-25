@@ -7,6 +7,7 @@ import {
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   ilike,
@@ -142,11 +143,11 @@ export async function listWorkflowTemplatesPageForPrincipal(
   const search = searchCondition(query.terms);
   if (search) conditions.push(search);
 
-  const rows = await withOrganizationContext(
+  const result = await withOrganizationContext(
     database,
     principal.organizationId,
-    async (db) =>
-      db
+    async (db) => {
+      const rows = await db
         .select({
           id: workflowTemplates.id,
           key: workflowTemplates.key,
@@ -168,10 +169,20 @@ export async function listWorkflowTemplatesPageForPrincipal(
         .where(and(...conditions))
         .orderBy(...templateOrder(input.sort))
         .limit(query.limit)
-        .offset(input.offset),
+        .offset(input.offset);
+      const totalRows = await db
+        .select({ total: count() })
+        .from(workflowTemplates)
+        .innerJoin(
+          workflowTemplateVersions,
+          eq(workflowTemplateVersions.workflowTemplateId, workflowTemplates.id),
+        )
+        .where(and(...conditions));
+      return { rows, total: Number(totalRows[0]?.total ?? 0) };
+    },
   );
 
-  const items = rows.flatMap((row) => {
+  const items = result.rows.flatMap((row) => {
     if (row.status !== "active" && row.status !== "disabled") return [];
     return [{ ...row, status: row.status }];
   });
@@ -180,8 +191,8 @@ export async function listWorkflowTemplatesPageForPrincipal(
     pagination: {
       limit: query.limit,
       offset: input.offset,
-      total: input.offset + items.length,
-      hasMore: items.length === query.limit,
+      total: result.total,
+      hasMore: input.offset + items.length < result.total,
     },
   };
 }

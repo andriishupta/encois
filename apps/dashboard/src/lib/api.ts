@@ -86,7 +86,13 @@ const apiBaseUrl = (environment.VITE_API_BASE_URL ?? "/api/v1").replace(
 );
 
 type ApiEnvelope<T> = {
-  data: T;
+  data: T | null;
+  error: {
+    code?: string;
+    message?: string;
+    requestId?: string;
+    traceId?: string;
+  } | null;
   pagination?: {
     limit?: unknown;
     offset?: unknown;
@@ -381,11 +387,21 @@ function isWorkflowPlannerVersion(
 function isWorkflowCreationPreview(
   value: unknown,
 ): value is WorkflowCreationPreview {
+  const blueprint = isJsonObject(value) ? value.blueprint : undefined;
   return (
     isJsonObject(value) &&
     isJsonObject(value.intent) &&
     isJsonObject(value.plan) &&
-    isJsonObject(value.blueprint) &&
+    isJsonObject(blueprint) &&
+    typeof blueprint.version === "string" &&
+    typeof blueprint.purpose === "string" &&
+    Array.isArray(blueprint.steps) &&
+    blueprint.steps.every(
+      (step) =>
+        isJsonObject(step) &&
+        typeof step.id === "string" &&
+        typeof step.kind === "string",
+    ) &&
     isJsonObject(value.source) &&
     typeof value.source.kind === "string" &&
     typeof value.source.title === "string" &&
@@ -878,32 +894,31 @@ function parseList<T>(
 }
 
 function parseListPage<T>(
-  value: unknown,
+  envelope: ApiEnvelope<unknown>,
   guard: (item: unknown) => item is T,
   name: string,
 ): ListPage<T> {
-  if (
-    !isJsonObject(value) ||
-    !Array.isArray(value.data) ||
-    !value.data.every(guard)
-  ) {
+  const data = envelope.data;
+  if (!Array.isArray(data) || !data.every(guard)) {
     throw createApiError(
       200,
       `The service returned an invalid ${name} response.`,
       "INVALID_RESPONSE",
     );
   }
-  const pagination = isJsonObject(value.pagination) ? value.pagination : {};
+  const pagination = isJsonObject(envelope.pagination)
+    ? envelope.pagination
+    : {};
   const limit =
-    typeof pagination.limit === "number" ? pagination.limit : value.data.length;
+    typeof pagination.limit === "number" ? pagination.limit : data.length;
   const offset = typeof pagination.offset === "number" ? pagination.offset : 0;
   const total =
-    typeof pagination.total === "number" ? pagination.total : value.data.length;
+    typeof pagination.total === "number" ? pagination.total : data.length;
   const hasMore =
     typeof pagination.hasMore === "boolean"
       ? pagination.hasMore
-      : value.data.length === limit;
-  return { items: value.data, pagination: { limit, offset, total, hasMore } };
+      : data.length === limit;
+  return { items: data, pagination: { limit, offset, total, hasMore } };
 }
 
 function isAcceptedResponse(value: unknown): value is { accepted: true } {
@@ -985,11 +1000,41 @@ async function requestEnvelope<T>(
     ) {
       throw createApiError(
         response.status,
-        "The service returned an invalid response.",
+        "The service returned an invalid response envelope.",
         "INVALID_RESPONSE",
       );
     }
-    return body as ApiEnvelope<T>;
+    const envelope = {
+      ...(body as Record<string, unknown>),
+      error: "error" in body ? body.error : null,
+    } as {
+      data: unknown;
+      error: unknown;
+      pagination?: unknown;
+    };
+    if (
+      envelope.error !== null &&
+      (typeof envelope.error !== "object" ||
+        envelope.error === null ||
+        Array.isArray(envelope.error))
+    ) {
+      throw createApiError(
+        response.status,
+        "The service returned an invalid response error.",
+        "INVALID_RESPONSE",
+      );
+    }
+    if (envelope.error) {
+      const error = envelope.error as Record<string, unknown>;
+      throw createApiError(
+        response.status,
+        typeof error.message === "string"
+          ? error.message
+          : "The service returned an API error.",
+        typeof error.code === "string" ? error.code : undefined,
+      );
+    }
+    return envelope as ApiEnvelope<T>;
   }
 
   clearAuthSession();
@@ -1001,7 +1046,15 @@ async function request<T>(
   init?: RequestInit,
   requiresAuth = true,
 ): Promise<T> {
-  return (await requestEnvelope<T>(path, init, requiresAuth)).data;
+  const envelope = await requestEnvelope<T>(path, init, requiresAuth);
+  if (envelope.data === null) {
+    throw createApiError(
+      200,
+      "The service returned an empty response.",
+      "INVALID_RESPONSE",
+    );
+  }
+  return envelope.data;
 }
 
 export async function downloadSourceRevisionRaw(
@@ -1096,7 +1149,7 @@ export function listWorkflows(
   input: ListQueryInput = {},
 ): Promise<readonly WorkflowExecutionProjection[]> {
   return request<unknown>(
-    `/workflows${listQuery({ ...input, limit: input.limit ?? 100 })}`,
+    `/workflows${listQuery({ ...input, limit: input.limit ?? 10 })}`,
   ).then((value) => parseList(value, isWorkflowProjection, "workflow list"));
 }
 

@@ -1,18 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Activity,
-  Home,
-  LogIn,
-  ServerCrash,
-  ShieldAlert,
-  UserRound,
-} from "lucide-react";
+import { Activity, Home, LogIn, ShieldAlert, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAuthIdentity, getAuthSession } from "@/lib/auth";
 import { getPublicWorkspaceTitle } from "@/lib/branding";
 
-type StatusCode = 403 | 404 | 500;
+type StatusCode = 403 | 404;
 
 const statusContent: Record<
   StatusCode,
@@ -31,13 +24,6 @@ const statusContent: Record<
     title: "Not Found",
     description:
       "The page you are looking for does not exist or is no longer available.",
-  },
-  500: {
-    icon: ServerCrash,
-    label: "Server error",
-    title: "Something went wrong",
-    description:
-      "The workspace could not complete this request. Please return to a safe starting point and try again later.",
   },
 };
 

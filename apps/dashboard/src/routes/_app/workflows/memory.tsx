@@ -193,7 +193,7 @@ function MemoryPage() {
             maxLength={160}
           />
         </div>
-        <ListMeta>{memory.data?.memories.length ?? 0} matches</ListMeta>
+        <ListMeta>{memory.data?.memories?.length ?? 0} matches</ListMeta>
       </ListToolbar>
       <Card>
         <CardHeader>
@@ -232,7 +232,7 @@ function MemoryPage() {
               <MemoryMeta label="Scope" value={scopeLabel} />
               <MemoryMeta
                 label="Matches"
-                value={String(memory.data.memories.length)}
+                value={String(memory.data.memories?.length ?? 0)}
               />
               <MemoryMeta
                 label="Generated"
@@ -240,7 +240,7 @@ function MemoryPage() {
               />
             </div>
           ) : null}
-          {memory.data && memory.data.memories.length === 0 ? (
+          {memory.data && memory.data.memories?.length === 0 ? (
             <EmptyPanel
               icon={BrainCircuit}
               title="No memories found"
@@ -252,8 +252,8 @@ function MemoryPage() {
               Could not submit the memory change: {changeError}
             </p>
           ) : null}
-          {memory.data && memory.data.memories.length > 0 ? (
-            <div className="grid gap-3 lg:grid-cols-2">
+          {memory.data && memory.data.memories?.length > 0 ? (
+            <div className="grid gap-3">
               {memory.data.memories.map((record) => (
                 <MemoryRecordCard
                   key={record.id}
@@ -423,10 +423,10 @@ function MemoryRecordCard({
           </div>
         ) : null}
       </dl>
-      {record.evidenceRefs.length ? (
+      {record.evidenceRefs?.length ? (
         <details className="mt-4 rounded-md border bg-muted/20 px-3 py-2 text-xs">
           <summary className="cursor-pointer font-medium">
-            Evidence references ({record.evidenceRefs.length})
+            Evidence references ({record.evidenceRefs?.length ?? 0})
           </summary>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {record.evidenceRefs.map((ref) => (

@@ -99,6 +99,9 @@ function WorkflowDetailPage() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.workflowEvents(workflowId),
         }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
       ]);
     },
   });
@@ -113,6 +116,9 @@ function WorkflowDetailPage() {
           queryKey: queryKeys.workflowEvents(workflowId),
         }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
       ]);
     },
   });
@@ -137,13 +143,21 @@ function WorkflowDetailPage() {
           queryKey: queryKeys.workflowEvents(workflowId),
         }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
       ]);
     },
   });
   const rerun = useMutation({
     mutationFn: () => rerunWorkflow(workflowId),
     onSuccess: async (nextWorkflow) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
+      ]);
       await navigate({
         to: "/workflows/$workflowId",
         params: { workflowId: nextWorkflow.workflowId },

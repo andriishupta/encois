@@ -4,6 +4,11 @@
 
 This repository is a pnpm workspace with a TypeScript Gateway API/UI and a Go agent runtime for Encois, an enterprise context-intelligence system. Encois correlates signals from company systems, uses specialized agents to investigate them, and presents evidence-backed insights to people. The MVP is read-oriented: observe, correlate, explain, and recommend. Any action that changes external systems requires an explicit approval boundary.
 
+This is a private proprietary project, not a source-available or open-source
+project. Access for bots, reviewers, and hackathon judges is limited to the
+approved evaluation purpose; do not copy, fork, redistribute, reuse, or create
+derivative work from the Repository. See [`LICENSE`](LICENSE).
+
 This file is the working guide for contributors and coding agents. The source of truth for product intent, the first architecture baseline, and the competition constraints is:
 
 - [`docs/idea.md`](docs/idea.md) — product vision, users, MVP, and positioning.

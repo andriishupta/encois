@@ -3,7 +3,11 @@ import type {
   WorkflowBlueprintStatus,
 } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -61,7 +65,7 @@ function WorkflowBlueprintsPage() {
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
   const blueprints = useInfiniteQuery({
-    queryKey: queryKeys.workflowBlueprints(query, status, sort),
+    queryKey: queryKeys.workflowBlueprintPages(query, status, sort),
     queryFn: ({ pageParam }) =>
       listWorkflowBlueprintsPage({
         query,
@@ -204,7 +208,7 @@ function BlueprintCard({
     mutationFn: () => deleteWorkflowBlueprint(blueprint.blueprintId),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprints(),
+        queryKey: queryKeys.workflowBlueprintsRoot(),
       }),
   });
 
@@ -230,7 +234,7 @@ function BlueprintCard({
         <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">Steps:</span>{" "}
-            {blueprint.steps.length} ·{" "}
+            {blueprint.steps?.length ?? 0} ·{" "}
             <span className="font-medium text-foreground">Approval:</span>{" "}
             {blueprint.requiresApproval ? "required" : "not required"}
           </p>

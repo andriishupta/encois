@@ -165,13 +165,27 @@ function ActivityPage() {
   const approvePlan = useMutation({
     mutationFn: approveWorkflowPlan,
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlans() }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      }),
     onError: (error) => setPlanActionError(error.message),
   });
   const applyPlan = useMutation({
     mutationFn: applyWorkflowPlan,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlans() }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowPlansRoot(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowBlueprintsRoot(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
+      ]);
+    },
     onError: (error) => setPlanActionError(error.message),
   });
   const [memoryActionError, setMemoryActionError] = useState<string | null>(

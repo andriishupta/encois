@@ -123,6 +123,7 @@ function NewWorkflowPage() {
   const [description, setDescription] = useState("");
   const [runAfterApply, setRunAfterApply] = useState(true);
   const [submittedPlanId, setSubmittedPlanId] = useState<string>();
+  const [createdPlan, setCreatedPlan] = useState<WorkflowPlanRecord>();
   const [completed, setCompleted] = useState(false);
 
   const templates = useQuery({
@@ -186,20 +187,60 @@ function NewWorkflowPage() {
   });
   const submit = useMutation({
     mutationFn: () => submitWorkflowCreation(buildIntent(runAfterApply)),
-    onSuccess: (plan) => setSubmittedPlanId(plan.planId),
+    onSuccess: async (plan) => {
+      setCreatedPlan(plan);
+      setSubmittedPlanId(plan.planId);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      });
+      await navigate({
+        to: "/workflows/plans",
+        search: { planId: plan.planId },
+      });
+    },
+  });
+  const createAndApprove = useMutation({
+    mutationFn: async () => {
+      const plan = await submitWorkflowCreation(buildIntent(runAfterApply));
+      setCreatedPlan(plan);
+      setSubmittedPlanId(plan.planId);
+      return approveWorkflowPlan(plan.planId);
+    },
+    onSuccess: async (plan) => {
+      setSubmittedPlanId(plan.planId);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      });
+      await navigate({
+        to: "/workflows/plans",
+        search: { planId: plan.planId },
+      });
+    },
   });
   const approve = useMutation({
     mutationFn: () => approveWorkflowPlan(submittedPlanId ?? ""),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprints(),
-      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      });
+    },
   });
   const apply = useMutation({
     mutationFn: () => applyWorkflowPlan(submittedPlanId ?? ""),
     onSuccess: async () => {
       setCompleted(true);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowPlansRoot(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowBlueprintsRoot(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
+      ]);
     },
   });
 
@@ -211,7 +252,7 @@ function NewWorkflowPage() {
         : false;
   const canContinueToConfigure = Boolean(mode && sourceReady);
   const canPreview = Boolean(name.trim() && sourceReady && !preview.isPending);
-  const submitted = submit.data;
+  const submitted = submit.data ?? createdPlan;
   const approved =
     approve.data ?? (submitted?.status === "approved" ? submitted : undefined);
 
@@ -222,9 +263,11 @@ function NewWorkflowPage() {
     setStage(1);
     preview.reset();
     submit.reset();
+    createAndApprove.reset();
     approve.reset();
     apply.reset();
     setSubmittedPlanId(undefined);
+    setCreatedPlan(undefined);
     setCompleted(false);
   }
 
@@ -315,14 +358,28 @@ function NewWorkflowPage() {
         <ReviewStage
           preview={preview.data}
           isLoading={preview.isPending}
-          error={preview.error ?? submit.error ?? approve.error ?? apply.error}
+          error={
+            preview.error ??
+            submit.error ??
+            createAndApprove.error ??
+            approve.error ??
+            apply.error
+          }
           runAfterApply={runAfterApply}
           onRunChange={setRunAfterApply}
           submitted={submitted}
           approved={approved}
           completed={completed}
-          onSubmit={() => submit.mutate()}
+          onSubmit={() => {
+            createAndApprove.reset();
+            submit.mutate();
+          }}
           submitting={submit.isPending}
+          onCreateAndApprove={() => {
+            submit.reset();
+            createAndApprove.mutate();
+          }}
+          creatingAndApproving={createAndApprove.isPending}
           onApprove={() => approve.mutate()}
           approving={approve.isPending}
           onApply={() => apply.mutate()}
@@ -590,6 +647,8 @@ function ReviewStage({
   completed,
   onSubmit,
   submitting,
+  onCreateAndApprove,
+  creatingAndApproving,
   onApprove,
   approving,
   onApply,
@@ -607,6 +666,8 @@ function ReviewStage({
   completed: boolean;
   onSubmit: () => void;
   submitting: boolean;
+  onCreateAndApprove: () => void;
+  creatingAndApproving: boolean;
   onApprove: () => void;
   approving: boolean;
   onApply: () => void;
@@ -664,7 +725,7 @@ function ReviewStage({
           <InfoItem label="Source" value={preview.source.title} />
           <InfoItem
             label="Steps"
-            value={String(preview.blueprint.steps.length)}
+            value={String(preview.blueprint.steps?.length ?? 0)}
           />
           <InfoItem
             label="Blueprint approval"
@@ -717,7 +778,7 @@ function ReviewStage({
             <p>Purpose: {preview.blueprint.purpose}</p>
             <p>
               Capabilities:{" "}
-              {preview.requiredCapabilities.length
+              {preview.requiredCapabilities?.length
                 ? preview.requiredCapabilities.join(", ")
                 : "None declared"}
             </p>
@@ -862,25 +923,53 @@ function ReviewStage({
             <Button onClick={onOpenWorkflows}>
               Open workflows <ArrowRight data-icon="inline-end" />
             </Button>
-          ) : !submitted ? (
-            <Button
-              onClick={onSubmit}
-              disabled={submitting || missingRequiredProvider}
-            >
-              {submitting ? (
-                <LoaderCircle
-                  className="animate-spin"
-                  data-icon="inline-start"
-                />
-              ) : (
-                <Check data-icon="inline-start" />
-              )}
-              {submitting
-                ? "Submitting…"
-                : missingRequiredProvider
-                  ? "Configure Source first"
-                  : "Submit for approval"}
+          ) : creatingAndApproving ? (
+            <Button disabled>
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              Creating and approving…
             </Button>
+          ) : !submitted ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={onSubmit}
+                disabled={
+                  submitting || creatingAndApproving || missingRequiredProvider
+                }
+              >
+                {submitting ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <Check data-icon="inline-start" />
+                )}
+                {submitting
+                  ? "Creating…"
+                  : missingRequiredProvider
+                    ? "Configure Source first"
+                    : "Create plan"}
+              </Button>
+              <Button
+                onClick={onCreateAndApprove}
+                disabled={
+                  submitting || creatingAndApproving || missingRequiredProvider
+                }
+              >
+                {creatingAndApproving ? (
+                  <LoaderCircle
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : (
+                  <CheckCircle2 data-icon="inline-start" />
+                )}
+                {creatingAndApproving
+                  ? "Creating and approving…"
+                  : "Create and approve plan now"}
+              </Button>
+            </div>
           ) : planStatus === "proposed" ? (
             <Button onClick={onApprove} disabled={approving}>
               {approving ? (
@@ -1133,7 +1222,7 @@ function BlueprintOption({
         {item.purpose}
       </span>
       <span className="mt-auto block text-xs text-muted-foreground">
-        {item.steps.length} steps ·{" "}
+        {item.steps?.length ?? 0} steps ·{" "}
         {item.requiresApproval ? "Approval required" : "Read-only plan"}
       </span>
     </>

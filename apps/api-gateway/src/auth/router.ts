@@ -20,6 +20,7 @@ export function createAuthRouter(
     if (!options.verifyIdentity || !options.resolveAccess) {
       return context.json(
         {
+          data: null,
           error: {
             code: "AUTHENTICATION_UNAVAILABLE",
             message: "Authentication is not configured.",
@@ -36,6 +37,7 @@ export function createAuthRouter(
       const status = identityResult.status === "unconfigured" ? 503 : 401;
       return context.json(
         {
+          data: null,
           error: {
             code:
               identityResult.status === "unconfigured"
@@ -60,6 +62,7 @@ export function createAuthRouter(
     if (access.status === "unavailable") {
       return context.json(
         {
+          data: null,
           error: {
             code: "PERSISTENCE_UNAVAILABLE",
             message: "Access provisioning is not configured.",
@@ -81,7 +84,7 @@ export function createAuthRouter(
           }
         : { status: AuthAccessStatus.Pending };
 
-    return context.json({ data: response });
+    return context.json({ data: response, error: null });
   });
 
   return router;

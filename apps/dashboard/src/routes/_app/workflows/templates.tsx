@@ -49,7 +49,7 @@ function WorkflowTemplatesPage() {
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
   const templates = useInfiniteQuery({
-    queryKey: queryKeys.workflowTemplates(query, status, sort),
+    queryKey: queryKeys.workflowTemplatePages(query, status, sort),
     queryFn: ({ pageParam }) =>
       listWorkflowTemplatesPage({
         query,
@@ -64,8 +64,11 @@ function WorkflowTemplatesPage() {
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
   });
-  const visibleTemplates =
-    templates.data?.pages.flatMap((page) => page.items) ?? [];
+  const visibleTemplates = Array.isArray(templates.data?.pages)
+    ? templates.data.pages.flatMap((page) =>
+        Array.isArray(page.items) ? page.items : [],
+      )
+    : [];
   const activeCount = visibleTemplates.filter(
     (template) => template.status === "active",
   ).length;
@@ -194,11 +197,11 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
         <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">Provider slots:</span>{" "}
-            {template.template.providerSlots.length || "None"}
+            {template.template.providerSlots?.length || "None"}
           </p>
           <p>
             <span className="font-medium text-foreground">Steps:</span>{" "}
-            {template.template.steps.length} ·{" "}
+            {template.template.steps?.length ?? 0} ·{" "}
             <span className="font-medium text-foreground">Output:</span>{" "}
             {template.template.output.type}
           </p>

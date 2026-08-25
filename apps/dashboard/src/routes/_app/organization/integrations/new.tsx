@@ -91,7 +91,7 @@ function NewIntegrationPage() {
     mutationFn: (input: IntegrationCreateRequest) => createIntegration(input),
     onSuccess: async (integration) => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.integrations(),
+        queryKey: queryKeys.integrationsRoot(),
       });
       await navigate({
         to: "/organization/integrations/$integrationId",

@@ -4,7 +4,7 @@ import {
   KnowledgeSourceKind,
   Permission,
 } from "@encois/contracts";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -59,6 +59,7 @@ export const Route = createFileRoute("/_app/organization/sources/new")({
 
 function NewSourcePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const search = Route.useSearch();
   const { units, currentUnitId } = useOrganization();
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId)
@@ -145,6 +146,9 @@ function NewSourcePage() {
       if (kind === KnowledgeSourceKind.UploadedDocument && file) {
         const uploaded = await uploadKnowledgeSourcePdf(file, name, scopes);
         await startSourceIngestion(uploaded.source.id, uploaded.revision.id);
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.sourcesRoot(),
+        });
         await navigate({
           to: "/organization/sources/$sourceId",
           params: { sourceId: uploaded.source.id },
@@ -159,6 +163,9 @@ function NewSourcePage() {
         ...scopes,
       };
       const source = await createKnowledgeSource(input);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.sourcesRoot(),
+      });
       await navigate({
         to: "/organization/sources/$sourceId",
         params: { sourceId: source.id },

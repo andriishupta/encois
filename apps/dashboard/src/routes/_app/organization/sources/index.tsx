@@ -71,7 +71,7 @@ function SourcesPage() {
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
   const sources = useInfiniteQuery({
-    queryKey: queryKeys.sources(selectedScopeUnitId, query, status, sort),
+    queryKey: queryKeys.sourcePages(selectedScopeUnitId, query, status, sort),
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       listKnowledgeSourcesPage({
@@ -88,10 +88,18 @@ function SourcesPage() {
         : undefined,
   });
   const items = useMemo(
-    () => sources.data?.pages.flatMap((page) => page.items) ?? [],
+    () =>
+      Array.isArray(sources.data?.pages)
+        ? sources.data.pages.flatMap((page) =>
+            Array.isArray(page.items) ? page.items : [],
+          )
+        : [],
     [sources.data],
   );
-  const total = sources.data?.pages[0]?.pagination.total ?? 0;
+  const firstPage = Array.isArray(sources.data?.pages)
+    ? sources.data.pages[0]
+    : undefined;
+  const total = firstPage?.pagination.total ?? 0;
   const statuses = [
     { value: "all", label: "All statuses" },
     ...Object.values(KnowledgeSourceStatus).map((value) => ({

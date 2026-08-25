@@ -5,6 +5,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { AppErrorPage } from "@/components/app-error-boundary";
 import { StatusPage } from "@/components/status-page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getOrganization } from "@/lib/api";
@@ -14,7 +15,9 @@ import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createRootRoute({
   component: RootLayout,
-  errorComponent: () => <StatusPage code={500} />,
+  errorComponent: ({ error, reset }) => (
+    <AppErrorPage error={error} onRetry={reset} />
+  ),
   notFoundComponent: () => <StatusPage code={404} />,
 });
 

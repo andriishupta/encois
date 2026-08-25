@@ -11,7 +11,9 @@ function fileNameForHeader(value: string): string {
     Array.from(value)
       .map((character) => {
         const code = character.charCodeAt(0);
-        return code <= 0x1f || code === 0x7f || character === '"' ? "_" : character;
+        return code <= 0x1f || code === 0x7f || character === '"'
+          ? "_"
+          : character;
       })
       .join("")
       .trim()
@@ -68,7 +70,7 @@ export function getSourceRevisionRawRoute(
         return context.json(
           { error: { code: error.code, message: error.message } },
           error.code === "PERSISTENCE_UNAVAILABLE" ||
-          error.code === "ARTIFACT_STORE_UNAVAILABLE"
+            error.code === "ARTIFACT_STORE_UNAVAILABLE"
             ? 503
             : error.code === "FORBIDDEN"
               ? 403

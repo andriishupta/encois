@@ -230,4 +230,4 @@ The initial infrastructure blueprint lives in [`infra/`](infra/) and is intentio
 
 ## License
 
-No project license has been selected yet. Add one before publishing or accepting external contributions.
+This repository is proprietary and is available only for authorized private evaluation. It is not licensed for copying, forking, redistribution, reuse, derivative works, or commercial use. See [`LICENSE`](LICENSE).

@@ -45,9 +45,9 @@ import {
 } from "@/components/ui/card";
 import { WorkflowStatusIndicator } from "@/components/workflow-status";
 import {
+  deleteWorkflowBlueprint,
   listWorkflowBlueprintsPage,
   listWorkflows,
-  deleteWorkflowBlueprint,
   startWorkflow,
 } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
@@ -73,7 +73,7 @@ function WorkflowsPage() {
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
   const workflows = useInfiniteQuery({
-    queryKey: queryKeys.workflowBlueprints(query, status, sort),
+    queryKey: queryKeys.workflowBlueprintPages(query, status, sort),
     queryFn: ({ pageParam }) =>
       listWorkflowBlueprintsPage({
         query,
@@ -92,8 +92,11 @@ function WorkflowsPage() {
     queryKey: queryKeys.workflows(),
     queryFn: listWorkflows,
   });
-  const blueprintItems =
-    workflows.data?.pages.flatMap((page) => page.items) ?? [];
+  const blueprintItems = Array.isArray(workflows.data?.pages)
+    ? workflows.data.pages.flatMap((page) =>
+        Array.isArray(page.items) ? page.items : [],
+      )
+    : [];
   const definitions = useMemo(
     () => selectWorkflowDefinitions(blueprintItems),
     [blueprintItems],
@@ -325,7 +328,7 @@ function WorkflowDefinitionCard({
         <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">Steps:</span>{" "}
-            {workflow.steps.length} ·{" "}
+            {workflow.steps?.length ?? 0} ·{" "}
             <span className="font-medium text-foreground">Approval:</span>{" "}
             {workflow.requiresApproval ? "required" : "not required"}
           </p>
@@ -380,7 +383,12 @@ function WorkflowDefinitionActions({
       });
     },
     onSuccess: async (started) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.workflows() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
+      ]);
       await navigate({
         to: "/workflows/$workflowId",
         params: { workflowId: started.workflowId },
@@ -391,7 +399,7 @@ function WorkflowDefinitionActions({
     mutationFn: () => deleteWorkflowBlueprint(workflow.blueprintId),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprints(),
+        queryKey: queryKeys.workflowBlueprintsRoot(),
       }),
   });
   const canStartAction =

@@ -90,12 +90,40 @@ function OrganizationPermissionsPage() {
 
   const selectedMember =
     members.find((member) => member.id === selectedMemberId) ?? members[0];
-  if (!selectedMember)
+  if (!selectedMember) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No organization members are available.
-      </p>
+      <div className="flex flex-col gap-8">
+        <PageHeader
+          title="Organization permissions"
+          description="Assign organization-unit access while keeping visibility scoped to the user’s effective tree."
+          actions={
+            <Button type="button" variant="outline" asChild>
+              <Link to="/organization">
+                <ChevronRight className="rotate-180" data-icon="inline-start" />
+                Organization tree
+              </Link>
+            </Button>
+          }
+        />
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            Loading organization permissions…
+          </p>
+        ) : error ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          >
+            Could not load organization permissions from the API: {error}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No organization members are available.
+          </p>
+        )}
+      </div>
     );
+  }
   const memberPermissions = permissions.filter(
     (permission) => permission.memberId === selectedMember.id,
   );
@@ -113,6 +141,7 @@ function OrganizationPermissionsPage() {
     selectedMember.id,
   );
   const managedUnits = units.filter((unit) => managedUnitIds.includes(unit.id));
+  const manageableUnits = units.filter((unit) => unit.canManage);
 
   async function addPermission() {
     await createPermission({
@@ -305,7 +334,7 @@ function OrganizationPermissionsPage() {
                     Each direct scope includes all descendant units.
                   </p>
                 </div>
-                {unitOptions.length > 0 ? (
+                {manageableUnits.length > 0 ? (
                   <Button
                     type="button"
                     variant="outline"

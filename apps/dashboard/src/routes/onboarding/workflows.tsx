@@ -103,6 +103,9 @@ function WorkflowRecommendationsPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.organization() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.workflowRunListRoot(),
+        }),
       ]);
       await navigate({ to: "/" });
     },

@@ -6,10 +6,23 @@ export function currentOrganizationId(): string | undefined {
 
 export const queryKeys = {
   workflows: () => ["workflows", currentOrganizationId()] as const,
+  workflowRunList: (query = "", status = "all") =>
+    ["workflow-run-list", currentOrganizationId(), query, status] as const,
+  workflowRunListRoot: () =>
+    ["workflow-run-list", currentOrganizationId()] as const,
   workflowTemplates: (query = "", status = "all", sort = "updated-desc") =>
     [
       "workflow-templates",
       currentOrganizationId(),
+      query,
+      status,
+      sort,
+    ] as const,
+  workflowTemplatePages: (query = "", status = "all", sort = "updated-desc") =>
+    [
+      "workflow-templates",
+      currentOrganizationId(),
+      "__pages__",
       query,
       status,
       sort,
@@ -22,8 +35,29 @@ export const queryKeys = {
       status,
       sort,
     ] as const,
+  workflowBlueprintsRoot: () =>
+    ["workflow-blueprints", currentOrganizationId()] as const,
+  workflowBlueprintPages: (query = "", status = "all", sort = "updated-desc") =>
+    [
+      "workflow-blueprints",
+      currentOrganizationId(),
+      "__pages__",
+      query,
+      status,
+      sort,
+    ] as const,
   workflowPlans: (query = "", status = "all", sort = "updated-desc") =>
     ["workflow-plans", currentOrganizationId(), query, status, sort] as const,
+  workflowPlansRoot: () => ["workflow-plans", currentOrganizationId()] as const,
+  workflowPlanPages: (query = "", status = "all", sort = "updated-desc") =>
+    [
+      "workflow-plans",
+      currentOrganizationId(),
+      "__pages__",
+      query,
+      status,
+      sort,
+    ] as const,
   workflowPlannerVersions: () =>
     ["workflow-planner-versions", currentOrganizationId()] as const,
   workflow: (workflowId: string) =>
@@ -51,6 +85,22 @@ export const queryKeys = {
           status,
           sort,
         ] as const),
+  integrationPages: (
+    scopeUnitId?: string,
+    query = "",
+    status = "all",
+    sort = "updated-desc",
+  ) =>
+    [
+      "integrations",
+      currentOrganizationId(),
+      "__pages__",
+      scopeUnitId ?? "all",
+      query,
+      status,
+      sort,
+    ] as const,
+  integrationsRoot: () => ["integrations", currentOrganizationId()] as const,
   integrationCatalog: (
     channel = "api",
     type = "all",
@@ -88,6 +138,22 @@ export const queryKeys = {
           status,
           sort,
         ] as const),
+  sourcePages: (
+    scopeUnitId?: string,
+    query = "",
+    status = "all",
+    sort = "updated-desc",
+  ) =>
+    [
+      "sources",
+      currentOrganizationId(),
+      "__pages__",
+      scopeUnitId ?? "all",
+      query,
+      status,
+      sort,
+    ] as const,
+  sourcesRoot: () => ["sources", currentOrganizationId()] as const,
   source: (sourceId: string) =>
     ["source", currentOrganizationId(), sourceId] as const,
   organization: () => ["organization", currentOrganizationId()] as const,

@@ -6,13 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import {
-  Check,
-  ClipboardCheck,
-  GitBranch,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Check, ClipboardCheck, GitBranch, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -47,6 +41,9 @@ import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/plans")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    planId: typeof search.planId === "string" ? search.planId : undefined,
+  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.WorkflowsManage))
       throw redirect({ to: "/forbidden" });
@@ -59,6 +56,7 @@ type PlanFilter = WorkflowPlanRecord["status"] | "all";
 function WorkflowPlansPage() {
   const queryClient = useQueryClient();
   const { units } = useOrganization();
+  const { planId } = Route.useSearch();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<PlanFilter>("all");
   const [sort, setSort] = useState<
@@ -66,7 +64,7 @@ function WorkflowPlansPage() {
   >("updated-desc");
   const [view, setView] = useState<ListViewMode>("list");
   const plans = useInfiniteQuery({
-    queryKey: queryKeys.workflowPlans(query, status, sort),
+    queryKey: queryKeys.workflowPlanPages(query, status, sort),
     queryFn: ({ pageParam }) =>
       listWorkflowPlansPage({
         query,
@@ -82,7 +80,11 @@ function WorkflowPlansPage() {
         : undefined,
     refetchInterval: 15_000,
   });
-  const visiblePlans = plans.data?.pages.flatMap((page) => page.items) ?? [];
+  const visiblePlans = Array.isArray(plans.data?.pages)
+    ? plans.data.pages.flatMap((page) =>
+        Array.isArray(page.items) ? page.items : [],
+      )
+    : [];
   const [actionError, setActionError] = useState<string | null>(null);
   const action = useMutation({
     mutationFn: async ({
@@ -97,8 +99,22 @@ function WorkflowPlansPage() {
         : operation === "apply"
           ? applyWorkflowPlan(planId)
           : deleteWorkflowPlan(planId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["workflow-plans"] }),
+    onSuccess: async (_plan, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowPlansRoot(),
+      });
+      if (variables.operation === "apply") {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.workflowBlueprintsRoot(),
+          }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.workflowRunListRoot(),
+          }),
+        ]);
+      }
+    },
     onError: (error) => setActionError(error.message),
   });
   const pendingCount = visiblePlans.filter(
@@ -175,6 +191,7 @@ function WorkflowPlansPage() {
             <WorkflowPlanCard
               plan={plan}
               units={units}
+              highlighted={plan.planId === planId}
               busy={action.isPending}
               onAction={(operation) => {
                 setActionError(null);
@@ -223,11 +240,13 @@ function WorkflowPlansPage() {
 function WorkflowPlanCard({
   plan,
   units,
+  highlighted,
   busy,
   onAction,
 }: {
   plan: WorkflowPlanRecord;
   units: ReturnType<typeof useOrganization>["units"];
+  highlighted: boolean;
   busy: boolean;
   onAction: (operation: "approve" | "apply" | "delete") => void;
 }) {
@@ -239,7 +258,11 @@ function WorkflowPlanCard({
       .join(", ") || "Organization scope";
   const status = planStatusLabel(plan.status);
   return (
-    <Card>
+    <Card
+      className={
+        highlighted ? "border-primary ring-2 ring-primary/20" : undefined
+      }
+    >
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -250,6 +273,11 @@ function WorkflowPlanCard({
               {change?.kind ?? "change"} · {status} ·{" "}
               {formatDate(plan.updatedAt)}
             </CardDescription>
+            {highlighted ? (
+              <p className="mt-2 text-xs font-medium text-primary">
+                Newly created plan
+              </p>
+            ) : null}
           </div>
           <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">
             {status}
@@ -261,7 +289,7 @@ function WorkflowPlanCard({
           <InfoItem label="Scope" value={scope} />
           <InfoItem
             label="Steps"
-            value={String(blueprint?.steps.length ?? 0)}
+            value={String(blueprint?.steps?.length ?? 0)}
           />
           <InfoItem
             label="Approval"

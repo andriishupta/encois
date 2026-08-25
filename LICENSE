@@ -1,0 +1,61 @@
+ENCOIS PRIVATE EVALUATION LICENSE
+Version 1.0 — 25 August 2026
+
+Copyright (c) 2026 Andrii Shupta, operating under the Encois project name.
+All rights reserved.
+
+This repository, including its source code, documentation, configuration,
+assets, schemas, generated files, and other contents (the “Repository”), is
+proprietary and is not open-source software.
+
+1. Limited permission
+
+The copyright holder grants a person or organization that has been explicitly
+authorized to access the private repository (an “Authorized Reviewer”) a
+limited, revocable, non-exclusive, non-transferable, non-sublicensable,
+royalty-free permission to access, inspect, execute, and evaluate the
+Repository solely for a private hackathon review, judging, security review, or
+technical evaluation requested or approved by Encois.
+
+Authorized automated tools and bots operated for the same approved evaluation
+purpose are covered by this permission.
+
+2. Restrictions
+
+Except for temporary technical copies made automatically and necessarily by an
+authorized tool to access or run the Repository, an Authorized Reviewer must
+not, directly or indirectly:
+
+- copy, reproduce, download for retention, fork, mirror, archive, or extract
+  the Repository or any substantial part of it;
+- publish, disclose, transmit, sell, license, sublicense, transfer, or make
+  the Repository or any part of it available to another person or service;
+- modify, adapt, translate, create derivative works from, or reuse the
+  Repository or any part of it in another project;
+- use the Repository to build, train, benchmark, or improve another product,
+  service, model, dataset, or competing implementation;
+- use the Repository for commercial, production, or unrelated purposes; or
+- bypass access controls or retain access after authorization is withdrawn.
+
+Evaluation results and feedback may be shared with Encois and with the
+organizing body of an approved hackathon, but the Repository and its contents
+must remain private unless Encois gives written permission otherwise.
+
+3. Ownership and termination
+
+Encois retains all right, title, and interest in the Repository. No rights are
+granted except those expressly stated in this license. This permission ends
+immediately when the evaluation ends or when Encois withdraws authorization.
+After termination, the Authorized Reviewer must stop using the Repository and
+delete retained copies, subject only to copies that cannot reasonably be
+removed from routine system backups and remain inaccessible.
+
+4. Disclaimer
+
+The Repository is provided “as is” without warranties of any kind. To the
+maximum extent permitted by law, Encois is not liable for any loss or damage
+arising from access to or use of the Repository.
+
+This license does not grant permission to use the Encois name, trademarks, or
+branding, except as necessary to identify the Repository during the approved
+evaluation.

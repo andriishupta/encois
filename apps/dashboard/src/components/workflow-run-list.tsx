@@ -45,7 +45,7 @@ export function WorkflowRunList() {
   const [status, setStatus] = useState<WorkflowExecutionStatus | "all">("all");
   const [query, setQuery] = useState("");
   const workflows = useInfiniteQuery({
-    queryKey: ["workflow-run-list", ...queryKeys.workflows(), query, status],
+    queryKey: queryKeys.workflowRunList(query, status),
     queryFn: ({ pageParam }) =>
       listWorkflowsPage({ query, status, limit: 10, offset: pageParam }),
     initialPageParam: 0,
