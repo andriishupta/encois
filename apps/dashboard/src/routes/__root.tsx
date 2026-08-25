@@ -94,11 +94,14 @@ function getPageTitle(pathname: string, productName: string) {
   if (pathname === "/workflows") return "Workflows";
   if (pathname === "/workflows/runs") return "Workflow runs";
   if (pathname === "/workflows/plans") return "Workflow plans";
+  if (pathname.startsWith("/workflows/plans/")) return "Workflow plan";
   if (pathname === "/workflows/new") return "New workflow";
   if (pathname === "/workflows/templates") return "Workflow templates";
   if (pathname === "/workflows/blueprints") return "Workflow Blueprints";
   if (pathname.startsWith("/workflows/blueprints/"))
     return "Blueprint revision";
+  if (pathname.startsWith("/workflows/definitions/"))
+    return "Workflow definition";
   if (pathname === "/workflows/memory") return "Workflow memory";
   if (pathname.startsWith("/workflows/")) return "Workflow execution";
   if (pathname === "/organization/sources") return "Knowledge sources";
@@ -113,6 +116,7 @@ function getPageTitle(pathname: string, productName: string) {
   if (pathname === "/organization/memory") return "Organization memory graph";
   if (pathname === "/organization/investigations") return "Investigations";
   if (pathname === "/organization") return "Organization";
+  if (pathname === "/organization/members") return "Organization members";
   if (pathname === "/organization/permissions")
     return "Organization permissions";
   if (pathname === "/settings") return "Settings";

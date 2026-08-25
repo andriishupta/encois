@@ -9,6 +9,7 @@ export type NavigationTarget =
   | "/organization/integrations"
   | "/activity"
   | "/organization"
+  | "/organization/members"
   | "/organization/memory"
   | "/organization/investigations"
   | "/organization/permissions"
@@ -33,11 +34,18 @@ export function isNavigationItemActive(
 ): boolean {
   if (target === "/") return pathname === "/";
   if (target === "/workflows")
-    return pathname === "/workflows" || pathname === "/workflows/new";
+    return (
+      pathname === "/workflows" ||
+      pathname === "/workflows/new" ||
+      pathname.startsWith("/workflows/definitions/")
+    );
   if (target === "/workflows/runs") {
     return (
       pathname === "/workflows/runs" ||
-      (workflowRunIdPath.test(pathname) && !workflowNonRunPaths.has(pathname))
+      (workflowRunIdPath.test(pathname) &&
+        !workflowNonRunPaths.has(pathname) &&
+        !pathname.startsWith("/workflows/definitions/") &&
+        !pathname.startsWith("/workflows/plans/"))
     );
   }
   if (target === "/workflows/blueprints" || target === "/workflows/plans")

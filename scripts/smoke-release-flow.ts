@@ -42,6 +42,7 @@ const startResponse = await app.request("/api/v1/workflows", {
       workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
+      allowedTools: ["jira.project_tasks"],
       steps: [
         { id: "source", kind: "tool", tool: "jira.project_tasks" },
         { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
@@ -77,6 +78,7 @@ const replayResponse = await app.request("/api/v1/workflows", {
       workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
+      allowedTools: ["jira.project_tasks"],
       steps: [
         { id: "source", kind: "tool", tool: "jira.project_tasks" },
         { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
@@ -103,6 +105,7 @@ const conflictResponse = await app.request("/api/v1/workflows", {
       workflowType: "encois.dynamic.v1",
       purpose: "Collect project context.",
       enabled: true,
+      allowedTools: ["jira.project_tasks"],
       steps: [
         { id: "source", kind: "tool", tool: "jira.project_tasks" },
         { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },

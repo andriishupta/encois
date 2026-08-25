@@ -8,6 +8,7 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
@@ -48,18 +49,21 @@ type BlueprintStepResult struct {
 }
 
 type BlueprintStepInput struct {
-	RequestID      string                         `json:"requestId"`
-	TraceID        string                         `json:"traceId,omitempty"`
-	WorkflowID     string                         `json:"workflowId"`
-	RunID          string                         `json:"runId"`
-	OrganizationID string                         `json:"organizationId"`
-	ActorID        string                         `json:"actorId"`
-	PolicyVersion  string                         `json:"policyVersion"`
-	Scope          map[string]any                 `json:"scope"`
-	Capability     string                         `json:"capability"`
-	BusinessInput  map[string]any                 `json:"businessInput"`
-	Step           coordinator.WorkflowStep       `json:"step"`
-	PriorResults   map[string]BlueprintStepResult `json:"priorResults,omitempty"`
+	RequestID        string                         `json:"requestId"`
+	TraceID          string                         `json:"traceId,omitempty"`
+	WorkflowID       string                         `json:"workflowId"`
+	RunID            string                         `json:"runId"`
+	OrganizationID   string                         `json:"organizationId"`
+	ActorID          string                         `json:"actorId"`
+	PolicyVersion    string                         `json:"policyVersion"`
+	Scope            map[string]any                 `json:"scope"`
+	Capability       string                         `json:"capability"`
+	BusinessInput    map[string]any                 `json:"businessInput"`
+	BlueprintID      string                         `json:"blueprintId"`
+	BlueprintVersion string                         `json:"blueprintVersion"`
+	AllowedTools     []string                       `json:"allowedTools"`
+	Step             coordinator.WorkflowStep       `json:"step"`
+	PriorResults     map[string]BlueprintStepResult `json:"priorResults,omitempty"`
 }
 
 type BlueprintApprovalSignal struct {
@@ -106,6 +110,9 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	}
 	if len(blueprint.Steps) == 0 {
 		return BlueprintWorkflowResult{}, fmt.Errorf("blueprint contains no steps")
+	}
+	if err := validateBlueprintExecutionPolicy(blueprint, input.Scope); err != nil {
+		return BlueprintWorkflowResult{}, err
 	}
 
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -157,6 +164,10 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			if completed[step.ID] || !dependenciesCompleted(step, completed) {
 				continue
 			}
+			if dependencySkipped(step, stepResults) {
+				completeStep(step, BlueprintStepResult{StepID: step.ID, Status: "skipped", StatusReason: contracts.ReasonInvalidInput, Data: map[string]any{"reason": "dependency_skipped"}}, completed, stepResults, &results)
+				continue
+			}
 			ready = append(ready, step)
 		}
 		if len(ready) == 0 {
@@ -169,26 +180,33 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			switch step.Kind {
 			case "tool", "agent":
 				futures = append(futures, workflow.ExecuteActivity(activityCtx, "ExecuteBlueprintStep", BlueprintStepInput{
-					RequestID:      input.RequestID,
-					TraceID:        input.TraceID,
-					WorkflowID:     input.WorkflowID,
-					RunID:          runID,
-					OrganizationID: input.OrganizationID,
-					ActorID:        input.ActorID,
-					PolicyVersion:  input.PolicyVersion,
-					Scope:          input.Scope,
-					Capability:     input.Capability,
-					BusinessInput:  businessInput,
-					Step:           step,
-					PriorResults:   dependencyResults(step, stepResults),
+					RequestID:        input.RequestID,
+					TraceID:          input.TraceID,
+					WorkflowID:       input.WorkflowID,
+					RunID:            runID,
+					OrganizationID:   input.OrganizationID,
+					ActorID:          input.ActorID,
+					PolicyVersion:    input.PolicyVersion,
+					Scope:            input.Scope,
+					Capability:       input.Capability,
+					BusinessInput:    businessInput,
+					BlueprintID:      blueprint.BlueprintID,
+					BlueprintVersion: blueprint.Version,
+					AllowedTools:     append([]string(nil), blueprint.AllowedTools...),
+					Step:             step,
+					PriorResults:     dependencyResults(step, stepResults),
 				}))
 				futureSteps = append(futureSteps, step)
 			case "transform":
-				completeStep(step, BlueprintStepResult{StepID: step.ID, Status: "completed", Data: step.Input}, completed, stepResults, &results)
+				data, err := transformStepData(step, dependencyResults(step, stepResults))
+				if err != nil {
+					return BlueprintWorkflowResult{}, err
+				}
+				completeStep(step, BlueprintStepResult{StepID: step.ID, Status: "completed", Data: data}, completed, stepResults, &results)
 			case "condition":
-				condition, ok := step.Input["condition"].(bool)
-				if !ok {
-					return BlueprintWorkflowResult{}, fmt.Errorf("condition step %q requires boolean input.condition", step.ID)
+				condition, err := evaluateCondition(step, dependencyResults(step, stepResults))
+				if err != nil {
+					return BlueprintWorkflowResult{}, err
 				}
 				status := "completed"
 				if !condition {
@@ -376,6 +394,83 @@ func validateBlueprintWorkflowInput(input BlueprintWorkflowInput) error {
 	return nil
 }
 
+func validateBlueprintExecutionPolicy(blueprint coordinator.WorkflowBlueprint, scope map[string]any) error {
+	if err := validateScope(scope); err != nil {
+		return err
+	}
+	for _, required := range blueprint.RequiredScopes {
+		if required != "ids" {
+			return fmt.Errorf("unsupported required scope %q", required)
+		}
+	}
+	for _, step := range blueprint.Steps {
+		switch step.Kind {
+		case contracts.StepKindTool:
+			if len(blueprint.AllowedTools) == 0 {
+				return fmt.Errorf("tool step %q requires an explicit blueprint allowedTools manifest", step.ID)
+			}
+			if !containsString(blueprint.AllowedTools, step.Tool) {
+				return fmt.Errorf("tool %q is not allowed by the Blueprint manifest", step.Tool)
+			}
+		case contracts.StepKindAgent:
+			if !agents.IsRegisteredDefinition(step.AgentDefinition) {
+				return fmt.Errorf("agent definition %q is not registered", step.AgentDefinition)
+			}
+		}
+		if (blueprint.RequiresApproval || step.RequiresApproval) && (step.Kind == contracts.StepKindTool || step.Kind == contracts.StepKindAgent) && !hasApprovalAncestor(step.ID, blueprint.Steps) {
+			return fmt.Errorf("step %q requires an approval step on its dependency path", step.ID)
+		}
+	}
+	return nil
+}
+
+func hasApprovalAncestor(stepID string, steps []coordinator.WorkflowStep) bool {
+	byID := make(map[string]coordinator.WorkflowStep, len(steps))
+	for _, step := range steps {
+		byID[step.ID] = step
+	}
+	seen := map[string]bool{}
+	var visit func(string) bool
+	visit = func(id string) bool {
+		if seen[id] {
+			return false
+		}
+		seen[id] = true
+		step, ok := byID[id]
+		if !ok {
+			return false
+		}
+		for _, dependency := range step.DependsOn {
+			if dependencyStep, exists := byID[dependency]; exists && dependencyStep.Kind == contracts.StepKindApproval {
+				return true
+			}
+			if visit(dependency) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(stepID)
+}
+
+func dependencySkipped(step coordinator.WorkflowStep, results map[string]BlueprintStepResult) bool {
+	for _, dependency := range step.DependsOn {
+		if result, ok := results[dependency]; ok && result.Status == "skipped" {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func validateScope(scope map[string]any) error {
 	if len(scope) == 0 {
 		return fmt.Errorf("workflow execution scope is empty")
@@ -385,15 +480,29 @@ func validateScope(scope map[string]any) error {
 		if _, ok := validKeys[key]; !ok {
 			return fmt.Errorf("unsupported scope field %q", key)
 		}
-		values, ok := raw.([]any)
-		if !ok || len(values) == 0 {
-			return fmt.Errorf("scope field %q must contain at least one value", key)
-		}
-		for _, value := range values {
-			if text, ok := value.(string); !ok || text == "" {
-				return fmt.Errorf("scope field %q contains an invalid value", key)
+		if values, ok := raw.([]any); ok {
+			if len(values) == 0 {
+				return fmt.Errorf("scope field %q must contain at least one value", key)
 			}
+			for _, value := range values {
+				if text, ok := value.(string); !ok || text == "" {
+					return fmt.Errorf("scope field %q contains an invalid value", key)
+				}
+			}
+			continue
 		}
+		if values, ok := raw.([]string); ok {
+			if len(values) == 0 {
+				return fmt.Errorf("scope field %q must contain at least one value", key)
+			}
+			for _, value := range values {
+				if value == "" {
+					return fmt.Errorf("scope field %q contains an invalid value", key)
+				}
+			}
+			continue
+		}
+		return fmt.Errorf("scope field %q must contain an array", key)
 	}
 	return nil
 }
@@ -432,4 +541,91 @@ func cloneMap(source map[string]any) map[string]any {
 		clone[key] = value
 	}
 	return clone
+}
+
+func transformStepData(step coordinator.WorkflowStep, prior map[string]BlueprintStepResult) (map[string]any, error) {
+	if fromStep, ok := step.Input["fromStep"].(string); ok && fromStep != "" {
+		result, exists := prior[fromStep]
+		if !exists {
+			return nil, fmt.Errorf("transform step %q references unavailable step %q", step.ID, fromStep)
+		}
+		value := any(result.Data)
+		if path, ok := stringPath(step.Input["path"]); ok {
+			var found bool
+			value, found = lookupPath(value, path)
+			if !found {
+				return nil, fmt.Errorf("transform step %q path does not exist in step %q output", step.ID, fromStep)
+			}
+		}
+		return map[string]any{"sourceStep": fromStep, "value": value}, nil
+	}
+	if merge, ok := step.Input["mergePriorResults"].(bool); ok && merge {
+		merged := make(map[string]any, len(prior))
+		for stepID, result := range prior {
+			merged[stepID] = result.Data
+		}
+		return merged, nil
+	}
+	return cloneMap(step.Input), nil
+}
+
+func evaluateCondition(step coordinator.WorkflowStep, prior map[string]BlueprintStepResult) (bool, error) {
+	if value, ok := step.Input["condition"].(bool); ok {
+		return value, nil
+	}
+	fromStep, ok := step.Input["fromStep"].(string)
+	if !ok || fromStep == "" {
+		return false, fmt.Errorf("condition step %q requires boolean input.condition or fromStep", step.ID)
+	}
+	result, exists := prior[fromStep]
+	if !exists {
+		return false, fmt.Errorf("condition step %q references unavailable step %q", step.ID, fromStep)
+	}
+	value := any(result.Data)
+	if path, ok := stringPath(step.Input["path"]); ok {
+		var found bool
+		value, found = lookupPath(value, path)
+		if !found {
+			return false, fmt.Errorf("condition step %q path does not exist in step %q output", step.ID, fromStep)
+		}
+	}
+	condition, ok := value.(bool)
+	if !ok {
+		return false, fmt.Errorf("condition step %q resolved value is not boolean", step.ID)
+	}
+	return condition, nil
+}
+
+func stringPath(value any) ([]string, bool) {
+	values, ok := value.([]any)
+	if ok {
+		path := make([]string, 0, len(values))
+		for _, value := range values {
+			text, valid := value.(string)
+			if !valid || text == "" {
+				return nil, false
+			}
+			path = append(path, text)
+		}
+		return path, true
+	}
+	valuesString, ok := value.([]string)
+	if ok {
+		return append([]string(nil), valuesString...), true
+	}
+	return nil, false
+}
+
+func lookupPath(value any, path []string) (any, bool) {
+	for _, segment := range path {
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok = object[segment]
+		if !ok {
+			return nil, false
+		}
+	}
+	return value, true
 }

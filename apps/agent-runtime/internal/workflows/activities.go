@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/observability"
 	contractschemas "github.com/andriishupta/encois/packages/contracts"
+	"go.opentelemetry.io/otel/attribute"
 	"go.temporal.io/sdk/activity"
 )
 
@@ -70,6 +73,8 @@ func NewActivities(agentBundle *agents.Bundle, agentGatewayURL string, serviceTo
 }
 
 func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintStepInput) (BlueprintStepResult, error) {
+	ctx, span := observability.StartSpan(ctx, "agent-runtime.blueprint.step", attribute.String("encois.step_id", input.Step.ID), attribute.String("encois.step_kind", string(input.Step.Kind)))
+	defer span.End()
 	startedAt := time.Now()
 	switch input.Step.Kind {
 	case "tool":
@@ -81,19 +86,22 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 			}, nil
 		}
 		result, err := a.agentGateway.Invoke(ctx, gatewayclient.ToolRequest{
-			ContractVersion: string(contractschemas.ContractToolRequest),
-			RequestID:       input.RequestID,
-			TraceID:         input.TraceID,
-			WorkflowID:      input.WorkflowID,
-			RunID:           input.RunID,
-			OrganizationID:  input.OrganizationID,
-			ActorID:         input.ActorID,
-			PolicyVersion:   input.PolicyVersion,
-			Scope:           input.Scope,
-			Capability:      input.Capability,
-			AgentDefinition: input.Step.AgentDefinition,
-			Tool:            input.Step.Tool,
-			Arguments:       map[string]any{"input": input.Step.Input, "businessInput": input.BusinessInput, "priorResults": input.PriorResults},
+			ContractVersion:  string(contractschemas.ContractToolRequest),
+			RequestID:        input.RequestID,
+			TraceID:          input.TraceID,
+			WorkflowID:       input.WorkflowID,
+			RunID:            input.RunID,
+			OrganizationID:   input.OrganizationID,
+			ActorID:          input.ActorID,
+			PolicyVersion:    input.PolicyVersion,
+			Scope:            input.Scope,
+			Capability:       input.Capability,
+			AgentDefinition:  input.Step.AgentDefinition,
+			BlueprintID:      input.BlueprintID,
+			BlueprintVersion: input.BlueprintVersion,
+			AllowedTools:     append([]string(nil), input.AllowedTools...),
+			Tool:             input.Step.Tool,
+			Arguments:        map[string]any{"input": input.Step.Input, "businessInput": input.BusinessInput, "priorResults": input.PriorResults},
 		})
 		if err != nil {
 			return BlueprintStepResult{}, err
@@ -107,17 +115,43 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 				StatusReason: contractschemas.ReasonCapabilityMissing,
 			}, nil
 		}
-		summary, err := a.agentBundle.RunAgentStep(ctx, input.WorkflowID+":"+input.Step.ID, input.Step.AgentDefinition, map[string]any{
+		modelInput := map[string]any{
 			"input":        input.Step.Input,
 			"priorResults": input.PriorResults,
+		}
+		if a.agentGateway == nil {
+			return BlueprintStepResult{StepID: input.Step.ID, Status: string(contractschemas.WorkflowResultWaiting), StatusReason: contractschemas.ReasonCapabilityMissing}, nil
+		}
+		graph, err := a.agentGateway.QueryGraph(ctx, gatewayclient.GraphQueryRequest{
+			ContractVersion: string(contractschemas.ContractGraphQuery),
+			RequestID:       input.RequestID + ":graph:" + input.Step.ID,
+			TraceID:         input.TraceID,
+			WorkflowID:      input.WorkflowID,
+			RunID:           input.RunID,
+			OrganizationID:  input.OrganizationID,
+			ActorID:         input.ActorID,
+			PolicyVersion:   input.PolicyVersion,
+			Scope:           input.Scope,
+			Capability:      input.Capability,
+			Query:           graphQueryForStep(input.Step),
+			Params:          graphParamsForStep(input.Step),
 		})
+		if err != nil {
+			return BlueprintStepResult{}, fmt.Errorf("query graph evidence for agent step: %w", err)
+		}
+		if graph.Status != string(contractschemas.GraphStatusCompleted) {
+			return BlueprintStepResult{StepID: input.Step.ID, Status: string(contractschemas.WorkflowResultWaiting), StatusReason: contractschemas.ReasonDegradedEvidence, EvidenceRefs: graph.EvidenceRefs, Freshness: graph.Freshness}, nil
+		}
+		modelInput["graph"] = graph
+		summary, err := a.agentBundle.RunAgentStep(ctx, input.WorkflowID+":"+input.Step.ID, input.Step.AgentDefinition, modelInput)
 		if err != nil {
 			return BlueprintStepResult{}, err
 		}
 		return BlueprintStepResult{StepID: input.Step.ID, Status: "model-generated", Data: map[string]any{
 			"summary":         summary,
 			"agentDefinition": input.Step.AgentDefinition,
-		}, Trace: executionTrace(ctx, startedAt, "model-generated", "", nil, agentModelName(a.agentBundle))}, nil
+			"graphQuery":      graphQueryForStep(input.Step),
+		}, EvidenceRefs: graph.EvidenceRefs, Freshness: graph.Freshness, Trace: executionTrace(ctx, startedAt, "model-generated", "", nil, agentModelName(a.agentBundle))}, nil
 	default:
 		return BlueprintStepResult{}, fmt.Errorf("step kind %q is handled by the workflow, not an activity", input.Step.Kind)
 	}
@@ -159,4 +193,24 @@ func agentModelName(bundle *agents.Bundle) string {
 		return ""
 	}
 	return bundle.ModelName
+}
+
+func graphQueryForStep(step coordinator.WorkflowStep) string {
+	if value, ok := step.Input["graphQuery"].(string); ok && strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	return "all_context"
+}
+
+func graphParamsForStep(step coordinator.WorkflowStep) map[string]any {
+	params := make(map[string]any)
+	if raw, ok := step.Input["graphParams"].(map[string]any); ok {
+		for key, value := range raw {
+			params[key] = value
+		}
+	}
+	if _, ok := params["limit"]; !ok {
+		params["limit"] = float64(100)
+	}
+	return params
 }

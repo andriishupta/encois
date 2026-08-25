@@ -7,6 +7,8 @@ import {
   type ArtifactRetentionClass,
   type AuthAccessStatus,
   ContractVersion,
+  CoordinatorScopeType,
+  CoordinatorStatus,
   type CoordinationMode,
   type CoordinatorEventType,
   CoordinatorSignalName,
@@ -69,6 +71,8 @@ export {
   ArtifactRetentionClass,
   AuthAccessStatus,
   ContractVersion,
+  CoordinatorScopeType,
+  CoordinatorStatus,
   CoordinationMode,
   CoordinatorEventType,
   CoordinatorSignalName,
@@ -861,6 +865,50 @@ export type CoordinatorEvent = {
   }[];
 };
 
+export type CoordinatorWorkflowStart = {
+  blueprintId: string;
+  blueprintVersion: string;
+  key: string;
+  businessInput?: JsonObject;
+  scope?: Partial<ExecutionScope>;
+};
+
+export type CoordinatorState = {
+  status: CoordinatorStatus;
+  version: number;
+  onboardingComplete: boolean;
+  connectedIntegrationIds?: readonly string[];
+  activeWorkflowIds?: readonly string[];
+  pendingPlanIds?: readonly string[];
+  pendingWorkflowStarts?: readonly CoordinatorWorkflowStart[];
+  processedEventIds?: readonly string[];
+  processedSignalIds?: readonly string[];
+  memoryVersion?: string;
+  lastEvent?: string;
+  reconciliationCount: number;
+};
+
+export type CoordinatorStartInput = {
+  contractVersion: typeof ContractVersion.Coordinator;
+  coordinatorId: string;
+  organizationId: string;
+  projectId?: string;
+  scopeType: CoordinatorScopeType;
+  actorId?: string;
+  policyVersion: string;
+  coordinationMode?: CoordinationMode;
+  selectedWorkflowRefs?: readonly string[];
+  state: CoordinatorState;
+};
+
+export type BootstrapProjectInput = {
+  contractVersion: typeof ContractVersion.BootstrapProject;
+  coordinatorId: string;
+  organizationId: string;
+  projectId?: string;
+  policyVersion: string;
+};
+
 export type WorkflowStartIntent = {
   key: string;
   businessInput?: JsonObject;
@@ -902,6 +950,9 @@ export type WorkflowChangePlan = {
 export type ToolRequest = ExecutionEnvelope & {
   contractVersion: typeof ContractVersion.ToolRequest;
   agentDefinition?: string;
+  blueprintId?: string;
+  blueprintVersion?: string;
+  allowedTools?: readonly string[];
   tool: string;
   arguments: JsonObject;
 };
@@ -932,7 +983,7 @@ export type ArtifactWriteResult = {
   requestId: string;
   artifactRef: string;
   objectKey: string;
-  status: "mocked" | "completed";
+  status: "completed";
   retentionClass?: ArtifactRetentionClass;
   retentionUntil?: string;
 };
@@ -1057,8 +1108,13 @@ export type AgentMemoryResult = {
 };
 
 export type MemoryInspectionQueryRequest = {
-  agentDefinition: string;
-  query: string;
+  /** Omit to inspect all registered Dashboard memory definitions. */
+  agentDefinition?: string;
+  /**
+   * Empty or omitted query returns the latest scoped memories without
+   * semantic filtering.
+   */
+  query?: string;
   projectId?: string;
   scope?: ExecutionScope;
   maxResults?: number;
@@ -1176,6 +1232,11 @@ export function parseWorkflowBlueprint(
     return null;
 
   const steps: WorkflowStep[] = [];
+  const allowedTools = new Set(
+    Array.isArray(value.allowedTools)
+      ? value.allowedTools.filter((tool): tool is string => typeof tool === "string")
+      : [],
+  );
   for (const stepCandidate of value.steps) {
     if (
       !isJsonObject(stepCandidate) ||
@@ -1208,6 +1269,11 @@ export function parseWorkflowBlueprint(
     )
       return null;
     if (stepCandidate.input !== undefined && !isJsonObject(stepCandidate.input))
+      return null;
+    if (
+      stepCandidate.kind === WorkflowStepKind.Tool &&
+      (typeof stepCandidate.tool !== "string" || !allowedTools.has(stepCandidate.tool))
+    )
       return null;
     steps.push({
       id: stepCandidate.id,

@@ -72,7 +72,6 @@
     {
       "if": { "properties": { "operation": { "const": "retrieve" } } },
       "then": {
-        "required": ["query"],
         "properties": {
           "query": { "type": "string", "minLength": 1, "maxLength": 2000 }
         }

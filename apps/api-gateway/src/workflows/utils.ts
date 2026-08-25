@@ -50,7 +50,7 @@ export function readOptionalRecord(
 }
 
 export function workflowErrorStatus(code: string): WorkflowHttpStatus {
-  if (code === "FORBIDDEN") return 403;
+  if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (unprocessableWorkflowErrors.has(code)) return 422;
   if (unavailableWorkflowErrors.has(code)) return 503;
   if (code === "IDEMPOTENCY_CONFLICT") return 409;

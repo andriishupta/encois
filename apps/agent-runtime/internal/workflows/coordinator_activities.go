@@ -14,6 +14,9 @@ import (
 // It does not persist or apply the plan. The Gateway API remains the owner of
 // registry writes, approval, and Temporal start/update operations.
 func (a *Activities) CreateBootstrapPlan(ctx context.Context, input coordinator.BootstrapProjectInput) (coordinator.BootstrapPlanActivityResult, error) {
+	if err := coordinator.ValidateBootstrapProjectInput(input); err != nil {
+		return coordinator.BootstrapPlanActivityResult{}, err
+	}
 	if a == nil || a.agentBundle == nil || !a.agentBundle.Enabled {
 		return coordinator.BootstrapPlanActivityResult{Status: "deferred-no-agent-model"}, nil
 	}
@@ -52,6 +55,9 @@ No external writes are allowed. Include a reason, observedAt, and approval requi
 // explicit reconciliation trigger. It proposes a plan but does not approve,
 // persist, or start anything by itself.
 func (a *Activities) CreateCoordinatorPlan(ctx context.Context, input coordinator.CoordinatorStartInput) (coordinator.CoordinatorPlanActivityResult, error) {
+	if err := coordinator.ValidateCoordinatorStartInput(input); err != nil {
+		return coordinator.CoordinatorPlanActivityResult{}, err
+	}
 	if a == nil || a.agentBundle == nil || !a.agentBundle.Enabled {
 		return coordinator.CoordinatorPlanActivityResult{Status: "deferred-no-agent-model"}, nil
 	}

@@ -19,6 +19,10 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	if state.Status == "" {
 		state.Status = StatusOnboarding
 	}
+	input.State = state
+	if err := ValidateCoordinatorStartInput(input); err != nil {
+		return err
+	}
 	initialReconcile := state.Status == StatusOnboarding && !state.OnboardingComplete
 	if err := workflow.SetQueryHandler(ctx, CoordinatorStateQueryName, func() (CoordinatorState, error) {
 		return state, nil
@@ -33,6 +37,10 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	providerChangedCh := workflow.GetSignalChannel(ctx, SignalProviderChanged)
 	approvalCh := workflow.GetSignalChannel(ctx, SignalApprovalResolved)
 	eventCh := workflow.GetSignalChannel(ctx, SignalCoordinatorEvent)
+	processedSignalIDs := make(map[string]bool, len(state.ProcessedSignalIDs))
+	for _, signalID := range state.ProcessedSignalIDs {
+		processedSignalIDs[signalID] = true
+	}
 
 	for {
 		shouldReconcile := initialReconcile
@@ -46,6 +54,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(integrationCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalIntegrationConnected
 				if signal.SourceID != "" {
 					state.ConnectedIntegrationIDs = appendUnique(state.ConnectedIntegrationIDs, signal.SourceID)
@@ -56,6 +67,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(sourceReadyCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalSourceReady
 				state.Status = StatusBootstrapping
 				shouldReconcile = true
@@ -63,6 +77,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(reconcileCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalReconcile
 				state.Status = StatusReconciling
 				shouldReconcile = true
@@ -70,6 +87,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(workflowCompletedCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalWorkflowCompleted
 				state.Status = StatusReconciling
 				shouldReconcile = true
@@ -77,6 +97,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(providerChangedCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalProviderChanged
 				state.Status = StatusReconciling
 				shouldReconcile = true
@@ -84,6 +107,9 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(approvalCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var signal CoordinatorSignal
 				channel.Receive(ctx, &signal)
+				if !acceptCoordinatorSignal(signal, &state, processedSignalIDs) {
+					return
+				}
 				state.LastEvent = SignalApprovalResolved
 				state.Status = StatusReconciling
 				shouldReconcile = true
@@ -91,6 +117,10 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			selector.AddReceive(eventCh, func(channel workflow.ReceiveChannel, _ bool) {
 				var event CoordinatorEvent
 				channel.Receive(ctx, &event)
+				if err := ValidateCoordinatorEvent(event); err != nil {
+					state.LastEvent = "invalid-coordinator-event"
+					return
+				}
 				if event.OrganizationID != "" && event.OrganizationID != input.OrganizationID {
 					return
 				}
@@ -100,6 +130,11 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 				if event.EventID == "" || contains(state.ProcessedEventIDs, event.EventID) {
 					return
 				}
+				if processedSignalIDs[event.EventID] {
+					return
+				}
+				processedSignalIDs[event.EventID] = true
+				state.ProcessedSignalIDs = rememberEvent(state.ProcessedSignalIDs, event.EventID)
 				state.ProcessedEventIDs = rememberEvent(state.ProcessedEventIDs, event.EventID)
 				state.LastEvent = event.EventType
 				switch event.EventType {
@@ -298,6 +333,9 @@ func reportOnboardingStatus(ctx workflow.Context, input CoordinatorStartInput, u
 }
 
 func BootstrapProjectWorkflow(ctx workflow.Context, input BootstrapProjectInput) (BootstrapProjectResult, error) {
+	if err := ValidateBootstrapProjectInput(input); err != nil {
+		return BootstrapProjectResult{}, err
+	}
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -358,4 +396,17 @@ func rememberEvent(values []string, value string) []string {
 		values = values[len(values)-100:]
 	}
 	return values
+}
+
+func acceptCoordinatorSignal(signal CoordinatorSignal, state *CoordinatorState, processed map[string]bool) bool {
+	if err := ValidateCoordinatorSignal(signal); err != nil {
+		state.LastEvent = "invalid-coordinator-signal"
+		return false
+	}
+	if processed[signal.EventID] {
+		return false
+	}
+	processed[signal.EventID] = true
+	state.ProcessedSignalIDs = rememberEvent(state.ProcessedSignalIDs, signal.EventID)
+	return true
 }

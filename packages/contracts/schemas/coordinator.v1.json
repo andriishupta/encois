@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.dev/schemas/coordinator.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "coordinatorId", "organizationId", "scopeType", "policyVersion", "state"],
+  "$defs": {
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version", "onboardingComplete", "reconciliationCount"],
+      "properties": {
+        "status": { "enum": ["CREATED", "ONBOARDING", "BOOTSTRAPPING", "READY", "RECONCILING", "WAITING", "SUSPENDED"] },
+        "version": { "type": "integer", "minimum": 0 },
+        "onboardingComplete": { "type": "boolean" },
+        "connectedIntegrationIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "activeWorkflowIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "pendingPlanIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "pendingWorkflowStarts": { "type": "array", "items": { "$ref": "#/$defs/workflowStart" } },
+        "processedEventIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "processedSignalIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "memoryVersion": { "type": "string", "minLength": 1 },
+        "lastEvent": { "type": "string", "minLength": 1 },
+        "reconciliationCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ids"],
+      "properties": {
+        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "workflowStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blueprintId", "blueprintVersion", "key"],
+      "properties": {
+        "blueprintId": { "type": "string", "minLength": 1 },
+        "blueprintVersion": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "businessInput": { "type": "object" },
+        "scope": { "$ref": "#/$defs/scope" }
+      }
+    }
+  },
+  "properties": {
+    "contractVersion": { "const": "coordinator.v1" },
+    "coordinatorId": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "projectId": { "type": "string", "minLength": 1 },
+    "scopeType": { "enum": ["organization", "project"] },
+    "actorId": { "type": "string", "minLength": 1 },
+    "policyVersion": { "type": "string", "minLength": 1 },
+    "coordinationMode": { "type": "string", "minLength": 1 },
+    "selectedWorkflowRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "state": { "$ref": "#/$defs/state" }
+  }
+}

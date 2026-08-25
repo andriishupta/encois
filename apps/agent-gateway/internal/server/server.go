@@ -13,9 +13,13 @@ import (
 	"time"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
+	"github.com/andriishupta/encois/apps/agent-gateway/internal/observability"
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/policy"
 	contractschemas "github.com/andriishupta/encois/packages/contracts"
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type Server struct {
@@ -32,7 +36,7 @@ type Server struct {
 }
 
 // RouterOptions contains replaceable data-plane adapters. The default router
-// uses deterministic local implementations; hosted wiring selects Cloud
+// must receive explicit data-plane adapters; hosted wiring selects Cloud
 // Storage and Spanner without changing routes, authentication, or policy code.
 type RouterOptions struct {
 	ArtifactStore     ArtifactStore
@@ -53,15 +57,15 @@ func NewRouter(policyService policy.Service, logger *slog.Logger, serviceToken s
 func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, serviceToken string, options RouterOptions) *gin.Engine {
 	artifactStore := options.ArtifactStore
 	if artifactStore == nil {
-		artifactStore = newMemoryArtifactStore()
+		artifactStore = unconfiguredArtifactStore{}
 	}
 	graphStore := options.GraphStore
 	if graphStore == nil {
-		graphStore = newMemoryGraphStore()
+		graphStore = unconfiguredGraphStore{}
 	}
 	providerTools := options.ProviderTools
 	if providerTools == nil {
-		providerTools = mockProviderToolRegistry{}
+		providerTools = unconfiguredProviderToolRegistry{}
 	}
 	server := &Server{
 		policy:                policyService,
@@ -75,7 +79,7 @@ func NewRouterWithOptions(policyService policy.Service, logger *slog.Logger, ser
 		providerTools:         providerTools,
 	}
 	router := gin.New()
-	router.Use(gin.Recovery(), requestID(), traceID(), requestLogging(logger), contentTypeJSON())
+	router.Use(gin.Recovery(), requestID(), traceID(), otelTracing(), requestLogging(logger), contentTypeJSON())
 
 	router.GET("/health/live", server.live)
 	router.GET("/health/ready", server.ready)
@@ -117,6 +121,10 @@ func (s *Server) ready(c *gin.Context) {
 	if err := s.providerTools.Ready(); err != nil {
 		status = http.StatusServiceUnavailable
 		state = "provider_tools_not_ready"
+	}
+	if s.artifactStoreStatus() == "unconfigured" || s.graphStoreStatus() == "unconfigured" {
+		status = http.StatusServiceUnavailable
+		state = "data_plane_not_configured"
 	}
 	c.JSON(status, gin.H{
 		"status":  state,
@@ -185,6 +193,14 @@ func (s *Server) invokeTool(c *gin.Context) {
 		errorResponse(c, http.StatusBadRequest, "invalid_request", "arguments are required", false)
 		return
 	}
+	if request.BlueprintID == "" || request.BlueprintVersion == "" || len(request.AllowedTools) == 0 {
+		errorResponse(c, http.StatusForbidden, "blueprint_manifest_required", "tool execution requires an immutable Blueprint manifest", false)
+		return
+	}
+	if !containsString(request.AllowedTools, request.Tool) {
+		errorResponse(c, http.StatusForbidden, "tool_not_allowed", "tool is not allowed by the immutable Blueprint manifest", false)
+		return
+	}
 	if !s.authorizeExecution(c, request.ExecutionContext) {
 		return
 	}
@@ -236,7 +252,7 @@ func (s *Server) invokeTool(c *gin.Context) {
 		ContractVersion: domain.ToolResultContractVersion,
 		RequestID:       request.RequestID,
 		Tool:            request.Tool,
-		Status:          providerToolStatus(s.providerTools),
+		Status:          "completed",
 		Data:            result.Data,
 		EvidenceRefs:    result.EvidenceRefs,
 		Provenance:      result.Provenance,
@@ -296,11 +312,13 @@ func (s *Server) providerHealthCheck(c *gin.Context) {
 	}})
 }
 
-func providerToolStatus(registry ProviderToolRegistry) string {
-	if registry.Status() == "mock-in-memory" {
-		return "mocked"
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
 	}
-	return "completed"
+	return false
 }
 
 func safeProviderToolError(err error) string {
@@ -440,6 +458,9 @@ func (s *Server) artifactStoreStatus() string {
 	if _, ok := s.artifactStore.(*gcsArtifactStore); ok {
 		return "gcp-cloud-storage"
 	}
+	if _, ok := s.artifactStore.(unconfiguredArtifactStore); ok {
+		return "unconfigured"
+	}
 	return "mock-in-memory"
 }
 
@@ -447,36 +468,48 @@ func (s *Server) graphStoreStatus() string {
 	if _, ok := s.graphStore.(*spannerGraphStore); ok {
 		return "gcp-spanner"
 	}
+	if _, ok := s.graphStore.(unconfiguredGraphStore); ok {
+		return "unconfigured"
+	}
 	return "mock-in-memory"
 }
 
-func mockTool(toolName, organizationID string) (map[string]any, []string, []contractschemas.SourceFreshness, bool) {
+func mockTool(request domain.ToolInvocationRequest) (map[string]any, []string, []contractschemas.SourceFreshness, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	projectID := "mock-project-checkout"
-	switch toolName {
+	input := providerInput(request.Arguments)
+	switch request.Tool {
 	case "jira.project_tasks":
+		projectID := stringInput(input, "projectKey", "project", "projectId")
+		if projectID == "" {
+			return nil, nil, nil, fmt.Errorf("Jira projectKey is required")
+		}
 		return map[string]any{
 			"source":         "jira",
-			"organizationId": organizationID,
+			"organizationId": request.OrganizationID,
 			"projectId":      projectID,
 			"totalTasks":     10,
 			"completedTasks": 8,
 			"remainingTasks": 2,
 			"blockedTasks":   1,
-			"observedAt":     time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock://organizations/" + organizationID + "/jira/project-checkout"}, []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
-	case "github.project_activity":
+			"observedAt":     now,
+		}, []string{"mock://organizations/" + request.OrganizationID + "/jira/project/" + projectID}, []contractschemas.SourceFreshness{{Source: "jira", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, nil
+	case "github.project_activity", "github.repository_activity":
+		repository := stringInput(input, "repository", "repositoryFullName", "repo", "projectKey")
+		parts := strings.Split(repository, "/")
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			return nil, nil, nil, fmt.Errorf("github repository must use owner/name format")
+		}
 		return map[string]any{
 			"source":             "github",
-			"organizationId":     organizationID,
-			"projectId":          projectID,
+			"organizationId":     request.OrganizationID,
+			"projectId":          repository,
 			"openPullRequests":   2,
 			"failingChecks":      1,
 			"commitsSinceCutoff": 12,
-			"observedAt":         time.Now().UTC().Format(time.RFC3339),
-		}, []string{"mock://organizations/" + organizationID + "/github/project-checkout"}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, true
+			"observedAt":         now,
+		}, []string{"mock://organizations/" + request.OrganizationID + "/github/repository/" + repository}, []contractschemas.SourceFreshness{{Source: "github", ObservedAt: now, IngestedAt: now, Status: contractschemas.FreshnessFresh}}, nil
 	default:
-		return nil, nil, nil, false
+		return nil, nil, nil, ErrProviderToolUnavailable
 	}
 }
 
@@ -585,6 +618,17 @@ func requestLogging(logger *slog.Logger) gin.HandlerFunc {
 			"traceId", c.GetString("traceID"),
 			"status", c.Writer.Status(),
 		)
+	}
+}
+
+func otelTracing() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		parent := otel.GetTextMapPropagator().Extract(c.Request.Context(), propagation.HeaderCarrier(c.Request.Header))
+		ctx, span := observability.StartSpan(parent, c.Request.Method+" "+c.Request.URL.Path)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+		span.SetAttributes(attribute.Int("http.status_code", c.Writer.Status()))
+		span.End()
 	}
 }
 

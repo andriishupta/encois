@@ -159,6 +159,74 @@ func TestMemoryContractsValidateAtTheRuntimeBoundary(t *testing.T) {
 	}
 }
 
+func TestMemoryRequestRejectsCrossTenantWorkflowAndAgentScopeConfusion(t *testing.T) {
+	request := Request{
+		ContractVersion: "agent-memory.v1", RequestID: "memory-security-1", WorkflowID: "workflow:org-1:release-1",
+		OrganizationID: "org-1", ActorID: "actor-1", Scope: Scope{IDs: []string{"team-1"}}, PolicyVersion: "policy-1",
+		Capability: "capability-1", AgentDefinition: "trusted.agent@1", Operation: "retrieve",
+		MemoryScope: MemoryScope{AgentDefinition: "trusted.agent@1"}, Query: "release", MaxResults: 5,
+	}
+	if err := ValidateRequest(request); err != nil {
+		t.Fatalf("valid memory request rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Request)
+	}{
+		{name: "cross tenant workflow", mutate: func(request *Request) { request.WorkflowID = "workflow:org-2:release-1" }},
+		{name: "agent scope confusion", mutate: func(request *Request) { request.MemoryScope.AgentDefinition = "other.agent@1" }},
+		{name: "empty workflow tenant prefix", mutate: func(request *Request) { request.WorkflowID = "release-1" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := request
+			test.mutate(&candidate)
+			if err := ValidateRequest(candidate); err == nil {
+				t.Fatal("memory request crossed a security boundary")
+			}
+		})
+	}
+}
+
+func TestMockStoreCannotMutateAnotherOrganizationScope(t *testing.T) {
+	store := NewMockStore()
+	seed := Request{
+		ContractVersion: "agent-memory.v1", RequestID: "memory-security-seed", WorkflowID: "workflow:org-1:release-1",
+		OrganizationID: "org-1", ActorID: "actor-1", Scope: Scope{IDs: []string{"team-1"}}, PolicyVersion: "policy-1",
+		Capability: "capability-1", AgentDefinition: "trusted.agent@1", Operation: "distill",
+		MemoryScope:  MemoryScope{AgentDefinition: "trusted.agent@1"},
+		Distillation: &Distillation{Summary: "Tenant one fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
+	}
+	created, err := store.Execute(context.Background(), seed)
+	if err != nil || len(created.Memories) != 1 {
+		t.Fatalf("seed failed: result=%+v err=%v", created, err)
+	}
+
+	crossTenant := seed
+	crossTenant.RequestID = "memory-security-cross-tenant"
+	crossTenant.WorkflowID = "workflow:org-2:release-1"
+	crossTenant.OrganizationID = "org-2"
+	crossTenant.Operation = "correct"
+	crossTenant.Distillation = nil
+	crossTenant.TargetMemoryID = created.Memories[0].ID
+	crossTenant.ReplacementSummary = "Attacker overwrite."
+	if _, err := store.Execute(context.Background(), crossTenant); err == nil {
+		t.Fatal("cross-tenant memory correction was accepted")
+	}
+
+	check := seed
+	check.RequestID = "memory-security-check"
+	check.Operation = "retrieve"
+	check.Distillation = nil
+	check.Query = "Tenant one"
+	check.MaxResults = 5
+	result, err := store.Execute(context.Background(), check)
+	if err != nil || len(result.Memories) != 1 || result.Memories[0].Summary != "Tenant one fact." {
+		t.Fatalf("cross-tenant correction mutated the original scope: result=%+v err=%v", result, err)
+	}
+}
+
 func TestGeneratedRecordsUseProviderMemoryNames(t *testing.T) {
 	request := Request{
 		RequestID:      "memory-gcp-1",

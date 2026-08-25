@@ -31,7 +31,16 @@ The tool names in examples are protocol examples, not a promise that those
 providers are already connected. The current Agent Gateway fixture catalog is
 `jira.project_tasks` and `github.project_activity`. Its entries now validate
 against the canonical `tool-manifest.v1` schema; persisted connector grants,
-live manifests, and real provider adapters remain deferred.
+live manifests, and production connector lifecycle wiring remain deployment
+and control-plane work; the hosted GitHub/Jira adapters are already behind the
+same boundary.
+
+The Agent Gateway mock and hosted adapters are substitutable implementations of
+the same `ArtifactStore`, `GraphStore`, and `ProviderToolRegistry` boundaries.
+They preserve the same request validation, success statuses, result schemas,
+scope checks, and failure classes. Mock data is selected explicitly by the
+deployment profile; it does not turn unknown artifact references or unsupported
+Graph queries into successful fixture responses.
 
 ## Contract ownership
 
@@ -481,15 +490,32 @@ GET  /api/v1/workflows
 GET  /api/v1/workflows/{workflowId}
 GET  /api/v1/workflows/{workflowId}/events
 GET  /api/v1/workflows/activity
+GET  /api/v1/workflows/templates
+GET  /api/v1/workflows/blueprints
+DELETE /api/v1/workflows/definitions/{workflowId}
+DELETE /api/v1/workflows/blueprints/{blueprintId}/{version}
 POST /api/v1/workflows/{workflowId}/signals
 POST /api/v1/workflows/{workflowId}/updates
 GET  /api/v1/integrations
 POST /api/v1/integrations/{integrationId}
 POST /api/v1/workflows/plans/validate
+GET  /api/v1/workflows/plans
 POST /api/v1/workflows/plans
+GET  /api/v1/workflows/plans/{planId}
+PATCH /api/v1/workflows/plans/{planId}
 POST /api/v1/workflows/plans/{planId}/approve
 POST /api/v1/workflows/plans/{planId}/apply
+DELETE /api/v1/workflows/plans/{planId}
 ```
+
+The Dashboard presents a Workflow definition as the existing organization-
+scoped Blueprint registry rows grouped by stable `blueprintId`; it does not
+invent a second runtime entity or persist browser-only state. Deleting a
+Workflow soft-deletes all revisions in that group and preserves historical
+Runs. Blueprint deletion is narrower: it soft-deletes one non-current revision
+and refuses the current revision. Proposed Plans can be read and edited
+through the same validated `workflow-change-plan.v1` contract before approval;
+approved, applied, rejected, and expired Plans are read-only.
 
 `GET /api/v1/auth/me` is the pre-membership access-resolution contract. It
 returns `active` with the local user and organization when an invite has been

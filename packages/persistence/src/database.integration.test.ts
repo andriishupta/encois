@@ -15,6 +15,7 @@ import {
   type PersistenceTransaction,
   withOrganizationContext,
   workflowBlueprints,
+  workflowDefinitions,
 } from "./index.js";
 
 const runtimeUrl = process.env.DATABASE_TEST_URL;
@@ -293,6 +294,57 @@ integrationTest("PostgreSQL persistence boundaries", () => {
         ),
       "42501",
     );
+  });
+
+  it("keeps workflow definitions tenant-isolated and rejects cross-tenant workflow writes", async () => {
+    const definitionA = randomUUID();
+    const definitionB = randomUUID();
+
+    await inOrganization(fixture.organizationA, (tx) =>
+      tx.insert(workflowDefinitions).values({
+        id: definitionA,
+        organizationId: fixture.organizationA,
+        key: `persistence-test-a-${definitionA}`,
+        version: "1.0.0",
+        status: "approved",
+      }),
+    );
+    await inOrganization(fixture.organizationB, (tx) =>
+      tx.insert(workflowDefinitions).values({
+        id: definitionB,
+        organizationId: fixture.organizationB,
+        key: `persistence-test-b-${definitionB}`,
+        version: "1.0.0",
+        status: "approved",
+      }),
+    );
+
+    await expectPostgresError(
+      () =>
+        inOrganization(fixture.organizationA, (tx) =>
+          tx.insert(workflowDefinitions).values({
+            organizationId: fixture.organizationB,
+            key: `cross-tenant-definition-${randomUUID()}`,
+            version: "1.0.0",
+            status: "approved",
+          }),
+        ),
+      "42501",
+    );
+
+    const visibleToA = await inOrganization(fixture.organizationA, (tx) =>
+      tx
+        .select({ organizationId: workflowDefinitions.organizationId })
+        .from(workflowDefinitions),
+    );
+    const visibleToB = await inOrganization(fixture.organizationB, (tx) =>
+      tx
+        .select({ organizationId: workflowDefinitions.organizationId })
+        .from(workflowDefinitions),
+    );
+
+    expect(visibleToA).toEqual([{ organizationId: fixture.organizationA }]);
+    expect(visibleToB).toEqual([{ organizationId: fixture.organizationB }]);
   });
 
   it("enforces composite foreign keys for organization-scoped resources", async () => {

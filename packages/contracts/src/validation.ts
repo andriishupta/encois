@@ -18,6 +18,8 @@ import workflowUpdateSchema from "../schemas/workflow-update.v1.json" with { typ
 import workflowChangePlanSchema from "../schemas/workflow-change-plan.v1.json" with { type: "json" };
 import workflowBlueprintLifecycleSchema from "../schemas/workflow-blueprint-lifecycle.v1.json" with { type: "json" };
 import coordinatorEventSchema from "../schemas/coordinator-event.v1.json" with { type: "json" };
+import coordinatorSchema from "../schemas/coordinator.v1.json" with { type: "json" };
+import bootstrapProjectSchema from "../schemas/bootstrap-project.v1.json" with { type: "json" };
 import knowledgeSourceSchema from "../schemas/knowledge-source.v1.json" with { type: "json" };
 import sourceRevisionSchema from "../schemas/source-revision.v1.json" with { type: "json" };
 import sourceIngestionSchema from "../schemas/source-ingestion.v1.json" with { type: "json" };
@@ -43,6 +45,8 @@ export const CONTRACT_SCHEMA_FILES = {
   workflowChangePlan: "workflow-change-plan.v1.json",
   workflowBlueprintLifecycle: "workflow-blueprint-lifecycle.v1.json",
   coordinatorEvent: "coordinator-event.v1.json",
+  coordinator: "coordinator.v1.json",
+  bootstrapProject: "bootstrap-project.v1.json",
   knowledgeSource: "knowledge-source.v1.json",
   sourceRevision: "source-revision.v1.json",
   sourceIngestion: "source-ingestion.v1.json",
@@ -77,6 +81,8 @@ const schemas: Record<ContractSchemaName, object> = {
   workflowChangePlan: workflowChangePlanSchema,
   workflowBlueprintLifecycle: workflowBlueprintLifecycleSchema,
   coordinatorEvent: coordinatorEventSchema,
+  coordinator: coordinatorSchema,
+  bootstrapProject: bootstrapProjectSchema,
   knowledgeSource: knowledgeSourceSchema,
   sourceRevision: sourceRevisionSchema,
   sourceIngestion: sourceIngestionSchema,

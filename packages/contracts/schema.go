@@ -35,6 +35,8 @@ const (
 	SchemaWorkflowUpdate        SchemaName = "workflowUpdate"
 	SchemaWorkflowChangePlan    SchemaName = "workflowChangePlan"
 	SchemaCoordinatorEvent      SchemaName = "coordinatorEvent"
+	SchemaCoordinator           SchemaName = "coordinator"
+	SchemaBootstrapProject      SchemaName = "bootstrapProject"
 	SchemaKnowledgeSource       SchemaName = "knowledgeSource"
 	SchemaSourceRevision        SchemaName = "sourceRevision"
 	SchemaSourceIngestion       SchemaName = "sourceIngestion"
@@ -63,6 +65,8 @@ var schemaPaths = map[SchemaName]string{
 	SchemaWorkflowUpdate:        "schemas/workflow-update.v1.json",
 	SchemaWorkflowChangePlan:    "schemas/workflow-change-plan.v1.json",
 	SchemaCoordinatorEvent:      "schemas/coordinator-event.v1.json",
+	SchemaCoordinator:           "schemas/coordinator.v1.json",
+	SchemaBootstrapProject:      "schemas/bootstrap-project.v1.json",
 	SchemaKnowledgeSource:       "schemas/knowledge-source.v1.json",
 	SchemaSourceRevision:        "schemas/source-revision.v1.json",
 	SchemaSourceIngestion:       "schemas/source-ingestion.v1.json",

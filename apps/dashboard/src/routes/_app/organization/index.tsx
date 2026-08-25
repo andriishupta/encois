@@ -85,65 +85,76 @@ function OrganizationPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {selectedUnit ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2
-                  className="size-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                {selectedUnit.name}
-              </CardTitle>
-              <CardDescription>
-                {formatUnitPath(units, selectedUnit.id)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">
-                {selectedUnit.description}
+      <Card>
+        <CardHeader>
+          <CardTitle>General</CardTitle>
+          <CardDescription>
+            {selectedUnit
+              ? formatUnitPath(units, selectedUnit.id)
+              : "Organization structure is not available yet."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-3">
+          <div className="flex flex-col gap-3">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Building2
+                className="size-4 text-muted-foreground"
+                aria-hidden="true"
+              />
+              {selectedUnit?.name ?? "Organization scope"}
+            </p>
+            {selectedUnit ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {selectedUnit.description}
+                </p>
+                <div className="grid gap-2 text-sm">
+                  <DetailRow
+                    label="Unit type"
+                    value={humanizeUnitType(selectedUnit.type)}
+                  />
+                  <DetailRow
+                    label="Manager"
+                    value={selectedUnit.manager ?? "Restricted"}
+                  />
+                  <DetailRow
+                    label="Members"
+                    value={
+                      selectedUnit.memberCount === undefined
+                        ? "Restricted"
+                        : String(selectedUnit.memberCount)
+                    }
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+          {selectedUnit ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="font-medium">
+                <ProductTerm term="scope" /> inheritance
               </p>
-              <div className="grid gap-2 text-sm">
-                <DetailRow
-                  label="Unit type"
-                  value={humanizeUnitType(selectedUnit.type)}
-                />
-                <DetailRow
-                  label="Manager"
-                  value={selectedUnit.manager ?? "Restricted"}
-                />
-                <DetailRow
-                  label="Members"
-                  value={
-                    selectedUnit.memberCount === undefined
-                      ? "Restricted"
-                      : String(selectedUnit.memberCount)
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Organization scope</CardTitle>
-              <CardDescription>
-                Organization structure is not available yet.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Unit actions</CardTitle>
-            <CardDescription>
-              Manage the selected organization unit when your effective scope
-              allows it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                Membership roots include descendants; restrictions narrow the
+                effective <ProductTerm term="scope" />.
+              </p>
+              <ScopeRow
+                label="Parent units"
+                value={String(
+                  Math.max(0, getUnitPath(units, selectedUnit.id).length - 1),
+                )}
+              />
+              <ScopeRow
+                label="Child units"
+                value={String(
+                  units.filter((unit) => unit.parentId === selectedUnit.id)
+                    .length,
+                )}
+              />
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Actions</p>
             {selectedUnit?.canManage ? (
               <Button variant="outline" asChild>
                 <Link
@@ -167,42 +178,9 @@ function OrganizationPage() {
                 </Link>
               </Button>
             ) : null}
-          </CardContent>
-        </Card>
-
-        {selectedUnit ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                <ProductTerm term="scope" /> inheritance
-              </CardTitle>
-              <CardDescription>
-                Membership roots can include descendants; explicit restrictions
-                narrow the effective scope.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              <ScopeRow
-                label="Parent units"
-                value={String(
-                  Math.max(0, getUnitPath(units, selectedUnit.id).length - 1),
-                )}
-              />
-              <ScopeRow
-                label="Child units"
-                value={String(
-                  units.filter((unit) => unit.parentId === selectedUnit.id)
-                    .length,
-                )}
-              />
-              <ScopeRow
-                label="Permission board"
-                value="Available to administrators"
-              />
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="min-w-0">
         <CardHeader>

@@ -83,15 +83,6 @@ function BlueprintRevisionPage() {
       });
     },
   });
-  const remove = useMutation({
-    mutationFn: () => deleteWorkflowBlueprint(blueprintId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprintsRoot(),
-      });
-      await navigate({ to: "/workflows/blueprints" });
-    },
-  });
   const versions = (
     blueprints.data?.filter(
       (blueprint) => blueprint.blueprintId === blueprintId,
@@ -107,6 +98,18 @@ function BlueprintRevisionPage() {
   const comparison = versions.find(
     (version) => version.version === (compareVersion ?? versions[1]?.version),
   );
+  const remove = useMutation({
+    mutationFn: () =>
+      selected
+        ? deleteWorkflowBlueprint(blueprintId, selected.version)
+        : Promise.resolve(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.workflowBlueprintsRoot(),
+      });
+      await navigate({ to: "/workflows/blueprints" });
+    },
+  });
 
   return (
     <div className="flex flex-col gap-8">
@@ -119,21 +122,36 @@ function BlueprintRevisionPage() {
               <ArrowLeft data-icon="inline-start" />
               Back to Blueprints
             </ButtonLink>
+            {selected?.status === "approved" && selected.isCurrent ? (
+              <Button variant="outline" asChild>
+                <Link
+                  to="/workflows/new"
+                  search={{ blueprint: selected.blueprintId }}
+                >
+                  Copy workflow
+                </Link>
+              </Button>
+            ) : null}
             {canManage && selected ? (
               <Button
                 variant="destructive"
-                disabled={remove.isPending}
+                disabled={remove.isPending || selected.isCurrent}
+                title={
+                  selected.isCurrent
+                    ? "The current revision cannot be deleted"
+                    : undefined
+                }
                 onClick={() => {
                   if (
                     window.confirm(
-                      "Delete this Blueprint? Its historical Workflow Runs will remain available, but all Blueprint revisions will be hidden.",
+                      `Delete Blueprint revision v${selected.version}? Its historical Workflow Runs will remain available.`,
                     )
                   )
                     remove.mutate();
                 }}
               >
                 <Trash2 data-icon="inline-start" />
-                {remove.isPending ? "Deleting…" : "Delete Blueprint"}
+                {remove.isPending ? "Deleting…" : "Delete revision"}
               </Button>
             ) : null}
           </div>
@@ -143,7 +161,7 @@ function BlueprintRevisionPage() {
         <Card>
           <CardContent className="pt-6">
             <p role="alert" className="text-sm text-destructive">
-              Could not delete this Blueprint: {remove.error.message}
+              Could not delete this Blueprint revision: {remove.error.message}
             </p>
           </CardContent>
         </Card>

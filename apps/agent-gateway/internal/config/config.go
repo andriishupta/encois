@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 type Config struct {
 	HTTPAddr             string
@@ -38,6 +41,41 @@ func FromEnv() Config {
 		ControlPlaneAudience: os.Getenv("CONTROL_PLANE_AUDIENCE"),
 		OAuthConfigJSON:      os.Getenv("INTEGRATION_OAUTH_CONFIG_JSON"),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.ServiceToken == "" {
+		return fmt.Errorf("AGENT_GATEWAY_SERVICE_TOKEN is required")
+	}
+	if c.CapabilitySecret == "" {
+		return fmt.Errorf("AGENT_GATEWAY_CAPABILITY_SECRET is required")
+	}
+	if c.DataMode != "mock" && c.DataMode != "gcp" {
+		return fmt.Errorf("unsupported AGENT_GATEWAY_DATA_MODE %q; use gcp or explicit mock", c.DataMode)
+	}
+	if c.StorageMode != "memory" && c.StorageMode != "gcs" {
+		return fmt.Errorf("unsupported AGENT_GATEWAY_STORAGE_MODE %q; use memory or gcs", c.StorageMode)
+	}
+	if c.DataMode == "gcp" && c.StorageMode != "gcs" {
+		return fmt.Errorf("AGENT_GATEWAY_STORAGE_MODE=gcs is required for AGENT_GATEWAY_DATA_MODE=gcp")
+	}
+	if c.StorageMode == "gcs" && c.StorageBucket == "" {
+		return fmt.Errorf("GCP_STORAGE_BUCKET is required for AGENT_GATEWAY_STORAGE_MODE=gcs")
+	}
+	if c.DataMode == "gcp" {
+		for name, value := range map[string]string{
+			"GCP_STORAGE_BUCKET":          c.StorageBucket,
+			"SPANNER_DATABASE":            c.SpannerDatabase,
+			"GOOGLE_CLOUD_PROJECT":        c.GoogleCloudProject,
+			"CONTROL_PLANE_URL":           c.ControlPlaneURL,
+			"CONTROL_PLANE_SERVICE_TOKEN": c.ControlPlaneToken,
+		} {
+			if value == "" {
+				return fmt.Errorf("%s is required for AGENT_GATEWAY_DATA_MODE=gcp", name)
+			}
+		}
+	}
+	return nil
 }
 
 func envOrDefault(name, fallback string) string {

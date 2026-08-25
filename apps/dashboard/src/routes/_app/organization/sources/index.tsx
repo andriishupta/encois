@@ -21,7 +21,6 @@ import {
   ListMeta,
   ListPagination,
   ListSearch,
-  ListSummary,
   ListToolbar,
   type ListViewMode,
   ListViewToggle,
@@ -66,19 +65,21 @@ function SourcesPage() {
   const canManage = hasPermission(getAuthSession(), Permission.KnowledgeManage);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<KnowledgeSourceStatus | "all">("all");
-  const [sort, setSort] = useState<
-    "updated-desc" | "updated-asc" | "name-asc" | "status"
-  >("updated-desc");
   const [view, setView] = useState<ListViewMode>("grid");
   const sources = useInfiniteQuery({
-    queryKey: queryKeys.sourcePages(selectedScopeUnitId, query, status, sort),
+    queryKey: queryKeys.sourcePages(
+      selectedScopeUnitId,
+      query,
+      status,
+      "name-asc",
+    ),
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       listKnowledgeSourcesPage({
         scopeUnitId: selectedScopeUnitId,
         query,
         status,
-        sort,
+        sort: "name-asc",
         limit: pageSize,
         offset: pageParam,
       }),
@@ -88,18 +89,20 @@ function SourcesPage() {
         : undefined,
   });
   const items = useMemo(
-    () =>
-      Array.isArray(sources.data?.pages)
-        ? sources.data.pages.flatMap((page) =>
-            Array.isArray(page.items) ? page.items : [],
-          )
-        : [],
+    () => sources.data?.pages.flatMap((page) => page.items) ?? [],
     [sources.data],
   );
-  const firstPage = Array.isArray(sources.data?.pages)
-    ? sources.data.pages[0]
-    : undefined;
+  const firstPage = sources.data?.pages[0];
   const total = firstPage?.pagination.total ?? 0;
+  const visibleItems = useMemo(
+    () =>
+      [...items].sort((left, right) =>
+        formatSourceScope(left.visibilityScope.ids, units).localeCompare(
+          formatSourceScope(right.visibilityScope.ids, units),
+        ),
+      ),
+    [items, units],
+  );
   const statuses = [
     { value: "all", label: "All statuses" },
     ...Object.values(KnowledgeSourceStatus).map((value) => ({
@@ -107,12 +110,6 @@ function SourcesPage() {
       label: humanizeKey(value),
     })),
   ];
-  const sorts = [
-    { value: "updated-desc", label: "Recently updated" },
-    { value: "updated-asc", label: "Oldest updated" },
-    { value: "name-asc", label: "Name" },
-    { value: "status", label: "Status" },
-  ] as const;
 
   return (
     <div className="flex flex-col gap-8">
@@ -139,25 +136,6 @@ function SourcesPage() {
           )
         }
       />
-      <ListSummary
-        items={[
-          {
-            label: "Available Sources",
-            value: sources.isLoading ? "…" : String(total),
-            detail: `Available in ${scopeLabel}`,
-          },
-          {
-            label: "Visible Sources",
-            value: sources.isLoading ? "…" : String(items.length),
-            detail: "Loaded in this view",
-          },
-          {
-            label: "Current scope",
-            value: scopeLabel,
-            detail: "Access-aware results",
-          },
-        ]}
-      />
       <ListToolbar>
         <ListSearch
           value={query}
@@ -172,12 +150,6 @@ function SourcesPage() {
           }
           options={statuses}
           label="Filter Sources by status"
-        />
-        <ListFilter
-          value={sort}
-          onChange={(value) => setSort(value as typeof sort)}
-          options={sorts}
-          label="Sort Sources"
         />
         <ListViewToggle value={view} onChange={setView} />
         <ListMeta>
@@ -196,9 +168,9 @@ function SourcesPage() {
           </CardContent>
         </Card>
       ) : null}
-      {!sources.isLoading && !sources.isError && items.length ? (
+      {!sources.isLoading && !sources.isError && visibleItems.length ? (
         <ListCollection
-          items={items}
+          items={visibleItems}
           view={view}
           getKey={(source) => source.id}
           renderItem={(source) => (
@@ -240,7 +212,7 @@ function SourcesPage() {
           </CardContent>
         </Card>
       ) : null}
-      {!sources.isLoading && !sources.isError && items.length ? (
+      {!sources.isLoading && !sources.isError && visibleItems.length ? (
         <ListPagination
           hasMore={Boolean(sources.hasNextPage)}
           loading={sources.isFetchingNextPage}
@@ -304,15 +276,13 @@ function SourceCard({
           />
         </CardHeader>
         <CardContent className="grid gap-1 border-t pt-0 text-xs text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Read scope:</span>{" "}
-            {formatSourceScope(source.readScope.ids, units)}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Visible in:</span>{" "}
-            {formatSourceScope(source.visibilityScope.ids, units)}
-          </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-secondary px-2 py-1">
+              Read: {formatSourceScope(source.readScope.ids, units)}
+            </span>
+            <span className="rounded-full bg-muted px-2 py-1">
+              Visible: {formatSourceScope(source.visibilityScope.ids, units)}
+            </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-secondary-foreground">
               <RefreshCw className="size-3" aria-hidden="true" />
               {statusLabel}

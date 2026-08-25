@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/observability"
 	contractschemas "github.com/andriishupta/encois/packages/contracts"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/api/idtoken"
 )
 
@@ -22,19 +26,22 @@ type Client struct {
 }
 
 type ToolRequest struct {
-	ContractVersion string         `json:"contractVersion"`
-	RequestID       string         `json:"requestId"`
-	TraceID         string         `json:"traceId,omitempty"`
-	WorkflowID      string         `json:"workflowId"`
-	RunID           string         `json:"runId,omitempty"`
-	OrganizationID  string         `json:"organizationId"`
-	ActorID         string         `json:"actorId"`
-	PolicyVersion   string         `json:"policyVersion"`
-	Scope           map[string]any `json:"scope"`
-	Capability      string         `json:"capability"`
-	AgentDefinition string         `json:"agentDefinition"`
-	Tool            string         `json:"tool"`
-	Arguments       map[string]any `json:"arguments"`
+	ContractVersion  string         `json:"contractVersion"`
+	RequestID        string         `json:"requestId"`
+	TraceID          string         `json:"traceId,omitempty"`
+	WorkflowID       string         `json:"workflowId"`
+	RunID            string         `json:"runId,omitempty"`
+	OrganizationID   string         `json:"organizationId"`
+	ActorID          string         `json:"actorId"`
+	PolicyVersion    string         `json:"policyVersion"`
+	Scope            map[string]any `json:"scope"`
+	Capability       string         `json:"capability"`
+	AgentDefinition  string         `json:"agentDefinition"`
+	BlueprintID      string         `json:"blueprintId"`
+	BlueprintVersion string         `json:"blueprintVersion"`
+	AllowedTools     []string       `json:"allowedTools"`
+	Tool             string         `json:"tool"`
+	Arguments        map[string]any `json:"arguments"`
 }
 
 type ToolResponse struct {
@@ -100,6 +107,31 @@ type GraphEdge struct {
 	Provenance   map[string]any `json:"provenance,omitempty"`
 }
 
+type GraphQueryRequest struct {
+	ContractVersion string         `json:"contractVersion"`
+	RequestID       string         `json:"requestId"`
+	TraceID         string         `json:"traceId,omitempty"`
+	WorkflowID      string         `json:"workflowId"`
+	RunID           string         `json:"runId,omitempty"`
+	OrganizationID  string         `json:"organizationId"`
+	ActorID         string         `json:"actorId"`
+	PolicyVersion   string         `json:"policyVersion"`
+	Scope           map[string]any `json:"scope"`
+	Capability      string         `json:"capability"`
+	Query           string         `json:"query"`
+	Params          map[string]any `json:"params,omitempty"`
+}
+
+type GraphQueryResponse struct {
+	ContractVersion string                            `json:"contractVersion"`
+	RequestID       string                            `json:"requestId"`
+	Status          string                            `json:"status"`
+	Nodes           []GraphNode                       `json:"nodes"`
+	Edges           []GraphEdge                       `json:"edges"`
+	EvidenceRefs    []string                          `json:"evidenceRefs,omitempty"`
+	Freshness       []contractschemas.SourceFreshness `json:"freshness,omitempty"`
+}
+
 func New(baseURL string, serviceToken ...string) *Client {
 	token := ""
 	if len(serviceToken) > 0 {
@@ -119,6 +151,8 @@ func NewWithAudience(baseURL, serviceToken, audience string) *Client {
 }
 
 func (c *Client) Invoke(ctx context.Context, request ToolRequest) (ToolResponse, error) {
+	ctx, span := observability.StartSpan(ctx, "agent-gateway.tools.invoke", attribute.String("encois.request_id", request.RequestID), attribute.String("encois.tool", request.Tool))
+	defer span.End()
 	body, err := json.Marshal(request)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("encode gateway request: %w", err)
@@ -135,6 +169,7 @@ func (c *Client) Invoke(ctx context.Context, request ToolRequest) (ToolResponse,
 	if request.TraceID != "" {
 		httpRequest.Header.Set("X-Trace-ID", request.TraceID)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpRequest.Header))
 	if c.audience != "" {
 		tokenSource, err := idtoken.NewTokenSource(ctx, c.audience)
 		if err != nil {
@@ -167,10 +202,15 @@ func (c *Client) Invoke(ctx context.Context, request ToolRequest) (ToolResponse,
 	if err := contractschemas.Validate(contractschemas.SchemaToolResult, result); err != nil {
 		return ToolResponse{}, fmt.Errorf("validate gateway response: %w", err)
 	}
+	if result.RequestID != request.RequestID || result.Tool != request.Tool {
+		return ToolResponse{}, fmt.Errorf("gateway response is bound to a different request or tool")
+	}
 	return result, nil
 }
 
 func (c *Client) ReadArtifact(ctx context.Context, request ArtifactReadRequest) (ArtifactReadResponse, error) {
+	ctx, span := observability.StartSpan(ctx, "agent-gateway.artifacts.read", attribute.String("encois.request_id", request.RequestID))
+	defer span.End()
 	body, err := json.Marshal(request)
 	if err != nil {
 		return ArtifactReadResponse{}, fmt.Errorf("encode artifact read request: %w", err)
@@ -199,6 +239,8 @@ func (c *Client) ReadArtifact(ctx context.Context, request ArtifactReadRequest) 
 }
 
 func (c *Client) UpsertGraph(ctx context.Context, request GraphMutation) error {
+	ctx, span := observability.StartSpan(ctx, "agent-gateway.graph.upsert", attribute.String("encois.request_id", request.RequestID))
+	defer span.End()
 	body, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("encode graph mutation: %w", err)
@@ -221,6 +263,41 @@ func (c *Client) UpsertGraph(ctx context.Context, request GraphMutation) error {
 	return nil
 }
 
+func (c *Client) QueryGraph(ctx context.Context, request GraphQueryRequest) (GraphQueryResponse, error) {
+	ctx, span := observability.StartSpan(ctx, "agent-gateway.graph.query", attribute.String("encois.request_id", request.RequestID), attribute.String("encois.graph_query", request.Query))
+	defer span.End()
+	body, err := json.Marshal(request)
+	if err != nil {
+		return GraphQueryResponse{}, fmt.Errorf("encode graph query: %w", err)
+	}
+	if err := contractschemas.ValidateJSON(contractschemas.SchemaGraphQuery, body); err != nil {
+		return GraphQueryResponse{}, fmt.Errorf("validate graph query: %w", err)
+	}
+	httpRequest, err := c.newRequest(ctx, http.MethodPost, "/v1/graph/query", body, request.RequestID, request.TraceID)
+	if err != nil {
+		return GraphQueryResponse{}, err
+	}
+	response, err := c.httpClient.Do(httpRequest)
+	if err != nil {
+		return GraphQueryResponse{}, fmt.Errorf("query Agent Gateway graph: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusBadRequest {
+		return GraphQueryResponse{}, fmt.Errorf("Agent Gateway graph query returned HTTP %d", response.StatusCode)
+	}
+	var result GraphQueryResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return GraphQueryResponse{}, fmt.Errorf("decode graph query response: %w", err)
+	}
+	if err := contractschemas.Validate(contractschemas.SchemaGraphQueryResult, result); err != nil {
+		return GraphQueryResponse{}, fmt.Errorf("validate graph query response: %w", err)
+	}
+	if result.RequestID != request.RequestID {
+		return GraphQueryResponse{}, fmt.Errorf("gateway graph response is bound to a different request")
+	}
+	return result, nil
+}
+
 func (c *Client) newRequest(ctx context.Context, method, path string, body []byte, requestID, traceID string) (*http.Request, error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
@@ -231,6 +308,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 	if traceID != "" {
 		httpRequest.Header.Set("X-Trace-ID", traceID)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpRequest.Header))
 	if c.audience != "" {
 		tokenSource, err := idtoken.NewTokenSource(ctx, c.audience)
 		if err != nil {

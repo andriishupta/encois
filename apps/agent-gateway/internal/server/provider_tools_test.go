@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/domain"
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
 )
 
 type staticCredentialResolver struct {
@@ -66,6 +67,52 @@ func jsonResponse(body string) *http.Response {
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestMockProviderToolRegistryUsesTheProductionToolEnvelope(t *testing.T) {
+	registry := mockProviderToolRegistry{}
+	for _, fixture := range []struct {
+		tool      string
+		arguments map[string]any
+	}{
+		{tool: "jira.project_tasks", arguments: map[string]any{"projectKey": "checkout"}},
+		{tool: "github.project_activity", arguments: map[string]any{"repository": "acme/checkout"}},
+		{tool: "github.repository_activity", arguments: map[string]any{"repository": "acme/checkout"}},
+	} {
+		result, err := registry.Invoke(context.Background(), domain.ToolInvocationRequest{
+			ExecutionContext: domain.ExecutionContext{RequestID: "mock-envelope", OrganizationID: "org-test"},
+			Tool:             fixture.tool,
+			Arguments:        fixture.arguments,
+		})
+		if err != nil {
+			t.Fatalf("mock tool %s failed: %v", fixture.tool, err)
+		}
+		response := domain.ToolInvocationResponse{
+			ContractVersion: domain.ToolResultContractVersion,
+			RequestID:       "mock-envelope",
+			Tool:            fixture.tool,
+			Status:          "completed",
+			Data:            result.Data,
+			EvidenceRefs:    result.EvidenceRefs,
+			Provenance:      result.Provenance,
+			Freshness:       result.Freshness,
+		}
+		if err := contractschemas.Validate(contractschemas.SchemaToolResult, response); err != nil {
+			t.Fatalf("mock tool %s did not produce the production envelope: %v", fixture.tool, err)
+		}
+	}
+}
+
+func TestMockProviderToolRegistryChecksKnownProviderHealth(t *testing.T) {
+	registry := mockProviderToolRegistry{}
+	for _, provider := range []string{"github", "jira"} {
+		if err := registry.Check(context.Background(), ProviderHealthCheckRequest{OrganizationID: "org-test", IntegrationID: "integration-test", Provider: provider}); err != nil {
+			t.Fatalf("mock health check for %s failed: %v", provider, err)
+		}
+	}
+	if err := registry.Check(context.Background(), ProviderHealthCheckRequest{OrganizationID: "org-test", IntegrationID: "integration-test", Provider: "unknown"}); err == nil {
+		t.Fatal("expected unknown mock provider health check to fail")
 	}
 }
 

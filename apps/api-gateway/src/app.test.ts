@@ -819,6 +819,77 @@ describe("API Gateway", () => {
     await expect(activityResponse.json()).resolves.toEqual({ data: [] });
   });
 
+  it("binds workflow creation to the authenticated tenant and rejects an inaccessible unit", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: {
+          actorId: "user-1",
+          organizationId: "org-customer-success",
+          scope: ["unit-customer-success"],
+          permissions: ["workflows:run"],
+        },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+      workflowClient: createTestWorkflowClient(),
+    });
+
+    const crossTenant = await app.request("/api/v1/workflows", {
+      body: JSON.stringify({
+        workflowType: "encois.dynamic.v1",
+        key: "tenant-bound-workflow",
+        organizationId: "org-engineering",
+        input: {
+          blueprint: {
+            contractVersion: "workflow-blueprint.v1",
+            blueprintId: "tenant-bound-blueprint",
+            version: "1.0.0",
+            name: "Tenant-bound workflow",
+            workflowType: "encois.dynamic.v1",
+            purpose: "Verify tenant binding.",
+            enabled: true,
+            steps: [{ id: "transform", kind: "transform", input: {} }],
+          },
+        },
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(crossTenant.status).toBe(202);
+    await expect(crossTenant.json()).resolves.toMatchObject({
+      data: {
+        organizationId: "org-customer-success",
+        workflowId: expect.stringContaining("org:org-customer-success:"),
+      },
+    });
+
+    const crossScope = await app.request("/api/v1/workflows", {
+      body: JSON.stringify({
+        workflowType: "encois.dynamic.v1",
+        key: "scope-bound-workflow",
+        scope: { ids: ["unit-engineering"] },
+        input: {
+          blueprint: {
+            contractVersion: "workflow-blueprint.v1",
+            blueprintId: "scope-bound-blueprint",
+            version: "1.0.0",
+            name: "Scope-bound workflow",
+            workflowType: "encois.dynamic.v1",
+            purpose: "Verify organization-unit scope.",
+            enabled: true,
+            steps: [{ id: "transform", kind: "transform", input: {} }],
+          },
+        },
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(crossScope.status).toBe(403);
+    await expect(crossScope.json()).resolves.toMatchObject({
+      error: { code: "SCOPE_DENIED" },
+    });
+  });
+
   it("rejects workflow reads when the principal has no workflow permission", async () => {
     const app = createApp({
       authenticate: async () => ({
@@ -1300,6 +1371,56 @@ describe("API Gateway", () => {
     });
   });
 
+  it("rejects workflow plans targeted at a sibling organization unit", async () => {
+    const app = createApp({
+      authenticate: async () => ({
+        principal: {
+          actorId: "user-cxs",
+          organizationId: "org-1",
+          scope: ["unit-customer-success"],
+          permissions: ["workflows:manage"],
+        },
+        status: "authenticated" as const,
+      }),
+      config: testConfig,
+    });
+    const response = await app.request("/api/v1/workflows/plans/validate", {
+      body: JSON.stringify({
+        contractVersion: "workflow-change-plan.v1",
+        planId: "plan-sibling-scope",
+        coordinatorId: "coordinator-org-1",
+        organizationId: "org-1",
+        observedAt: "2026-08-20T16:00:00.000Z",
+        scope: { ids: ["unit-engineering"] },
+        changes: [
+          {
+            kind: "create",
+            start: { key: "sibling-scope-workflow" },
+            blueprint: {
+              contractVersion: "workflow-blueprint.v1",
+              blueprintId: "sibling-scope-blueprint",
+              version: "1.0.0",
+              name: "Sibling scope workflow",
+              workflowType: "encois.dynamic.v1",
+              purpose: "Verify sibling scope isolation.",
+              enabled: true,
+              steps: [{ id: "transform", kind: "transform", input: {} }],
+            },
+            reason: "Must remain inside the caller scope.",
+            requiresApproval: false,
+          },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SCOPE_DENIED" },
+    });
+  });
+
   it("does not accept plan persistence or approval when the database is unavailable", async () => {
     const app = createApp({
       authenticate: async () => ({
@@ -1465,6 +1586,7 @@ describe("API Gateway", () => {
         workflowType: "encois.dynamic.v1",
         purpose: "Collect project context.",
         enabled: true,
+        allowedTools: ["jira.project_tasks"],
         steps: [
           { id: "source", kind: "tool", tool: "jira.project_tasks" },
           {

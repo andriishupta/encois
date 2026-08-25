@@ -354,6 +354,7 @@ export async function getWorkflowPlan(
   planId: string,
 ): Promise<WorkflowPlanRecord | null> {
   if (!database) return persistenceUnavailable();
+  await requirePlanManager(principal);
   const row = await withOrganizationContext(
     database,
     principal.organizationId,
@@ -378,6 +379,91 @@ export async function getWorkflowPlan(
     row.plan as unknown as WorkflowChangePlanInput,
   );
   return recordFromRow(row);
+}
+
+export async function updateWorkflowPlan(
+  principal: AosPrincipal,
+  planId: string,
+  plan: WorkflowChangePlanInput,
+): Promise<WorkflowPlanRecord> {
+  if (!database) return persistenceUnavailable();
+  const userId = await requirePlanManager(principal);
+  if (plan.planId !== planId)
+    throw workflowServiceError(
+      "WORKFLOW_PLAN_ID_MISMATCH",
+      "The workflow plan id in the request does not match the URL.",
+    );
+
+  const validation = await validateWorkflowChangePlan(principal, plan);
+  return withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      const [row] = await db
+        .select()
+        .from(workflowChangePlans)
+        .where(
+          and(
+            eq(workflowChangePlans.organizationId, principal.organizationId),
+            eq(workflowChangePlans.planId, planId),
+            isNull(workflowChangePlans.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row)
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_NOT_FOUND",
+          "Workflow change plan not found.",
+        );
+      if (row.status !== "proposed")
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_NOT_EDITABLE",
+          `Workflow change plan is ${row.status} and cannot be edited.`,
+        );
+
+      const now = new Date();
+      const [updated] = await db
+        .update(workflowChangePlans)
+        .set({
+          coordinatorId: plan.coordinatorId,
+          projectId: plan.projectId,
+          planHash: planHash(plan),
+          plan: plan as unknown as Record<string, unknown>,
+          ...planMetadata(plan),
+          approvalRequired: validation.approvalRequired,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowChangePlans.organizationId, principal.organizationId),
+            eq(workflowChangePlans.planId, planId),
+            eq(workflowChangePlans.status, "proposed"),
+            isNull(workflowChangePlans.deletedAt),
+          ),
+        )
+        .returning();
+      if (!updated)
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_UPDATE_CONFLICT",
+          "The workflow plan changed concurrently.",
+        );
+
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "workflow_plan_updated",
+        outcome: "accepted",
+        resourceType: "workflow_change_plan",
+        resourceId: planId,
+        scope: { ids: principal.scope },
+        metadata: {
+          changeCount: plan.changes.length,
+          approvalRequired: validation.approvalRequired,
+        },
+      });
+      return recordFromRow(updated);
+    },
+  );
 }
 
 export async function deleteWorkflowPlan(

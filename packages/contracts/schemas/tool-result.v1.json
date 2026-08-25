@@ -26,7 +26,7 @@
     "contractVersion": { "const": "tool-result.v1" },
     "requestId": { "type": "string" },
     "tool": { "type": "string" },
-    "status": { "enum": ["mocked", "completed", "waiting", "failed"] },
+    "status": { "enum": ["completed", "waiting", "failed"] },
     "data": { "type": "object" },
     "evidenceRefs": { "type": "array", "items": { "type": "string" } },
     "provenance": { "$ref": "#/$defs/provenance" },

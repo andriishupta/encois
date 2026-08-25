@@ -20,7 +20,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { FilePlus2, GitBranch, Play, Search, Trash2 } from "lucide-react";
+import { FilePlus2, GitBranch, Play, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -45,7 +45,6 @@ import {
 } from "@/components/ui/card";
 import { WorkflowStatusIndicator } from "@/components/workflow-status";
 import {
-  deleteWorkflowBlueprint,
   listWorkflowBlueprintsPage,
   listWorkflows,
   startWorkflow,
@@ -92,11 +91,7 @@ function WorkflowsPage() {
     queryKey: queryKeys.workflows(),
     queryFn: listWorkflows,
   });
-  const blueprintItems = Array.isArray(workflows.data?.pages)
-    ? workflows.data.pages.flatMap((page) =>
-        Array.isArray(page.items) ? page.items : [],
-      )
-    : [];
+  const blueprintItems = workflows.data?.pages.flatMap((page) => page.items) ?? [];
   const definitions = useMemo(
     () => selectWorkflowDefinitions(blueprintItems),
     [blueprintItems],
@@ -189,7 +184,6 @@ function WorkflowsPage() {
             <WorkflowDefinitionCard
               workflow={workflow}
               activeRun={activeRuns.get(workflow.blueprintId)}
-              canManage={canManage}
               canRun={canRun}
               runsReady={!runs.isLoading && !runs.isError}
             />
@@ -295,13 +289,11 @@ function selectActiveRuns(
 function WorkflowDefinitionCard({
   workflow,
   activeRun,
-  canManage,
   canRun,
   runsReady,
 }: {
   workflow: WorkflowBlueprintProjection;
   activeRun?: WorkflowExecutionProjection;
-  canManage: boolean;
   canRun: boolean;
   runsReady: boolean;
 }) {
@@ -309,9 +301,15 @@ function WorkflowDefinitionCard({
   return (
     <Card className="flex h-full flex-col">
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <Link
+          to="/workflows/definitions/$workflowId"
+          params={{ workflowId: workflow.blueprintId }}
+          className="group flex items-start justify-between gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
           <div>
-            <CardTitle>{workflow.name}</CardTitle>
+            <CardTitle className="group-hover:underline">
+              {workflow.name}
+            </CardTitle>
             <CardDescription>
               {statusLabel} · v{workflow.version}
               {workflow.isCurrent ? " · current revision" : ""}
@@ -321,10 +319,16 @@ function WorkflowDefinitionCard({
             className="size-4 text-muted-foreground"
             aria-hidden="true"
           />
-        </div>
+        </Link>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{workflow.purpose}</p>
+        <Link
+          to="/workflows/definitions/$workflowId"
+          params={{ workflowId: workflow.blueprintId }}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          {workflow.purpose}
+        </Link>
         <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">Steps:</span>{" "}
@@ -340,7 +344,6 @@ function WorkflowDefinitionCard({
         <WorkflowDefinitionActions
           workflow={workflow}
           activeRun={activeRun}
-          canManage={canManage}
           canRun={canRun}
           runsReady={runsReady}
         />
@@ -352,13 +355,11 @@ function WorkflowDefinitionCard({
 function WorkflowDefinitionActions({
   workflow,
   activeRun,
-  canManage,
   canRun,
   runsReady,
 }: {
   workflow: WorkflowBlueprintProjection;
   activeRun?: WorkflowExecutionProjection;
-  canManage: boolean;
   canRun: boolean;
   runsReady: boolean;
 }) {
@@ -395,13 +396,6 @@ function WorkflowDefinitionActions({
       });
     },
   });
-  const remove = useMutation({
-    mutationFn: () => deleteWorkflowBlueprint(workflow.blueprintId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprintsRoot(),
-      }),
-  });
   const canStartAction =
     canRun && workflow.status === "approved" && workflow.isCurrent;
   const canStart = canStartAction && runsReady && !activeRun && !run.isPending;
@@ -436,49 +430,9 @@ function WorkflowDefinitionActions({
           </Button>
         )
       ) : null}
-      <Button variant="outline" asChild>
-        <Link
-          to="/workflows/blueprints/$blueprintId"
-          params={{ blueprintId: workflow.blueprintId }}
-        >
-          Open definition
-        </Link>
-      </Button>
-      {workflow.status === "approved" && workflow.isCurrent ? (
-        <Button variant="outline" asChild>
-          <Link
-            to="/workflows/new"
-            search={{ blueprint: workflow.blueprintId }}
-          >
-            Copy workflow
-          </Link>
-        </Button>
-      ) : null}
-      {canManage ? (
-        <Button
-          variant="destructive"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (
-              window.confirm(
-                "Delete this Workflow? Its historical Runs will remain available, but the Workflow and its Blueprint revisions will be hidden.",
-              )
-            )
-              remove.mutate();
-          }}
-        >
-          <Trash2 data-icon="inline-start" />
-          {remove.isPending ? "Deleting…" : "Delete"}
-        </Button>
-      ) : null}
       {run.isError ? (
         <p role="alert" className="basis-full text-xs text-destructive">
           Could not start this workflow: {run.error.message}
-        </p>
-      ) : null}
-      {remove.isError ? (
-        <p role="alert" className="basis-full text-xs text-destructive">
-          Could not delete this Workflow: {remove.error.message}
         </p>
       ) : null}
     </div>

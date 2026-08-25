@@ -263,12 +263,20 @@ POST /v1/workflows/plans/validate
   -> enforce tenant and required-scope ownership
   -> return validated_not_applied
   -> POST /v1/workflows/plans persists the proposal when Postgres is configured
+  -> GET /v1/workflows/plans/:planId loads one tenant-scoped proposal
+  -> PATCH /v1/workflows/plans/:planId edits only a proposed plan and revalidates it
   -> POST /v1/workflows/plans/:planId/approve records explicit approval
   -> POST /v1/workflows/plans/:planId/apply persists an approved Blueprint revision
   -> API enqueues coordinator-event.v1 transactionally
   -> Coordinator receives workflowStarts for changes that explicitly requested start
   -> Coordinator starts the immutable approved snapshot through the private Gateway
   -> update/deprecate changes without start only change the registry; cancel-only plans cancel targeted Temporal executions
+
+Dashboard lifecycle separation:
+  Workflow detail = grouped Blueprint definition by stable blueprintId
+  Blueprint detail = one versioned registry family and revision lifecycle
+  Workflow deletion = hide the complete definition family
+  Blueprint revision deletion = hide one non-current revision only
 
 Temporal start:
   workflowType = encois.dynamic.v1

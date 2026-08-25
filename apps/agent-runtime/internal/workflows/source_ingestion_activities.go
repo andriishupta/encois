@@ -11,7 +11,9 @@ import (
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/observability"
 	contractschemas "github.com/andriishupta/encois/packages/contracts"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type RawSource struct {
@@ -46,12 +48,14 @@ func (mockSourceReader) Read(_ context.Context, input SourceIngestionWorkflowInp
 
 type gatewaySourceReader struct {
 	client *gatewayclient.Client
-	mock   mockSourceReader
 }
 
 func (r gatewaySourceReader) Read(ctx context.Context, input SourceIngestionWorkflowInput) (RawSource, error) {
 	if input.ArtifactRef == "" {
-		return r.mock.Read(ctx, input)
+		return RawSource{}, fmt.Errorf("artifactRef is required for gateway source mode; provider acquisition is not configured")
+	}
+	if r.client == nil {
+		return RawSource{}, fmt.Errorf("Agent Gateway client is not configured")
 	}
 	result, err := r.client.ReadArtifact(ctx, gatewayclient.ArtifactReadRequest{
 		ContractVersion: string(contractschemas.ContractArtifactRead),
@@ -79,17 +83,19 @@ type SourceIngestionActivities struct {
 	reader  SourceReader
 	gateway *gatewayclient.Client
 	memory  memory.Store
+	mode    string
 }
 
-func NewSourceIngestionActivities(gateway *gatewayclient.Client, store memory.Store) *SourceIngestionActivities {
-	if store == nil {
-		store = memory.NewMockStore()
+func NewSourceIngestionActivities(gateway *gatewayclient.Client, store memory.Store, sourceModes ...string) *SourceIngestionActivities {
+	mode := "gateway"
+	if len(sourceModes) > 0 && sourceModes[0] != "" {
+		mode = sourceModes[0]
 	}
-	reader := SourceReader(mockSourceReader{})
-	if gateway != nil {
-		reader = gatewaySourceReader{client: gateway}
+	var reader SourceReader = gatewaySourceReader{client: gateway}
+	if mode == "mock" {
+		reader = mockSourceReader{}
 	}
-	return &SourceIngestionActivities{reader: reader, gateway: gateway, memory: store}
+	return &SourceIngestionActivities{reader: reader, gateway: gateway, memory: store, mode: mode}
 }
 
 func ValidateSourceIngestionContract(_ context.Context, input SourceIngestionWorkflowInput) error {
@@ -132,10 +138,21 @@ func ValidateSourceIngestionResult(_ context.Context, result SourceIngestionWork
 // ProcessSourceRevision is kept as a local fixture entry point for unit tests;
 // production workers register the injected method below.
 func ProcessSourceRevision(ctx context.Context, input SourceIngestionWorkflowInput) (SourceIngestionWorkflowResult, error) {
-	return NewSourceIngestionActivities(nil, nil).ProcessSourceRevision(ctx, input)
+	return NewSourceIngestionActivities(nil, memory.NewMockStore(), "mock").ProcessSourceRevision(ctx, input)
 }
 
 func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, input SourceIngestionWorkflowInput) (SourceIngestionWorkflowResult, error) {
+	ctx, span := observability.StartSpan(ctx, "agent-runtime.source-ingestion", attribute.String("encois.source_id", input.SourceID), attribute.String("encois.source_revision_id", input.SourceRevisionID))
+	defer span.End()
+	if a == nil || a.reader == nil {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("source reader is not configured")
+	}
+	if a.memory == nil {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("agent memory store is not configured")
+	}
+	if a.mode != "gateway" && a.mode != "mock" {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("unsupported source mode %q", a.mode)
+	}
 	raw, err := a.reader.Read(ctx, input)
 	if err != nil {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("acquire source revision: %w", err)
@@ -143,7 +160,7 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 	text := normalizeSourceText(raw.Bytes, raw.ContentType, input.ArtifactRef)
 	facts := extractFacts(text)
 	if len(facts) == 0 {
-		facts = []string{"source revision was acquired and contained no extractable text"}
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("source revision contained no extractable text")
 	}
 	for index, fact := range facts {
 		facts[index], _ = memory.RedactSensitiveText(fact)
@@ -168,7 +185,7 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 			digest := sha256.Sum256([]byte(input.SourceRevisionID + "\x00" + fmt.Sprint(index) + "\x00" + fact))
 			nodes = append(nodes, gatewayclient.GraphNode{ID: "fact:" + hex.EncodeToString(digest[:]), Type: "source_fact", Properties: map[string]any{"text": fact, "sourceId": input.SourceID, "sourceRevisionId": input.SourceRevisionID}, Provenance: provenance})
 		}
-		if err := a.gateway.UpsertGraph(ctx, gatewayclient.GraphMutation{ContractVersion: string(contractschemas.ContractGraphUpsert), RequestID: input.RequestID + ":graph", TraceID: input.TraceID, WorkflowID: input.WorkflowID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, PolicyVersion: input.PolicyVersion, Scope: input.Scope, Capability: input.Capability, Nodes: nodes}); err != nil {
+		if err := a.gateway.UpsertGraph(ctx, gatewayclient.GraphMutation{ContractVersion: string(contractschemas.ContractGraphUpsert), RequestID: input.RequestID + ":graph", TraceID: input.TraceID, WorkflowID: input.WorkflowID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, PolicyVersion: input.PolicyVersion, Scope: input.Scope, Capability: input.Capability, Nodes: nodes, Edges: make([]gatewayclient.GraphEdge, 0)}); err != nil {
 			return SourceIngestionWorkflowResult{}, fmt.Errorf("project source facts into graph: %w", err)
 		}
 	}
@@ -201,11 +218,7 @@ func normalizeSourceText(bytes []byte, contentType, artifactRef string) string {
 			builder.WriteRune(value)
 		}
 	}
-	text := strings.TrimSpace(builder.String())
-	if text == "" {
-		return "uploaded artifact " + artifactRef
-	}
-	return text
+	return strings.TrimSpace(builder.String())
 }
 
 func extractFacts(text string) []string {

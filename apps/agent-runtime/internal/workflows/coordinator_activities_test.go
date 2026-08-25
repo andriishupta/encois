@@ -11,7 +11,7 @@ import (
 func TestCreateBootstrapPlanIsExplicitlyDeferredWithoutModel(t *testing.T) {
 	activities := NewActivities(&agents.Bundle{}, "")
 	result, err := activities.CreateBootstrapPlan(context.Background(), coordinator.BootstrapProjectInput{
-		ContractVersion: coordinator.CoordinatorContractVersion,
+		ContractVersion: coordinator.BootstrapProjectContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
 		ProjectID:       "project-1",

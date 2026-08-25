@@ -116,6 +116,12 @@ const organizationNavigation: readonly NavigationItem[] = [
     permission: Permission.OrganizationRead,
   },
   {
+    label: "Members",
+    to: "/organization/members",
+    icon: UserRound,
+    permission: Permission.OrganizationRead,
+  },
+  {
     label: "Memory",
     to: "/organization/memory",
     icon: Network,
@@ -206,6 +212,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           .filter((unit) => unit.type !== "organization")
           .map((unit) => unit.name)
       : undefined;
+  const canViewNotifications =
+    can(Permission.SettingsRead) ||
+    can(Permission.WorkflowsRead) ||
+    can(Permission.KnowledgeRead);
 
   useEffect(() => {
     if (!pathname) return;
@@ -415,6 +425,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             productName={branding.productName}
             currentScope={currentBreadcrumbScope}
           />
+          {canViewNotifications ? (
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/settings/notifications" aria-label="Notifications">
+                <Bell />
+              </Link>
+            </Button>
+          ) : null}
           <div className="relative ml-auto">
             <Button
               variant="outline"
@@ -616,6 +633,17 @@ function getBreadcrumbItems(
     return [{ label: "Workflows", to: "/workflows" }, { label: "Blueprints" }];
   if (pathname === "/workflows/plans")
     return [{ label: "Workflows", to: "/workflows" }, { label: "Plans" }];
+  if (pathname.startsWith("/workflows/plans/"))
+    return [
+      { label: "Workflows", to: "/workflows" },
+      { label: "Plans", to: "/workflows/plans" },
+      { label: "Plan details" },
+    ];
+  if (pathname.startsWith("/workflows/definitions/"))
+    return [
+      { label: "Workflows", to: "/workflows" },
+      { label: "Workflow definition" },
+    ];
   if (pathname.startsWith("/workflows/blueprints/"))
     return [
       { label: "Workflows", to: "/workflows" },
@@ -682,6 +710,11 @@ function getBreadcrumbItems(
       { label: "Investigations" },
     ];
   if (pathname === "/organization") return [{ label: "Organization" }];
+  if (pathname === "/organization/members")
+    return [
+      { label: "Organization", to: "/organization" },
+      { label: "Members" },
+    ];
   if (pathname === "/organization/permissions")
     return [
       { label: "Organization", to: "/organization" },

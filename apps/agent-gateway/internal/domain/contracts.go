@@ -79,9 +79,12 @@ type AuthorizationResponse struct {
 
 type ToolInvocationRequest struct {
 	ExecutionContext
-	AgentDefinition string         `json:"agentDefinition"`
-	Tool            string         `json:"tool"`
-	Arguments       map[string]any `json:"arguments"`
+	AgentDefinition  string         `json:"agentDefinition"`
+	BlueprintID      string         `json:"blueprintId"`
+	BlueprintVersion string         `json:"blueprintVersion"`
+	AllowedTools     []string       `json:"allowedTools"`
+	Tool             string         `json:"tool"`
+	Arguments        map[string]any `json:"arguments"`
 }
 
 type ToolInvocationResponse struct {

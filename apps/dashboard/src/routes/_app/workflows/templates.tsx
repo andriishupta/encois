@@ -64,11 +64,7 @@ function WorkflowTemplatesPage() {
         ? lastPage.pagination.offset + lastPage.pagination.limit
         : undefined,
   });
-  const visibleTemplates = Array.isArray(templates.data?.pages)
-    ? templates.data.pages.flatMap((page) =>
-        Array.isArray(page.items) ? page.items : [],
-      )
-    : [];
+  const visibleTemplates = templates.data?.pages.flatMap((page) => page.items) ?? [];
   const activeCount = visibleTemplates.filter(
     (template) => template.status === "active",
   ).length;
@@ -194,28 +190,21 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
             </span>
           ))}
         </div>
-        <div className="mt-auto grid gap-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Provider slots:</span>{" "}
-            {template.template.providerSlots?.length || "None"}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Steps:</span>{" "}
-            {template.template.steps?.length ?? 0} ·{" "}
-            <span className="font-medium text-foreground">Output:</span>{" "}
-            {template.template.output.type}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">
-              Estimated duration:
-            </span>{" "}
-            Not reported by Template
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Risk:</span> Review
-            approval requirements in the plan preview
-          </p>
-        </div>
+        <details className="mt-auto rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-medium text-foreground">
+            Technical details
+          </summary>
+          <div className="mt-2 grid gap-2">
+            <p>
+              Provider slots: {template.template.providerSlots?.length || "None"}
+            </p>
+            <p>
+              Steps: {template.template.steps?.length ?? 0} · Output: {template.template.output.type}
+            </p>
+            <p>Estimated duration: Not reported by Template</p>
+            <p>Risk: Review approval requirements in the plan preview</p>
+          </div>
+        </details>
         {disabled ? (
           <Button variant="outline" disabled>
             Disabled

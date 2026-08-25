@@ -22,6 +22,16 @@ type ArtifactStore interface {
 	Read(context.Context, domain.ArtifactReadRequest) (domain.ArtifactReadResponse, error)
 }
 
+type unconfiguredArtifactStore struct{}
+
+func (unconfiguredArtifactStore) Write(context.Context, domain.ArtifactWriteRequest) (domain.ArtifactWriteResponse, error) {
+	return domain.ArtifactWriteResponse{}, fmt.Errorf("artifact store is not configured")
+}
+
+func (unconfiguredArtifactStore) Read(context.Context, domain.ArtifactReadRequest) (domain.ArtifactReadResponse, error) {
+	return domain.ArtifactReadResponse{}, fmt.Errorf("artifact store is not configured")
+}
+
 type memoryArtifactStore struct {
 	mu      sync.Mutex
 	objects map[string]memoryArtifact
@@ -62,7 +72,7 @@ func (s *memoryArtifactStore) Write(_ context.Context, request domain.ArtifactWr
 		RequestID:       request.RequestID,
 		ArtifactRef:     artifactRef,
 		ObjectKey:       objectKey,
-		Status:          "mocked",
+		Status:          "completed",
 		RetentionClass:  defaultRetentionClass(request.RetentionClass),
 		RetentionUntil:  request.RetentionUntil,
 	}, nil
@@ -76,21 +86,7 @@ func (s *memoryArtifactStore) Read(_ context.Context, request domain.ArtifactRea
 	object, ok := s.objects[request.ArtifactRef]
 	s.mu.Unlock()
 	if !ok {
-		// The API Gateway's local upload fixtures use this explicit namespace.
-		// Unknown memory references must not silently become readable from every
-		// organization, because the hash reference itself does not carry tenant
-		// information.
-		if !localArtifactReferenceInOrganization(request.ArtifactRef, request.OrganizationID) {
-			return domain.ArtifactReadResponse{}, fmt.Errorf("artifact is not available in the local mock store")
-		}
-		// The API Gateway's local upload store is intentionally process-local. A
-		// deterministic fixture keeps the multi-process local flow useful while
-		// the GCP mode reads the real object from Cloud Storage.
-		return domain.ArtifactReadResponse{
-			ArtifactRef: request.ArtifactRef,
-			ContentType: "text/plain",
-			Bytes:       []byte("Encois mock source\nsource=" + request.ArtifactRef),
-		}, nil
+		return domain.ArtifactReadResponse{}, fmt.Errorf("artifact is not available in the configured mock store")
 	}
 	if !artifactObjectInOrganization(object.ObjectKey, request.OrganizationID) {
 		return domain.ArtifactReadResponse{}, fmt.Errorf("artifact is outside the organization scope")
@@ -100,11 +96,6 @@ func (s *memoryArtifactStore) Read(_ context.Context, request domain.ArtifactRea
 		ContentType: object.ContentType,
 		Bytes:       []byte(object.DataRef),
 	}, nil
-}
-
-func localArtifactReferenceInOrganization(reference, organizationID string) bool {
-	return strings.HasPrefix(reference, "artifact://local/"+organizationID+"/") ||
-		strings.HasPrefix(reference, "artifact://memory/organizations/"+organizationID+"/")
 }
 
 func defaultRetentionClass(value contracts.ArtifactRetentionClass) contracts.ArtifactRetentionClass {

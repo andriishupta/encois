@@ -67,7 +67,6 @@ const UpdateBlueprintContext WorkflowUpdateName = "blueprint-context"
 type ToolResultStatus string
 
 const (
-	ToolStatusMocked    ToolResultStatus = "mocked"
 	ToolStatusCompleted ToolResultStatus = "completed"
 	ToolStatusWaiting   ToolResultStatus = "waiting"
 	ToolStatusFailed    ToolResultStatus = "failed"

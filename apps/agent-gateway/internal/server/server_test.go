@@ -64,7 +64,7 @@ func (s *recordingGraphStore) Query(_ context.Context, request domain.GraphQuery
 func (s *recordingGraphStore) Upsert(context.Context, domain.GraphMutation) error { return nil }
 
 func TestMockToolInvocation(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	request := domain.ToolInvocationRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.ToolRequestContractVersion,
@@ -76,8 +76,11 @@ func TestMockToolInvocation(t *testing.T) {
 			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
-		Tool:      "jira.project_tasks",
-		Arguments: map[string]any{},
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"jira.project_tasks"},
+		Tool:             "jira.project_tasks",
+		Arguments:        map[string]any{"projectKey": "checkout"},
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -101,8 +104,53 @@ func TestMockToolInvocation(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "mocked" || result.Data["completedTasks"] != float64(8) || len(result.EvidenceRefs) != 1 || result.EvidenceRefs[0] != "mock://organizations/org-test/jira/project-checkout" {
+	if result.Status != "completed" || result.Data["completedTasks"] != float64(8) || len(result.EvidenceRefs) != 1 || result.EvidenceRefs[0] != "mock://organizations/org-test/jira/project/checkout" {
 		t.Fatalf("unexpected mock result: %+v", result)
+	}
+}
+
+func TestRouterWithoutExplicitDataPlaneAdaptersFailsReadiness(t *testing.T) {
+	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected unconfigured router readiness to fail, got %d: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "data_plane_not_configured") {
+		t.Fatalf("expected explicit data plane failure, got %s", response.Body.String())
+	}
+}
+
+func TestToolInvocationRejectsManifestThatDoesNotAllowTool(t *testing.T) {
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
+	request := domain.ToolInvocationRequest{
+		ExecutionContext: domain.ExecutionContext{
+			ContractVersion: domain.ToolRequestContractVersion,
+			RequestID:       "req-manifest",
+			WorkflowID:      "workflow:org-test:project:one",
+			OrganizationID:  "org-test",
+			ActorID:         "actor-test",
+			PolicyVersion:   "policy-test",
+			Capability:      "test-capability",
+			Scope:           domain.Scope{IDs: []string{"team-test"}},
+		},
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"github.project_activity"},
+		Tool:             "jira.project_tasks",
+		Arguments:        map[string]any{},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewReader(body))
+	httpRequest.Header.Set("Content-Type", "application/json")
+	httpRequest.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, httpRequest)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "tool_not_allowed") {
+		t.Fatalf("expected manifest denial, got %d: %s", response.Code, response.Body.String())
 	}
 }
 
@@ -121,8 +169,11 @@ func TestProviderToolFailureExposesReauthorizationState(t *testing.T) {
 			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
-		Tool:      "jira.project_tasks",
-		Arguments: map[string]any{},
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"jira.project_tasks"},
+		Tool:             "jira.project_tasks",
+		Arguments:        map[string]any{},
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
@@ -199,6 +250,16 @@ func TestMemoryGraphStoreCreatesTenantScopedLocalFixtures(t *testing.T) {
 	}
 }
 
+func TestMemoryGraphStoreRejectsUnsupportedLogicalQueriesLikeSpanner(t *testing.T) {
+	store := newMemoryGraphStore()
+	if _, err := store.Query(context.Background(), domain.GraphQueryRequest{
+		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
+		Query:            "raw.cypher",
+	}); err == nil {
+		t.Fatal("expected the mock graph adapter to reject an unsupported logical query")
+	}
+}
+
 func TestSpannerGraphStatementsPushDownSafeGraphFilters(t *testing.T) {
 	nodeStatement := graphNodesStatement(domain.GraphQueryRequest{
 		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
@@ -263,11 +324,11 @@ func TestMemoryGraphStoreDoesNotReturnEdgesWithHiddenEndpoints(t *testing.T) {
 	if err := store.Upsert(context.Background(), domain.GraphMutation{
 		ExecutionContext: domain.ExecutionContext{OrganizationID: "organization-test"},
 		Nodes: []domain.GraphNode{
-			{ID: "blocked", Type: "blocker", Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-visible"}}},
-			{ID: "secret-project", Type: "project", Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-secret"}}},
+			{ID: "blocked", Type: "blocker", Properties: map[string]any{}, Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-visible"}}},
+			{ID: "secret-project", Type: "project", Properties: map[string]any{}, Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-secret"}}},
 		},
 		Edges: []domain.GraphEdge{{
-			ID: "hidden-endpoint-edge", SourceID: "secret-project", TargetID: "blocked", Relationship: "has_blocker",
+			ID: "hidden-endpoint-edge", SourceID: "secret-project", TargetID: "blocked", Relationship: "has_blocker", Properties: map[string]any{},
 			Provenance: &contracts.DataProvenance{VisibilityScope: []string{"team-visible"}},
 		}},
 	}); err != nil {
@@ -291,7 +352,7 @@ func TestMemoryGraphStoreDoesNotReturnEdgesWithHiddenEndpoints(t *testing.T) {
 }
 
 func TestRequiresRuntimeServiceAuthentication(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
 	router.ServeHTTP(response, request)
@@ -301,7 +362,7 @@ func TestRequiresRuntimeServiceAuthentication(t *testing.T) {
 }
 
 func TestToolCatalogExposesSchemasAnnotationsAndScopeRequirements(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
 	request.Header.Set("Authorization", "Bearer test-token")
@@ -330,7 +391,7 @@ func TestToolCatalogExposesSchemasAnnotationsAndScopeRequirements(t *testing.T) 
 }
 
 func TestReadinessFailsClosedWhenServiceAuthenticationIsMissing(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "", NewMockDataPlaneAdapters())
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
 	router.ServeHTTP(response, request)
@@ -340,7 +401,7 @@ func TestReadinessFailsClosedWhenServiceAuthenticationIsMissing(t *testing.T) {
 }
 
 func TestAcceptsCloudRunIdentityWithSeparateServiceToken(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/tools", nil)
 	request.Header.Set("Authorization", "Bearer cloud-run-id-token")
@@ -352,7 +413,7 @@ func TestAcceptsCloudRunIdentityWithSeparateServiceToken(t *testing.T) {
 }
 
 func TestReadOnlyPolicyDeniesUnknownTool(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	request := domain.ToolInvocationRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.ToolRequestContractVersion,
@@ -364,8 +425,11 @@ func TestReadOnlyPolicyDeniesUnknownTool(t *testing.T) {
 			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
-		Tool:      "unknown.tool",
-		Arguments: map[string]any{},
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"unknown.tool"},
+		Tool:             "unknown.tool",
+		Arguments:        map[string]any{},
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -382,7 +446,7 @@ func TestReadOnlyPolicyDeniesUnknownTool(t *testing.T) {
 }
 
 func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
-	router := NewRouter(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewReadOnlyToolPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	request := domain.ToolInvocationRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.ToolRequestContractVersion,
@@ -394,8 +458,11 @@ func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
 			Capability:      "test-capability",
 			Scope:           domain.Scope{IDs: []string{"team-test"}},
 		},
-		Tool:      "jira.project_tasks",
-		Arguments: map[string]any{},
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"jira.project_tasks"},
+		Tool:             "jira.project_tasks",
+		Arguments:        map[string]any{},
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
@@ -412,7 +479,7 @@ func TestReadOnlyPolicyDeniesMismatchedPolicyVersion(t *testing.T) {
 }
 
 func TestArtifactWriteReturnsTenantScopedReference(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"objectKey":"evidence/project.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
@@ -427,7 +494,7 @@ func TestArtifactWriteReturnsTenantScopedReference(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "mocked" || result.ArtifactRef == "" || result.ObjectKey != "org-test/workflow:org-test:project:one/evidence/project.json" {
+	if result.Status != "completed" || result.ArtifactRef == "" || result.ObjectKey != "org-test/workflow:org-test:project:one/evidence/project.json" {
 		t.Fatalf("unexpected artifact result: %+v", result)
 	}
 }
@@ -450,8 +517,8 @@ func TestMemoryArtifactStoreRejectsCrossOrganizationReads(t *testing.T) {
 		t.Fatalf("same-organization artifact read failed: %v", err)
 	}
 	readRequest.ArtifactRef = "artifact://local/organization-test/source/r1"
-	if _, err := store.Read(context.Background(), readRequest); err != nil {
-		t.Fatalf("same-organization local fixture artifact read failed: %v", err)
+	if _, err := store.Read(context.Background(), readRequest); err == nil {
+		t.Fatal("unknown local artifact reference was fabricated by the mock store")
 	}
 	readRequest.ArtifactRef = written.ArtifactRef
 	readRequest.OrganizationID = "organization-avengers"
@@ -515,7 +582,7 @@ func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
 }
 
 func TestGraphQueryUsesDefaultMockAdapter(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	body := `{"contractVersion":"graph-query.v1","requestId":"graph-deferred","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"query":"project.related_entities"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/graph/query", bytes.NewBufferString(body))
@@ -528,7 +595,7 @@ func TestGraphQueryUsesDefaultMockAdapter(t *testing.T) {
 }
 
 func TestArtifactWriteRejectsPathTraversal(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	body := `{"contractVersion":"artifact-write.v1","requestId":"artifact-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"objectKey":"../../secret.json","contentType":"application/json","dataRef":"provider:jira:project-1"}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts", bytes.NewBufferString(body))
@@ -542,7 +609,7 @@ func TestArtifactWriteRejectsPathTraversal(t *testing.T) {
 }
 
 func TestToolBoundaryRequiresCanonicalScopeIDs(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	body := `{"contractVersion":"tool-request.v1","requestId":"req-test","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"projectIds":["project-a"]},"tool":"jira.project_tasks","arguments":{}}`
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/tools/invoke", bytes.NewBufferString(body))
@@ -556,7 +623,7 @@ func TestToolBoundaryRequiresCanonicalScopeIDs(t *testing.T) {
 }
 
 func TestRejectsUnknownContractFields(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/permissions/check", bytes.NewBufferString(`{"contractVersion":"authorization-check.v1","requestId":"req","organizationId":"org","resource":"jira","action":"read","unexpected":true}`))
 	httpRequest.Header.Set("Content-Type", "application/json")
@@ -569,7 +636,7 @@ func TestRejectsUnknownContractFields(t *testing.T) {
 }
 
 func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
 	request := domain.WorkflowDefinitionRequest{
 		ExecutionContext: domain.ExecutionContext{
 			ContractVersion: domain.WorkflowDefinitionContractVersion,
@@ -584,10 +651,12 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 			WorkflowType:    "encois.dynamic.v1",
 			Purpose:         "Run Jira and GitHub checks in parallel",
 			Enabled:         true,
+			AllowedTools:    []string{"jira.project_tasks", "github.project_activity", "email.send"},
 			Steps: []domain.WorkflowStep{
 				{ID: "jira", Kind: "tool", Tool: "jira.project_tasks"},
 				{ID: "github", Kind: "tool", Tool: "github.project_activity"},
-				{ID: "email", Kind: "tool", Tool: "email.send", DependsOn: []string{"jira", "github"}},
+				{ID: "approval", Kind: "approval", DependsOn: []string{"jira", "github"}},
+				{ID: "email", Kind: "tool", Tool: "email.send", DependsOn: []string{"approval"}},
 			},
 		},
 	}
@@ -617,8 +686,8 @@ func TestCreatesWorkflowBlueprintAndDerivesPermissions(t *testing.T) {
 }
 
 func TestRejectsWorkflowDependencyCycle(t *testing.T) {
-	router := NewRouter(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token")
-	body := `{"contractVersion":"workflow-definition.v1","requestId":"req-cycle","organizationId":"org-test","blueprint":{"contractVersion":"workflow-blueprint.v1","blueprintId":"cycle","version":"1.0.0","name":"Cycle","workflowType":"encois.dynamic.v1","purpose":"Detect cycles","enabled":true,"steps":[{"id":"a","kind":"tool","tool":"jira.project_tasks","dependsOn":["b"]},{"id":"b","kind":"tool","tool":"github.project_activity","dependsOn":["a"]}]}}`
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", NewMockDataPlaneAdapters())
+	body := `{"contractVersion":"workflow-definition.v1","requestId":"req-cycle","organizationId":"org-test","blueprint":{"contractVersion":"workflow-blueprint.v1","blueprintId":"cycle","version":"1.0.0","name":"Cycle","workflowType":"encois.dynamic.v1","purpose":"Detect cycles","enabled":true,"allowedTools":["jira.project_tasks","github.project_activity"],"steps":[{"id":"a","kind":"tool","tool":"jira.project_tasks","dependsOn":["b"]},{"id":"b","kind":"tool","tool":"github.project_activity","dependsOn":["a"]}]}}`
 	response := httptest.NewRecorder()
 	httpRequest := httptest.NewRequest(http.MethodPost, "/v1/workflows/validate", bytes.NewBufferString(body))
 	httpRequest.Header.Set("Content-Type", "application/json")

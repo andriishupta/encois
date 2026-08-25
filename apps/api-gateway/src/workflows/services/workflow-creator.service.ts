@@ -784,7 +784,12 @@ export async function listWorkflowBlueprintsPageForPrincipal(
   return listPage(sorted, query);
 }
 
-export async function deleteWorkflowBlueprintForPrincipal(
+/**
+ * A Workflow definition is the stable blueprintId grouping in the current
+ * control-plane model. Deleting it hides every persisted revision in that
+ * group while leaving historical Run projections intact.
+ */
+export async function deleteWorkflowDefinitionForPrincipal(
   principal: AosPrincipal,
   blueprintId: string,
 ): Promise<void> {
@@ -807,7 +812,7 @@ export async function deleteWorkflowBlueprintForPrincipal(
       if (!(await hasPermission(db, principal, Permission.WorkflowsManage)))
         throw workflowServiceError(
           "FORBIDDEN",
-          "The user cannot delete Workflows or Blueprints.",
+          "The user cannot delete Workflow definitions.",
         );
 
       const rows = await db
@@ -828,7 +833,7 @@ export async function deleteWorkflowBlueprintForPrincipal(
       if (rows.length === 0)
         throw workflowServiceError(
           "WORKFLOW_BLUEPRINT_NOT_FOUND",
-          "The Workflow or Blueprint was not found.",
+          "The Workflow definition was not found.",
         );
 
       const now = new Date();
@@ -846,20 +851,111 @@ export async function deleteWorkflowBlueprintForPrincipal(
       if (deleted.length !== rows.length)
         throw workflowServiceError(
           "WORKFLOW_BLUEPRINT_DELETE_CONFLICT",
-          "The Workflow or Blueprint changed concurrently.",
+          "The Workflow definition changed concurrently.",
         );
 
       await db.insert(auditEvents).values({
         organizationId: principal.organizationId,
         actorUserId: userId,
-        action: "workflow_blueprint_deleted",
+        action: "workflow_definition_deleted",
         outcome: "accepted",
-        resourceType: "workflow_blueprint",
+        resourceType: "workflow_definition",
         resourceId: blueprintId,
         scope: { ids: principal.scope },
         metadata: {
           deletedVersions: rows.map((row) => row.version),
           previousStatuses: rows.map((row) => row.status),
+        },
+      });
+    },
+  );
+}
+
+export async function deleteWorkflowBlueprintRevisionForPrincipal(
+  principal: AosPrincipal,
+  blueprintId: string,
+  version: string,
+): Promise<void> {
+  if (!database)
+    throw workflowServiceError(
+      "PERSISTENCE_UNAVAILABLE",
+      "Blueprint registry access is not configured.",
+    );
+  const userId = localUserId(principal);
+  if (!userId)
+    throw workflowServiceError(
+      "IDENTITY_NOT_RESOLVED",
+      "The identity is not linked to a local user.",
+    );
+
+  await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsManage)))
+        throw workflowServiceError(
+          "FORBIDDEN",
+          "The user cannot delete Blueprint revisions.",
+        );
+
+      const [row] = await db
+        .select({
+          id: workflowBlueprints.id,
+          version: workflowBlueprints.version,
+          status: workflowBlueprints.status,
+          isCurrent: workflowBlueprints.isCurrent,
+        })
+        .from(workflowBlueprints)
+        .where(
+          and(
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            eq(workflowBlueprints.blueprintId, blueprintId),
+            eq(workflowBlueprints.version, version),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!row)
+        throw workflowServiceError(
+          "WORKFLOW_BLUEPRINT_NOT_FOUND",
+          "The Blueprint revision was not found.",
+        );
+      if (row.isCurrent)
+        throw workflowServiceError(
+          "WORKFLOW_BLUEPRINT_CURRENT_NOT_DELETABLE",
+          "The current Blueprint revision cannot be deleted. Publish another revision first.",
+        );
+
+      const now = new Date();
+      const [deleted] = await db
+        .update(workflowBlueprints)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(workflowBlueprints.id, row.id),
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        )
+        .returning({ id: workflowBlueprints.id });
+      if (!deleted)
+        throw workflowServiceError(
+          "WORKFLOW_BLUEPRINT_DELETE_CONFLICT",
+          "The Blueprint revision changed concurrently.",
+        );
+
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "workflow_blueprint_revision_deleted",
+        outcome: "accepted",
+        resourceType: "workflow_blueprint",
+        resourceId: `${blueprintId}@${version}`,
+        scope: { ids: principal.scope },
+        metadata: {
+          version: row.version,
+          previousStatus: row.status,
         },
       });
     },

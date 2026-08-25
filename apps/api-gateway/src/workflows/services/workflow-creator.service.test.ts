@@ -33,7 +33,7 @@ describe("workflow provider bindings", () => {
         },
       ]),
     ).toThrowError(
-      "Connect an active integration for the required code capability before submitting this workflow plan.",
+      "Configure a matching Source in the selected scope for the required code capability before submitting this workflow plan.",
     );
   });
 });

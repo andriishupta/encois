@@ -49,6 +49,8 @@ export const queryKeys = {
   workflowPlans: (query = "", status = "all", sort = "updated-desc") =>
     ["workflow-plans", currentOrganizationId(), query, status, sort] as const,
   workflowPlansRoot: () => ["workflow-plans", currentOrganizationId()] as const,
+  workflowPlan: (planId: string) =>
+    ["workflow-plan", currentOrganizationId(), planId] as const,
   workflowPlanPages: (query = "", status = "all", sort = "updated-desc") =>
     [
       "workflow-plans",
@@ -179,7 +181,6 @@ export const queryKeys = {
     agentDefinition: string,
     query: string,
     scope = "",
-    projectId = "",
   ) =>
     [
       "agent-memory",
@@ -187,7 +188,6 @@ export const queryKeys = {
       agentDefinition,
       query,
       scope,
-      projectId,
     ] as const,
   memoryChanges: () => ["memory-changes", currentOrganizationId()] as const,
   savedInvestigations: () =>

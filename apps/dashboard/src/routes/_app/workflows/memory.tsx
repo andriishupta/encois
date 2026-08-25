@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
+import { OrganizationUnitSelect } from "@/components/organization-unit-select";
 import {
   ListFilter,
   ListMeta,
@@ -31,7 +32,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyMemoryChange,
@@ -75,24 +75,19 @@ function MemoryPage() {
   const { can } = usePermissions();
   const queryClient = useQueryClient();
   const canManageMemory = can(Permission.MemoryManage);
-  const [agentDefinition, setAgentDefinition] = useState<string>(
-    agentDefinitions[0],
-  );
-  const [query, setQuery] = useState("release context");
-  const [projectId, setProjectId] = useState("");
+  const [agentDefinition, setAgentDefinition] = useState("all");
+  const [query, setQuery] = useState("");
   const [scope, setScope] = useState("all");
   const selectedScope = scope === "all" ? undefined : { ids: [scope] };
   const memory = useQuery({
-    queryKey: queryKeys.agentMemory(agentDefinition, query, scope, projectId),
+    queryKey: queryKeys.agentMemory(agentDefinition, query, scope),
     queryFn: () =>
       queryAgentMemory({
-        agentDefinition,
+        ...(agentDefinition !== "all" ? { agentDefinition } : {}),
         query,
         maxResults: 20,
-        ...(projectId.trim() ? { projectId: projectId.trim() } : {}),
         ...(selectedScope ? { scope: selectedScope } : {}),
       }),
-    enabled: query.trim().length > 0,
   });
   const changes = useQuery({
     queryKey: queryKeys.memoryChanges(),
@@ -111,6 +106,25 @@ function MemoryPage() {
     },
     onError: (error) => setChangeError(error.message),
   });
+  const memoryAction = useMutation({
+    mutationFn: ({
+      id,
+      action,
+    }: {
+      id: string;
+      action: "approve" | "reject" | "apply";
+    }) =>
+      action === "approve"
+        ? approveMemoryChange(id)
+        : action === "reject"
+          ? rejectMemoryChange(id)
+          : applyMemoryChange(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.memoryChanges(),
+      });
+    },
+  });
   const scopeLabel =
     scope === "all"
       ? "All available units"
@@ -122,8 +136,9 @@ function MemoryPage() {
         description={
           <>
             Review scoped distilled context available to authorized workflows.
-            Retrieval is read-only; changes are proposed, approved, audited, and
-            then applied through the runtime to{" "}
+            Leave search empty to show all available memories; search narrows
+            the results. Changes are proposed, approved, audited, and applied
+            through the runtime to{" "}
             <ProductTerm term="memoryBank" />.
           </>
         }
@@ -151,7 +166,7 @@ function MemoryPage() {
           <span className="font-medium text-foreground">
             Scoped memory boundary.
           </span>{" "}
-          The dashboard can inspect only the selected workflow context and
+          The dashboard can inspect only the selected agent definitions and
           organization scope. It never mutates provider memory directly;
           authorized managers create an auditable change proposal.
         </p>
@@ -167,39 +182,30 @@ function MemoryPage() {
           value={agentDefinition}
           onChange={setAgentDefinition}
           label="Filter by agent definition"
-          options={agentDefinitions.map((definition) => ({
-            value: definition,
-            label: definition,
-          }))}
-        />
-        <ListFilter
-          value={scope}
-          onChange={setScope}
-          label="Filter memory by scope"
           options={[
-            { value: "all", label: "All available units" },
-            ...units
-              .filter((unit) => unit.canView && unit.id !== "organization")
-              .map((unit) => ({ value: unit.id, label: unit.name })),
+            { value: "all", label: "All agent definitions" },
+            ...agentDefinitions.map((definition) => ({
+              value: definition,
+              label: definition,
+            })),
           ]}
         />
-        <div className="min-w-40">
-          <span className="sr-only">Project filter</span>
-          <Input
-            value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-            placeholder="Project filter"
-            aria-label="Project filter"
-            maxLength={160}
-          />
-        </div>
+        <OrganizationUnitSelect
+          id="workflow-memory-scope-filter"
+          label="Organization scope"
+          value={scope === "all" ? "" : scope}
+          units={units}
+          filter={(unit) => unit.canView}
+          onChange={(value) => setScope(value || "all")}
+          description="All available units when no unit is selected."
+        />
         <ListMeta>{memory.data?.memories?.length ?? 0} matches</ListMeta>
       </ListToolbar>
       <Card>
         <CardHeader>
           <CardTitle>Memory results</CardTitle>
           <CardDescription>
-            Results are restricted to the selected workflow context and
+            Results are restricted to the selected agent definitions and
             authorized organization scope.
           </CardDescription>
         </CardHeader>
@@ -244,7 +250,7 @@ function MemoryPage() {
             <EmptyPanel
               icon={BrainCircuit}
               title="No memories found"
-              description="The selected agent definition has no matching memory in the current scope."
+              description="No memory matches the current filters and organization scope."
             />
           ) : null}
           {changeError ? (
@@ -284,6 +290,11 @@ function MemoryPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
+            {memoryAction.isError ? (
+              <p role="alert" className="text-sm text-destructive">
+                Could not update memory governance: {memoryAction.error.message}
+              </p>
+            ) : null}
             {changes.isLoading ? (
               <p className="text-sm text-muted-foreground">
                 Loading memory changes…
@@ -296,9 +307,9 @@ function MemoryPage() {
               changes.data.map((change) => (
                 <div
                   key={change.id}
-                  className="flex flex-col gap-1 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">
                       {change.action === "add"
                         ? "Addition"
@@ -313,11 +324,62 @@ function MemoryPage() {
                       {formatDate(change.updatedAt)}
                     </p>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {change.status === "applied"
-                      ? "Provider updated"
-                      : "Review in Approval queue"}
-                  </span>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {change.status === "applied"
+                        ? "Provider updated"
+                        : change.status === "rejected"
+                          ? "Rejected"
+                          : change.status === "approved"
+                            ? "Approved · ready to apply"
+                            : "Awaiting approval"}
+                    </span>
+                    {change.status === "proposed" ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={memoryAction.isPending}
+                          onClick={() =>
+                            memoryAction.mutate({
+                              id: change.id,
+                              action: "reject",
+                            })
+                          }
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={memoryAction.isPending}
+                          onClick={() =>
+                            memoryAction.mutate({
+                              id: change.id,
+                              action: "approve",
+                            })
+                          }
+                        >
+                          Approve
+                        </Button>
+                      </>
+                    ) : change.status === "approved" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={memoryAction.isPending}
+                        onClick={() =>
+                          memoryAction.mutate({
+                            id: change.id,
+                            action: "apply",
+                          })
+                        }
+                      >
+                        Apply
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ))
             ) : (

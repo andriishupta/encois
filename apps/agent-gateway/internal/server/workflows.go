@@ -164,6 +164,15 @@ func (s *Server) createWorkflow(c *gin.Context) {
 
 func (s *Server) getWorkflow(c *gin.Context) {
 	workflowID := c.Param("workflowId")
+	organizationID := strings.TrimSpace(c.GetHeader("X-Organization-ID"))
+	if organizationID == "" {
+		errorResponse(c, http.StatusBadRequest, "organization_required", "X-Organization-ID is required", false)
+		return
+	}
+	if !blueprintIDBelongsToOrganization(workflowID, organizationID) {
+		errorResponse(c, http.StatusForbidden, "organization_scope_denied", "workflow is outside the organization scope", false)
+		return
+	}
 	s.workflowMu.RLock()
 	response, ok := s.workflowRecords[workflowID]
 	s.workflowMu.RUnlock()
@@ -172,6 +181,10 @@ func (s *Server) getWorkflow(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response)
+}
+
+func blueprintIDBelongsToOrganization(workflowID, organizationID string) bool {
+	return strings.HasPrefix(workflowID, "blueprint:"+organizationID+":")
 }
 
 func (s *Server) authorizeWorkflowPermissions(c *gin.Context, request domain.WorkflowDefinitionRequest, permissions []domain.WorkflowPermissionRequirement) bool {
@@ -221,6 +234,10 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 	}
 
 	steps := make(map[string]domain.WorkflowStep, len(blueprint.Steps))
+	allowedTools := make(map[string]struct{}, len(blueprint.AllowedTools))
+	for _, tool := range blueprint.AllowedTools {
+		allowedTools[tool] = struct{}{}
+	}
 	for _, step := range blueprint.Steps {
 		if step.ID == "" {
 			return nil, nil, fmt.Errorf("every step requires an id")
@@ -236,14 +253,26 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 			if !knownCapability(step.Tool) {
 				return nil, nil, fmt.Errorf("tool %q is not in the registered capability catalog", step.Tool)
 			}
+			if len(allowedTools) == 0 {
+				return nil, nil, fmt.Errorf("tool steps require an explicit allowedTools manifest")
+			}
+			if _, allowed := allowedTools[step.Tool]; !allowed {
+				return nil, nil, fmt.Errorf("tool %q is not allowed by the Blueprint manifest", step.Tool)
+			}
 		case "agent":
 			if strings.TrimSpace(step.AgentDefinition) == "" {
 				return nil, nil, fmt.Errorf("agent step %q requires an agentDefinition", step.ID)
 			}
+			if !knownAgentDefinition(step.AgentDefinition) {
+				return nil, nil, fmt.Errorf("agent definition %q is not registered", step.AgentDefinition)
+			}
 		case "transform", "condition", "wait", "approval":
 			if step.Kind == "condition" {
 				if _, ok := step.Input["condition"].(bool); !ok {
-					return nil, nil, fmt.Errorf("condition step %q requires boolean input.condition", step.ID)
+					fromStep, fromStepOK := step.Input["fromStep"].(string)
+					if !fromStepOK || strings.TrimSpace(fromStep) == "" {
+						return nil, nil, fmt.Errorf("condition step %q requires boolean input.condition or fromStep", step.ID)
+					}
 				}
 			}
 			if step.Kind == "wait" {
@@ -268,9 +297,23 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 				return nil, nil, fmt.Errorf("step %q depends on unknown step %q", step.ID, dependency)
 			}
 		}
+		if step.Kind == "condition" {
+			if _, literal := step.Input["condition"].(bool); !literal {
+				fromStep, _ := step.Input["fromStep"].(string)
+				if !containsString(step.DependsOn, fromStep) {
+					return nil, nil, fmt.Errorf("condition step %q must depend on fromStep %q", step.ID, fromStep)
+				}
+			}
+		}
 
+		if (blueprint.RequiresApproval || step.RequiresApproval) && (step.Kind == "tool" || step.Kind == "agent") && !hasApprovalAncestor(step.ID, steps) {
+			return nil, nil, fmt.Errorf("step %q requires an approval step on its dependency path", step.ID)
+		}
 		if step.Kind != "tool" {
 			continue
+		}
+		if capabilityRequiresApproval(step.Tool) && !hasApprovalAncestor(step.ID, steps) {
+			return nil, nil, fmt.Errorf("step %q requires an approval step on its dependency path", step.ID)
 		}
 		permission := capabilityPermission(step.Tool, blueprint.RequiresApproval || step.RequiresApproval)
 		key := permission.Resource + ":" + permission.Action
@@ -296,6 +339,50 @@ func validateBlueprint(blueprint domain.WorkflowBlueprint) ([]domain.WorkflowPer
 func knownCapability(name string) bool {
 	_, ok := capabilityByName(name)
 	return ok
+}
+
+var registeredAgentDefinitions = map[string]struct{}{
+	"context.summarizer.v1":               {},
+	"context.summarizer@1":                {},
+	"context.synthesizer@1":               {},
+	"context.synthesizer.v1":              {},
+	"release-investigation.synthesizer@1": {},
+}
+
+func knownAgentDefinition(name string) bool {
+	_, ok := registeredAgentDefinitions[strings.TrimSpace(name)]
+	return ok
+}
+
+func capabilityRequiresApproval(tool string) bool {
+	capability, ok := capabilityByName(tool)
+	return ok && capability.ApprovalRequired
+}
+
+func hasApprovalAncestor(stepID string, steps map[string]domain.WorkflowStep) bool {
+	seen := make(map[string]bool, len(steps))
+	var visit func(string) bool
+	visit = func(id string) bool {
+		if seen[id] {
+			return false
+		}
+		seen[id] = true
+		step, ok := steps[id]
+		if !ok {
+			return false
+		}
+		for _, dependency := range step.DependsOn {
+			dependencyStep, exists := steps[dependency]
+			if exists && dependencyStep.Kind == "approval" {
+				return true
+			}
+			if visit(dependency) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(stepID)
 }
 
 func capabilityByName(name string) (domain.WorkflowCapability, bool) {

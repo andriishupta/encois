@@ -177,6 +177,7 @@ services:
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
       AGENT_AI_MODE: mock
+      AGENT_SOURCE_MODE: mock
       AGENT_MEMORY_MODE: mock
       AGENT_MEMORY_FIXTURE: local
       AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token

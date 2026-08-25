@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
-  Github,
   PlugZap,
   Power,
   RefreshCw,
@@ -193,8 +192,6 @@ function IntegrationDetailPage() {
       </Card>
     );
 
-  const Icon =
-    integration.provider.toLowerCase() === "github" ? Github : PlugZap;
   const providerName = integration.provider;
 
   function saveChanges(event: React.FormEvent<HTMLFormElement>) {
@@ -224,27 +221,6 @@ function IntegrationDetailPage() {
         description="Organization-level provider connection, permissions, and unit-scoped Sources."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <SummaryCard icon={Icon} label="Provider" value={providerName} />
-        <SummaryCard
-          icon={
-            integration.status === IntegrationStatus.Active ||
-            integration.status === IntegrationStatus.Authorized
-              ? CheckCircle2
-              : PlugZap
-          }
-          label="Status"
-          value={humanizeKey(integration.status)}
-        />
-        <SummaryCard
-          icon={Clock3}
-          label="Visible Sources"
-          value={
-            canViewSources ? String(integrationSources.length) : "Restricted"
-          }
-        />
-      </div>
-
       <div
         role="tablist"
         aria-label="Integration detail sections"
@@ -267,7 +243,7 @@ function IntegrationDetailPage() {
       <div
         className={
           activeTab === "overview" || activeTab === "permissions"
-            ? "grid gap-4 xl:grid-cols-[1fr_0.8fr]"
+            ? "block"
             : "hidden"
         }
       >
@@ -783,30 +759,6 @@ const integrationTabs: readonly { key: IntegrationTab; label: string }[] = [
   { key: "errors", label: "Errors" },
   { key: "capabilities", label: "Capabilities" },
 ];
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof PlugZap;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-      </CardHeader>
-      <CardContent>
-        <p className="truncate text-sm font-medium">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 function LifecycleState({
   label,

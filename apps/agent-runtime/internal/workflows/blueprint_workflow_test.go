@@ -38,6 +38,7 @@ func TestDynamicBlueprintWorkflowExecutesGenericToolAndAgentSteps(t *testing.T) 
 			Name:            "Project context",
 			WorkflowType:    DynamicWorkflowType,
 			Purpose:         "Collect project context",
+			AllowedTools:    []string{"jira.project_tasks", "github.project_activity"},
 			Steps: []coordinator.WorkflowStep{
 				{ID: "jira", Kind: "tool", Tool: "jira.project_tasks"},
 				{ID: "github", Kind: "tool", Tool: "github.project_activity"},

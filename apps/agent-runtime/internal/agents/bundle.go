@@ -74,7 +74,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		return bundle, nil
 	}
 	if !cfg.UseVertexAI && cfg.APIKey == "" {
-		return bundle, nil
+		return nil, fmt.Errorf("Gemini credentials are required for AGENT_AI_MODE=gemini; use AGENT_AI_MODE=mock explicitly for local fixtures")
 	}
 
 	clientConfig := &genai.ClientConfig{APIKey: cfg.APIKey}

@@ -27,10 +27,8 @@ function nodeLabel(node: GraphNode): string {
 
 export function ContextGraphCanvas({
   graph,
-  onSelect,
 }: {
   graph: GraphInspectionProjection;
-  onSelect: (node: GraphNode) => void;
 }) {
   const layoutNodes = useMemo<Node[]>(
     () =>
@@ -39,18 +37,14 @@ export function ContextGraphCanvas({
         position: { x: (index % 3) * 290, y: Math.floor(index / 3) * 185 },
         data: {
           label: (
-            <button
-              type="button"
-              className="w-full text-left"
-              onClick={() => onSelect(node)}
-            >
+            <span className="block w-full text-left">
               <span className="block truncate text-sm font-medium">
                 {nodeLabel(node)}
               </span>
               <span className="mt-1 block text-[11px] text-muted-foreground">
                 {node.type}
               </span>
-            </button>
+            </span>
           ),
         },
         style: {
@@ -63,7 +57,7 @@ export function ContextGraphCanvas({
             "0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent)",
         },
       })),
-    [graph.nodes, onSelect],
+    [graph.nodes],
   );
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(layoutNodes);
 

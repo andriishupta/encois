@@ -85,6 +85,60 @@ func TestExecutionCapabilityBindsExecutionContextAndScope(t *testing.T) {
 	}
 }
 
+func TestExecutionCapabilityRejectsEveryContextMutation(t *testing.T) {
+	secret := "test-capability-secret"
+	now := time.Now()
+	base := capabilityTestContext()
+	capability := signedTestCapability(t, secret, base, now)
+
+	tests := []struct {
+		name   string
+		mutate func(*domain.ExecutionContext)
+	}{
+		{name: "organization", mutate: func(execution *domain.ExecutionContext) { execution.OrganizationID = "org-other" }},
+		{name: "workflow", mutate: func(execution *domain.ExecutionContext) { execution.WorkflowID = "workflow:org-test:other" }},
+		{name: "actor", mutate: func(execution *domain.ExecutionContext) { execution.ActorID = "actor-other" }},
+		{name: "policy version", mutate: func(execution *domain.ExecutionContext) { execution.PolicyVersion = "policy-other" }},
+		{name: "scope", mutate: func(execution *domain.ExecutionContext) { execution.Scope.IDs = []string{"unit-other"} }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			execution := base
+			execution.Capability = capability
+			test.mutate(&execution)
+			if err := verifyExecutionCapability(execution.Capability, secret, execution, now); err == nil {
+				t.Fatal("capability remained valid after execution context mutation")
+			}
+		})
+	}
+}
+
+func TestExecutionCapabilityRejectsWrongSecretAndInvalidLifetime(t *testing.T) {
+	secret := "test-capability-secret"
+	now := time.Now()
+	execution := capabilityTestContext()
+
+	if err := verifyExecutionCapability(signedTestCapability(t, secret, execution, now), "wrong-secret", execution, now); err == nil {
+		t.Fatal("capability signed by another gateway secret was accepted")
+	}
+
+	for _, test := range []struct {
+		name     string
+		issuedAt time.Time
+		verifyAt time.Time
+	}{
+		{name: "expired", issuedAt: now.Add(-2 * time.Minute), verifyAt: now},
+		{name: "issued in future", issuedAt: now, verifyAt: now.Add(-2 * time.Minute)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			capability := signedTestCapability(t, secret, execution, test.issuedAt)
+			if err := verifyExecutionCapability(capability, secret, execution, test.verifyAt); err == nil {
+				t.Fatal("capability with invalid lifetime was accepted")
+			}
+		})
+	}
+}
+
 func TestConfiguredRouterRejectsMissingOrMismatchedCapability(t *testing.T) {
 	secret := "test-capability-secret"
 	now := time.Now()
@@ -92,12 +146,16 @@ func TestConfiguredRouterRejectsMissingOrMismatchedCapability(t *testing.T) {
 	execution.Capability = signedTestCapability(t, secret, execution, now)
 	request := domain.ToolInvocationRequest{
 		ExecutionContext: execution,
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"jira.project_tasks"},
 		Tool:             "jira.project_tasks",
-		Arguments:        map[string]any{},
+		Arguments:        map[string]any{"projectKey": "checkout"},
 	}
 	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
 		CapabilitySecret:  secret,
 		RequireCapability: true,
+		ProviderTools:     mockProviderToolRegistry{},
 	})
 
 	invoke := func(input domain.ToolInvocationRequest) *httptest.ResponseRecorder {
@@ -124,8 +182,11 @@ func TestConfiguredRouterRejectsMissingOrMismatchedCapability(t *testing.T) {
 
 	request = domain.ToolInvocationRequest{
 		ExecutionContext: capabilityTestContext(),
+		BlueprintID:      "project-context",
+		BlueprintVersion: "1.0.0",
+		AllowedTools:     []string{"jira.project_tasks"},
 		Tool:             "jira.project_tasks",
-		Arguments:        map[string]any{},
+		Arguments:        map[string]any{"projectKey": "checkout"},
 	}
 	if response := invoke(request); response.Code != http.StatusBadRequest {
 		t.Fatalf("missing capability was not rejected at the contract boundary: %d: %s", response.Code, response.Body.String())

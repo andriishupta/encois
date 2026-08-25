@@ -200,7 +200,16 @@ func NewStore(ctx context.Context, mode, reasoningEngine string) (Store, func() 
 }
 
 func ValidateRequest(request Request) error {
-	return contractschemaValidate(contracts.SchemaAgentMemory, request)
+	if err := contractschemaValidate(contracts.SchemaAgentMemory, request); err != nil {
+		return err
+	}
+	if request.AgentDefinition != request.MemoryScope.AgentDefinition {
+		return fmt.Errorf("agent definition does not match memory scope")
+	}
+	if !workflowIDBelongsToOrganization(request.WorkflowID, request.OrganizationID) {
+		return fmt.Errorf("workflow id is outside the organization scope")
+	}
+	return nil
 }
 
 func ValidateResult(result Result) error {
@@ -209,4 +218,9 @@ func ValidateResult(result Result) error {
 
 func contractschemaValidate(schema contracts.SchemaName, value any) error {
 	return contracts.Validate(schema, value)
+}
+
+func workflowIDBelongsToOrganization(workflowID, organizationID string) bool {
+	return organizationID != "" && (strings.HasPrefix(workflowID, "org:"+organizationID+":") ||
+		strings.HasPrefix(workflowID, "workflow:"+organizationID+":"))
 }

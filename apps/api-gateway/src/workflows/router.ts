@@ -6,10 +6,12 @@ import { approveWorkflowPlanRoute } from "./routes/approve-workflow-plan.route.j
 import { cancelWorkflowRoute } from "./routes/cancel-workflow.route.js";
 import { createBlueprintLifecyclePlanRoute } from "./routes/create-blueprint-lifecycle-plan.route.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
+import { deleteWorkflowDefinitionRoute } from "./routes/delete-workflow-definition.route.js";
 import { deleteWorkflowBlueprintRoute } from "./routes/delete-workflow-blueprint.route.js";
 import { deleteWorkflowPlanRoute } from "./routes/delete-workflow-plan.route.js";
 import { getWorkflowRoute } from "./routes/get-workflow.route.js";
 import { getWorkflowEventsRoute } from "./routes/get-workflow-events.route.js";
+import { getWorkflowPlanRoute } from "./routes/get-workflow-plan.route.js";
 import { listWorkflowActivityRoute } from "./routes/list-workflow-activity.route.js";
 import { listWorkflowBlueprintsRoute } from "./routes/list-workflow-blueprints.route.js";
 import { listWorkflowPlannerVersionsRoute } from "./routes/list-workflow-planner-versions.route.js";
@@ -22,6 +24,7 @@ import { signalWorkflowRoute } from "./routes/signal-workflow.route.js";
 import { submitWorkflowCreationRoute } from "./routes/submit-workflow-creation.route.js";
 import { submitWorkflowPlanRoute } from "./routes/submit-workflow-plan.route.js";
 import { updateWorkflowRoute } from "./routes/update-workflow.route.js";
+import { updateWorkflowPlanRoute } from "./routes/update-workflow-plan.route.js";
 import { validateWorkflowPlanRoute } from "./routes/validate-workflow-plan.route.js";
 import type { WorkflowClient } from "./temporal-client.js";
 
@@ -52,21 +55,27 @@ export function createWorkflowsRouter(
   router.post("/plans/preview", previewWorkflowCreationRoute);
   router.post("/plans/from-intent", submitWorkflowCreationRoute);
   router.get("/plans", listWorkflowPlansRoute);
+  router.get("/plans/:planId", getWorkflowPlanRoute);
   router.get("/planner-versions", listWorkflowPlannerVersionsRoute);
   router.post("/plans", submitWorkflowPlanRoute());
   router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post("/plans/:planId/approve", approveWorkflowPlanRoute());
   router.post("/plans/:planId/apply", applyWorkflowPlanRoute(options));
   router.delete("/plans/:planId", deleteWorkflowPlanRoute);
+  router.patch("/plans/:planId", updateWorkflowPlanRoute);
   router.get("/templates", listWorkflowTemplatesRoute);
   router.get("/blueprints", listWorkflowBlueprintsRoute);
-  router.delete("/blueprints/:blueprintId", deleteWorkflowBlueprintRoute);
+  router.delete(
+    "/blueprints/:blueprintId/:version",
+    deleteWorkflowBlueprintRoute,
+  );
   router.post(
     "/blueprints/:blueprintId/lifecycle",
     createBlueprintLifecyclePlanRoute,
   );
   router.get("/activity", listWorkflowActivityRoute(options));
   router.get("/", listWorkflowsRoute(options));
+  router.delete("/definitions/:workflowId", deleteWorkflowDefinitionRoute);
   router.post("/:workflowId/cancel", cancelWorkflowRoute(options));
   router.post("/:workflowId/rerun", rerunWorkflowRoute(options));
   router.post("/:workflowId/signals", signalWorkflowRoute(options));

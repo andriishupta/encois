@@ -14,6 +14,13 @@ Local mode is process-local; GCP mode uses Cloud Storage, Spanner, Secret
 Manager, and typed read-only GitHub/Jira provider adapters through Application
 Default Credentials.
 
+Mock and GCP adapters implement the same internal interfaces and return the
+same versioned HTTP envelopes. Successful tool, artifact, and graph operations
+use `completed` in both modes; provider health checks use the same `active`
+response for known fixture providers. Only backend data and opaque evidence
+references differ. The mock adapters never synthesize an unknown artifact or
+accept an unsupported logical Graph query.
+
 When `INTEGRATION_OAUTH_CONFIG_JSON` is supplied from Secret Manager, the
 Gateway can refresh provider OAuth tokens on expiry or one provider
 authorization failure, write a new secret version, and retry once. Providers
@@ -31,7 +38,10 @@ credential, calls the provider's identity endpoint, and reports `active`,
 From this directory:
 
 ```bash
-AGENT_GATEWAY_DATA_MODE=mock go run ./cmd/agent-gateway
+AGENT_GATEWAY_DATA_MODE=mock \
+AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
+AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret \
+go run ./cmd/agent-gateway
 ```
 
 Default address: `http://127.0.0.1:8080`.
@@ -45,6 +55,10 @@ separate application-level check. Set the same high-entropy
 internal execution request must carry a signed capability bound to its exact
 organization, workflow, actor, policy version, and scope. Missing service or
 capability configuration makes readiness fail closed.
+
+Set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to
+an OTLP/HTTP collector when one is available. The service creates spans for
+HTTP requests, graph/artifact operations, tool calls, and workflow steps.
 
 Endpoints:
 

@@ -109,7 +109,9 @@ function NewWorkflowPage() {
   const { currentUnitId, units } = useOrganization();
   const search = Route.useSearch();
   const [executionScopeId, setExecutionScopeId] = useState("");
-  const [stage, setStage] = useState<Stage>(1);
+  const [stage, setStage] = useState<Stage>(
+    search.blueprint || search.template ? 2 : 1,
+  );
   const [mode, setMode] = useState<CreationMode | null>(() =>
     search.blueprint ? "blueprint" : search.template ? "template" : null,
   );
@@ -250,7 +252,6 @@ function NewWorkflowPage() {
       : mode === "blueprint"
         ? Boolean(blueprintKey)
         : false;
-  const canContinueToConfigure = Boolean(mode && sourceReady);
   const canPreview = Boolean(name.trim() && sourceReady && !preview.isPending);
   const submitted = submit.data ?? createdPlan;
   const approved =
@@ -279,7 +280,7 @@ function NewWorkflowPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Create workflow"
+        title="New workflow"
         description="Create a governed workflow from a catalog template or an approved Blueprint. Internal identifiers and execution details are managed for you."
         actions={
           <Button variant="outline" asChild>
@@ -309,7 +310,7 @@ function NewWorkflowPage() {
         />
         <StepIndicator
           number="3"
-          label="Review & apply"
+          label="Review and apply"
           active={stage === 3}
           complete={completed}
         />
@@ -323,8 +324,14 @@ function NewWorkflowPage() {
           blueprints={availableBlueprints}
           selectedTemplateKey={templateKey}
           selectedBlueprintKey={blueprintKey}
-          onTemplateChange={setTemplateKey}
-          onBlueprintChange={setBlueprintKey}
+          onTemplateChange={(key) => {
+            setTemplateKey(key);
+            setStage(2);
+          }}
+          onBlueprintChange={(key) => {
+            setBlueprintKey(key);
+            setStage(2);
+          }}
           templatesLoading={templates.isLoading}
           blueprintsLoading={blueprints.isLoading}
           error={
@@ -391,17 +398,6 @@ function NewWorkflowPage() {
           onOpenWorkflows={() => void navigate({ to: "/workflows" })}
         />
       ) : null}
-      {stage === 1 ? (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            disabled={!canContinueToConfigure}
-            onClick={() => setStage(2)}
-          >
-            Continue <ArrowRight data-icon="inline-end" />
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -436,8 +432,7 @@ function SourceStage({
       <div>
         <h2 className="text-lg font-semibold">Choose a starting point</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          The selected source will be resolved into a validated, versioned
-          Blueprint.
+          Select a reviewed template or an approved Blueprint to continue.
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
@@ -575,7 +570,7 @@ function ConfigureStage({
           />
           <InfoItem label="Selected scope" value={currentScope} />
         </div>
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-5">
           <label
             className="flex flex-col gap-2 text-sm font-medium"
             htmlFor="workflow-name"
@@ -606,14 +601,14 @@ function ConfigureStage({
         </div>
         <OrganizationUnitSelect
           id="workflow-execution-scope"
-          label="Execution scope"
+          label="Organization scope"
           value={executionScopeId}
           units={units}
           filter={() => true}
           isDisabled={(unit) => !unit.canView}
           onChange={onExecutionScopeChange}
           required
-          description="Sources must cover this scope. Owners can choose any visible organization unit without copying its Sources."
+          description="The workflow runs only against Sources visible in this scope."
         />
         {error ? <ErrorCallout message={error.message} /> : null}
         <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
@@ -712,7 +707,7 @@ function ReviewStage({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Review the generated plan</CardTitle>
+        <CardTitle>Review and apply</CardTitle>
         <CardDescription>
           Preview is read-only. Submit stores a reviewable plan, approval
           records the human decision, and apply writes the Blueprint registry or

@@ -9,7 +9,8 @@ exposes only internal liveness/readiness endpoints for Cloud Run.
 Start the private Agent Gateway first, then a local Temporal server, and run:
 
 ```bash
-AGENT_AI_MODE=mock AGENT_MEMORY_MODE=mock go run ./cmd/agent-runtime
+AGENT_AI_MODE=mock AGENT_SOURCE_MODE=mock AGENT_MEMORY_MODE=mock \
+AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token go run ./cmd/agent-runtime
 ```
 
 Configuration is environment-based:
@@ -24,6 +25,9 @@ Configuration is environment-based:
 - `AGENT_AI_MODE` — `gemini` (default) uses the configured Gemini/Vertex AI
   backend; `mock` enables the deterministic local fixture in
   `internal/mock` and requires no model credentials;
+- `AGENT_SOURCE_MODE` — `gateway` (default) requires an artifact reference and
+  reads it through Agent Gateway; `mock` is an explicit deterministic source
+  fixture mode. Gateway mode never falls back to fabricated source content;
 - `AGENT_GATEWAY_URL` — defaults to `http://127.0.0.1:8080`;
 - `AGENT_GATEWAY_SERVICE_TOKEN` — bearer token used for private Gateway calls;
 - `AGENT_GATEWAY_AUDIENCE` — optional Cloud Run service URL; when set, the
@@ -39,10 +43,9 @@ Configuration is environment-based:
   Application Default Credentials instead of a long-lived Gemini API key;
 - `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` — Vertex AI project and
   region; the location defaults to `us-central1`;
-- `GEMINI_API_KEY` or `GOOGLE_API_KEY` — optional for the local scaffold;
-  without it ADK agent steps return a deferred status instead of calling
-  Gemini. Use `AGENT_AI_MODE=mock` when the local workflow should produce a
-  short deterministic AI result instead;
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` — required for `AGENT_AI_MODE=gemini`
+  unless Vertex AI mode is enabled. Use `AGENT_AI_MODE=mock` explicitly when
+  the local workflow should produce a deterministic AI result;
 - `AGENT_MEMORY_MODE` — `gcp` (default) calls Vertex AI Memory Bank through the
   configured Reasoning Engine; use the explicit `mock` value for local/test
   runs;
@@ -51,6 +54,9 @@ Configuration is environment-based:
 - `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
   name required by `AGENT_MEMORY_MODE=gcp`;
 - `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` — optional
+  OTLP/HTTP trace endpoint. If unset, spans are created locally but are not
+  exported; no provider or source mock is selected implicitly.
 - `GEMINI_COORDINATOR_MODEL` — defaults to `gemini-3.1-pro-preview`; used by
   the Coordinator and Workflow Creator instead of the lower-latency specialist
   model;

@@ -6,6 +6,7 @@ const (
 	CoordinatorWorkflowName                 = string(contracts.WorkflowTypeCoordinator)
 	BootstrapProjectWorkflowName            = string(contracts.WorkflowTypeBootstrapProject)
 	CoordinatorContractVersion              = string(contracts.ContractCoordinator)
+	BootstrapProjectContractVersion         = string(contracts.ContractBootstrapProject)
 	WorkflowChangePlanVersion               = string(contracts.ContractWorkflowChangePlan)
 	DynamicWorkflowType                     = string(contracts.WorkflowTypeDynamic)
 	SignalIntegrationConnected              = string(contracts.SignalIntegrationConnected)
@@ -63,6 +64,7 @@ type CoordinatorState struct {
 	PendingPlanIDs          []string            `json:"pendingPlanIds,omitempty"`
 	PendingWorkflowStarts   []WorkflowStartSpec `json:"pendingWorkflowStarts,omitempty"`
 	ProcessedEventIDs       []string            `json:"processedEventIds,omitempty"`
+	ProcessedSignalIDs      []string            `json:"processedSignalIds,omitempty"`
 	MemoryVersion           string              `json:"memoryVersion,omitempty"`
 	LastEvent               string              `json:"lastEvent,omitempty"`
 	ReconciliationCount     int                 `json:"reconciliationCount"`

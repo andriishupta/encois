@@ -10,6 +10,16 @@ type GCPProviderToolOptions struct {
 	OAuthConfigJSON      string
 }
 
+// NewMockDataPlaneAdapters is an explicit local/test fixture selection. The
+// production router constructor never silently substitutes these adapters.
+func NewMockDataPlaneAdapters() RouterOptions {
+	return RouterOptions{
+		ArtifactStore: newMemoryArtifactStore(),
+		GraphStore:    newMemoryGraphStore(),
+		ProviderTools: mockProviderToolRegistry{},
+	}
+}
+
 // NewCloudStorageArtifactStore exposes the artifact adapter for local
 // emulator-backed runs without requiring the Spanner adapter.
 func NewCloudStorageArtifactStore(ctx context.Context, bucket string) (ArtifactStore, func() error, error) {

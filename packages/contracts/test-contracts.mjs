@@ -40,6 +40,7 @@ const blueprint = {
     { id: "source", kind: "tool", tool: "jira.project_tasks" },
     { id: "summary", kind: "agent", agentDefinition: "context.synthesizer@1", dependsOn: ["source"] },
   ],
+  allowedTools: ["jira.project_tasks"],
 };
 
 assert.equal(validateContract("workflowBlueprint", blueprint).valid, true);

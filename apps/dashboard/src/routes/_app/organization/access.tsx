@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   Send,
   ShieldCheck,
-  Users,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -56,6 +55,9 @@ function AccessSettingsPage() {
   const { units, members, permissions, isLoading, isLoaded, error } =
     useOrganization();
   const { permissions: capabilities, can } = usePermissions();
+  const sortedCapabilities = [...capabilities].sort((left, right) =>
+    humanizeKey(left).localeCompare(humanizeKey(right)),
+  );
   const session = getAuthSession();
   const identity = getAuthIdentity();
   const currentMember = members.find(
@@ -279,7 +281,7 @@ function AccessSettingsPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {capabilities.length ? (
-              capabilities.map((permission) => (
+              sortedCapabilities.map((permission) => (
                 <div
                   key={permission}
                   className="flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm"
@@ -301,32 +303,6 @@ function AccessSettingsPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            Visible organization members
-          </CardTitle>
-          <CardDescription>
-            Only members permitted by the current organization scope are shown.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {members.length ? (
-            members.map((member) => (
-              <MemberRow key={member.id} member={member} />
-            ))
-          ) : (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No organization members are visible in the current scope.
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -578,28 +554,6 @@ function AccessRequestRow({
           Awaiting another administrator
         </span>
       ) : null}
-    </div>
-  );
-}
-
-type OrganizationMember = ReturnType<typeof useOrganization>["members"][number];
-
-function MemberRow({ member }: { member: OrganizationMember }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border p-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-        {member.initials}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{member.name}</p>
-        <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-      </div>
-      <span className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-        {member.role}
-      </span>
-      <span className="hidden text-xs text-muted-foreground sm:block">
-        {member.status}
-      </span>
     </div>
   );
 }

@@ -51,6 +51,25 @@ export const WorkflowStepKind = {
 export type WorkflowStepKind =
   (typeof WorkflowStepKind)[keyof typeof WorkflowStepKind];
 
+export const CoordinatorScopeType = {
+  Organization: "organization",
+  Project: "project",
+} as const;
+export type CoordinatorScopeType =
+  (typeof CoordinatorScopeType)[keyof typeof CoordinatorScopeType];
+
+export const CoordinatorStatus = {
+  Created: "CREATED",
+  Onboarding: "ONBOARDING",
+  Bootstrapping: "BOOTSTRAPPING",
+  Ready: "READY",
+  Reconciling: "RECONCILING",
+  Waiting: "WAITING",
+  Suspended: "SUSPENDED",
+} as const;
+export type CoordinatorStatus =
+  (typeof CoordinatorStatus)[keyof typeof CoordinatorStatus];
+
 export const KnowledgeSourceKind = {
   Integration: "integration",
   UploadedDocument: "uploaded_document",
@@ -124,7 +143,6 @@ export type WorkflowResultStatus =
   (typeof WorkflowResultStatus)[keyof typeof WorkflowResultStatus];
 
 export const ToolResultStatus = {
-  Mocked: "mocked",
   Completed: "completed",
   Waiting: "waiting",
   Failed: "failed",

@@ -37,6 +37,7 @@ import type {
   WebhookEndpointSecretResponse,
   WorkflowBlueprintLifecycleRequest,
   WorkflowBlueprintProjection,
+  WorkflowChangePlan,
   WorkflowCreationIntent,
   WorkflowCreationPreview,
   WorkflowEventProjection,
@@ -1227,15 +1228,31 @@ export async function createBlueprintLifecyclePlan(
 
 export async function deleteWorkflowBlueprint(
   blueprintId: string,
+  version: string,
 ): Promise<void> {
   const value = await request<unknown>(
-    `/workflows/blueprints/${encodeURIComponent(blueprintId)}`,
+    `/workflows/blueprints/${encodeURIComponent(blueprintId)}/${encodeURIComponent(version)}`,
     { method: "DELETE" },
   );
   if (!isJsonObject(value) || value.deleted !== true)
     throw createApiError(
       200,
       "The service returned an invalid Blueprint deletion response.",
+      "INVALID_RESPONSE",
+    );
+}
+
+export async function deleteWorkflowDefinition(
+  workflowId: string,
+): Promise<void> {
+  const value = await request<unknown>(
+    `/workflows/definitions/${encodeURIComponent(workflowId)}`,
+    { method: "DELETE" },
+  );
+  if (!isJsonObject(value) || value.deleted !== true)
+    throw createApiError(
+      200,
+      "The service returned an invalid Workflow deletion response.",
       "INVALID_RESPONSE",
     );
 }
@@ -1286,6 +1303,41 @@ export function listWorkflowPlansPage(
     isWorkflowPlanRecord,
     "workflow plan list",
   );
+}
+
+export async function getWorkflowPlan(
+  planId: string,
+): Promise<WorkflowPlanRecord> {
+  const value = await request<unknown>(
+    `/workflows/plans/${encodeURIComponent(planId)}`,
+  );
+  if (!isWorkflowPlanRecord(value))
+    throw createApiError(
+      200,
+      "The service returned an invalid workflow plan.",
+      "INVALID_RESPONSE",
+    );
+  return value;
+}
+
+export async function updateWorkflowPlan(
+  planId: string,
+  plan: WorkflowChangePlan,
+): Promise<WorkflowPlanRecord> {
+  const value = await request<unknown>(
+    `/workflows/plans/${encodeURIComponent(planId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(plan),
+    },
+  );
+  if (!isWorkflowPlanRecord(value))
+    throw createApiError(
+      200,
+      "The service returned an invalid updated workflow plan.",
+      "INVALID_RESPONSE",
+    );
+  return value;
 }
 
 export function listWorkflowPlannerVersions(

@@ -14,9 +14,6 @@ type MemoryActivities struct {
 }
 
 func NewMemoryActivities(store memory.Store) *MemoryActivities {
-	if store == nil {
-		store = memory.NewMockStore()
-	}
 	return &MemoryActivities{store: store}
 }
 
@@ -26,6 +23,9 @@ func (a *MemoryActivities) ExecuteAgentMemory(ctx context.Context, request memor
 	request = memory.SanitizeRequest(request)
 	if err := memory.ValidateRequest(request); err != nil {
 		return memory.Result{}, fmt.Errorf("validate agent memory request: %w", err)
+	}
+	if a == nil || a.store == nil {
+		return memory.Result{}, fmt.Errorf("agent memory store is not configured")
 	}
 	result, err := a.store.Execute(ctx, request)
 	if err != nil {

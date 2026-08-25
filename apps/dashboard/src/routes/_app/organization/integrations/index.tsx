@@ -31,7 +31,6 @@ import {
   ListMeta,
   ListPagination,
   ListSearch,
-  ListSummary,
   ListToolbar,
   type ListViewMode,
   ListViewToggle,
@@ -124,17 +123,10 @@ function IntegrationsPage() {
         : undefined,
   });
   const items = useMemo(
-    () =>
-      Array.isArray(integrations.data?.pages)
-        ? integrations.data.pages.flatMap((page) =>
-            Array.isArray(page.items) ? page.items : [],
-          )
-        : [],
+    () => integrations.data?.pages.flatMap((page) => page.items) ?? [],
     [integrations.data],
   );
-  const firstIntegrationPage = Array.isArray(integrations.data?.pages)
-    ? integrations.data.pages[0]
-    : undefined;
+  const firstIntegrationPage = integrations.data?.pages[0];
   const total = firstIntegrationPage?.pagination.total ?? 0;
   const catalog = useInfiniteQuery({
     queryKey: queryKeys.integrationCatalog(
@@ -161,17 +153,10 @@ function IntegrationsPage() {
         : undefined,
   });
   const catalogItems = useMemo(
-    () =>
-      Array.isArray(catalog.data?.pages)
-        ? catalog.data.pages.flatMap((page) =>
-            Array.isArray(page.items) ? page.items : [],
-          )
-        : [],
+    () => catalog.data?.pages.flatMap((page) => page.items) ?? [],
     [catalog.data],
   );
-  const firstCatalogPage = Array.isArray(catalog.data?.pages)
-    ? catalog.data.pages[0]
-    : undefined;
+  const firstCatalogPage = catalog.data?.pages[0];
   const catalogTotal = firstCatalogPage?.pagination.total ?? 0;
   const statuses = [
     { value: "all", label: "All statuses" },
@@ -253,25 +238,6 @@ function IntegrationsPage() {
             scope.
           </p>
         </div>
-        <ListSummary
-          items={[
-            {
-              label: "Available Integrations",
-              value: integrations.isLoading ? "…" : String(total),
-              detail: `Available in ${scopeLabel}`,
-            },
-            {
-              label: "Visible Integrations",
-              value: integrations.isLoading ? "…" : String(items.length),
-              detail: "Loaded in this view",
-            },
-            {
-              label: "Current scope",
-              value: scopeLabel,
-              detail: "Access-aware results",
-            },
-          ]}
-        />
       </div>
       <ListToolbar>
         <ListSearch
@@ -315,7 +281,11 @@ function IntegrationsPage() {
           view={view}
           getKey={(integration) => integration.id}
           renderItem={(integration) => (
-            <IntegrationPreviewCard integration={integration} view={view} />
+            <IntegrationPreviewCard
+              integration={integration}
+              view={view}
+              scopeLabel={scopeLabel}
+            />
           )}
         />
       ) : null}
@@ -494,9 +464,11 @@ function IntegrationsPage() {
 function IntegrationPreviewCard({
   integration,
   view,
+  scopeLabel,
 }: {
   integration: IntegrationProjection;
   view: ListViewMode;
+  scopeLabel: string;
 }) {
   const Icon =
     integration.provider.toLowerCase() === "github" ? Github : PlugZap;
@@ -533,16 +505,18 @@ function IntegrationPreviewCard({
             aria-hidden="true"
           />
         </CardHeader>
-        <CardContent className="flex items-center gap-2 text-xs text-muted-foreground">
+        <CardContent className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {integration.status === IntegrationStatus.Active ? (
             <CheckCircle2 className="size-3.5" aria-hidden="true" />
           ) : (
             <PlugZap className="size-3.5" aria-hidden="true" />
           )}
           <span>{humanizeKey(integration.status)}</span>
+          <span className="rounded-full bg-secondary px-2 py-1">
+            Visible in {scopeLabel}
+          </span>
           <span className="ml-auto">
-            Technical ID:{" "}
-            <span className="font-mono">{shortIdentifier(integration.id)}</span>
+            ID: <span className="font-mono">{shortIdentifier(integration.id)}</span>
           </span>
         </CardContent>
       </Card>

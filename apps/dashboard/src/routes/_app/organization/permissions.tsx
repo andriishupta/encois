@@ -1,12 +1,16 @@
 import { Permission } from "@encois/contracts";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   Check,
   ChevronRight,
   CircleAlert,
   LockKeyhole,
   Plus,
-  ShieldCheck,
   UserRound,
   X,
 } from "lucide-react";
@@ -30,13 +34,15 @@ import {
   getManagedUnitIds,
   getOrganizationUnit,
   humanizeAccessLevel,
-  type OrganizationMember,
   type OrganizationUnit,
   type UnitPermission,
 } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 
 export const Route = createFileRoute("/_app/organization/permissions")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    memberId: typeof search.memberId === "string" ? search.memberId : undefined,
+  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.OrganizationManage))
       throw redirect({ to: "/forbidden" });
@@ -52,6 +58,8 @@ const accessLevels: AccessLevel[] = [
 ];
 
 function OrganizationPermissionsPage() {
+  const navigate = useNavigate();
+  const { memberId } = Route.useSearch();
   const {
     units,
     members,
@@ -72,7 +80,6 @@ function OrganizationPermissionsPage() {
   );
   const canAssignAdministrator =
     actor?.roleKey === "organization_admin" || actor?.roleKey === "admin";
-  const [selectedMemberId, setSelectedMemberId] = useState("");
   const [addPermissionOpen, setAddPermissionOpen] = useState(false);
   const [newUnitId, setNewUnitId] = useState(currentUnitId);
   const [newAccess, setNewAccess] = useState<AccessLevel>("viewer");
@@ -80,13 +87,12 @@ function OrganizationPermissionsPage() {
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   useEffect(() => {
-    if (members.some((member) => member.id === selectedMemberId)) return;
-    setSelectedMemberId(focusedManager?.id ?? members[0]?.id ?? "");
-  }, [focusedManager?.id, members, selectedMemberId]);
-  useEffect(() => {
     if (units.some((unit) => unit.id === newUnitId && unit.canManage)) return;
     setNewUnitId(units.find((unit) => unit.canManage)?.id ?? "");
   }, [newUnitId, units]);
+  const selectedMemberId = members.some((member) => member.id === memberId)
+    ? (memberId ?? "")
+    : (focusedManager?.id ?? members[0]?.id ?? "");
 
   const selectedMember =
     members.find((member) => member.id === selectedMemberId) ?? members[0];
@@ -202,16 +208,6 @@ function OrganizationPermissionsPage() {
         }
       />
 
-      <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3 text-sm">
-        <ShieldCheck
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">Permission board.</span>{" "}
-          Direct membership scopes are inherited through descendant units.
-        </p>
-      </div>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">
           Loading organization permissions…
@@ -232,43 +228,30 @@ function OrganizationPermissionsPage() {
         </div>
       ) : null}
 
-      {focusedUnit ? (
-        <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
-          <div className="min-w-0">
-            <p className="font-medium">Permission focus</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {formatUnitPath(units, focusedUnit.id)} · new scopes default to
-              this unit
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground">
-            {focusedUnit.name}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Organization members</CardTitle>
-            <CardDescription>
-              Select a person to inspect their scope.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {members.map((member) => (
-              <MemberRow
-                key={member.id}
-                member={member}
-                selected={member.id === selectedMember.id}
-                onSelect={() => setSelectedMemberId(member.id)}
+      <Card className="w-full">
+        <CardHeader>
+            <label
+              className="flex max-w-md flex-col gap-2 text-sm font-medium"
+              htmlFor="permission-member"
+            >
+              Member
+              <Select
+                id="permission-member"
+                value={selectedMember.id}
+                onChange={(event) =>
+                  void navigate({
+                    search: (current) => ({
+                      ...current,
+                      memberId: event.target.value,
+                    }),
+                  })
+                }
+                options={members.map((member) => ({
+                  value: member.id,
+                  label: member.name,
+                }))}
               />
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
+            </label>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -286,8 +269,8 @@ function OrganizationPermissionsPage() {
                 {selectedMember.status}
               </span>
             </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
             <div className="rounded-lg border bg-muted/20 p-3 text-sm">
               <p className="font-medium">Home unit</p>
               <p className="mt-1 text-muted-foreground">
@@ -417,47 +400,9 @@ function OrganizationPermissionsPage() {
                 does not receive access to sibling branches.
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-function MemberRow({
-  member,
-  selected,
-  onSelect,
-}: {
-  member: OrganizationMember;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${selected ? "border-primary bg-primary/[0.04]" : ""}`}
-    >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-        {member.initials}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">
-          {member.name}
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {member.role}
-        </span>
-      </span>
-      <span className="hidden text-xs text-muted-foreground sm:block">
-        {member.status}
-      </span>
-      <ChevronRight
-        className="size-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-    </button>
   );
 }
 

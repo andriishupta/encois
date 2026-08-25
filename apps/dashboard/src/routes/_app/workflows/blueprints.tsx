@@ -5,8 +5,6 @@ import type {
 import { Permission } from "@encois/contracts";
 import {
   useInfiniteQuery,
-  useMutation,
-  useQueryClient,
 } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -15,7 +13,7 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router";
-import { GitBranch, Search, Trash2 } from "lucide-react";
+import { GitBranch, Search } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import {
@@ -30,7 +28,6 @@ import {
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { ProductTerm } from "@/components/product-term";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -38,10 +35,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { deleteWorkflowBlueprint, listWorkflowBlueprintsPage } from "@/lib/api";
+import { listWorkflowBlueprintsPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
-import { useCan } from "@/lib/permissions";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/blueprints")({
@@ -53,7 +49,6 @@ export const Route = createFileRoute("/_app/workflows/blueprints")({
 });
 
 function WorkflowBlueprintsPage() {
-  const canManage = useCan(Permission.WorkflowsManage);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -148,7 +143,7 @@ function WorkflowBlueprintsPage() {
             `${blueprint.blueprintId}:${blueprint.version}`
           }
           renderItem={(blueprint) => (
-            <BlueprintCard blueprint={blueprint} canManage={canManage} />
+            <BlueprintCard blueprint={blueprint} />
           )}
         />
       ) : null}
@@ -198,22 +193,16 @@ function WorkflowBlueprintsPage() {
 
 function BlueprintCard({
   blueprint,
-  canManage,
 }: {
   blueprint: WorkflowBlueprintProjection;
-  canManage: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const remove = useMutation({
-    mutationFn: () => deleteWorkflowBlueprint(blueprint.blueprintId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowBlueprintsRoot(),
-      }),
-  });
-
   return (
-    <Card className="flex h-full flex-col">
+    <Link
+      to="/workflows/blueprints/$blueprintId"
+      params={{ blueprintId: blueprint.blueprintId }}
+      className="group block h-full"
+    >
+      <Card className="flex h-full flex-col transition-colors group-hover:border-foreground/30">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -243,49 +232,8 @@ function BlueprintCard({
             {formatDate(blueprint.updatedAt)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link
-              to="/workflows/blueprints/$blueprintId"
-              params={{ blueprintId: blueprint.blueprintId }}
-            >
-              Review revisions
-            </Link>
-          </Button>
-          {blueprint.status === "approved" && blueprint.isCurrent ? (
-            <Button variant="outline" asChild>
-              <Link
-                to="/workflows/new"
-                search={{ blueprint: blueprint.blueprintId }}
-              >
-                Use as workflow source
-              </Link>
-            </Button>
-          ) : null}
-          {canManage ? (
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Delete this Blueprint? Its historical Workflow Runs will remain available, but all Blueprint revisions will be hidden.",
-                  )
-                )
-                  remove.mutate();
-              }}
-            >
-              <Trash2 data-icon="inline-start" />
-              {remove.isPending ? "Deleting…" : "Delete"}
-            </Button>
-          ) : null}
-          {remove.isError ? (
-            <p role="alert" className="basis-full text-xs text-destructive">
-              Could not delete this Blueprint: {remove.error.message}
-            </p>
-          ) : null}
-        </div>
       </CardContent>
-    </Card>
+      </Card>
+    </Link>
   );
 }

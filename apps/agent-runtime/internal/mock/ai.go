@@ -44,11 +44,15 @@ func WorkflowChangePlanJSON(prompt string) (string, error) {
 		"workflowType":    "encois.dynamic.v1",
 		"purpose":         "Produce a deterministic local evidence summary.",
 		"enabled":         true,
-		"steps": []map[string]any{{
-			"id":              "mock-summary",
-			"kind":            "agent",
-			"agentDefinition": "context.summarizer.v1",
-		}},
+		"steps": []map[string]any{
+			{"id": "mock-approval", "kind": "approval"},
+			{
+				"id":              "mock-summary",
+				"kind":            "agent",
+				"agentDefinition": "context.summarizer.v1",
+				"dependsOn":       []string{"mock-approval"},
+			},
+		},
 		"requiresApproval": true,
 	}
 

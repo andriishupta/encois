@@ -10,21 +10,31 @@ import {
   queryMemoryForPrincipal,
 } from "../memory.service.js";
 
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function readInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
 function parseRequest(value: unknown): MemoryInspectionQueryRequest | null {
-  if (
-    !isJsonObject(value) ||
-    typeof value.agentDefinition !== "string" ||
-    typeof value.query !== "string"
-  )
+  if (!isJsonObject(value)) return null;
+  const agentDefinition =
+    value.agentDefinition === undefined
+      ? undefined
+      : readString(value.agentDefinition);
+  const query =
+    value.query === undefined ? undefined : readString(value.query);
+  const projectId =
+    value.projectId === undefined ? undefined : readString(value.projectId);
+  const maxResults =
+    value.maxResults === undefined ? undefined : readInteger(value.maxResults);
+  if (value.agentDefinition !== undefined && agentDefinition === undefined)
     return null;
-  if (value.projectId !== undefined && typeof value.projectId !== "string")
-    return null;
-  if (
-    value.maxResults !== undefined &&
-    (typeof value.maxResults !== "number" ||
-      !Number.isInteger(value.maxResults))
-  )
-    return null;
+  if (value.projectId !== undefined && projectId === undefined) return null;
+  if (value.query !== undefined && query === undefined) return null;
+  if (value.maxResults !== undefined && maxResults === undefined) return null;
   if (
     value.scope !== undefined &&
     (!isJsonObject(value.scope) ||
@@ -33,12 +43,10 @@ function parseRequest(value: unknown): MemoryInspectionQueryRequest | null {
   )
     return null;
   return {
-    agentDefinition: value.agentDefinition,
-    query: value.query,
-    ...(value.projectId ? { projectId: value.projectId } : {}),
-    ...(typeof value.maxResults === "number"
-      ? { maxResults: value.maxResults }
-      : {}),
+    ...(agentDefinition === undefined ? {} : { agentDefinition }),
+    ...(query === undefined ? {} : { query }),
+    ...(projectId ? { projectId } : {}),
+    ...(maxResults === undefined ? {} : { maxResults }),
     ...(value.scope ? { scope: { ids: value.scope.ids as string[] } } : {}),
   };
 }
@@ -65,7 +73,7 @@ export function queryMemoryRoute(
         {
           error: {
             code: "INVALID_REQUEST",
-            message: "Agent definition and query are required.",
+            message: "Memory query payload is invalid.",
           },
         },
         400,

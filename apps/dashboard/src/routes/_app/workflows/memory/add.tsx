@@ -18,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createMemoryChange } from "@/lib/api";
@@ -47,7 +46,6 @@ function AddWorkflowMemoryPage() {
   const [agentDefinition, setAgentDefinition] = useState<string>(
     agentDefinitions[0],
   );
-  const [projectId, setProjectId] = useState("");
   const [scope, setScope] = useState("");
   const [summary, setSummary] = useState("");
   const [evidenceRefs, setEvidenceRefs] = useState("");
@@ -78,7 +76,6 @@ function AddWorkflowMemoryPage() {
     if (!scope || !summary.trim() || references.length === 0) return;
     mutation.mutate({
       agentDefinition,
-      projectId: projectId.trim() || undefined,
       scope: { ids: [scope] },
       action: "add",
       replacementSummary: summary.trim(),
@@ -116,39 +113,21 @@ function AddWorkflowMemoryPage() {
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-5" onSubmit={submit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label
-                className="flex flex-col gap-2 text-sm font-medium"
-                htmlFor="workflow-memory-agent-definition"
-              >
-                Agent definition
-                <Select
-                  id="workflow-memory-agent-definition"
-                  value={agentDefinition}
-                  onChange={(event) => setAgentDefinition(event.target.value)}
-                  options={agentDefinitions.map((definition) => ({
-                    value: definition,
-                    label: definition,
-                  }))}
-                />
-              </label>
-              <label
-                className="flex flex-col gap-2 text-sm font-medium"
-                htmlFor="workflow-memory-project-id"
-              >
-                Project scope{" "}
-                <span className="font-normal text-muted-foreground">
-                  Optional
-                </span>
-                <Input
-                  id="workflow-memory-project-id"
-                  value={projectId}
-                  onChange={(event) => setProjectId(event.target.value)}
-                  placeholder="Optional project id"
-                  maxLength={160}
-                />
-              </label>
-            </div>
+            <label
+              className="flex flex-col gap-2 text-sm font-medium"
+              htmlFor="workflow-memory-agent-definition"
+            >
+              Agent definition
+              <Select
+                id="workflow-memory-agent-definition"
+                value={agentDefinition}
+                onChange={(event) => setAgentDefinition(event.target.value)}
+                options={agentDefinitions.map((definition) => ({
+                  value: definition,
+                  label: definition,
+                }))}
+              />
+            </label>
             <OrganizationUnitSelect
               id="workflow-memory-scope"
               label="Organization scope"

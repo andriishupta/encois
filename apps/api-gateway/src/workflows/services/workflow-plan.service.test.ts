@@ -26,6 +26,7 @@ const plan: WorkflowChangePlan = {
         workflowType: "encois.dynamic.v1",
         purpose: "Assess release readiness.",
         enabled: true,
+        allowedTools: ["jira.project_tasks"],
         steps: [{ id: "jira", kind: "tool", tool: "jira.project_tasks" }],
       },
       start: {

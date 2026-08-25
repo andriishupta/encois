@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 type Config struct {
 	HTTPAddr              string
@@ -20,6 +23,7 @@ type Config struct {
 	AgentGatewayURL       string
 	AgentGatewayToken     string
 	AgentGatewayAudience  string
+	SourceMode            string
 	ControlPlaneURL       string
 	ControlPlaneToken     string
 	ControlPlaneAudience  string
@@ -50,12 +54,35 @@ func FromEnv() Config {
 		AgentGatewayURL:       envOrDefault("AGENT_GATEWAY_URL", "http://127.0.0.1:8080"),
 		AgentGatewayToken:     os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
 		AgentGatewayAudience:  os.Getenv("AGENT_GATEWAY_AUDIENCE"),
+		SourceMode:            envOrDefault("AGENT_SOURCE_MODE", "gateway"),
 		ControlPlaneURL:       os.Getenv("CONTROL_PLANE_URL"),
 		ControlPlaneToken:     os.Getenv("CONTROL_PLANE_SERVICE_TOKEN"),
 		ControlPlaneAudience:  os.Getenv("CONTROL_PLANE_AUDIENCE"),
 		MemoryMode:            envOrDefault("AGENT_MEMORY_MODE", "gcp"),
 		MemoryReasoningEngine: os.Getenv("VERTEX_MEMORY_REASONING_ENGINE"),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.TemporalHostPort == "" || c.TemporalNamespace == "" || c.TaskQueue == "" {
+		return fmt.Errorf("Temporal host, namespace, and task queue are required")
+	}
+	if c.AgentGatewayURL == "" {
+		return fmt.Errorf("AGENT_GATEWAY_URL is required; disablement must be explicit in a different worker profile")
+	}
+	if c.AgentGatewayToken == "" {
+		return fmt.Errorf("AGENT_GATEWAY_SERVICE_TOKEN is required")
+	}
+	if c.SourceMode != "gateway" && c.SourceMode != "mock" {
+		return fmt.Errorf("unsupported AGENT_SOURCE_MODE %q; use gateway or explicit mock", c.SourceMode)
+	}
+	if c.AgentAIMode != "mock" && !c.UseVertexAI && c.GeminiAPIKey == "" {
+		return fmt.Errorf("Gemini credentials are required unless AGENT_AI_MODE=mock or GOOGLE_GENAI_USE_VERTEXAI=true")
+	}
+	if c.MemoryMode != "mock" && c.MemoryReasoningEngine == "" {
+		return fmt.Errorf("VERTEX_MEMORY_REASONING_ENGINE is required unless AGENT_MEMORY_MODE=mock")
+	}
+	return nil
 }
 
 func runtimeHTTPAddr() string {

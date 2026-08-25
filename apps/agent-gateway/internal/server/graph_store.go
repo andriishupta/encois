@@ -18,6 +18,16 @@ import (
 
 var ErrGraphNotConfigured = errors.New("graph store is not configured")
 
+type unconfiguredGraphStore struct{}
+
+func (unconfiguredGraphStore) Query(context.Context, domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
+	return domain.GraphQueryResponse{}, ErrGraphNotConfigured
+}
+
+func (unconfiguredGraphStore) Upsert(context.Context, domain.GraphMutation) error {
+	return ErrGraphNotConfigured
+}
+
 type GraphStore interface {
 	Query(context.Context, domain.GraphQueryRequest) (domain.GraphQueryResponse, error)
 	Upsert(context.Context, domain.GraphMutation) error
@@ -44,27 +54,24 @@ func newMemoryGraphStore() GraphStore {
 }
 
 func (s *memoryGraphStore) Upsert(_ context.Context, mutation domain.GraphMutation) error {
-	if mutation.OrganizationID == "" {
-		return fmt.Errorf("organizationId is required")
+	if err := validateGraphMutation(mutation); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, node := range mutation.Nodes {
-		if node.ID == "" || node.Type == "" {
-			return fmt.Errorf("graph node id and type are required")
-		}
 		s.nodes[mutation.OrganizationID+"\x00"+node.ID] = scopedGraphNode{organizationID: mutation.OrganizationID, node: node}
 	}
 	for _, edge := range mutation.Edges {
-		if edge.ID == "" || edge.SourceID == "" || edge.TargetID == "" || edge.Relationship == "" {
-			return fmt.Errorf("graph edge identity is incomplete")
-		}
 		s.edges[mutation.OrganizationID+"\x00"+edge.ID] = scopedGraphEdge{organizationID: mutation.OrganizationID, edge: edge}
 	}
 	return nil
 }
 
 func (s *memoryGraphStore) Query(_ context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
+	if err := validateGraphQuery(request); err != nil {
+		return domain.GraphQueryResponse{}, err
+	}
 	s.mu.Lock()
 	s.ensureLocalFixture(request.OrganizationID)
 	defer s.mu.Unlock()
@@ -172,6 +179,7 @@ func graphResponse(request domain.GraphQueryRequest, nodes []domain.GraphNode, e
 	}
 	if len(nodes) > 0 || len(edges) > 0 {
 		now := time.Now().UTC().Format(time.RFC3339)
+		response.EvidenceRefs = []string{"graph://organizations/" + request.OrganizationID + "/queries/" + request.Query}
 		response.Freshness = []contracts.SourceFreshness{{Source: "graph", ObservedAt: now, IngestedAt: now, Status: contracts.FreshnessFresh}}
 	}
 	return response
@@ -227,6 +235,33 @@ func isBroadGraphQuery(query string) bool {
 
 func isSupportedGraphQuery(query string) bool {
 	return isBroadGraphQuery(query) || query == "project.related_entities" || query == "release.blockers"
+}
+
+func validateGraphQuery(request domain.GraphQueryRequest) error {
+	if strings.TrimSpace(request.OrganizationID) == "" {
+		return fmt.Errorf("organizationId is required")
+	}
+	if !isSupportedGraphQuery(strings.TrimSpace(request.Query)) {
+		return fmt.Errorf("unsupported logical graph query %q", request.Query)
+	}
+	return nil
+}
+
+func validateGraphMutation(mutation domain.GraphMutation) error {
+	if strings.TrimSpace(mutation.OrganizationID) == "" {
+		return fmt.Errorf("organizationId is required")
+	}
+	for _, node := range mutation.Nodes {
+		if strings.TrimSpace(node.ID) == "" || strings.TrimSpace(node.Type) == "" || node.Properties == nil {
+			return fmt.Errorf("graph node identity and properties are required")
+		}
+	}
+	for _, edge := range mutation.Edges {
+		if strings.TrimSpace(edge.ID) == "" || strings.TrimSpace(edge.SourceID) == "" || strings.TrimSpace(edge.TargetID) == "" || strings.TrimSpace(edge.Relationship) == "" || edge.Properties == nil {
+			return fmt.Errorf("graph edge identity and properties are required")
+		}
+	}
+	return nil
 }
 
 func graphEdgeTouches(edge domain.GraphEdge, nodeIDs map[string]struct{}) bool {
@@ -306,6 +341,9 @@ func newSpannerGraphStore(ctx context.Context, database string) (GraphStore, fun
 }
 
 func (s *spannerGraphStore) Upsert(ctx context.Context, mutation domain.GraphMutation) error {
+	if err := validateGraphMutation(mutation); err != nil {
+		return err
+	}
 	mutations := make([]*spanner.Mutation, 0, len(mutation.Nodes)+len(mutation.Edges))
 	for _, node := range mutation.Nodes {
 		properties, err := json.Marshal(node.Properties)
@@ -341,8 +379,8 @@ func (s *spannerGraphStore) Upsert(ctx context.Context, mutation domain.GraphMut
 }
 
 func (s *spannerGraphStore) Query(ctx context.Context, request domain.GraphQueryRequest) (domain.GraphQueryResponse, error) {
-	if !isSupportedGraphQuery(request.Query) {
-		return domain.GraphQueryResponse{}, fmt.Errorf("unsupported logical graph query %q", request.Query)
+	if err := validateGraphQuery(request); err != nil {
+		return domain.GraphQueryResponse{}, err
 	}
 	nodes, matchingNodeIDs, err := s.readGraphNodes(ctx, graphNodesStatement(request), request, func(node domain.GraphNode) bool {
 		return graphNodeMatchesQuery(node, request)

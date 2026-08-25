@@ -1,28 +1,30 @@
 import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { isWorkflowServiceError } from "../services/workflow.service.js";
-import { deleteWorkflowBlueprintForPrincipal } from "../services/workflow-creator.service.js";
+import { deleteWorkflowBlueprintRevisionForPrincipal } from "../services/workflow-creator.service.js";
 import { workflowPlanErrorStatus } from "../utils.js";
 
 export const deleteWorkflowBlueprintRoute: Handler<GatewayEnv> = async (
   context,
 ) => {
   const blueprintId = context.req.param("blueprintId")?.trim();
-  if (!blueprintId)
+  const version = context.req.param("version")?.trim();
+  if (!blueprintId || !version)
     return context.json(
       {
         error: {
           code: "INVALID_REQUEST",
-          message: "Blueprint id is required.",
+          message: "Blueprint id and version are required.",
         },
       },
       400,
     );
 
   try {
-    await deleteWorkflowBlueprintForPrincipal(
+    await deleteWorkflowBlueprintRevisionForPrincipal(
       context.get("principal"),
       blueprintId,
+      version,
     );
     return context.json({ data: { deleted: true } });
   } catch (error) {

@@ -95,7 +95,7 @@ assert_http_status 403 \
   --request POST \
   --header 'Content-Type: application/json' \
   --header 'Authorization: Bearer local-agent-runtime-token' \
-  --data '{"contractVersion":"tool-request.v1","requestId":"smoke-denied","workflowId":"workflow:smoke-org:denied","organizationId":"smoke-org","actorId":"smoke-user","policyVersion":"policy-read-only-fixture-v1","scope":{"ids":["team-smoke"]},"capability":"invalid","tool":"unknown.tool","arguments":{}}' \
+  --data '{"contractVersion":"tool-request.v1","requestId":"smoke-denied","workflowId":"workflow:smoke-org:denied","organizationId":"smoke-org","actorId":"smoke-user","policyVersion":"policy-read-only-fixture-v1","scope":{"ids":["team-smoke"]},"capability":"invalid","blueprintId":"smoke-denied-blueprint","blueprintVersion":"1.0.0","allowedTools":["unknown.tool"],"tool":"unknown.tool","arguments":{}}' \
   "${gateway_address}/v1/tools/invoke"
 
 (
@@ -105,6 +105,7 @@ assert_http_status 403 \
   TEMPORAL_NAMESPACE=default \
   TEMPORAL_TASK_QUEUE=encois-agent-runtime \
   AGENT_AI_MODE=mock \
+  AGENT_SOURCE_MODE=mock \
   AGENT_MEMORY_MODE=mock \
   AGENT_GATEWAY_URL="${gateway_address}" \
   AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \

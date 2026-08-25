@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/config"
+	"github.com/andriishupta/encois/apps/agent-gateway/internal/observability"
 	"github.com/andriishupta/encois/apps/agent-gateway/internal/policy"
 	gatewayserver "github.com/andriishupta/encois/apps/agent-gateway/internal/server"
 )
@@ -18,10 +19,16 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.FromEnv()
-	if cfg.CapabilitySecret == "" {
-		logger.Error("execution capability secret is not configured")
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid agent gateway configuration", "error", err)
 		os.Exit(1)
 	}
+	shutdownTelemetry, telemetryErr := observability.Setup(context.Background(), "encois-agent-gateway")
+	if telemetryErr != nil {
+		logger.Error("failed to initialize OpenTelemetry", "error", telemetryErr)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTelemetry(context.Background()) }()
 
 	if cfg.GinMode != "" {
 		gatewayserver.SetGinMode(cfg.GinMode)
@@ -46,6 +53,7 @@ func main() {
 		defer func() { _ = closeAdapters() }()
 	case "mock":
 		// Explicit local/test fixture mode.
+		routerOptions = gatewayserver.NewMockDataPlaneAdapters()
 		if cfg.StorageMode == "gcs" {
 			routerOptions.ArtifactStore, closeAdapters, err = gatewayserver.NewCloudStorageArtifactStore(context.Background(), cfg.StorageBucket)
 			if err != nil {

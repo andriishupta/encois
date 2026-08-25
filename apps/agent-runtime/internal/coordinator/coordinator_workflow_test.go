@@ -19,7 +19,7 @@ func TestBootstrapProjectWorkflowDefersWhenCreatorIsUnavailable(t *testing.T) {
 	}, activity.RegisterOptions{Name: "CreateBootstrapPlan"})
 
 	env.ExecuteWorkflow(BootstrapProjectWorkflow, BootstrapProjectInput{
-		ContractVersion: CoordinatorContractVersion,
+		ContractVersion: BootstrapProjectContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
 		ProjectID:       "project-1",
@@ -131,6 +131,7 @@ func TestCoordinatorWorkflowPerformsInitialOnboardingReconciliation(t *testing.T
 		ContractVersion: CoordinatorContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
+		ScopeType:       ScopeProject,
 		PolicyVersion:   "policy-read-only-fixture-v1",
 		State:           CoordinatorState{Status: StatusOnboarding},
 	})
@@ -162,6 +163,7 @@ func TestCoordinatorWorkflowFailsOnboardingWhenBootstrapIsDeferred(t *testing.T)
 		ContractVersion: CoordinatorContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
+		ScopeType:       ScopeProject,
 		PolicyVersion:   "policy-read-only-fixture-v1",
 		State:           CoordinatorState{Status: StatusOnboarding},
 	})
@@ -212,6 +214,7 @@ func TestCoordinatorWorkflowDeduplicatesCoordinatorEvents(t *testing.T) {
 		ContractVersion: CoordinatorContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
+		ScopeType:       ScopeProject,
 		PolicyVersion:   "policy-read-only-fixture-v1",
 		State:           CoordinatorState{Status: StatusReady},
 	})
@@ -271,6 +274,7 @@ func TestCoordinatorWorkflowRetainsFailedStartsForRetry(t *testing.T) {
 		ContractVersion: CoordinatorContractVersion,
 		CoordinatorID:   "coord-1",
 		OrganizationID:  "org-1",
+		ScopeType:       ScopeProject,
 		PolicyVersion:   "policy-read-only-fixture-v1",
 		State:           CoordinatorState{Status: StatusReady},
 	})

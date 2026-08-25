@@ -316,44 +316,52 @@ function ActivityPage() {
         description="Technical activity that needs a decision or follow-up in the current scope. Each item links to the product surface that owns it; active Runs refresh automatically."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <QueueSummary
-          icon={ActivityIcon}
-          label="Running"
-          value={queueMetric(workflows, runningRuns.length)}
-          detail="Queued, running, or paused workflow runs"
-          to="/workflows/runs"
-        />
-        <QueueSummary
-          icon={AlertTriangle}
-          label="Run attention"
-          value={queueMetric(workflows, failedRuns.length)}
-          detail="Failed or partial investigations"
-          to="/workflows/runs"
-        />
-        <QueueSummaryGroup
-          icon={Waypoints}
-          label="Sources & Integrations"
-          value={environmentAttention}
-          detail="Source health and Integration setup"
-          items={[
-            { label: "Sources", to: "/organization/sources" },
-            { label: "Integrations", to: "/organization/integrations" },
-          ]}
-        />
-        <QueueSummaryGroup
-          icon={ClipboardCheck}
-          label="Approvals & changes"
-          value={decisionAttention}
-          detail="Approvals, Plans, memory, and access"
-          items={[
-            { label: "Runs", to: "/workflows/runs" },
-            { label: "Plans", to: "/workflows/plans" },
-            { label: "Memory", to: "/workflows/memory" },
-            { label: "Access", to: "/organization/access" },
-          ]}
-        />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>General</CardTitle>
+          <CardDescription>
+            Current activity summary. Open the linked surface for details.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ActivityMetric
+            icon={ActivityIcon}
+            label="Running"
+            value={workflows.isError ? "—" : workflows.isLoading ? "…" : runningRuns.length}
+            detail="Queued, running, or paused Runs"
+            to="/workflows/runs"
+          />
+          <ActivityMetric
+            icon={AlertTriangle}
+            label="Run attention"
+            value={workflows.isError ? "—" : workflows.isLoading ? "…" : failedRuns.length}
+            detail="Failed or partial investigations"
+            to="/workflows/runs"
+          />
+          <ActivityMetric
+            icon={Waypoints}
+            label="Sources & Integrations"
+            value={environmentAttention}
+            detail="Source health and connector setup"
+            to="/organization/sources"
+            secondaryLinks={[
+              { label: "Integrations", to: "/organization/integrations" },
+            ]}
+          />
+          <ActivityMetric
+            icon={ClipboardCheck}
+            label="Approvals & changes"
+            value={decisionAttention}
+            detail="Runs, Plans, memory, and access"
+            to="/workflows/runs"
+            secondaryLinks={[
+              { label: "Plans", to: "/workflows/plans" },
+              { label: "Memory", to: "/workflows/memory" },
+              { label: "Access", to: "/organization/access" },
+            ]}
+          />
+        </CardContent>
+      </Card>
 
       {reviewUnavailable ? (
         <Card className="border-destructive/30 bg-destructive/5">
@@ -580,89 +588,52 @@ type ActivityRoute =
   | "/organization/integrations"
   | "/organization/access";
 
-function QueueSummary({
+function ActivityMetric({
   icon: Icon,
   label,
   value,
   detail,
   to,
+  secondaryLinks,
 }: {
   icon: typeof Clock3;
   label: string;
   value: number | string;
   detail: string;
   to: ActivityRoute;
+  secondaryLinks?: readonly { label: string; to: ActivityRoute }[];
 }) {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-        <CardTitle className="min-w-0 text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-        <Link
-          to={to}
-          aria-label={`Open ${label}`}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ArrowUpRight className="size-4" aria-hidden="true" />
-        </Link>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold tracking-tight">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function QueueSummaryGroup({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  items,
-}: {
-  icon: typeof Clock3;
-  label: string;
-  value: number | string;
-  detail: string;
-  items: readonly { label: string; to: ActivityRoute }[];
-}) {
-  return (
-    <Card className="min-w-0">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-        <CardTitle className="flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Icon className="size-4" aria-hidden="true" />
-          {label}
-        </CardTitle>
-        <p className="text-2xl font-semibold tracking-tight">{value}</p>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">{detail}</p>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          {items.map((item) => (
+    <div className="min-w-0 border-l pl-4 first:border-l-0 first:pl-0">
+      <Link
+        to={to}
+        className="group flex items-center gap-2 text-sm font-medium hover:text-foreground"
+      >
+        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+        {label}
+        <ArrowUpRight
+          className="size-3.5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
+      </Link>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      {secondaryLinks?.length ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          {secondaryLinks.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              className="inline-flex text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              {item.label}{" "}
-              <ArrowUpRight className="inline size-3" aria-hidden="true" />
+              {item.label}
+              <ArrowUpRight className="ml-1 size-3" aria-hidden="true" />
             </Link>
           ))}
         </div>
-      </CardContent>
-    </Card>
+      ) : null}
+    </div>
   );
-}
-
-function queueMetric(
-  query: { isLoading: boolean; isError: boolean },
-  value: number,
-): number | string {
-  if (query.isError) return "—";
-  if (query.isLoading) return "…";
-  return value;
 }
 
 function aggregateMetric(

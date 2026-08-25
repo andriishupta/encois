@@ -1150,6 +1150,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowPlanResponse'
+  /api/v1/workflows/blueprints/{blueprintId}/{version}:
+    delete:
+      operationId: deleteWorkflowBlueprintRevision
+      summary: Soft-delete one non-current Blueprint revision
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: blueprintId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 160 }
+        - name: version
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 32 }
+      responses:
+        '200':
+          description: Blueprint revision deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+  /api/v1/workflows/definitions/{workflowId}:
+    delete:
+      operationId: deleteWorkflowDefinition
+      summary: Soft-delete a Workflow definition and its Blueprint revisions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: workflowId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        '200':
+          description: Workflow definition deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
   /api/v1/workflows/plans/preview:
     post:
       operationId: previewWorkflowCreation
@@ -1269,6 +1309,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowPlanResponse'
+  /api/v1/workflows/plans/{planId}:
+    get:
+      operationId: getWorkflowChangePlan
+      summary: Get one tenant-visible persisted workflow change proposal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Persisted workflow proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanResponse'
+    patch:
+      operationId: updateWorkflowChangePlan
+      summary: Update a proposed workflow change plan before approval
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowChangePlanRequest'
+      responses:
+        '200':
+          description: Updated workflow proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowPlanResponse'
+    delete:
+      operationId: deleteWorkflowChangePlan
+      summary: Soft-delete a workflow change proposal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workflow proposal deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
   /api/v1/workflows/plans/{planId}/apply:
     post:
       operationId: applyWorkflowChangePlan
@@ -2174,10 +2272,16 @@ components:
     MemoryInspectionQueryRequest:
       type: object
       additionalProperties: false
-      required: [agentDefinition, query]
       properties:
-        agentDefinition: { type: string, minLength: 1, maxLength: 160 }
-        query: { type: string, minLength: 1, maxLength: 2000 }
+        agentDefinition:
+          type: string
+          minLength: 1
+          maxLength: 160
+          description: Optional agent definition; omit to inspect all Dashboard memory definitions.
+        query:
+          type: string
+          maxLength: 2000
+          description: Optional semantic filter; omitted or empty returns all scoped memories.
         projectId: { type: string, minLength: 1, maxLength: 160 }
         scope: { $ref: '#/components/schemas/ExecutionScope' }
         maxResults: { type: integer, minimum: 1, maximum: 20 }

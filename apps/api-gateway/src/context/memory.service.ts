@@ -23,6 +23,15 @@ export type MemoryServiceOptions = {
   capabilityTtlMs: number;
 };
 
+// TODO: replace this compatibility list with the persisted agent registry when
+// the control plane exposes it. Empty agentDefinition queries fan out only to
+// definitions explicitly supported by the current Dashboard contract.
+const dashboardMemoryAgentDefinitions = [
+  "context.synthesizer@1",
+  "release-investigation.synthesizer@1",
+  "source-ingestion",
+] as const;
+
 function scopeFor(
   principal: AosPrincipal,
   requested: MemoryInspectionQueryRequest["scope"],
@@ -68,17 +77,18 @@ export async function queryMemoryForPrincipal(
       "CAPABILITY_NOT_CONFIGURED",
       "Memory inspection capability signing is not configured.",
     );
-  const agentDefinition = input.agentDefinition.trim();
-  const query = input.query.trim();
+  const client = options.client;
+  const capabilitySecret = options.capabilitySecret;
+  const requestedAgentDefinition = input.agentDefinition?.trim();
+  const query = input.query?.trim() ?? "";
   if (
-    !agentDefinition ||
-    agentDefinition.length > 160 ||
-    !query ||
+    (input.agentDefinition !== undefined &&
+      (!requestedAgentDefinition || requestedAgentDefinition.length > 160)) ||
     query.length > 2000
   )
     throw new GraphServiceError(
       "INVALID_REQUEST",
-      "Agent definition and query are required.",
+      "Memory query values are invalid.",
     );
   const scope = scopeFor(principal, input.scope);
   const allowed = await withOrganizationContext(
@@ -92,44 +102,66 @@ export async function queryMemoryForPrincipal(
       "Agent memory inspection permission is required.",
     );
 
-  const workflowId = `workflow:${principal.organizationId}:dashboard-memory:${requestId}`;
-  const request: AgentMemoryRequest = {
-    contractVersion: ContractVersion.AgentMemory,
-    requestId,
-    traceId,
-    workflowId,
-    organizationId: principal.organizationId,
-    actorId: principal.actorId,
-    policyVersion: options.policyVersion,
-    scope,
-    capability: createExecutionCapability({
-      secret: options.capabilitySecret,
-      organizationId: principal.organizationId,
-      workflowId,
-      actorId: principal.actorId,
-      policyVersion: options.policyVersion,
-      scope,
-      ttlMs: options.capabilityTtlMs,
-    }),
-    agentDefinition,
-    operation: "retrieve",
-    memoryScope: {
-      agentDefinition,
-      ...(input.projectId?.trim() ? { projectId: input.projectId.trim() } : {}),
+  const agentDefinitions = requestedAgentDefinition
+    ? [requestedAgentDefinition]
+    : dashboardMemoryAgentDefinitions;
+  const projectId = input.projectId?.trim();
+  const maxResults = Math.min(Math.max(input.maxResults ?? 10, 1), 20);
+  const baseWorkflowId =
+    `workflow:${principal.organizationId}:dashboard-memory:${requestId}`;
+  const requests: AgentMemoryRequest[] = agentDefinitions.map(
+    (agentDefinition) => {
+      const workflowId = `${baseWorkflowId}:${agentDefinition}`;
+      return {
+        contractVersion: ContractVersion.AgentMemory,
+        requestId,
+        traceId,
+        workflowId,
+        organizationId: principal.organizationId,
+        actorId: principal.actorId,
+        policyVersion: options.policyVersion,
+        scope,
+        capability: createExecutionCapability({
+          secret: capabilitySecret,
+          organizationId: principal.organizationId,
+          workflowId,
+          actorId: principal.actorId,
+          policyVersion: options.policyVersion,
+          scope,
+          ttlMs: options.capabilityTtlMs,
+        }),
+        agentDefinition,
+        operation: "retrieve",
+        memoryScope: {
+          agentDefinition,
+          ...(projectId ? { projectId } : {}),
+        },
+        ...(query ? { query } : {}),
+        maxResults,
+      };
     },
-    query,
-    maxResults: Math.min(Math.max(input.maxResults ?? 10, 1), 20),
-  };
+  );
 
   try {
-    const result = await options.client.query(request);
+    const results = await Promise.all(
+      requests.map((request) => client.query(request)),
+    );
+    const memories = results
+      .flatMap((result) => result.memories)
+      .sort((left, right) => right.observedAt.localeCompare(left.observedAt))
+      .slice(0, maxResults);
+    const status = results.some((result) => result.status === "failed")
+      ? "failed"
+      : results.some((result) => result.status === "deferred")
+        ? "deferred"
+        : "completed";
     return {
-      agentDefinition,
+      agentDefinition: requestedAgentDefinition ?? "all",
       query,
       scope,
-      ...(input.projectId?.trim() ? { projectId: input.projectId.trim() } : {}),
-      status: result.status,
-      memories: result.memories,
+      ...(projectId ? { projectId } : {}),
+      status,
+      memories,
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {

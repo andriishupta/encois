@@ -2,8 +2,14 @@ package workflows
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
@@ -80,5 +86,80 @@ func TestSourceIngestionWorkflowRejectsCrossOrganizationWorkflowID(t *testing.T)
 	})
 	if err == nil {
 		t.Fatal("expected workflow id organization mismatch to be rejected")
+	}
+}
+
+func TestGatewaySourceModeReadsArtifactAndProjectsGraphWithExplicitEmptyEdges(t *testing.T) {
+	var graphPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/artifacts/read":
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("release has one blocked task\n"))
+		case "/v1/graph/upsert":
+			if err := json.NewDecoder(request.Body).Decode(&graphPayload); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"completed"}`))
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	activity := NewSourceIngestionActivities(gatewayclient.New(server.URL, "token"), memory.NewMockStore(), "gateway")
+	input := SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-gateway-source",
+		WorkflowID:       "workflow:org-1:source:revision",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		Scope:            map[string]any{"ids": []string{"project-1"}},
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindUploadedDocument,
+		ArtifactRef:      "gs://bucket/source-1/revision-1.txt",
+		ContentType:      "text/plain",
+		Provider:         "jira",
+		Trigger:          contracts.IngestionTriggerManual,
+		ReadScope:        map[string]any{"ids": []string{"project-1"}},
+		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
+	}
+	result, err := activity.ProcessSourceRevision(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FactsCount != 1 || result.Status != contracts.IngestionStatusCompleted {
+		t.Fatalf("unexpected ingestion result: %+v", result)
+	}
+	if edges, ok := graphPayload["edges"].([]any); !ok || edges == nil {
+		t.Fatalf("graph upsert must send an explicit empty edges array: %#v", graphPayload["edges"])
+	}
+}
+
+func TestGatewaySourceModeFailsWithoutArtifactReference(t *testing.T) {
+	activity := NewSourceIngestionActivities(nil, memory.NewMockStore(), "gateway")
+	_, err := activity.ProcessSourceRevision(context.Background(), SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-gateway-source",
+		WorkflowID:       "workflow:org-1:source:revision",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		Scope:            map[string]any{"ids": []string{"project-1"}},
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindUploadedDocument,
+		Trigger:          contracts.IngestionTriggerManual,
+		ReadScope:        map[string]any{"ids": []string{"project-1"}},
+		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "artifactRef is required for gateway source mode") {
+		t.Fatalf("expected strict gateway source failure, got %v", err)
 	}
 }

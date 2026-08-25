@@ -95,18 +95,35 @@ type ProviderToolResult struct {
 
 type mockProviderToolRegistry struct{}
 
+type unconfiguredProviderToolRegistry struct{}
+
+func (unconfiguredProviderToolRegistry) Invoke(context.Context, domain.ToolInvocationRequest) (ProviderToolResult, error) {
+	return ProviderToolResult{}, ErrProviderToolUnavailable
+}
+func (unconfiguredProviderToolRegistry) Status() string { return "unconfigured" }
+func (unconfiguredProviderToolRegistry) Ready() error   { return ErrProviderToolUnavailable }
+func (unconfiguredProviderToolRegistry) Check(context.Context, ProviderHealthCheckRequest) error {
+	return ErrProviderToolUnavailable
+}
+
 func (mockProviderToolRegistry) Invoke(_ context.Context, request domain.ToolInvocationRequest) (ProviderToolResult, error) {
-	data, evidenceRefs, freshness, ok := mockTool(request.Tool, request.OrganizationID)
-	if !ok {
-		return ProviderToolResult{}, ErrProviderToolUnavailable
+	data, evidenceRefs, freshness, err := mockTool(request)
+	if err != nil {
+		return ProviderToolResult{}, err
 	}
 	return ProviderToolResult{Data: data, EvidenceRefs: evidenceRefs, Provenance: mockToolProvenance(request.Tool, request.OrganizationID, data), Freshness: freshness}, nil
 }
 
 func (mockProviderToolRegistry) Status() string { return "mock-in-memory" }
 func (mockProviderToolRegistry) Ready() error   { return nil }
-func (mockProviderToolRegistry) Check(context.Context, ProviderHealthCheckRequest) error {
-	return ErrProviderToolUnavailable
+func (mockProviderToolRegistry) Check(_ context.Context, request ProviderHealthCheckRequest) error {
+	if _, _, ok := providerHealthBinding(request.Provider); !ok {
+		return ErrProviderToolUnavailable
+	}
+	if strings.TrimSpace(request.OrganizationID) == "" || strings.TrimSpace(request.IntegrationID) == "" {
+		return fmt.Errorf("organizationId and integrationId are required")
+	}
+	return nil
 }
 
 type gcpProviderToolRegistry struct {

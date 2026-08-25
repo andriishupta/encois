@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Check, ClipboardCheck, GitBranch, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
@@ -80,11 +80,7 @@ function WorkflowPlansPage() {
         : undefined,
     refetchInterval: 15_000,
   });
-  const visiblePlans = Array.isArray(plans.data?.pages)
-    ? plans.data.pages.flatMap((page) =>
-        Array.isArray(page.items) ? page.items : [],
-      )
-    : [];
+  const visiblePlans = plans.data?.pages.flatMap((page) => page.items) ?? [];
   const [actionError, setActionError] = useState<string | null>(null);
   const action = useMutation({
     mutationFn: async ({
@@ -267,7 +263,13 @@ function WorkflowPlanCard({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <CardTitle>
-              {blueprint?.name ?? "Workflow change proposal"}
+              <Link
+                to="/workflows/plans/$planId"
+                params={{ planId: plan.planId }}
+                className="hover:underline"
+              >
+                {blueprint?.name ?? "Workflow change proposal"}
+              </Link>
             </CardTitle>
             <CardDescription>
               {change?.kind ?? "change"} · {status} ·{" "}
@@ -352,10 +354,19 @@ function WorkflowPlanCard({
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <div className="text-xs text-muted-foreground">
-            Plan ID: <span className="font-mono">{plan.planId}</span>
-          </div>
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Technical details</summary>
+            <span className="mt-1 block font-mono">Plan {plan.planId}</span>
+          </details>
           <div className="flex gap-2">
+            <Button variant="ghost" asChild>
+              <Link
+                to="/workflows/plans/$planId"
+                params={{ planId: plan.planId }}
+              >
+                Open details
+              </Link>
+            </Button>
             {plan.status === "proposed" ? (
               <Button
                 variant="outline"

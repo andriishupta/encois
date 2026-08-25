@@ -3,7 +3,6 @@ import { CoordinationMode, Permission } from "@encois/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
-  Check,
   CircleAlert,
   Radio,
   SlidersHorizontal,
@@ -74,8 +73,7 @@ function WorkspaceSettingsPage() {
           below when your session has the required permission.
         </div>
       ) : null}
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
+      <Card className="max-w-3xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <SlidersHorizontal
@@ -96,39 +94,10 @@ function WorkspaceSettingsPage() {
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Scope and investigation defaults are resolved by the control plane
-              for the active organization and session.
+              Scope and investigation context are resolved by the organization
+              control plane for the active session.
             </p>
-          </CardContent>
-        </Card>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Default investigation preferences</CardTitle>
-            <CardDescription>
-              These are starting defaults. Each investigation can use a narrower
-              scope.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {[
-              "Show evidence and freshness",
-              "Include delegated agent steps",
-              "Surface unresolved input early",
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-center gap-3 rounded-lg border px-3 py-3 text-sm"
-              >
-                <span className="flex size-5 items-center justify-center rounded-full bg-muted">
-                  <Check
-                    className="size-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </span>
-                {item}
-              </div>
-            ))}
-            <div className="mt-2 border-t pt-5">
+            <div className="border-t pt-5">
               <p className="text-sm font-medium">Product term explanations</p>
               <label
                 className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm"
@@ -157,8 +126,7 @@ function WorkspaceSettingsPage() {
               </label>
             </div>
           </CardContent>
-        </Card>
-      </div>
+      </Card>
 
       {onboarding && onboarding.status !== "ready" ? (
         <OnboardingConfigurationCard

@@ -17,12 +17,23 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/health"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/integrations/corecoordinator"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
+	"github.com/andriishupta/encois/apps/agent-runtime/internal/observability"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/workflows"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.FromEnv()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid agent runtime configuration", "error", err)
+		os.Exit(1)
+	}
+	shutdownTelemetry, err := observability.Setup(context.Background(), "encois-agent-runtime")
+	if err != nil {
+		logger.Error("failed to initialize OpenTelemetry", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTelemetry(context.Background()) }()
 
 	temporalOptions := client.Options{
 		HostPort:  cfg.TemporalHostPort,
@@ -77,7 +88,7 @@ func main() {
 	if cfg.AgentGatewayURL != "" {
 		agentGateway = gatewayclient.NewWithAudience(cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)
 	}
-	sourceActivities := workflows.NewSourceIngestionActivities(agentGateway, memoryStore)
+	sourceActivities := workflows.NewSourceIngestionActivities(agentGateway, memoryStore, cfg.SourceMode)
 	w := worker.New(temporalClient, cfg.TaskQueue, worker.Options{
 		OnFatalError: func(err error) {
 			healthServer.Ready.Store(false)
