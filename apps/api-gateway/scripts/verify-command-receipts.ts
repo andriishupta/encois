@@ -183,8 +183,7 @@ try {
       AND command_id = ${request.updateId}
   `;
   if (
-    !receipt ||
-    receipt.status !== "accepted" ||
+    receipt?.status !== "accepted" ||
     transportCalls !== 2 ||
     logicalApplications !== 1
   ) {

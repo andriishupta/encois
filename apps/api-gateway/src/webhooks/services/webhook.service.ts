@@ -107,7 +107,9 @@ export function verifyWebhookSignature(
     createHmac("sha256", secret).update(bytes).digest("hex"),
     "utf8",
   );
-  const supplied = Buffer.from(match[1]!.toLowerCase(), "utf8");
+  const suppliedDigest = match[1];
+  if (!suppliedDigest) return false;
+  const supplied = Buffer.from(suppliedDigest.toLowerCase(), "utf8");
   return (
     expected.length === supplied.length && timingSafeEqual(expected, supplied)
   );

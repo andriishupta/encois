@@ -62,8 +62,7 @@ try {
       ? (body as Record<string, unknown>)
       : null;
   const data =
-    envelope &&
-    envelope.data &&
+    envelope?.data &&
     typeof envelope.data === "object" &&
     !Array.isArray(envelope.data)
       ? (envelope.data as Record<string, unknown>)

@@ -1,7 +1,6 @@
 import {
   type ExecutionScope,
   isJsonObject,
-  type JsonObject,
   Permission,
   type SavedInvestigation,
   type SavedInvestigationCreateRequest,

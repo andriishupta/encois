@@ -930,15 +930,17 @@ export async function startIntegrationAuthorizationForPrincipal(
     throw new Error("INTEGRATION_AUTHORIZATION_FAILED");
   }
 
-  if (result.status === "redirect" && result.stateHash && result.expiresAt) {
+  const stateHash = result.status === "redirect" ? result.stateHash : undefined;
+  const expiresAt = result.status === "redirect" ? result.expiresAt : undefined;
+  if (stateHash && expiresAt) {
     await withOrganizationContext(database, principal.organizationId, (db) =>
       db.insert(integrationAuthorizationStates).values({
         organizationId: principal.organizationId,
         integrationId: integration.id,
         actorUserId: userId,
         provider: integration.provider,
-        stateHash: result.stateHash!,
-        expiresAt: new Date(result.expiresAt!),
+        stateHash,
+        expiresAt: new Date(expiresAt),
       }),
     );
   }

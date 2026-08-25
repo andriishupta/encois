@@ -1619,10 +1619,18 @@ async function seedFixtures(): Promise<unknown> {
 
     const outputOrganizations: unknown[] = [];
     for (const organizationSpec of organizationsFixture) {
-      const organization = organizationsBySlug.get(organizationSpec.slug)!;
-      const owner = usersByKey.get("owner")!;
-      const engineeringUnit = organization.units.get("engineering")!;
-      const customerSuccessUnit = organization.units.get("customer-success")!;
+      const organization = organizationsBySlug.get(organizationSpec.slug);
+      if (!organization)
+        throw new Error(
+          `Organization fixture ${organizationSpec.slug} was not created.`,
+        );
+      const owner = usersByKey.get("owner");
+      const engineeringUnit = organization.units.get("engineering");
+      const customerSuccessUnit = organization.units.get("customer-success");
+      if (!owner || !engineeringUnit || !customerSuccessUnit)
+        throw new Error(
+          `Organization fixture ${organizationSpec.slug} is incomplete.`,
+        );
       const firstIntegration = await ensureIntegration(
         tx,
         organization,
@@ -1689,10 +1697,16 @@ async function seedFixtures(): Promise<unknown> {
           thirdIntegration.id,
         ),
       ];
+      const [githubSource, jiraSource, handbookSource, incidentSource] =
+        sources;
+      if (!githubSource || !jiraSource || !handbookSource || !incidentSource)
+        throw new Error(
+          `Organization fixture ${organizationSpec.slug} has incomplete sources.`,
+        );
       await ensureSourceIngestion(
         tx,
         organization,
-        sources[0]!,
+        githubSource,
         "completed",
         "memory_distilled",
         48,
@@ -1700,7 +1714,7 @@ async function seedFixtures(): Promise<unknown> {
       await ensureSourceIngestion(
         tx,
         organization,
-        sources[1]!,
+        jiraSource,
         "completed",
         "memory_distilled",
         17,
@@ -1708,7 +1722,7 @@ async function seedFixtures(): Promise<unknown> {
       await ensureSourceIngestion(
         tx,
         organization,
-        sources[2]!,
+        handbookSource,
         "completed",
         "graph_projected",
         12,
@@ -1716,7 +1730,7 @@ async function seedFixtures(): Promise<unknown> {
       await ensureSourceIngestion(
         tx,
         organization,
-        sources[3]!,
+        incidentSource,
         "failed",
         "acquired",
         0,

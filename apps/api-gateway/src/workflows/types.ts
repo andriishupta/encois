@@ -1,7 +1,6 @@
 import type {
   ContractVersion,
   CoordinationMode,
-  CoordinatorEvent,
   ExecutionScope,
   JsonObject,
   KnowledgeSourceScope,

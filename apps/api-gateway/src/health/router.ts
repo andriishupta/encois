@@ -39,7 +39,7 @@ export async function checkDatabase(
     const schemaReady = Boolean(
       (
         await client.unsafe("select to_regclass($1) as schema_marker", [
-          "public." + currentSchemaMarker,
+          `public.${currentSchemaMarker}`,
         ])
       )[0]?.schema_marker,
     );

@@ -162,7 +162,7 @@ async function reconcileSourceIngestion(
   } catch {
     return;
   }
-  if (!projection || projection.status !== "completed") return;
+  if (projection?.status !== "completed") return;
   const reader = options.workflowClient as unknown as WorkflowResultReader;
   if (typeof reader.GetResult !== "function") return;
   const rawResult = await reader
@@ -626,6 +626,12 @@ export async function createKnowledgeSource(
         );
       }
       if (request.kind === KnowledgeSourceKind.Integration) {
+        const integrationId = request.integrationId;
+        if (!integrationId)
+          throw sourceServiceError(
+            "INTEGRATION_REFERENCE_REQUIRED",
+            "Integration sources require integrationId.",
+          );
         const [integration] = await db
           .select({
             provider: integrations.provider,
@@ -635,7 +641,7 @@ export async function createKnowledgeSource(
           .from(integrations)
           .where(
             and(
-              eq(integrations.id, request.integrationId!),
+              eq(integrations.id, integrationId),
               eq(integrations.organizationId, principal.organizationId),
             ),
           )
@@ -667,7 +673,7 @@ export async function createKnowledgeSource(
           .from(integrationBindings)
           .where(
             and(
-              eq(integrationBindings.integrationId, request.integrationId!),
+              eq(integrationBindings.integrationId, integrationId),
               eq(integrationBindings.organizationId, principal.organizationId),
               eq(integrationBindings.status, "active"),
             ),

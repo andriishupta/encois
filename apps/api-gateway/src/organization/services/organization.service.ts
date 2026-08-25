@@ -46,7 +46,16 @@ import {
   workflowTemplates,
   workflowTemplateVersions,
 } from "@encois/persistence";
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+} from "drizzle-orm";
 import {
   getGrantedPermissions,
   isOrganizationAdministratorRole,
@@ -571,10 +580,11 @@ async function validateWorkflowCatalogSelections(
         and(
           inArray(workflowTemplates.key, selectedWorkflows),
           eq(workflowTemplates.status, "active"),
+          isNotNull(workflowTemplates.publishedVersion),
           eq(workflowTemplateVersions.status, "published"),
           eq(
             workflowTemplateVersions.version,
-            workflowTemplates.publishedVersion!,
+            workflowTemplates.publishedVersion,
           ),
           or(
             and(

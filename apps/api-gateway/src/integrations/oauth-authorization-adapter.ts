@@ -241,7 +241,7 @@ async function grantSecretAccessor(
   const existing = bindings.find(
     (binding) => binding.role === "roles/secretmanager.secretAccessor",
   );
-  if (existing && existing.members.includes(accessor)) return;
+  if (existing?.members.includes(accessor)) return;
   if (existing) existing.members.push(accessor);
   else
     bindings.push({

@@ -263,7 +263,8 @@ export function createInternalServiceAuthenticator(
 
     const actorId = context.req.header("X-Actor-ID")?.trim() || "agent-runtime";
     if (database) {
-      if (!options.serviceUserId)
+      const serviceUserId = options.serviceUserId;
+      if (!serviceUserId)
         return { reason: "missing_service_user_id", status: "unauthenticated" };
 
       const principal = await withOrganizationContext(
@@ -285,7 +286,7 @@ export function createInternalServiceAuthenticator(
                 eq(organizationMemberships.status, "active"),
               ),
             )
-            .where(eq(users.id, options.serviceUserId!))
+            .where(eq(users.id, serviceUserId))
             .limit(1);
           if (!membership) return null;
 
@@ -634,9 +635,10 @@ async function resolveExistingIdentity(
   const organizationIds = [
     ...new Set(acceptedInvites.map((invite) => invite.organizationId)),
   ];
-  if (organizationIds.length !== 1) return null;
+  const [organizationId] = organizationIds;
+  if (organizationIds.length !== 1 || !organizationId) return null;
 
-  return resolvePrincipalForOrganization(identity, organizationIds[0]!);
+  return resolvePrincipalForOrganization(identity, organizationId);
 }
 
 /**

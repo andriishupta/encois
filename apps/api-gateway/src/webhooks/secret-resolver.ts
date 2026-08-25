@@ -25,13 +25,14 @@ function parseSecretRef(
     /^secretmanager:\/\/projects\/([^/]+)\/secrets\/([^/]+)(?:\/versions\/([^/]+))?$/u.exec(
       secretRef,
     );
-  return match
-    ? {
-        projectId: decodeURIComponent(match[1]!),
-        secretId: decodeURIComponent(match[2]!),
-        ...(match[3] ? { version: decodeURIComponent(match[3]) } : {}),
-      }
-    : undefined;
+  if (!match) return undefined;
+  const [, projectId, secretId, version] = match;
+  if (!projectId || !secretId) return undefined;
+  return {
+    projectId: decodeURIComponent(projectId),
+    secretId: decodeURIComponent(secretId),
+    ...(version ? { version: decodeURIComponent(version) } : {}),
+  };
 }
 
 export function createWebhookSecretResolver(

@@ -400,7 +400,7 @@ async function resolveStoredBlueprint(
       ),
     )
     .limit(1);
-  if (!row || row.status !== "approved") {
+  if (row?.status !== "approved") {
     throw workflowServiceError(
       "BLUEPRINT_NOT_FOUND",
       "The requested approved Blueprint snapshot was not found.",
@@ -1868,7 +1868,7 @@ export async function rerunWorkflow(
           ),
         )
         .limit(1);
-      if (!blueprintRow || blueprintRow.status !== "approved")
+      if (blueprintRow?.status !== "approved")
         throw workflowServiceError(
           "WORKFLOW_REVISION_UNAVAILABLE",
           "The original approved Blueprint revision is no longer available.",

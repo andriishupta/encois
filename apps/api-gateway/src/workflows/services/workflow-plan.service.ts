@@ -853,7 +853,7 @@ export async function applyWorkflowPlan(
               ),
             )
             .limit(1);
-          if (!target || target.status !== "approved") {
+          if (target?.status !== "approved") {
             throw workflowServiceError(
               "WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND",
               `Approved Blueprint ${change.targetBlueprintId}@${change.targetBlueprintVersion} was not found.`,
@@ -974,7 +974,7 @@ export async function applyWorkflowPlan(
               ),
             )
             .limit(1);
-          if (!target || target.status !== "approved") {
+          if (target?.status !== "approved") {
             throw workflowServiceError(
               "WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND",
               `Approved Blueprint ${change.targetBlueprintId}@${change.targetBlueprintVersion} was not found.`,

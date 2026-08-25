@@ -251,12 +251,9 @@ async function verifyFixtures(): Promise<void> {
 
   const report: Record<string, unknown> = {};
   for (const slug of expectedOrganizations) {
-    const organization = bySlug.get(slug)!;
-    const units = await database.db
-      .select({ id: organizationUnits.id })
-      .from(organizationUnits)
-      .where(eq(organizationUnits.organizationId, organization.id));
-    const unitIds = new Set(units.map(({ id }) => id));
+    const organization = bySlug.get(slug);
+    if (!organization)
+      throw new Error(`Organization ${slug} was not found in the database.`);
     const sourceRuns = await database.db
       .select({ temporalWorkflowId: sourceIngestionRuns.temporalWorkflowId })
       .from(sourceIngestionRuns)

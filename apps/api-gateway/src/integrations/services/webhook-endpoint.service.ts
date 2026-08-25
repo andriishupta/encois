@@ -7,7 +7,6 @@ import {
 } from "@encois/contracts";
 import {
   auditEvents,
-  integrations,
   type PersistenceTransaction,
   webhookEndpoints,
   withOrganizationContext,

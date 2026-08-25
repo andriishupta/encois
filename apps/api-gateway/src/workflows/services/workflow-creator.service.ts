@@ -615,7 +615,7 @@ async function resolveBlueprint(
       return candidate;
     },
   );
-  if (!row || row.status !== "approved")
+  if (row?.status !== "approved")
     throw workflowServiceError(
       "WORKFLOW_BLUEPRINT_NOT_FOUND",
       "The selected approved Blueprint is not available in this scope.",

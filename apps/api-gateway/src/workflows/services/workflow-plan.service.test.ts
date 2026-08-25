@@ -71,14 +71,17 @@ describe("workflow plan coordinator events", () => {
   });
 
   it("does not start a registry-only change", () => {
+    const [firstChange] = plan.changes;
+    if (!firstChange)
+      throw new Error("The workflow plan fixture is incomplete.");
     const registryOnlyPlan: WorkflowChangePlan = {
       ...plan,
       changes: [
         {
           kind: "create",
-          blueprint: plan.changes[0]!.blueprint,
-          reason: plan.changes[0]!.reason,
-          requiresApproval: plan.changes[0]!.requiresApproval,
+          blueprint: firstChange.blueprint,
+          reason: firstChange.reason,
+          requiresApproval: firstChange.requiresApproval,
         },
       ],
     };
