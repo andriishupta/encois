@@ -77,10 +77,10 @@ services:
         source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
         target: /var/run/secrets/google/application_default_credentials.json
         read_only: true
-      - encois-watch-prod-node-modules:/workspace/node_modules
-      - encois-watch-prod-api-node-modules:/workspace/apps/api-gateway/node_modules
-      - encois-watch-prod-contracts-node-modules:/workspace/packages/contracts/node_modules
-      - encois-watch-prod-persistence-node-modules:/workspace/packages/persistence/node_modules
+      - /workspace/node_modules
+      - /workspace/apps/api-gateway/node_modules
+      - /workspace/packages/contracts/node_modules
+      - /workspace/packages/persistence/node_modules
     ports:
       - "8787:8787"
 
@@ -147,19 +147,14 @@ services:
       VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:?set VITE_FIREBASE_APP_ID}
     volumes:
       - .:/workspace
-      - encois-watch-prod-node-modules:/workspace/node_modules
-      - encois-watch-prod-dashboard-node-modules:/workspace/apps/dashboard/node_modules
-      - encois-watch-prod-contracts-node-modules:/workspace/packages/contracts/node_modules
+      - /workspace/node_modules
+      - /workspace/apps/dashboard/node_modules
+      - /workspace/packages/contracts/node_modules
     ports:
       - "5173:5173"
     depends_on:
       - api-gateway
 
 volumes:
-  encois-watch-prod-node-modules:
-  encois-watch-prod-api-node-modules:
-  encois-watch-prod-dashboard-node-modules:
-  encois-watch-prod-contracts-node-modules:
-  encois-watch-prod-persistence-node-modules:
   encois-watch-prod-agent-gateway-tmp:
   encois-watch-prod-agent-runtime-tmp:
