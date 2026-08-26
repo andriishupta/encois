@@ -34,3 +34,24 @@ func TestDecodeWorkflowChangePlanAcceptsJsonCodeFence(t *testing.T) {
 		t.Fatalf("unexpected plan: %+v", plan)
 	}
 }
+
+func TestApplyAuthorizedCoordinatorScopeCopiesInputScope(t *testing.T) {
+	plan := coordinator.WorkflowChangePlan{
+		ContractVersion: coordinator.WorkflowChangePlanVersion,
+		PlanID:          "plan-1",
+		CoordinatorID:   "coord-1",
+		OrganizationID:  "org-1",
+	}
+	input := coordinator.CoordinatorStartInput{
+		Scope: coordinator.WorkflowPlanScope{IDs: []string{"unit-1", "unit-2"}},
+	}
+
+	if err := applyAuthorizedCoordinatorScope(&plan, input.Scope); err != nil {
+		t.Fatal(err)
+	}
+	input.Scope.IDs[0] = "changed-after-normalization"
+
+	if plan.Scope == nil || len(plan.Scope.IDs) != 2 || plan.Scope.IDs[0] != "unit-1" {
+		t.Fatalf("expected copied authorized scope, got %+v", plan.Scope)
+	}
+}

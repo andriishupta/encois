@@ -12,6 +12,7 @@ import {
   Connection,
   WorkflowIdConflictPolicy,
   WorkflowIdReusePolicy,
+  WorkflowNotFoundError,
 } from "@temporalio/client";
 import type { AppConfig } from "../config.js";
 import {
@@ -61,6 +62,11 @@ export type WorkflowClient = {
     request: WorkflowUpdateRequest,
   ): Promise<void>;
   cancel(
+    workflowId: string,
+    organizationId: string,
+    namespace: string,
+  ): Promise<void>;
+  terminate(
     workflowId: string,
     organizationId: string,
     namespace: string,
@@ -117,6 +123,31 @@ function temporalStatusMessage(value: string): string | undefined {
     case "UNKNOWN":
     default:
       return `Temporal reported an unsupported workflow status: ${value}.`;
+  }
+}
+
+function canRetryClosedExecution(statusName: string): boolean {
+  return ["FAILED", "TERMINATED", "TIMED_OUT", "CANCELLED"].includes(
+    statusName,
+  );
+}
+
+const coordinatorStateTimeoutMs = 2_000;
+const coordinatorControlTimeoutMs = 5_000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeout = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -343,48 +374,53 @@ function createTemporalWorkflowClient(
         // protects against a concurrent start race.
       }
       if (description) {
-        const existingRequestHash = description.memo?.encoisRequestHash;
-        if (
-          typeof existingRequestHash === "string" &&
-          existingRequestHash !== command.requestHash
-        ) {
-          throw new Error("idempotency conflict");
+        const retryClosedExecution =
+          command.retryClosedExecution === true &&
+          canRetryClosedExecution(description.status.name);
+        if (!retryClosedExecution) {
+          const existingRequestHash = description.memo?.encoisRequestHash;
+          if (
+            typeof existingRequestHash === "string" &&
+            existingRequestHash !== command.requestHash
+          ) {
+            throw new Error("idempotency conflict");
+          }
+          const resolvedStatus = await resolveTemporalStatus(
+            existingHandle,
+            description.status.name,
+            description.type,
+          );
+          return {
+            workflowId: command.workflowId,
+            runId: description.runId,
+            workflowType: description.type,
+            namespace,
+            taskQueue: description.taskQueue,
+            ...resolvedStatus,
+            organizationId: command.input.organizationId,
+            blueprintId:
+              typeof description.memo?.encoisBlueprintId === "string"
+                ? description.memo.encoisBlueprintId
+                : command.input.blueprint?.blueprintId,
+            blueprintVersion:
+              typeof description.memo?.encoisBlueprintVersion === "string"
+                ? description.memo.encoisBlueprintVersion
+                : (command.input.blueprint?.version ??
+                  command.input.blueprintVersion),
+            ...(typeof description.memo?.encoisParentWorkflowId === "string"
+              ? { parentWorkflowId: description.memo.encoisParentWorkflowId }
+              : {}),
+            ...(typeof description.memo?.encoisTrigger === "string"
+              ? { trigger: description.memo.encoisTrigger }
+              : {}),
+            reused: true,
+            createdAt: description.startTime?.toISOString() ?? now(),
+            ...(description.closeTime
+              ? { completedAt: description.closeTime.toISOString() }
+              : {}),
+            updatedAt: now(),
+          };
         }
-        const resolvedStatus = await resolveTemporalStatus(
-          existingHandle,
-          description.status.name,
-          description.type,
-        );
-        return {
-          workflowId: command.workflowId,
-          runId: description.runId,
-          workflowType: description.type,
-          namespace,
-          taskQueue: description.taskQueue,
-          ...resolvedStatus,
-          organizationId: command.input.organizationId,
-          blueprintId:
-            typeof description.memo?.encoisBlueprintId === "string"
-              ? description.memo.encoisBlueprintId
-              : command.input.blueprint?.blueprintId,
-          blueprintVersion:
-            typeof description.memo?.encoisBlueprintVersion === "string"
-              ? description.memo.encoisBlueprintVersion
-              : (command.input.blueprint?.version ??
-                command.input.blueprintVersion),
-          ...(typeof description.memo?.encoisParentWorkflowId === "string"
-            ? { parentWorkflowId: description.memo.encoisParentWorkflowId }
-            : {}),
-          ...(typeof description.memo?.encoisTrigger === "string"
-            ? { trigger: description.memo.encoisTrigger }
-            : {}),
-          reused: true,
-          createdAt: description.startTime?.toISOString() ?? now(),
-          ...(description.closeTime
-            ? { completedAt: description.closeTime.toISOString() }
-            : {}),
-          updatedAt: now(),
-        };
       }
       const handle = await client.workflow.start(command.workflowType, {
         args: [command.input],
@@ -414,7 +450,10 @@ function createTemporalWorkflowClient(
             : {}),
         },
         workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+        workflowIdReusePolicy:
+          command.retryClosedExecution === true
+            ? WorkflowIdReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY
+            : WorkflowIdReusePolicy.REJECT_DUPLICATE,
       });
       const timestamp = now();
 
@@ -571,15 +610,21 @@ function createTemporalWorkflowClient(
 
     async getCoordinatorState(coordinatorId, organizationId) {
       if (!organizationId || !coordinatorId) return null;
-      const temporalClient = await getClient();
-      const workflowId = buildCoordinatorWorkflowId(
-        organizationId,
-        coordinatorId,
-      );
-      const handle = temporalClient.workflow.getHandle(workflowId);
       try {
-        await handle.describe();
-        return await handle.query<CoordinatorState>("coordinator-state");
+        return await withTimeout(
+          (async () => {
+            const temporalClient = await getClient();
+            const workflowId = buildCoordinatorWorkflowId(
+              organizationId,
+              coordinatorId,
+            );
+            const handle = temporalClient.workflow.getHandle(workflowId);
+            await handle.describe();
+            return await handle.query<CoordinatorState>("coordinator-state");
+          })(),
+          coordinatorStateTimeoutMs,
+          null,
+        );
       } catch {
         // Readiness remains driven by the persisted onboarding record when the
         // Coordinator is not available or an older worker has no query.
@@ -610,6 +655,31 @@ function createTemporalWorkflowClient(
         throw new Error(`workflow is ${status} and cannot be cancelled`);
       }
       await handle.cancel();
+    },
+
+    async terminate(workflowId, organizationId) {
+      if (!workflowIdBelongsToOrganization(workflowId, organizationId))
+        throw new Error("workflow not found");
+      try {
+        const terminated = await withTimeout(
+          (async () => {
+            const handle = (await getClient()).workflow.getHandle(workflowId);
+            const description = await handle.describe();
+            if (description.status.name !== "RUNNING") return true;
+            await handle.terminate(
+              "Replaced by an organization onboarding retry.",
+            );
+            return true;
+          })(),
+          coordinatorControlTimeoutMs,
+          false,
+        );
+        if (!terminated)
+          throw new Error("Temporal Coordinator termination timed out.");
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return;
+        throw error;
+      }
     },
   };
 }

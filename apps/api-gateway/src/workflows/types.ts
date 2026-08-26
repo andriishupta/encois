@@ -15,6 +15,8 @@ export type WorkflowStartCommand = {
   workflowType: TemporalWorkflowType;
   workflowId: string;
   taskQueue: string;
+  /** Allow a new execution only after a failed onboarding Coordinator run. */
+  retryClosedExecution?: boolean;
   input: {
     contractVersion:
       | typeof ContractVersion.WorkflowBlueprint

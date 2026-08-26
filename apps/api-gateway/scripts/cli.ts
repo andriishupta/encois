@@ -2,6 +2,7 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
   const options: Record<string, string> = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === "--") continue;
     if (!argument?.startsWith("--")) continue;
     const [key, inlineValue] = argument.slice(2).split("=", 2);
     const value = inlineValue ?? argv[index + 1];

@@ -70,6 +70,25 @@ import {
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const temporalStartTimeoutMs = 5_000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error("Temporal Coordinator start timed out.")),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 export type OrganizationServiceErrorCode =
   | "PERSISTENCE_UNAVAILABLE"
@@ -742,6 +761,7 @@ function coordinatorStartCommand(
     workflowType: TemporalWorkflowType.Coordinator,
     workflowId,
     taskQueue: options.taskQueue,
+    retryClosedExecution: true,
     input: {
       contractVersion: ContractVersion.Coordinator,
       actorId: principal.actorId,
@@ -784,6 +804,17 @@ export async function startOrganizationOnboardingForPrincipal(
     requirePermission(context, Permission.OnboardingManage);
     if (context.onboarding.status === OrganizationOnboardingStatus.Ready)
       return projectOnboarding(context.onboarding);
+    if (context.onboarding.status === OrganizationOnboardingStatus.Failed) {
+      const previousWorkflowId = buildCoordinatorWorkflowId(
+        principal.organizationId,
+        context.onboarding.coordinatorId,
+      );
+      await options.workflowClient.terminate(
+        previousWorkflowId,
+        principal.organizationId,
+        options.namespace,
+      );
+    }
     await validateWorkflowCatalogSelections(
       db,
       principal.organizationId,
@@ -824,14 +855,14 @@ export async function startOrganizationOnboardingForPrincipal(
       );
 
     try {
-      const projection = await options.workflowClient.start(
-        command,
-        options.namespace,
+      const projection = await withTimeout(
+        options.workflowClient.start(command, options.namespace),
+        temporalStartTimeoutMs,
       );
       if (projection.reused) {
-        // A failed onboarding retry may reuse the long-lived Coordinator
-        // execution. Wake it explicitly; the initial start is reconciled by
-        // the workflow itself and does not need a synthetic browser signal.
+        // An active Coordinator can be reused and must be woken explicitly.
+        // A failed or terminated retry starts a new execution and does not
+        // receive a Signal because its initial reconciliation runs on start.
         await options.workflowClient.signalCoordinator(
           context.onboarding.coordinatorId,
           principal.organizationId,

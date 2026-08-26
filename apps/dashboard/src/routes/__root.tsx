@@ -131,6 +131,8 @@ function getPageTitle(pathname: string, productName: string) {
   if (pathname === "/management/access") return "Organization access";
   if (pathname === "/profile") return "Account";
   if (pathname === "/forbidden") return "Access denied";
+  if (pathname === "/onboarding" || pathname.startsWith("/onboarding/"))
+    return "Workspace onboarding";
   return "Page not found";
 }
 

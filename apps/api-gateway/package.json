@@ -18,6 +18,7 @@
     "dispatch:coordinator": "node dist/coordinator-dispatcher.js",
     "dispatch:integration-health": "node dist/integration-health-dispatcher.js",
     "auth:bootstrap-organization": "tsx scripts/bootstrap-organization.ts",
+    "auth:onboarding": "tsx scripts/onboarding.ts",
     "auth:invite-user": "tsx scripts/invite-user.ts",
     "auth:seed-local": "tsx scripts/seed-local.ts",
     "auth:reset-local": "tsx scripts/reset-local.ts",

@@ -254,6 +254,23 @@ organization rather than changing the seeded fixture:
    errors or is deferred. An administrator can explicitly retry a failed
    onboarding; a non-admin receives the administrator handoff.
 
+For Watch AI or Watch mock, the root command below creates the pending invite
+and the matching Firebase Auth Emulator user in one operation. It requires a
+password of at least six characters and refuses to run without the emulator:
+
+```bash
+DATABASE_MIGRATION_URL=postgresql://postgres:postgres@127.0.0.1:5432/encois \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+pnpm run onboarding -- \
+  --organization "OB Onboarding Demo" \
+  --email "ob+1@local.test" \
+  --password "local-onboarding-1"
+```
+
+The command returns the organization ID, invite ID, and Firebase UID. If
+Firebase user creation fails after the database transaction, it removes the
+new organization and its cascading invite/onboarding records.
+
 An onboarding row must never be created by a dashboard fallback or a normal
 `GET /api/v1/organization` read. To diagnose a missing row, inspect the
 control-plane migration/backfill and repair the data through the operator

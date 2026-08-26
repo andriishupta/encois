@@ -121,6 +121,9 @@ try {
     async cancel() {
       throw new Error("not used by receipt verification");
     },
+    async terminate() {
+      throw new Error("not used by receipt verification");
+    },
   };
 
   const principal: AosPrincipal = {

@@ -100,6 +100,18 @@ pnpm --filter @encois/api-gateway auth:bootstrap-organization -- \
   --organization "Example Company" --email owner@example.com
 ```
 
+For a local Watch AI/Watch mock onboarding user, create the pending invite and
+the matching Firebase Auth Emulator account together:
+
+```bash
+DATABASE_MIGRATION_URL=postgresql://postgres:postgres@127.0.0.1:5432/encois \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+pnpm run onboarding -- \
+  --organization "OB Onboarding Demo" \
+  --email "ob+1@local.test" \
+  --password "local-onboarding-1"
+```
+
 Use `auth:invite-user` for later members and `auth:list-waitlist` to review
 unknown visitors. These are private operator scripts, not a public management
 UI; the waitlist requires work email, company name, and a company website or

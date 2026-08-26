@@ -42,6 +42,7 @@ const noOpWorkflowClient: WorkflowClient = {
   async signalCoordinator() {},
   async update() {},
   async cancel() {},
+  async terminate() {},
 };
 
 function createTestWorkflowClient(): WorkflowClient {
@@ -98,6 +99,7 @@ function createTestWorkflowClient(): WorkflowClient {
         throw new Error("workflow not found");
       executions.set(workflowId, { ...projection, status: "cancelled" });
     },
+    async terminate() {},
   };
 }
 
@@ -1735,6 +1737,7 @@ describe("API Gateway", () => {
       signalCoordinator: async () => undefined,
       update: async () => undefined,
       cancel: async () => undefined,
+      terminate: async () => undefined,
     };
     const app = createApp({
       authenticate: async () => ({
@@ -1790,6 +1793,7 @@ describe("API Gateway", () => {
         updatedRequest = request;
       },
       cancel: async () => undefined,
+      terminate: async () => undefined,
     };
     const app = createApp({
       authenticate: async () => ({

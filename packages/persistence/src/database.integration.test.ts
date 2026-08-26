@@ -375,7 +375,17 @@ integrationTest("PostgreSQL persistence boundaries", () => {
     );
   });
 
-  it("keeps uniqueness tenant-scoped and rejects duplicates inside one tenant", async () => {
+  it("allows duplicate source names within one tenant", async () => {
+    await inOrganization(fixture.organizationA, (tx) =>
+      tx.insert(knowledgeSources).values({
+        organizationId: fixture.organizationA,
+        name: "Shared source name",
+        kind: "manual",
+        readScope: { ids: [fixture.unitA] },
+        visibilityScope: { ids: [fixture.unitA] },
+      }),
+    );
+
     const rows = await inOrganization(fixture.organizationA, (tx) =>
       tx
         .select({ id: knowledgeSources.id })
@@ -387,21 +397,42 @@ integrationTest("PostgreSQL persistence boundaries", () => {
           ),
         ),
     );
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
+  });
 
-    await expectPostgresError(
-      () =>
-        inOrganization(fixture.organizationA, (tx) =>
-          tx.insert(knowledgeSources).values({
-            organizationId: fixture.organizationA,
-            name: "Shared source name",
-            kind: "manual",
-            readScope: { ids: [fixture.unitA] },
-            visibilityScope: { ids: [fixture.unitA] },
-          }),
+  it("allows duplicate names for uploaded documents within one tenant", async () => {
+    await inOrganization(fixture.organizationA, async (tx) => {
+      await tx.insert(knowledgeSources).values([
+        {
+          organizationId: fixture.organizationA,
+          name: "Shared source name",
+          kind: "uploaded_document",
+          readScope: { ids: [fixture.unitA] },
+          visibilityScope: { ids: [fixture.unitA] },
+        },
+        {
+          organizationId: fixture.organizationA,
+          name: "Shared source name",
+          kind: "uploaded_document",
+          readScope: { ids: [fixture.unitA] },
+          visibilityScope: { ids: [fixture.unitA] },
+        },
+      ]);
+    });
+
+    const rows = await inOrganization(fixture.organizationA, (tx) =>
+      tx
+        .select({ id: knowledgeSources.id })
+        .from(knowledgeSources)
+        .where(
+          and(
+            eq(knowledgeSources.organizationId, fixture.organizationA),
+            eq(knowledgeSources.name, "Shared source name"),
+            eq(knowledgeSources.kind, "uploaded_document"),
+          ),
         ),
-      "23505",
     );
+    expect(rows).toHaveLength(2);
   });
 
   it("enforces check constraints at the database boundary", async () => {

@@ -102,10 +102,6 @@ export const knowledgeSources = pgTable(
       table.id,
       table.organizationId,
     ),
-    uniqueIndex("knowledge_sources_name_organization_idx").on(
-      table.organizationId,
-      table.name,
-    ),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
       foreignColumns: [integrations.id, integrations.organizationId],

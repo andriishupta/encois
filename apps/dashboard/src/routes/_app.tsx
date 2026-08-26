@@ -5,6 +5,8 @@ import {
   Link,
   Outlet,
   redirect,
+  useLocation,
+  useNavigate,
 } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -12,7 +14,7 @@ import {
   LoaderCircle,
   RotateCcw,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { startOrganizationOnboarding } from "@/lib/api";
@@ -48,6 +50,8 @@ function OrganizationReadinessGate() {
   const { error, errorCode, isLoading, onboarding } = useOrganization();
   const canManageOnboarding = useCan(Permission.OnboardingManage);
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
   const authenticationError = errorCode === "UNAUTHENTICATED";
   const branding = getBranding();
   const retryOnboarding = useMutation({
@@ -58,6 +62,15 @@ function OrganizationReadinessGate() {
       });
     },
   });
+
+  useEffect(() => {
+    if (
+      onboarding?.status === OrganizationOnboardingStatus.Ready &&
+      location.pathname.startsWith("/onboarding")
+    ) {
+      void navigate({ to: "/" });
+    }
+  }, [location.pathname, navigate, onboarding?.status]);
 
   async function recoverClientSession() {
     queryClient.clear();
