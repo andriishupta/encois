@@ -124,13 +124,13 @@ function WorkflowPlanDetailPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title={blueprint?.name ?? "Workflow Plan"}
-        description="Review and, while proposed, edit this persisted workflow proposal before the approval boundary."
+        title={blueprint?.name ?? "Change Plan"}
+        description="Review this persisted Change Plan and manage its approval boundary."
         actions={
           <Button variant="outline" asChild>
             <Link to="/workflows/plans">
               <ArrowLeft data-icon="inline-start" />
-              Back to Plans
+              Back to Change Plans
             </Link>
           </Button>
         }
@@ -276,7 +276,7 @@ function WorkflowPlanDetailPage() {
                   variant="destructive"
                   disabled={remove.isPending}
                   onClick={() => {
-                    if (window.confirm("Delete this workflow Plan?"))
+                    if (window.confirm("Delete this Change Plan?"))
                       remove.mutate();
                   }}
                 >
@@ -303,7 +303,7 @@ function WorkflowPlanDetailPage() {
           <details className="text-sm text-muted-foreground">
             <summary className="cursor-pointer">Technical details</summary>
             <div className="mt-2 flex flex-col gap-1 font-mono text-xs">
-              <span>Plan {plan.planId}</span>
+              <span>Change Plan {plan.planId}</span>
               <span>Coordinator {plan.coordinatorId}</span>
               <span>Created {formatDate(plan.createdAt)}</span>
             </div>

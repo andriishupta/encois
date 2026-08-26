@@ -1,5 +1,8 @@
-name: encois-watch-mock
+name: encois-watch-ai
 
+# Local application and infrastructure with real GCP AI/context adapters.
+# Gemini, Vertex Memory Bank, and Spanner use ADC and GCP. Postgres, Temporal,
+# Firebase Auth, Firebase Storage, and provider tools remain local fixtures.
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - encois-postgres-data:/var/lib/postgresql/data
+      - encois-watch-ai-postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/init/00-runtime-role.sql:/docker-entrypoint-initdb.d/00-runtime-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d encois"]
@@ -25,7 +28,7 @@ services:
       - "7233:7233"
       - "8233:8233"
     volumes:
-      - encois-temporal-data:/tmp
+      - encois-watch-ai-temporal-data:/tmp
     healthcheck:
       test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
       interval: 3s
@@ -33,7 +36,7 @@ services:
       retries: 30
 
   firebase-auth:
-    image: encois-watch-mock/firebase-auth:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/firebase-auth:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/firebase/Dockerfile
@@ -49,10 +52,10 @@ services:
       timeout: 5s
       retries: 30
     volumes:
-      - encois-firebase-data:/firebase/data
+      - encois-watch-ai-firebase-data:/firebase/data
 
   migrations:
-    image: encois-watch-mock/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: packages/persistence/Dockerfile
@@ -66,7 +69,7 @@ services:
     restart: "no"
 
   local-auth-seed:
-    image: encois-watch-mock/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/api-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
@@ -89,7 +92,7 @@ services:
     restart: "no"
 
   agent-gateway:
-    image: encois-watch-mock/agent-gateway:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/agent-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-gateway/Dockerfile.dev
@@ -101,11 +104,14 @@ services:
       AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
       AGENT_GATEWAY_CAPABILITY_SECRET: local-execution-capability-secret
-      AGENT_GATEWAY_DATA_MODE: mock
+      AGENT_GATEWAY_DATA_MODE: hybrid
       AGENT_GATEWAY_STORAGE_MODE: gcs
       GCP_STORAGE_BUCKET: demo-encois.appspot.com
       STORAGE_EMULATOR_HOST: firebase-auth:9199
+      SPANNER_DATABASE: ${SPANNER_DATABASE:?set SPANNER_DATABASE}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
       GIN_MODE: debug
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
     ports:
       - "8080:8080"
     depends_on:
@@ -113,10 +119,14 @@ services:
         condition: service_healthy
     volumes:
       - .:/workspace
-      - encois-watch-mock-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+      - encois-watch-ai-agent-gateway-tmp:/workspace/apps/agent-gateway/tmp
 
   api-gateway:
-    image: encois-watch-mock/api-gateway-dev:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/api-gateway-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
@@ -165,7 +175,7 @@ services:
       - /workspace/packages/persistence/node_modules
 
   agent-runtime:
-    image: encois-watch-mock/agent-runtime:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/agent-runtime:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: apps/agent-runtime/Dockerfile.dev
@@ -177,15 +187,22 @@ services:
       TEMPORAL_HOST_PORT: temporal:7233
       TEMPORAL_NAMESPACE: default
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
-      AGENT_AI_MODE: mock
-      AGENT_SOURCE_MODE: mock
-      AGENT_MEMORY_MODE: mock
-      AGENT_MEMORY_FIXTURE: local
+      AGENT_AI_MODE: gemini
+      AGENT_SOURCE_MODE: gateway
+      AGENT_MEMORY_MODE: gcp
       AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
+      VERTEX_MEMORY_REASONING_ENGINE: ${VERTEX_MEMORY_REASONING_ENGINE:?set VERTEX_MEMORY_REASONING_ENGINE}
       CONTROL_PLANE_URL: http://api-gateway:8787
       CONTROL_PLANE_SERVICE_TOKEN: local-control-plane-token
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
+      GOOGLE_GENAI_USE_VERTEXAI: "true"
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-east1}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
+      GEMINI_REASONING_MODEL: ${GEMINI_REASONING_MODEL:-gemini-3.1-pro-preview}
+      GEMINI_REASONING_THINKING_LEVEL: ${GEMINI_REASONING_THINKING_LEVEL:-high}
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
     ports:
       - "8090:8090"
     depends_on:
@@ -197,10 +214,14 @@ services:
         condition: service_started
     volumes:
       - .:/workspace
-      - encois-watch-mock-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
+      - encois-watch-ai-agent-runtime-tmp:/workspace/apps/agent-runtime/tmp
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
 
   dashboard:
-    image: encois-watch-mock/dashboard-dev:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/dashboard-dev:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
       dockerfile: docker/node/Dockerfile.dev
@@ -229,8 +250,8 @@ services:
       - /workspace/packages/contracts/node_modules
 
 volumes:
-  encois-postgres-data:
-  encois-temporal-data:
-  encois-firebase-data:
-  encois-watch-mock-agent-gateway-tmp:
-  encois-watch-mock-agent-runtime-tmp:
+  encois-watch-ai-postgres-data:
+  encois-watch-ai-temporal-data:
+  encois-watch-ai-firebase-data:
+  encois-watch-ai-agent-gateway-tmp:
+  encois-watch-ai-agent-runtime-tmp:

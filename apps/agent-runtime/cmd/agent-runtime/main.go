@@ -57,8 +57,8 @@ func main() {
 		GoogleCloudProject:  cfg.GoogleCloudProject,
 		GoogleCloudLocation: cfg.GoogleCloudLocation,
 		ModelName:           cfg.GeminiModel,
-		CoordinatorModel:    cfg.CoordinatorModel,
-		CoordinatorThinking: cfg.CoordinatorThink,
+		ReasoningModel:      cfg.ReasoningModel,
+		ReasoningThinking:   cfg.ReasoningThink,
 	})
 	if err != nil {
 		logger.Error("failed to initialize ADK bundle", "error", err)
@@ -68,7 +68,7 @@ func main() {
 	if agentBundle.Mode == agents.ModeGemini && cfg.UseVertexAI {
 		modelBackend = "vertex-ai"
 	}
-	logger.Info("agent bundle initialized", "specialistModel", agentBundle.ModelName, "coordinatorModel", agentBundle.CoordinatorModelName, "coordinatorThinkingLevel", agentBundle.CoordinatorThinkingLevel, "modelBackend", modelBackend, "geminiEnabled", agentBundle.Enabled)
+	logger.Info("agent bundle initialized", "standardModel", agentBundle.ModelName, "reasoningModel", agentBundle.ReasoningModelName, "reasoningThinkingLevel", agentBundle.ReasoningThinkingLevel, "modelBackend", modelBackend, "geminiEnabled", agentBundle.Enabled)
 
 	healthServer := &health.Server{}
 	fatalWorkerErrors := make(chan error, 1)

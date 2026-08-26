@@ -1,16 +1,23 @@
 import { OrganizationOnboardingStatus, Permission } from "@encois/contracts";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
   Outlet,
   redirect,
 } from "@tanstack/react-router";
-import { LoaderCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ExternalLink,
+  LoaderCircle,
+  RotateCcw,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { startOrganizationOnboarding } from "@/lib/api";
 import { clearAuthStorage, getAuthSession } from "@/lib/auth";
+import { getBranding } from "@/lib/branding";
 import {
   OrganizationProvider,
   useOrganization,
@@ -42,6 +49,15 @@ function OrganizationReadinessGate() {
   const canManageOnboarding = useCan(Permission.OnboardingManage);
   const queryClient = useQueryClient();
   const authenticationError = errorCode === "UNAUTHENTICATED";
+  const branding = getBranding();
+  const retryOnboarding = useMutation({
+    mutationFn: startOrganizationOnboarding,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.organization(),
+      });
+    },
+  });
 
   async function recoverClientSession() {
     queryClient.clear();
@@ -160,6 +176,52 @@ function OrganizationReadinessGate() {
                   "The Coordinator could not complete bootstrap. Retry setup from onboarding.")
                 : "Complete onboarding before using the dashboard, integrations, workflows, or organization administration."}
           </p>
+          {failed ? (
+            <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+                <AlertTriangle className="size-4" aria-hidden="true" />
+                <span>Coordinator status: Failed</span>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-destructive/90">
+                {onboarding.lastError ??
+                  "The Coordinator reported a failure without a detailed error."}
+              </p>
+              <details className="mt-3 text-xs text-muted-foreground">
+                <summary className="cursor-pointer">Execution details</summary>
+                <dl className="mt-2 grid gap-1">
+                  <div>
+                    <dt className="inline font-medium text-foreground">
+                      Organization ID:{" "}
+                    </dt>
+                    <dd className="inline break-all">
+                      {onboarding.organizationId}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-medium text-foreground">
+                      Coordinator ID:{" "}
+                    </dt>
+                    <dd className="inline break-all">
+                      {onboarding.coordinatorId}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-medium text-foreground">
+                      Last updated:{" "}
+                    </dt>
+                    <dd className="inline">
+                      {new Date(onboarding.updatedAt).toLocaleString()}
+                    </dd>
+                  </div>
+                </dl>
+              </details>
+            </div>
+          ) : null}
+          {retryOnboarding.isError ? (
+            <p className="mt-4 text-sm text-destructive" role="alert">
+              Try again failed: {retryOnboarding.error.message}
+            </p>
+          ) : null}
           {!canManageOnboarding && !initializing ? (
             <p className="mt-4 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
               Ask your organization administrator to complete setup.
@@ -177,12 +239,41 @@ function OrganizationReadinessGate() {
             >
               {initializing ? "Check status" : "Refresh status"}
             </Button>
+            {canManageOnboarding && failed ? (
+              <Button
+                type="button"
+                onClick={() => retryOnboarding.mutate()}
+                disabled={retryOnboarding.isPending}
+              >
+                <RotateCcw
+                  className={
+                    retryOnboarding.isPending ? "animate-spin" : undefined
+                  }
+                  data-icon="inline-start"
+                />
+                {retryOnboarding.isPending ? "Trying again…" : "Try again"}
+              </Button>
+            ) : null}
             {canManageOnboarding && !initializing ? (
               <Button asChild>
                 <Link to="/onboarding/workspace">Open onboarding</Link>
               </Button>
             ) : null}
+            {failed && branding.supportUrl ? (
+              <Button variant="ghost" asChild>
+                <a href={branding.supportUrl} target="_blank" rel="noreferrer">
+                  Contact support
+                  <ExternalLink data-icon="inline-end" />
+                </a>
+              </Button>
+            ) : null}
           </div>
+          {failed && !branding.supportUrl ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              If retry still fails, contact your support team and include the
+              execution details above.
+            </p>
+          ) : null}
         </div>
       </ReadinessFrame>
     );

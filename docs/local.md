@@ -6,11 +6,12 @@ Google Cloud Identity Platform deployment.
 
 ## Compose modes
 
-The repository has three intentionally different Compose modes:
+The repository has four intentionally different Compose modes:
 
 | Mode | Command | Dependencies | Application containers |
 | --- | --- | --- | --- |
 | Watch mock | `pnpm run dev:watch:mock` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, mock data adapters | Development images with live reload |
+| Watch AI | `pnpm run dev:watch:ai` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, real Spanner and Vertex AI/Memory Bank | Development images with live reload |
 | Watch prod | `pnpm run dev:watch:prod` | Managed services from `.env.local.prod` | Development images with live reload |
 | Local prod | `pnpm run dev:local:prod` | Managed services from `.env.local.prod` | Production Docker images, no watch mode |
 
@@ -18,6 +19,8 @@ Use Watch mock first for deterministic local workflows. Use Watch prod when
 you need to exercise real Temporal Cloud, Spanner, Memory Bank, Cloud Storage,
 Gemini, Identity Platform, and managed Postgres credentials while keeping
 source changes live. Use Local prod to validate the built production images.
+Use Watch AI when only Spanner, Vertex AI Gemini, and Vertex Memory Bank should
+be real while the control plane and local emulators remain local.
 
 ## Start
 
@@ -330,6 +333,24 @@ organization-scoped fixtures on first access; source ingestion can later add
 realistic projections to the same tenant-scoped stores. External Jira/GitHub
 calls remain deterministic fixtures; live provider credentials and adapters
 are hosted follow-up work.
+
+## Watch AI mode
+
+Use this mode to run the full application flow locally while exercising the
+real GCP context and AI adapters:
+
+```bash
+cp .env.local.ai.example .env.local.ai
+# set GOOGLE_APPLICATION_CREDENTIALS
+pnpm dev:watch:ai
+```
+
+The Agent Gateway uses real Spanner Graph and the local Firebase Storage
+emulator. The Agent Runtime uses Vertex AI Gemini and the configured Vertex
+Memory Bank reasoning engine. Postgres, Temporal, Firebase Auth, and provider
+tools remain local. The ADC file is mounted read-only into the GCP-facing
+containers and must not be committed. Stop the stack with
+`pnpm dev:watch:ai:down`.
 
 ## Watch prod mode
 

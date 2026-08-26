@@ -7,7 +7,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Check, Circle, LogOut, ShieldAlert } from "lucide-react";
+import { Activity, Check, Circle, LogOut, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

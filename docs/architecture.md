@@ -411,13 +411,18 @@ provides durable state, waiting, retries, Signals, and recovery.
 
 The model cannot invent a tool, widen scope, select a different organization, or bypass the Agent Gateway.
 
-Model policy is role-specific. High-volume specialists and routine synthesis
-use the lower-latency `GEMINI_MODEL` profile. The Coordinator and Workflow
-Creator use a separate reasoning profile (`GEMINI_COORDINATOR_MODEL`, default
-`gemini-3.1-pro-preview`) with `thinking_level=high`, because they make
-cross-source plans and propose changes to the workflow catalog. Thinking output
-is not exposed as chain-of-thought in logs or the UI; only validated decisions,
-evidence references, and structured results leave the agent boundary.
+Model policy is role-specific. High-volume specialists, routine synthesis, and
+generic Blueprint Agent Definitions use the standard `GEMINI_MODEL` profile,
+defaulting to the stable `gemini-3.7-flash`. The Coordinator and Workflow
+Creator use a separate high-responsibility reasoning profile
+(`GEMINI_REASONING_MODEL`, default `gemini-3.1-pro-preview`) with
+`GEMINI_REASONING_THINKING_LEVEL=high`, because they make cross-source plans
+and propose changes to the workflow catalog. Other configuration names are
+intentionally not supported; before the first release,
+configuration changes may be breaking and must be updated everywhere together.
+Thinking output is not exposed as chain-of-thought in logs or the UI; only
+validated decisions, evidence references, and structured results leave the
+agent boundary.
 
 ### 4.5 Organization onboarding and Coordinator
 

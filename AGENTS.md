@@ -35,6 +35,7 @@ Do not invent product requirements that conflict with those documents. If implem
 8. Run tests only when the user explicitly requests testing/verification or the task itself requires it - unit or tools like tsx/go are fine for harder things and multi-step implementations, but e2e should be definetly run only once; e2e is not mandatory on every run.
 9. No need to add tests everywhere ad this point - only some crucial parts can be covered on api/agent code
 10. If during goal persue you notice some unrelated issues or gaps - report them but don't start to implement them or dont count them as part of goal - it is ok to stop, when not sure
+11. This repository has no released compatibility surface yet. Do not add compatibility aliases, legacy configuration names, silent fallbacks, or migration shims. Breaking configuration and contract changes are allowed before the first release, and all callers, examples, and documentation must be updated together. Invalid or missing configuration must fail closed.
 
 ## Product truth and mocking policy
 

@@ -64,6 +64,7 @@ export type WorkflowStartCommand = {
       pendingPlanIds?: readonly string[];
       processedEventIds?: readonly string[];
       lastEvent?: string;
+      lastError?: string;
       reconciliationCount: number;
     };
   };
@@ -110,14 +111,20 @@ export function buildWorkflowId(identity: WorkflowIdentity): string {
   ].join(":");
 }
 
-/** Stable Temporal id for the long-lived organization/project Coordinator. */
+/**
+ * Stable Temporal id for the long-lived organization/project Coordinator.
+ *
+ * Coordinators are control-plane workflows, not organization-unit runs, so
+ * keep their identity in a separate namespace from ordinary Blueprint runs.
+ */
 export function buildCoordinatorWorkflowId(
   organizationId: string,
   coordinatorId: string,
 ): string {
-  return buildWorkflowId({
-    organizationId,
-    organizationUnitId: organizationId,
-    key: coordinatorId,
-  });
+  return [
+    "org",
+    safePart(organizationId, "organization"),
+    "coordinator",
+    safePart(coordinatorId, "coordinator"),
+  ].join(":");
 }

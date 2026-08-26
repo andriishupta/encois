@@ -101,7 +101,7 @@ const workflowManagementNavigation: readonly NavigationItem[] = [
     permission: Permission.WorkflowsRead,
   },
   {
-    label: "Plans",
+    label: "Change Plans",
     to: "/workflows/plans",
     icon: ClipboardCheck,
     permission: Permission.WorkflowsManage,
@@ -683,12 +683,15 @@ function getBreadcrumbItems(
   if (pathname === "/workflows/blueprints")
     return [{ label: "Workflows", to: "/workflows" }, { label: "Blueprints" }];
   if (pathname === "/workflows/plans")
-    return [{ label: "Workflows", to: "/workflows" }, { label: "Plans" }];
+    return [
+      { label: "Workflows", to: "/workflows" },
+      { label: "Change Plans" },
+    ];
   if (pathname.startsWith("/workflows/plans/"))
     return [
       { label: "Workflows", to: "/workflows" },
-      { label: "Plans", to: "/workflows/plans" },
-      { label: "Plan details" },
+      { label: "Change Plans", to: "/workflows/plans" },
+      { label: "Change Plan" },
     ];
   if (pathname.startsWith("/workflows/definitions/"))
     return [

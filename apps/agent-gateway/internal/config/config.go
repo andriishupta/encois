@@ -50,14 +50,14 @@ func (c Config) Validate() error {
 	if c.CapabilitySecret == "" {
 		return fmt.Errorf("AGENT_GATEWAY_CAPABILITY_SECRET is required")
 	}
-	if c.DataMode != "mock" && c.DataMode != "gcp" {
-		return fmt.Errorf("unsupported AGENT_GATEWAY_DATA_MODE %q; use gcp or explicit mock", c.DataMode)
+	if c.DataMode != "mock" && c.DataMode != "gcp" && c.DataMode != "hybrid" {
+		return fmt.Errorf("unsupported AGENT_GATEWAY_DATA_MODE %q; use gcp, hybrid, or explicit mock", c.DataMode)
 	}
 	if c.StorageMode != "memory" && c.StorageMode != "gcs" {
 		return fmt.Errorf("unsupported AGENT_GATEWAY_STORAGE_MODE %q; use memory or gcs", c.StorageMode)
 	}
-	if c.DataMode == "gcp" && c.StorageMode != "gcs" {
-		return fmt.Errorf("AGENT_GATEWAY_STORAGE_MODE=gcs is required for AGENT_GATEWAY_DATA_MODE=gcp")
+	if (c.DataMode == "gcp" || c.DataMode == "hybrid") && c.StorageMode != "gcs" {
+		return fmt.Errorf("AGENT_GATEWAY_STORAGE_MODE=gcs is required for AGENT_GATEWAY_DATA_MODE=%s", c.DataMode)
 	}
 	if c.StorageMode == "gcs" && c.StorageBucket == "" {
 		return fmt.Errorf("GCP_STORAGE_BUCKET is required for AGENT_GATEWAY_STORAGE_MODE=gcs")
@@ -72,6 +72,17 @@ func (c Config) Validate() error {
 		} {
 			if value == "" {
 				return fmt.Errorf("%s is required for AGENT_GATEWAY_DATA_MODE=gcp", name)
+			}
+		}
+	}
+	if c.DataMode == "hybrid" {
+		for name, value := range map[string]string{
+			"GCP_STORAGE_BUCKET":   c.StorageBucket,
+			"SPANNER_DATABASE":     c.SpannerDatabase,
+			"GOOGLE_CLOUD_PROJECT": c.GoogleCloudProject,
+		} {
+			if value == "" {
+				return fmt.Errorf("%s is required for AGENT_GATEWAY_DATA_MODE=hybrid", name)
 			}
 		}
 	}

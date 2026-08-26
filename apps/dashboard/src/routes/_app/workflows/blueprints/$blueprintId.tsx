@@ -67,14 +67,14 @@ function BlueprintRevisionPage() {
   const [duplicateName, setDuplicateName] = useState("");
   const [reason, setReason] = useState("");
   const [lifecycleSuccess, setLifecycleSuccess] = useState("");
+  const [lifecyclePlanId, setLifecyclePlanId] = useState<string>();
   const lifecycle = useMutation({
     mutationFn: (
       input: Omit<WorkflowBlueprintLifecycleRequest, "contractVersion">,
     ) => createBlueprintLifecyclePlan(blueprintId, input),
     onSuccess: (plan) => {
-      setLifecycleSuccess(
-        `Proposal ${plan.planId} is awaiting approval in Activity.`,
-      );
+      setLifecyclePlanId(plan.planId);
+      setLifecycleSuccess(`Change Plan ${plan.planId} is awaiting approval.`);
       setReason("");
       void queryClient.invalidateQueries({
         queryKey: queryKeys.workflowBlueprintsRoot(),
@@ -539,12 +539,15 @@ function BlueprintRevisionPage() {
                   {lifecycleSuccess ? (
                     <p className="text-sm text-emerald-700 dark:text-emerald-400">
                       {lifecycleSuccess}{" "}
-                      <Link
-                        className="font-medium underline underline-offset-4"
-                        to="/workflows/plans"
-                      >
-                        Open Plans
-                      </Link>
+                      {lifecyclePlanId ? (
+                        <Link
+                          className="font-medium underline underline-offset-4"
+                          to="/workflows/plans/$planId"
+                          params={{ planId: lifecyclePlanId }}
+                        >
+                          Open Change Plan
+                        </Link>
+                      ) : null}
                     </p>
                   ) : null}
                 </>

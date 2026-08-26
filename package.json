@@ -21,6 +21,8 @@
     "e2e:open": "pnpm --filter @encois/e2e e2e:open",
     "dev:watch:mock": "node scripts/compose-with-version.mjs compose.watch.mock.yaml up -d --build",
     "dev:watch:mock:down": "node scripts/compose-with-version.mjs compose.watch.mock.yaml down",
+    "dev:watch:ai": "node scripts/compose-with-version.mjs compose.watch.ai.yaml --env-file .env.local.ai up -d --build",
+    "dev:watch:ai:down": "node scripts/compose-with-version.mjs compose.watch.ai.yaml --env-file .env.local.ai down",
     "dev:watch:prod": "node scripts/compose-with-version.mjs compose.watch.prod.yaml --env-file .env.local.prod up -d --build",
     "dev:watch:prod:down": "node scripts/compose-with-version.mjs compose.watch.prod.yaml --env-file .env.local.prod down",
     "dev:local:prod": "node scripts/compose-with-version.mjs compose.local.prod.yaml --env-file .env.local.prod up -d --build",

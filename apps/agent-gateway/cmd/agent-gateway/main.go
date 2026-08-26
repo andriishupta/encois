@@ -51,6 +51,13 @@ func main() {
 			os.Exit(1)
 		}
 		defer func() { _ = closeAdapters() }()
+	case "hybrid":
+		routerOptions, closeAdapters, err = gatewayserver.NewHybridDataPlaneAdapters(context.Background(), cfg.StorageBucket, cfg.SpannerDatabase)
+		if err != nil {
+			logger.Error("failed to initialize hybrid data adapters", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = closeAdapters() }()
 	case "mock":
 		// Explicit local/test fixture mode.
 		routerOptions = gatewayserver.NewMockDataPlaneAdapters()
@@ -66,7 +73,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		logger.Error("unsupported agent gateway data mode", "data_mode", cfg.DataMode, "allowed", []string{"gcp", "mock"})
+		logger.Error("unsupported agent gateway data mode", "data_mode", cfg.DataMode, "allowed", []string{"gcp", "hybrid", "mock"})
 		os.Exit(1)
 	}
 	routerOptions.CapabilitySecret = cfg.CapabilitySecret

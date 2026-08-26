@@ -34,6 +34,7 @@ EXPOSE 8080
 
 FROM runtime AS local-seed
 
+ENV NODE_ENV=development
 COPY --from=build /local-seed-scripts /app/dist/scripts
 CMD ["node", "dist/scripts/seed-local.js"]
 

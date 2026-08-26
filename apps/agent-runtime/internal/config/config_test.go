@@ -43,3 +43,14 @@ func TestValidateRequiresRealCredentialsOutsideMockModes(t *testing.T) {
 		t.Fatal("expected Memory Bank target to be required")
 	}
 }
+
+func TestReasoningConfigurationUsesCanonicalNames(t *testing.T) {
+	t.Setenv("GEMINI_REASONING_MODEL", "gemini-reasoning-custom")
+	t.Setenv("GEMINI_REASONING_THINKING_LEVEL", "medium")
+	if got := reasoningModelFromEnv(); got != "gemini-reasoning-custom" {
+		t.Fatalf("canonical reasoning model variable was not used: %q", got)
+	}
+	if got := reasoningThinkingFromEnv(); got != "medium" {
+		t.Fatalf("canonical reasoning thinking variable was not used: %q", got)
+	}
+}

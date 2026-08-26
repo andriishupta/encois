@@ -101,7 +101,10 @@ health locally.
 
 Set `AGENT_GATEWAY_DATA_MODE=mock` explicitly for local/test development. The
 default is `gcp`; set it with `GCP_STORAGE_BUCKET` and `SPANNER_DATABASE` to
-activate the hosted adapters. Mock mode uses memory stores by default; set
+activate the hosted adapters. `hybrid` uses real Spanner Graph, the configured
+Cloud Storage client, and local provider fixtures; the watch-ai Compose
+profile points that Cloud Storage client at the Firebase Storage emulator.
+Mock mode uses memory stores by default; set
 `AGENT_GATEWAY_STORAGE_MODE=gcs` with `STORAGE_EMULATOR_HOST` to read raw
 Source artifacts from a local GCS-compatible emulator while keeping Graph and
 provider adapters mocked. GCP mode also requires `GOOGLE_CLOUD_PROJECT`,

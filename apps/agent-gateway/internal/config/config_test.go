@@ -57,3 +57,18 @@ func TestValidateDoesNotAllowMemoryStorageInGCPMode(t *testing.T) {
 		t.Fatal("expected GCP mode to require the Cloud Storage adapter")
 	}
 }
+
+func TestValidateHybridRequiresSpannerAndProject(t *testing.T) {
+	config := validMockConfig()
+	config.DataMode = "hybrid"
+	config.StorageMode = "gcs"
+	config.StorageBucket = "demo-encois.appspot.com"
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected hybrid mode to require Spanner and Google Cloud project configuration")
+	}
+	config.SpannerDatabase = "projects/p/instances/i/databases/d"
+	config.GoogleCloudProject = "project"
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

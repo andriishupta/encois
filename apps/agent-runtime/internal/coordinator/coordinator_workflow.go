@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,27 @@ import (
 )
 
 const coordinatorReconcileInterval = 24 * time.Hour
+
+type onboardingStatusReportError struct {
+	err error
+}
+
+func (e onboardingStatusReportError) Error() string {
+	return e.err.Error()
+}
+
+func (e onboardingStatusReportError) Unwrap() error {
+	return e.err
+}
+
+func coordinatorActivityOptions() workflow.ActivityOptions {
+	return workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 1,
+		},
+	}
+}
 
 // CoordinatorWorkflow is the logical per-organization/project control loop.
 // Provider/model I/O and plan application belong in Activities or the Gateway API.
@@ -173,19 +195,25 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			if err := startApprovedWorkflows(ctx, input, &state, pendingStarts); err != nil {
 				state.Status = StatusSuspended
 				state.LastEvent = "approved-workflow-start-failed"
+				state.LastError = err.Error()
 				continue
 			}
 			state.PendingWorkflowStarts = nil
 		}
 
 		if shouldReconcile {
+			state.LastError = ""
 			if err := reconcileCoordinator(ctx, input, &state); err != nil {
 				// Keep the long-lived Coordinator alive after a bounded Activity
 				// failure. A later Signal or timer can retry reconciliation.
 				state.Status = StatusSuspended
 				state.LastEvent = "reconciliation-failed"
-				if !state.OnboardingComplete {
-					_ = reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "failed", LastError: err.Error()})
+				state.LastError = err.Error()
+				var statusReportErr onboardingStatusReportError
+				if !errors.As(err, &statusReportErr) && !state.OnboardingComplete {
+					if reportErr := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "failed", LastError: err.Error()}); reportErr != nil {
+						state.LastError = fmt.Sprintf("%s; failed to persist onboarding status: %v", state.LastError, reportErr)
+					}
 				}
 			}
 		}
@@ -200,6 +228,7 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 				OrganizationID:       input.OrganizationID,
 				ProjectID:            input.ProjectID,
 				ScopeType:            input.ScopeType,
+				Scope:                input.Scope,
 				ActorID:              input.ActorID,
 				PolicyVersion:        input.PolicyVersion,
 				CoordinationMode:     input.CoordinationMode,
@@ -211,14 +240,7 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 }
 
 func startApprovedWorkflows(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState, starts []WorkflowStartSpec) error {
-	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    2,
-		},
-	})
+	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
 
 	for index, spec := range starts {
 		if len(spec.Scope) == 0 {
@@ -266,14 +288,7 @@ func appendWorkflowStartUnique(values []WorkflowStartSpec, candidate WorkflowSta
 }
 
 func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState) error {
-	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    2,
-		},
-	})
+	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
 
 	var proposal CoordinatorPlanActivityResult
 	if err := workflow.ExecuteActivity(activityCtx, CoordinatorPlanActivityName, input).Get(ctx, &proposal); err != nil {
@@ -291,7 +306,7 @@ func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, sta
 				Status:    "failed",
 				LastError: fmt.Sprintf("Coordinator bootstrap did not produce a plan (status: %s).", status),
 			}); err != nil {
-				return err
+				return onboardingStatusReportError{err: fmt.Errorf("report onboarding failure status: %w", err)}
 			}
 		}
 		return nil
@@ -308,7 +323,7 @@ func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, sta
 	state.LastEvent = "workflow-plan-submitted"
 	if !state.OnboardingComplete {
 		if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "ready"}); err != nil {
-			return err
+			return onboardingStatusReportError{err: fmt.Errorf("report onboarding ready status: %w", err)}
 		}
 		state.OnboardingComplete = true
 		state.Status = StatusReady
@@ -318,14 +333,7 @@ func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, sta
 }
 
 func reportOnboardingStatus(ctx workflow.Context, input CoordinatorStartInput, update OnboardingStatusUpdate) error {
-	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    2,
-		},
-	})
+	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
 	update.CoordinatorID = input.CoordinatorID
 	update.OrganizationID = input.OrganizationID
 	update.ContractVersion = CoordinatorContractVersion
@@ -336,14 +344,7 @@ func BootstrapProjectWorkflow(ctx workflow.Context, input BootstrapProjectInput)
 	if err := ValidateBootstrapProjectInput(input); err != nil {
 		return BootstrapProjectResult{}, err
 	}
-	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    2,
-		},
-	})
+	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
 	var proposal BootstrapPlanActivityResult
 	if err := workflow.ExecuteActivity(activityCtx, "CreateBootstrapPlan", input).Get(ctx, &proposal); err != nil {
 		return BootstrapProjectResult{}, err

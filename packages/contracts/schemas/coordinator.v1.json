@@ -3,7 +3,7 @@
   "$id": "https://encois.dev/schemas/coordinator.v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "coordinatorId", "organizationId", "scopeType", "policyVersion", "state"],
+  "required": ["contractVersion", "coordinatorId", "organizationId", "scopeType", "scope", "policyVersion", "state"],
   "$defs": {
     "state": {
       "type": "object",
@@ -21,6 +21,7 @@
         "processedSignalIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "memoryVersion": { "type": "string", "minLength": 1 },
         "lastEvent": { "type": "string", "minLength": 1 },
+        "lastError": { "type": "string", "minLength": 1 },
         "reconciliationCount": { "type": "integer", "minimum": 0 }
       }
     },
@@ -51,6 +52,7 @@
     "organizationId": { "type": "string", "minLength": 1 },
     "projectId": { "type": "string", "minLength": 1 },
     "scopeType": { "enum": ["organization", "project"] },
+    "scope": { "$ref": "#/$defs/scope" },
     "actorId": { "type": "string", "minLength": 1 },
     "policyVersion": { "type": "string", "minLength": 1 },
     "coordinationMode": { "type": "string", "minLength": 1 },

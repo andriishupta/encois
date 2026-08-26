@@ -1811,6 +1811,7 @@ export async function rerunWorkflow(
     throw workflowServiceError("WORKFLOW_NOT_FOUND", "Workflow not found.");
   const rerunnableStatuses: readonly WorkflowExecutionStatus[] = [
     WorkflowExecutionStatus.Completed,
+    WorkflowExecutionStatus.Failed,
     WorkflowExecutionStatus.Cancelled,
   ];
   if (!rerunnableStatuses.includes(previous.status)) {

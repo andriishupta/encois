@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import {
   type CoordinatorEvent,
   CoordinatorSignalName,
+  type CoordinatorState,
   WorkflowExecutionStatus,
   WorkflowSignalName,
+  WorkflowStatusReason,
 } from "@encois/contracts";
 import {
   Client,
@@ -47,6 +49,11 @@ export type WorkflowClient = {
     namespace: string,
     event: CoordinatorEvent,
   ): Promise<void>;
+  getCoordinatorState?(
+    coordinatorId: string,
+    organizationId: string,
+    namespace: string,
+  ): Promise<CoordinatorState | null>;
   update(
     workflowId: string,
     organizationId: string,
@@ -73,14 +80,164 @@ function now(): string {
 }
 
 function temporalStatus(value: string): WorkflowRunStatus {
-  const normalized = value.toLowerCase();
-  if (normalized.includes("completed"))
-    return WorkflowExecutionStatus.Completed;
-  if (normalized.includes("failed") || normalized.includes("timed_out"))
-    return WorkflowExecutionStatus.Failed;
-  if (normalized.includes("cancel")) return WorkflowExecutionStatus.Cancelled;
-  if (normalized.includes("waiting")) return WorkflowExecutionStatus.Waiting;
-  return WorkflowExecutionStatus.Running;
+  switch (value) {
+    case "RUNNING":
+    case "CONTINUED_AS_NEW":
+      return WorkflowExecutionStatus.Running;
+    case "PAUSED":
+      return WorkflowExecutionStatus.Paused;
+    case "COMPLETED":
+      return WorkflowExecutionStatus.Completed;
+    case "CANCELLED":
+      return WorkflowExecutionStatus.Cancelled;
+    case "FAILED":
+    case "TERMINATED":
+    case "TIMED_OUT":
+    case "UNSPECIFIED":
+    case "UNKNOWN":
+    default:
+      return WorkflowExecutionStatus.Failed;
+  }
+}
+
+function temporalStatusMessage(value: string): string | undefined {
+  switch (value) {
+    case "TERMINATED":
+      return "Temporal terminated this workflow.";
+    case "TIMED_OUT":
+      return "Temporal timed out this workflow.";
+    case "FAILED":
+    case "CANCELLED":
+    case "COMPLETED":
+    case "RUNNING":
+    case "PAUSED":
+    case "CONTINUED_AS_NEW":
+      return undefined;
+    case "UNSPECIFIED":
+    case "UNKNOWN":
+    default:
+      return `Temporal reported an unsupported workflow status: ${value}.`;
+  }
+}
+
+type TemporalStatusHandle = {
+  result(): Promise<unknown>;
+  query<Ret>(definition: string): Promise<Ret>;
+};
+
+type TemporalRuntimeStatus = {
+  status: WorkflowRunStatus;
+  statusReason?: WorkflowStatusReason;
+};
+
+function parseTemporalRuntimeStatus(
+  value: unknown,
+): TemporalRuntimeStatus | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as { status?: unknown; statusReason?: unknown };
+  if (
+    record.status !== WorkflowExecutionStatus.Running &&
+    record.status !== WorkflowExecutionStatus.Waiting &&
+    record.status !== WorkflowExecutionStatus.Paused
+  )
+    return undefined;
+  const statusReason = Object.values(WorkflowStatusReason).includes(
+    record.statusReason as WorkflowStatusReason,
+  )
+    ? (record.statusReason as WorkflowStatusReason)
+    : undefined;
+  return { status: record.status, ...(statusReason ? { statusReason } : {}) };
+}
+
+async function temporalRuntimeStatus(
+  handle: TemporalStatusHandle,
+  status: WorkflowRunStatus,
+  workflowType: string,
+): Promise<TemporalRuntimeStatus | undefined> {
+  if (
+    workflowType !== "encois.dynamic.v1" ||
+    (status !== WorkflowExecutionStatus.Running &&
+      status !== WorkflowExecutionStatus.Paused)
+  )
+    return undefined;
+  try {
+    return parseTemporalRuntimeStatus(
+      await handle.query<unknown>("workflow-status"),
+    );
+  } catch {
+    // Older workers and non-Dynamic workflows may not expose this query.
+    return undefined;
+  }
+}
+
+async function temporalResultStatus(
+  handle: TemporalStatusHandle,
+  status: WorkflowRunStatus,
+  workflowType: string,
+): Promise<TemporalRuntimeStatus | undefined> {
+  if (
+    workflowType !== "encois.dynamic.v1" ||
+    status !== WorkflowExecutionStatus.Completed
+  )
+    return undefined;
+  try {
+    const result = await handle.result();
+    return parseTemporalRuntimeStatus(result);
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveTemporalStatus(
+  handle: TemporalStatusHandle,
+  statusName: string,
+  workflowType: string,
+): Promise<{
+  status: WorkflowRunStatus;
+  statusReason?: WorkflowStatusReason;
+  statusMessage?: string;
+}> {
+  const describedStatus = temporalStatus(statusName);
+  const runtimeStatus =
+    (await temporalRuntimeStatus(handle, describedStatus, workflowType)) ??
+    (await temporalResultStatus(handle, describedStatus, workflowType));
+  const status = runtimeStatus?.status ?? describedStatus;
+  const statusMessage =
+    status === WorkflowExecutionStatus.Failed
+      ? ((await temporalFailureMessage(handle)) ??
+        temporalStatusMessage(statusName))
+      : temporalStatusMessage(statusName);
+  return {
+    status,
+    ...(runtimeStatus?.statusReason
+      ? { statusReason: runtimeStatus.statusReason }
+      : {}),
+    ...(statusMessage ? { statusMessage } : {}),
+  };
+}
+
+async function temporalFailureMessage(
+  handle: TemporalStatusHandle,
+): Promise<string | undefined> {
+  try {
+    await handle.result();
+    return undefined;
+  } catch (error) {
+    const messages: string[] = [];
+    const seen = new Set<unknown>();
+    let current: unknown = error;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      if (current instanceof Error && current.message) {
+        messages.push(current.message);
+        current = (current as Error & { cause?: unknown }).cause;
+        continue;
+      }
+      break;
+    }
+    const message = messages[messages.length - 1] ?? String(error);
+    return message.length > 2000 ? `${message.slice(0, 1997)}…` : message;
+  }
 }
 
 function workflowIdBelongsToOrganization(
@@ -193,13 +350,18 @@ function createTemporalWorkflowClient(
         ) {
           throw new Error("idempotency conflict");
         }
+        const resolvedStatus = await resolveTemporalStatus(
+          existingHandle,
+          description.status.name,
+          description.type,
+        );
         return {
           workflowId: command.workflowId,
           runId: description.runId,
           workflowType: description.type,
           namespace,
           taskQueue: description.taskQueue,
-          status: temporalStatus(description.status.name),
+          ...resolvedStatus,
           organizationId: command.input.organizationId,
           blueprintId:
             typeof description.memo?.encoisBlueprintId === "string"
@@ -285,6 +447,11 @@ function createTemporalWorkflowClient(
       const handle = client.workflow.getHandle(workflowId);
       const description = await handle.describe();
       const timestamp = now();
+      const resolvedStatus = await resolveTemporalStatus(
+        handle,
+        description.status.name,
+        description.type,
+      );
 
       return {
         workflowId,
@@ -292,7 +459,7 @@ function createTemporalWorkflowClient(
         workflowType: description.type,
         namespace,
         taskQueue: description.taskQueue,
-        status: temporalStatus(description.status.name),
+        ...resolvedStatus,
         organizationId,
         blueprintId:
           typeof description.memo?.encoisBlueprintId === "string"
@@ -329,13 +496,18 @@ function createTemporalWorkflowClient(
       for await (const info of temporalClient.workflow.list({
         query: `WorkflowId STARTS_WITH "org:${organizationId}:" OR WorkflowId STARTS_WITH "workflow:${organizationId}:"`,
       })) {
+        const resolvedStatus = await resolveTemporalStatus(
+          temporalClient.workflow.getHandle(info.workflowId),
+          info.status.name,
+          info.type,
+        );
         executions.push({
           workflowId: info.workflowId,
           runId: info.runId,
           workflowType: info.type,
           namespace,
           taskQueue: info.taskQueue,
-          status: temporalStatus(info.status.name),
+          ...resolvedStatus,
           organizationId,
           blueprintId:
             typeof info.memo?.encoisBlueprintId === "string"
@@ -395,6 +567,24 @@ function createTemporalWorkflowClient(
       await temporalClient.workflow
         .getHandle(workflowId)
         .signal(CoordinatorSignalName.Event, event);
+    },
+
+    async getCoordinatorState(coordinatorId, organizationId) {
+      if (!organizationId || !coordinatorId) return null;
+      const temporalClient = await getClient();
+      const workflowId = buildCoordinatorWorkflowId(
+        organizationId,
+        coordinatorId,
+      );
+      const handle = temporalClient.workflow.getHandle(workflowId);
+      try {
+        await handle.describe();
+        return await handle.query<CoordinatorState>("coordinator-state");
+      } catch {
+        // Readiness remains driven by the persisted onboarding record when the
+        // Coordinator is not available or an older worker has no query.
+        return null;
+      }
     },
 
     async update(workflowId, organizationId, _namespace, request) {

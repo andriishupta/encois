@@ -1,15 +1,12 @@
 import type { WorkflowPlanRecord } from "@encois/contracts";
 import { Permission } from "@encois/contracts";
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { Check, ClipboardCheck, GitBranch, Search, Trash2 } from "lucide-react";
+import { ClipboardCheck, Search } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
+import { LinkCardIndicator } from "@/components/link-card";
 import {
   ListCollection,
   ListFilter,
@@ -22,7 +19,6 @@ import {
 } from "@/components/list-controls";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/pill";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -30,12 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  applyWorkflowPlan,
-  approveWorkflowPlan,
-  deleteWorkflowPlan,
-  listWorkflowPlansPage,
-} from "@/lib/api";
+import { listWorkflowPlansPage } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
 import { formatUnitPath } from "@/lib/organization";
@@ -43,9 +34,6 @@ import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/plans")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    planId: typeof search.planId === "string" ? search.planId : undefined,
-  }),
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.WorkflowsManage))
       throw redirect({ to: "/forbidden" });
@@ -56,9 +44,7 @@ export const Route = createFileRoute("/_app/workflows/plans")({
 type PlanFilter = WorkflowPlanRecord["status"] | "all";
 
 function WorkflowPlansPage() {
-  const queryClient = useQueryClient();
   const { units } = useOrganization();
-  const { planId } = Route.useSearch();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<PlanFilter>("all");
   const [sort, setSort] = useState<
@@ -83,38 +69,6 @@ function WorkflowPlansPage() {
   });
   const visiblePlans = plans.data?.pages.flatMap((page) => page.items) ?? [];
   const total = plans.data?.pages[0]?.pagination.total;
-  const [actionError, setActionError] = useState<string | null>(null);
-  const action = useMutation({
-    mutationFn: async ({
-      planId,
-      operation,
-    }: {
-      planId: string;
-      operation: "approve" | "apply" | "delete";
-    }) =>
-      operation === "approve"
-        ? approveWorkflowPlan(planId)
-        : operation === "apply"
-          ? applyWorkflowPlan(planId)
-          : deleteWorkflowPlan(planId),
-    onSuccess: async (_plan, variables) => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlansRoot(),
-      });
-      if (variables.operation === "apply") {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workflowBlueprintsRoot(),
-          }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workflowRunListRoot(),
-          }),
-        ]);
-      }
-    },
-    onError: (error) => setActionError(error.message),
-  });
   const pendingCount = visiblePlans.filter(
     (plan) => plan.status === "proposed" || plan.status === "approved",
   ).length;
@@ -122,20 +76,20 @@ function WorkflowPlansPage() {
   return (
     <div data-testid="workflow-plans-page" className="flex flex-col gap-4">
       <PageHeader
-        title="Workflow Plans"
-        description="Approval boundary for workflow proposals. Review the generated Blueprint, approve it, then apply it to make it available in Workflows."
+        title="Change Plans"
+        description="Review persisted workflow change proposals, approve them, and apply approved changes to Workflows."
       />
       <ListToolbar>
         <ListSearch
           value={query}
           onChange={setQuery}
-          placeholder="Search Plans by workflow name or purpose…"
-          label="Search workflow Plans"
+          placeholder="Search Change Plans by workflow name or purpose…"
+          label="Search Change Plans"
         />
         <ListFilter
           value={status}
           onChange={setStatus}
-          label="Filter Plans by status"
+          label="Filter Change Plans by status"
           options={[
             { value: "all", label: "All statuses" },
             { value: "proposed", label: "Awaiting approval" },
@@ -148,7 +102,7 @@ function WorkflowPlansPage() {
         <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
-          label="Sort Plans"
+          label="Sort Change Plans"
           options={[
             { value: "updated-desc", label: "Recently updated" },
             { value: "updated-asc", label: "Oldest updated" },
@@ -165,15 +119,12 @@ function WorkflowPlansPage() {
         view={view}
         onViewChange={setView}
       />
-      {actionError ? (
-        <InlineError title="Could not update this Plan" message={actionError} />
-      ) : null}
       {plans.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading Plans…</p>
+        <p className="text-sm text-muted-foreground">Loading Change Plans…</p>
       ) : null}
       {plans.isError ? (
         <InlineError
-          title="Plans unavailable"
+          title="Change Plans unavailable"
           message={plans.error.message}
           onRetry={() => plans.refetch()}
           retrying={plans.isFetching}
@@ -184,18 +135,7 @@ function WorkflowPlansPage() {
           items={visiblePlans}
           view={view}
           getKey={(plan) => plan.planId}
-          renderItem={(plan) => (
-            <WorkflowPlanCard
-              plan={plan}
-              units={units}
-              highlighted={plan.planId === planId}
-              busy={action.isPending}
-              onAction={(operation) => {
-                setActionError(null);
-                action.mutate({ planId: plan.planId, operation });
-              }}
-            />
-          )}
+          renderItem={(plan) => <WorkflowPlanCard plan={plan} units={units} />}
         />
       ) : null}
       {!plans.isLoading &&
@@ -206,7 +146,7 @@ function WorkflowPlansPage() {
           <CardContent className="pt-6">
             <EmptyPanel
               icon={Search}
-              title="No Plans match"
+              title="No Change Plans match"
               description="Change the search or status filter."
             />
           </CardContent>
@@ -217,8 +157,8 @@ function WorkflowPlansPage() {
           <CardContent className="pt-6">
             <EmptyPanel
               icon={ClipboardCheck}
-              title="No workflow Plans"
-              description="Submitted workflow proposals will appear here before they become Blueprints."
+              title="No Change Plans"
+              description="Submitted workflow proposals will appear here until they are applied as Blueprints."
             />
           </CardContent>
         </Card>
@@ -237,15 +177,9 @@ function WorkflowPlansPage() {
 function WorkflowPlanCard({
   plan,
   units,
-  highlighted,
-  busy,
-  onAction,
 }: {
   plan: WorkflowPlanRecord;
   units: ReturnType<typeof useOrganization>["units"];
-  highlighted: boolean;
-  busy: boolean;
-  onAction: (operation: "approve" | "apply" | "delete") => void;
 }) {
   const change = plan.plan.changes[0];
   const blueprint = change?.blueprint;
@@ -255,163 +189,57 @@ function WorkflowPlanCard({
       .join(", ") || "Organization scope";
   const status = planStatusLabel(plan.status);
   return (
-    <Card
-      data-testid="workflow-plan-card"
-      className={
-        highlighted ? "border-primary ring-2 ring-primary/20" : undefined
-      }
+    <Link
+      to="/workflows/plans/$planId"
+      params={{ planId: plan.planId }}
+      className="group block h-full"
     >
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle data-testid="workflow-plan-title">
-              <Link
-                to="/workflows/plans/$planId"
-                params={{ planId: plan.planId }}
-                className="hover:underline"
-              >
-                {blueprint?.name ?? "Workflow change proposal"}
-              </Link>
-            </CardTitle>
-            <CardDescription>
-              {change?.kind ?? "change"} · {status} ·{" "}
-              {formatDate(plan.updatedAt)}
-            </CardDescription>
-            {highlighted ? (
-              <p className="mt-2 text-xs font-medium text-primary">
-                Newly created plan
-              </p>
-            ) : null}
-          </div>
-          <StatusPill
-            data-testid="workflow-plan-status"
-            status={plan.status}
-            label={status}
-            className="shrink-0"
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-3">
-          <InfoItem label="Scope" value={scope} />
-          <InfoItem
-            label="Steps"
-            value={String(blueprint?.steps?.length ?? 0)}
-          />
-          <InfoItem
-            label="Approval"
-            value={plan.approvalRequired ? "Required" : "Not required"}
-          />
-        </div>
-        {blueprint ? (
-          <details className="rounded-lg border p-4">
-            <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-              <GitBranch
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Open proposed Blueprint
-            </summary>
-            <div className="mt-4 flex flex-col gap-3">
-              <div>
-                <p className="text-sm font-medium">{blueprint.name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {blueprint.purpose}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {blueprint.steps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className="flex items-center gap-3 rounded-md border p-3 text-sm"
-                  >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{step.id}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {step.kind}
-                        {step.tool ? ` · ${step.tool}` : ""}
-                        {step.agentDefinition
-                          ? ` · ${step.agentDefinition}`
-                          : ""}
-                      </span>
-                    </span>
-                    {step.requiresApproval ? (
-                      <span className="text-xs text-muted-foreground">
-                        Approval
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              {change?.reason ? (
-                <p className="text-sm text-muted-foreground">
-                  Reason: {change.reason}
-                </p>
-              ) : null}
+      <Card
+        data-testid="workflow-plan-card"
+        className="relative flex h-full flex-col transition-colors group-hover:border-foreground/30"
+      >
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle data-testid="workflow-plan-title">
+                {blueprint?.name ?? "Change Plan proposal"}
+              </CardTitle>
+              <CardDescription>
+                {change?.kind ?? "change"} · {status} ·{" "}
+                {formatDate(plan.updatedAt)}
+              </CardDescription>
             </div>
-          </details>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            This Plan does not contain a Blueprint snapshot.
-          </p>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer">Technical details</summary>
-            <span className="mt-1 block font-mono">Plan {plan.planId}</span>
-          </details>
-          <div className="flex gap-2">
-            <Button variant="ghost" asChild>
-              <Link
-                to="/workflows/plans/$planId"
-                params={{ planId: plan.planId }}
-              >
-                Open details
-              </Link>
-            </Button>
-            {plan.status === "proposed" ? (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => onAction("approve")}
-              >
-                <Check data-icon="inline-start" />
-                Approve
-              </Button>
-            ) : null}
-            {plan.status === "approved" ? (
-              <Button
-                data-testid="workflow-plan-apply"
-                disabled={busy}
-                onClick={() => onAction("apply")}
-              >
-                Apply plan
-              </Button>
-            ) : null}
-            {plan.status !== "applied" ? (
-              <Button
-                variant="destructive"
-                disabled={busy}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      "Delete this workflow plan? It will be hidden from Plans and cannot be approved or applied.",
-                    )
-                  )
-                    onAction("delete");
-                }}
-              >
-                <Trash2 data-icon="inline-start" />
-                Delete
-              </Button>
-            ) : null}
+            <StatusPill
+              data-testid="workflow-plan-status"
+              status={plan.status}
+              label={status}
+              className="shrink-0"
+            />
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="flex flex-1 flex-col gap-4 pr-14">
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-3">
+            <InfoItem label="Scope" value={scope} />
+            <InfoItem
+              label="Steps"
+              value={String(blueprint?.steps?.length ?? 0)}
+            />
+            <InfoItem
+              label="Approval"
+              value={plan.approvalRequired ? "Required" : "Not required"}
+            />
+          </div>
+          {blueprint ? (
+            <p className="text-sm text-muted-foreground">{blueprint.purpose}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              This Plan does not contain a Blueprint snapshot.
+            </p>
+          )}
+        </CardContent>
+        <LinkCardIndicator />
+      </Card>
+    </Link>
   );
 }
 

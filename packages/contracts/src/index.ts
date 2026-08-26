@@ -883,6 +883,7 @@ export type CoordinatorState = {
   processedSignalIds?: readonly string[];
   memoryVersion?: string;
   lastEvent?: string;
+  lastError?: string;
   reconciliationCount: number;
 };
 
@@ -892,6 +893,7 @@ export type CoordinatorStartInput = {
   organizationId: string;
   projectId?: string;
   scopeType: CoordinatorScopeType;
+  scope: ExecutionScope;
   actorId?: string;
   policyVersion: string;
   coordinationMode?: CoordinationMode;

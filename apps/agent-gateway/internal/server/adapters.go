@@ -66,3 +66,27 @@ func NewGCPAdapters(ctx context.Context, bucket, database string, providerOption
 		return closeArtifacts()
 	}, nil
 }
+
+// NewHybridDataPlaneAdapters combines real Spanner Graph with the configured
+// Cloud Storage client and local provider fixtures. In the watch-ai Compose
+// profile, STORAGE_EMULATOR_HOST makes the Cloud Storage client use the local
+// Firebase Storage emulator while the Spanner client still uses GCP.
+func NewHybridDataPlaneAdapters(ctx context.Context, bucket, database string) (RouterOptions, func() error, error) {
+	artifacts, closeArtifacts, err := newGCSArtifactStore(ctx, bucket)
+	if err != nil {
+		return RouterOptions{}, nil, err
+	}
+	graph, closeGraph, err := newSpannerGraphStore(ctx, database)
+	if err != nil {
+		_ = closeArtifacts()
+		return RouterOptions{}, nil, err
+	}
+	return RouterOptions{
+			ArtifactStore: artifacts,
+			GraphStore:    graph,
+			ProviderTools: mockProviderToolRegistry{},
+		}, func() error {
+			closeGraph()
+			return closeArtifacts()
+		}, nil
+}

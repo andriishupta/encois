@@ -165,6 +165,13 @@ This local service mode includes live reload: the Dashboard uses Vite HMR, the
 API restarts on TypeScript changes, and Go watchers rebuild the Agent Gateway
 and Agent Runtime. Stop it with `pnpm run dev:watch:mock:down`.
 
+For a local flow that uses the real GCP context and AI services while keeping
+the rest local, copy `.env.local.ai.example` to `.env.local.ai`, set the ADC
+file path, and run `pnpm run dev:watch:ai`. This uses real Spanner Graph,
+Vertex AI Gemini, and Vertex Memory Bank; Postgres, Temporal, Firebase Auth and
+Storage emulators, and provider fixtures remain local. Stop it with
+`pnpm run dev:watch:ai:down`.
+
 To reset only the known fixture organizations and Auth Emulator accounts, use
 the scoped reset command documented in [`docs/local.md`](docs/local.md). It
 does not remove Docker volumes or unrelated local data.

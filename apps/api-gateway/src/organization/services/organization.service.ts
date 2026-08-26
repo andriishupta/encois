@@ -517,10 +517,41 @@ function requirePermission(
 
 export async function getOrganizationForPrincipal(
   principal: AosPrincipal,
+  options?: OrganizationOnboardingServiceOptions,
 ): Promise<OrganizationProjection> {
-  return withContext(principal, async (context) => {
+  return withContext(principal, async (context, db) => {
     requirePermission(context, Permission.OrganizationRead);
-    return projectContext(context);
+    const projection = projectContext(context);
+    if (
+      !options ||
+      context.onboarding.status !== OrganizationOnboardingStatus.Initializing
+    )
+      return projection;
+
+    const coordinatorState =
+      (await options.workflowClient.getCoordinatorState?.(
+        context.onboarding.coordinatorId,
+        principal.organizationId,
+        options.namespace,
+      )) ?? null;
+    if (coordinatorState?.status !== "SUSPENDED") return projection;
+
+    const [failed] = await db
+      .update(organizationOnboarding)
+      .set({
+        status: OrganizationOnboardingStatus.Failed,
+        lastError:
+          coordinatorState.lastError?.slice(0, 1000) ||
+          "The Coordinator suspended onboarding without a detailed error.",
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(organizationOnboarding.organizationId, principal.organizationId),
+      )
+      .returning();
+    return failed
+      ? { ...projection, onboarding: projectOnboarding(failed) }
+      : projection;
   });
 }
 

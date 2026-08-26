@@ -335,6 +335,7 @@ function WorkflowDetailPage() {
             {canRun &&
             new Set<WorkflowExecutionStatus>([
               WorkflowExecutionStatus.Completed,
+              WorkflowExecutionStatus.Failed,
               WorkflowExecutionStatus.Cancelled,
             ]).has(status) ? (
               <Button
@@ -412,6 +413,7 @@ function WorkflowDetailPage() {
       <WorkflowOutputCard
         status={status}
         statusReason={workflow.data.statusReason}
+        statusMessage={workflow.data.statusMessage}
         output={runOutput}
       />
 
@@ -1090,10 +1092,12 @@ function DetailField({
 function WorkflowOutputCard({
   status,
   statusReason,
+  statusMessage,
   output,
 }: {
   status: WorkflowExecutionStatus;
   statusReason?: WorkflowStatusReason;
+  statusMessage?: string;
   output?: WorkflowOutput;
 }) {
   const terminal = terminalRunStatuses.has(status);
@@ -1153,6 +1157,14 @@ function WorkflowOutputCard({
             {title}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          {status === WorkflowExecutionStatus.Failed && statusMessage ? (
+            <p
+              role="alert"
+              className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+            >
+              {statusMessage}
+            </p>
+          ) : null}
           {output ? (
             <>
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">

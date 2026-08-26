@@ -21,26 +21,29 @@ type Config struct {
 	GoogleCloudProject  string
 	GoogleCloudLocation string
 	ModelName           string
-	CoordinatorModel    string
-	CoordinatorThinking string
+	ReasoningModel      string
+	ReasoningThinking   string
 }
 
 type Bundle struct {
-	Mode                     string
-	Coordinator              agent.Agent
-	WorkflowCreator          agent.Agent
-	AgentModel               model.LLM
-	Runner                   *runner.Runner
-	WorkflowCreatorRunner    *runner.Runner
-	ModelName                string
-	CoordinatorModelName     string
-	CoordinatorThinkingLevel genai.ThinkingLevel
-	Enabled                  bool
+	Mode                   string
+	Coordinator            agent.Agent
+	WorkflowCreator        agent.Agent
+	AgentModel             model.LLM
+	StandardRunner         *runner.Runner
+	WorkflowCreatorRunner  *runner.Runner
+	ModelName              string
+	ReasoningModelName     string
+	ReasoningThinkingLevel genai.ThinkingLevel
+	Enabled                bool
 }
 
 const (
 	ModeGemini = "gemini"
 	ModeMock   = "mock"
+
+	DefaultStandardModel  = "gemini-3.7-flash"
+	DefaultReasoningModel = "gemini-3.1-pro-preview"
 )
 
 func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
@@ -53,21 +56,21 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	}
 	modelName := cfg.ModelName
 	if modelName == "" {
-		modelName = "gemini-3.7-flash"
+		modelName = DefaultStandardModel
 	}
-	coordinatorModelName := cfg.CoordinatorModel
-	if coordinatorModelName == "" {
-		coordinatorModelName = "gemini-3.1-pro-preview"
+	reasoningModelName := cfg.ReasoningModel
+	if reasoningModelName == "" {
+		reasoningModelName = DefaultReasoningModel
 	}
-	thinkingLevel, err := parseThinkingLevel(cfg.CoordinatorThinking)
+	thinkingLevel, err := parseThinkingLevel(cfg.ReasoningThinking)
 	if err != nil {
 		return nil, err
 	}
 	bundle := &Bundle{
-		Mode:                     mode,
-		ModelName:                modelName,
-		CoordinatorModelName:     coordinatorModelName,
-		CoordinatorThinkingLevel: thinkingLevel,
+		Mode:                   mode,
+		ModelName:              modelName,
+		ReasoningModelName:     reasoningModelName,
+		ReasoningThinkingLevel: thinkingLevel,
 	}
 	if mode == ModeMock {
 		bundle.Enabled = true
@@ -92,9 +95,9 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Gemini model: %w", err)
 	}
-	coordinatorModel, err := gemini.NewModel(ctx, coordinatorModelName, clientConfig)
+	reasoningModel, err := gemini.NewModel(ctx, reasoningModelName, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("create coordinator Gemini model: %w", err)
+		return nil, fmt.Errorf("create reasoning Gemini model: %w", err)
 	}
 	deepThinkingConfig := &genai.GenerateContentConfig{
 		ThinkingConfig: &genai.ThinkingConfig{ThinkingLevel: thinkingLevel},
@@ -103,7 +106,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	coordinator, err := llmagent.New(llmagent.Config{
 		Name:        "coordinator",
 		Description: "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
-		Model:       coordinatorModel,
+		Model:       reasoningModel,
 		Instruction: "Coordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
 		// The coordinator owns cross-source planning and must use the deeper
 		// reasoning profile configured for high-responsibility agents.
@@ -116,7 +119,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	workflowCreator, err := llmagent.New(llmagent.Config{
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
-		Model:                 coordinatorModel,
+		Model:                 reasoningModel,
 		Instruction:           "Propose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
 		GenerateContentConfig: deepThinkingConfig,
 	})
@@ -124,9 +127,18 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		return nil, fmt.Errorf("create workflow creator: %w", err)
 	}
 
-	adkRunner, err := runner.NewInMemory("encois-agent-runtime", coordinator)
+	standardAgent, err := llmagent.New(llmagent.Config{
+		Name:        "routine_summarizer",
+		Description: "Summarizes approved evidence for routine specialist work.",
+		Model:       model,
+		Instruction: "Summarize only the supplied structured evidence. Do not invent facts, permissions, tools, or actions.",
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create ADK runner: %w", err)
+		return nil, fmt.Errorf("create standard summarizer: %w", err)
+	}
+	standardRunner, err := runner.NewInMemory("encois-agent-runtime-standard", standardAgent)
+	if err != nil {
+		return nil, fmt.Errorf("create standard ADK runner: %w", err)
 	}
 	workflowCreatorRunner, err := runner.NewInMemory("encois-agent-runtime-workflow-creator", workflowCreator)
 	if err != nil {
@@ -135,7 +147,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	bundle.Coordinator = coordinator
 	bundle.WorkflowCreator = workflowCreator
 	bundle.AgentModel = model
-	bundle.Runner = adkRunner
+	bundle.StandardRunner = standardRunner
 	bundle.WorkflowCreatorRunner = workflowCreatorRunner
 	bundle.Enabled = true
 	return bundle, nil
@@ -188,13 +200,13 @@ func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (strin
 	if b != nil && b.Mode == ModeMock {
 		return localmock.Summary(), nil
 	}
-	if b == nil || b.Runner == nil {
+	if b == nil || b.StandardRunner == nil {
 		return "", nil
 	}
 
 	content := genai.NewContentFromText(prompt, genai.RoleUser)
 	var parts []string
-	for event, err := range b.Runner.Run(ctx, "system", sessionID, content, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
+	for event, err := range b.StandardRunner.Run(ctx, "system", sessionID, content, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
 		if err != nil {
 			return "", err
 		}
@@ -245,6 +257,6 @@ func parseThinkingLevel(value string) (genai.ThinkingLevel, error) {
 	case "low":
 		return genai.ThinkingLevelLow, nil
 	default:
-		return "", fmt.Errorf("unsupported coordinator thinking level %q; use low, medium, or high", value)
+		return "", fmt.Errorf("unsupported reasoning thinking level %q; use low, medium, or high", value)
 	}
 }

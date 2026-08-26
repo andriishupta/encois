@@ -130,10 +130,14 @@ metadata by workflow ID. The Go application polls the same task queue and owns
 workflow code and Activities. Temporal credentials belong in Secret Manager or
 the deployment secret integration; they are not browser configuration.
 
-For local development, the Agent Gateway and Runtime select in-process mock
-data adapters with `AGENT_GATEWAY_DATA_MODE=mock` and
-`AGENT_MEMORY_MODE=mock`. Hosted deployments select `gcp`, use ADC, and must
-provide the bucket, Spanner database, and Vertex AI Reasoning Engine resource.
+For local development, the Agent Gateway and Runtime can select in-process
+mock data adapters with `AGENT_GATEWAY_DATA_MODE=mock` and
+`AGENT_MEMORY_MODE=mock`. The `watch:ai` profile selects
+`AGENT_GATEWAY_DATA_MODE=hybrid`: it uses ADC-backed Spanner Graph plus local
+emulator storage and provider fixtures, while the Runtime uses real Vertex AI
+Gemini and the configured Vertex AI Reasoning Engine. Hosted deployments select
+`gcp`, use ADC, and must provide the bucket, Spanner database, and Vertex AI
+Reasoning Engine resource.
 The API uses Temporal for workflow execution in every environment. Local
 fixture data is created by an explicit seed script and is never selected as an
 API workflow backend. Deployments must provide the Temporal address, namespace,

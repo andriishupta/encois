@@ -44,38 +44,56 @@ function WorkflowRecommendationsPage() {
     queryFn: getOrganization,
   });
   const templates = useQuery({
-    queryKey: queryKeys.workflowTemplates("onboarding-catalog"),
-    queryFn: () => listWorkflowTemplates({}),
+    queryKey: queryKeys.workflowTemplates(
+      "onboarding-catalog",
+      "active",
+      "updated-desc",
+    ),
+    queryFn: () =>
+      listWorkflowTemplates({
+        status: "active",
+        sort: "updated-desc",
+        limit: 5,
+      }),
   });
   const blueprints = useQuery({
-    queryKey: queryKeys.workflowBlueprints(),
-    queryFn: listWorkflowBlueprints,
+    queryKey: queryKeys.workflowBlueprints("", "approved", "updated-desc"),
+    queryFn: () =>
+      listWorkflowBlueprints({
+        status: "approved",
+        sort: "updated-desc",
+        limit: 5,
+      }),
   });
   const [selected, setSelected] = useState<string[]>();
 
   const catalog = useMemo(
-    () => [
-      ...(templates.data ?? []).map((template) => ({
-        value: template.key,
-        title: template.title,
-        description: template.description,
-        meta: `Template · ${template.category} · v${template.version}`,
-        icon: BookOpen,
-        unavailable: template.status !== "active",
-      })),
-      ...(blueprints.data ?? [])
-        .filter(
-          (blueprint) => blueprint.status === "approved" && blueprint.isCurrent,
-        )
-        .map((blueprint) => ({
-          value: blueprint.blueprintId,
-          title: blueprint.name,
-          description: blueprint.purpose,
-          meta: `Blueprint · v${blueprint.version}`,
-          icon: GitBranch,
-          unavailable: false,
+    () =>
+      [
+        ...(templates.data ?? []).map((template) => ({
+          value: template.key,
+          title: template.title,
+          description: template.description,
+          meta: `Template · ${template.category} · v${template.version}`,
+          icon: BookOpen,
+          unavailable: template.status !== "active",
         })),
-    ],
+        ...(blueprints.data ?? [])
+          .filter(
+            (blueprint) =>
+              blueprint.status === "approved" && blueprint.isCurrent,
+          )
+          .map((blueprint) => ({
+            value: blueprint.blueprintId,
+            title: blueprint.name,
+            description: blueprint.purpose,
+            meta: `Blueprint · v${blueprint.version}`,
+            icon: GitBranch,
+            unavailable: false,
+          })),
+      ]
+        .filter((item) => !item.unavailable)
+        .slice(0, 5),
     [blueprints.data, templates.data],
   );
   const selectedWorkflows =
@@ -147,10 +165,12 @@ function WorkflowRecommendationsPage() {
           Choose your first workflows
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Select active Templates or current approved Blueprints. Disabled
-          catalog entries are visible but cannot be selected; the workspace
-          stores product references and resolves runtime identifiers in the
-          control plane.
+          Select from the five active workflow options available to this
+          organization. The workspace stores product references and resolves
+          runtime identifiers in the control plane.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          More workflows can be selected later in configuration.
         </p>
       </div>
       <Card>

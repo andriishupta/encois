@@ -176,7 +176,10 @@ export function createOrganizationRouter(
   router.get("/", async (context) => {
     try {
       return context.json({
-        data: await getOrganizationForPrincipal(context.get("principal")),
+        data: await getOrganizationForPrincipal(
+          context.get("principal"),
+          options,
+        ),
       });
     } catch (error) {
       return errorResponse(context, error);

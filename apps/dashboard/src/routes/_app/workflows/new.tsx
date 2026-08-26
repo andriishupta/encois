@@ -193,12 +193,13 @@ function NewWorkflowPage() {
     onSuccess: async (plan) => {
       setCreatedPlan(plan);
       setSubmittedPlanId(plan.planId);
+      queryClient.setQueryData(queryKeys.workflowPlan(plan.planId), plan);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.workflowPlansRoot(),
       });
       await navigate({
-        to: "/workflows/plans",
-        search: { planId: plan.planId },
+        to: "/workflows/plans/$planId",
+        params: { planId: plan.planId },
       });
     },
   });
@@ -211,12 +212,13 @@ function NewWorkflowPage() {
     },
     onSuccess: async (plan) => {
       setSubmittedPlanId(plan.planId);
+      queryClient.setQueryData(queryKeys.workflowPlan(plan.planId), plan);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.workflowPlansRoot(),
       });
       await navigate({
-        to: "/workflows/plans",
-        search: { planId: plan.planId },
+        to: "/workflows/plans/$planId",
+        params: { planId: plan.planId },
       });
     },
   });
@@ -903,7 +905,7 @@ function ReviewStage({
           >
             <CheckCircle2 className="mt-0.5 size-5 text-emerald-600" />
             <div>
-              <p className="font-medium">Workflow plan applied</p>
+              <p className="font-medium">Change Plan applied</p>
               <p className="mt-1 text-muted-foreground">
                 The immutable Blueprint is now available to the Coordinator.{" "}
                 {runAfterApply

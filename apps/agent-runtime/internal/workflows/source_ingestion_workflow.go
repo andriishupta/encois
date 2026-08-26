@@ -64,9 +64,7 @@ func SourceIngestionWorkflow(ctx workflow.Context, args converter.EncodedValues)
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    3,
+			MaximumAttempts: 1,
 		},
 	})
 	if err := workflow.ExecuteActivity(activityCtx, "ValidateSourceIngestionContract", input).Get(ctx, nil); err != nil {

@@ -350,10 +350,10 @@ function ActivityPage() {
             icon={ClipboardCheck}
             label="Approvals & changes"
             value={decisionAttention}
-            detail="Runs, Plans, memory, and access"
+            detail="Runs, Change Plans, memory, and access"
             to="/workflows/runs"
             secondaryLinks={[
-              { label: "Plans", to: "/workflows/plans" },
+              { label: "Change Plans", to: "/workflows/plans" },
               { label: "Workflows", to: "/workflows" },
               { label: "Access", to: "/management/access" },
             ]}
@@ -467,13 +467,13 @@ function ActivityPage() {
             ))}
           </ReviewSection>
           <ReviewSection
-            title="Workflow Plans"
+            title="Change Plans"
             to="/workflows/plans"
-            empty="No workflow Plan is waiting for approval or apply."
+            empty="No Change Plan is waiting for approval or apply."
           >
             {planActionError ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Could not update the workflow Plan: {planActionError}
+                Could not update the Change Plan: {planActionError}
               </p>
             ) : null}
             {pendingPlans.map((plan) => (
@@ -869,7 +869,7 @@ function WorkflowPlanReviewRow({
 }) {
   const change = plan.plan.changes[0];
   const label =
-    change?.blueprint?.name ?? change?.reason ?? "Workflow change proposal";
+    change?.blueprint?.name ?? change?.reason ?? "Change Plan proposal";
   const detail = `${change?.kind ?? "change"} · ${plan.status === "proposed" ? "awaiting approval" : "ready to apply"} · ${formatDate(plan.updatedAt)}`;
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start">
@@ -880,7 +880,13 @@ function WorkflowPlanReviewRow({
         />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{label}</span>
+        <Link
+          className="block truncate text-sm font-medium hover:underline"
+          to="/workflows/plans/$planId"
+          params={{ planId: plan.planId }}
+        >
+          {label}
+        </Link>
         <span className="block truncate text-xs text-muted-foreground">
           {detail}
         </span>

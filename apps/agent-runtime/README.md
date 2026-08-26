@@ -53,22 +53,23 @@ Configuration is environment-based:
   deterministic organization-scoped local fixture;
 - `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
   name required by `AGENT_MEMORY_MODE=gcp`;
-- `GEMINI_MODEL` — defaults to `gemini-3.7-flash`.
+- `GEMINI_MODEL` — the standard model for routine specialist execution and
+  evidence summarization; defaults to the stable `gemini-3.7-flash`.
 - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` — optional
   OTLP/HTTP trace endpoint. If unset, spans are created locally but are not
   exported; no provider or source mock is selected implicitly.
-- `GEMINI_COORDINATOR_MODEL` — defaults to `gemini-3.1-pro-preview`; used by
-  the Coordinator and Workflow Creator instead of the lower-latency specialist
-  model;
-- `GEMINI_COORDINATOR_THINKING_LEVEL` — defaults to `high`; supported values
-  are `low`, `medium`, and `high`.
+- `GEMINI_REASONING_MODEL` — the higher-reasoning model used only by the
+  Coordinator and Workflow Creator for planning and decision proposals;
+  defaults to `gemini-3.1-pro-preview`.
+- `GEMINI_REASONING_THINKING_LEVEL` — defaults to `high`; supported values are
+  `low`, `medium`, and `high`.
 
 The current skeleton:
 
 - connect to the configured Temporal endpoint (local Temporal Server or Temporal Cloud) and poll named task queues;
-- initializes Coordinator and Workflow Creator ADK capabilities with a
-  stronger reasoning profile when Gemini is configured; the generic Blueprint
-  path invokes approved Agent Definitions from Activities, and the bootstrap
+- initializes Coordinator and Workflow Creator ADK capabilities with the
+  explicit reasoning profile when Gemini is configured; routine summaries and
+  approved Blueprint Agent Definitions use the standard model, and the bootstrap
   path can propose a validated `workflow-change-plan.v1` when Gemini is
   available;
 - keeps model calls and external I/O inside Activities;

@@ -90,6 +90,13 @@ type BlueprintContextUpdateResult struct {
 	Accepted bool   `json:"accepted"`
 }
 
+const BlueprintWorkflowStatusQueryName = "workflow-status"
+
+type BlueprintWorkflowStatus struct {
+	Status       string                         `json:"status"`
+	StatusReason contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
+}
+
 // DynamicBlueprintWorkflow is one generic executable for user-created
 // blueprints. Temporal still runs registered Go code; the user's workflow is
 // data (a validated DAG), not generated Go code.
@@ -118,9 +125,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    2 * time.Second,
-			BackoffCoefficient: 2,
-			MaximumAttempts:    3,
+			MaximumAttempts: 1,
 		},
 	})
 	if err := workflow.ExecuteActivity(activityCtx, "ValidateBlueprintContract", input).Get(ctx, nil); err != nil {
@@ -154,6 +159,20 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	pendingApprovals := make(map[string]BlueprintApprovalSignal)
 	processedSignalIDs := make(map[string]bool)
 	paused := false
+	waiting := false
+	if err := workflow.SetQueryHandler(ctx, BlueprintWorkflowStatusQueryName, func() (BlueprintWorkflowStatus, error) {
+		status := "running"
+		var statusReason contracts.WorkflowStatusReason
+		if paused {
+			status = "paused"
+		} else if waiting {
+			status = "waiting"
+			statusReason = contracts.ReasonHumanApproval
+		}
+		return BlueprintWorkflowStatus{Status: status, StatusReason: statusReason}, nil
+	}); err != nil {
+		return BlueprintWorkflowResult{}, fmt.Errorf("register workflow status query: %w", err)
+	}
 	runID := workflow.GetInfo(ctx).WorkflowExecution.RunID
 
 	for len(results) < len(blueprint.Steps) {
@@ -226,6 +245,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 				futureSteps = append(futureSteps, step)
 			case "approval":
 				approval, ok := pendingApprovals[step.ID]
+				waiting = true
 				for !ok {
 					waitForBlueprintResume(ctx, controlChannel, &paused, processedSignalIDs)
 					var received BlueprintApprovalSignal
@@ -254,6 +274,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 					}
 					pendingApprovals[received.StepID] = received
 				}
+				waiting = false
 				delete(pendingApprovals, step.ID)
 				if !approval.Approved {
 					return BlueprintWorkflowResult{}, fmt.Errorf("approval denied for step %q: %s", step.ID, approval.Reason)
