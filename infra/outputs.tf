@@ -34,8 +34,8 @@ output "secret_ids" {
 }
 
 output "spanner_database" {
-  description = "Optional Spanner database resource name."
-  value       = var.enable_spanner ? google_spanner_database.context[0].name : null
+  description = "Optional Spanner database resource name, whether managed by Terraform or supplied as an existing instance."
+  value       = local.spanner_enabled ? local.spanner_database_resource : null
 }
 
 output "cloud_sql_connection_name" {

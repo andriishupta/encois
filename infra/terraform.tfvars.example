@@ -18,6 +18,11 @@ enable_agent_runtime     = false
 enable_agent_gateway     = false
 enable_edge              = false
 enable_spanner           = false
+use_existing_spanner     = false
+spanner_instance_id      = ""
+# For a manually created Spanner Free Trial instance, use instead:
+# use_existing_spanner = true
+# spanner_instance_id  = "encois-graph-memory"
 
 # Required when the API or worker is enabled.
 temporal_address               = ""

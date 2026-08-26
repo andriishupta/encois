@@ -108,6 +108,13 @@ The current Spanner implementation is a tenant-keyed node/edge projection in
 Gateway. It is the MVP Graph persistence boundary; native property-graph query
 syntax can be introduced later without changing the Runtime contract.
 
+Terraform can either create a new provisioned instance with `enable_spanner`
+or reference a manually created Spanner Free Trial instance with
+`use_existing_spanner = true` and `spanner_instance_id`. The existing-instance
+mode does not manage or delete the instance; the database named by
+`spanner_database_name` must already exist with the schema from
+`infra/spanner-schema.sql`.
+
 Graph, Workflow Memory, and artifact scope semantics are documented separately
 in [`memory.md`](memory.md). In particular, the current Vertex Memory Bank
 adapter does not yet encode the full Encois organization-unit hierarchy into

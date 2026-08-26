@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.title="Encois Persistence Migrations" \
 
 WORKDIR /workspace
 RUN corepack enable
+ENV NODE_ENV=production
 ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 ENV CI=true
 

@@ -4,6 +4,9 @@ resource "google_artifact_registry_repository" "containers" {
   description   = "Encois ${var.environment} container images"
   format        = "DOCKER"
   labels        = local.common_labels
+  depends_on = [
+    google_project_service.required["artifactregistry.googleapis.com"]
+  ]
 
   cleanup_policies {
     id     = "delete-old-untagged"
@@ -15,4 +18,3 @@ resource "google_artifact_registry_repository" "containers" {
     }
   }
 }
-

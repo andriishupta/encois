@@ -1,5 +1,8 @@
 resource "google_secret_manager_secret" "application" {
   for_each = var.secret_names
+  depends_on = [
+    google_project_service.required["secretmanager.googleapis.com"]
+  ]
 
   secret_id = "${local.name_prefix}-${each.key}"
 
@@ -112,7 +115,7 @@ resource "google_secret_manager_secret_iam_member" "api_execution_capability_acc
 resource "google_secret_manager_secret_iam_member" "api_database_accessor" {
   for_each = {
     for name in var.secret_names : name => name
-    if name == "cloud-sql-runtime-url"
+    if var.enable_api && var.enable_cloud_sql && name == "cloud-sql-runtime-url"
   }
 
   secret_id = google_secret_manager_secret.application[each.key].id
@@ -145,7 +148,7 @@ resource "google_secret_manager_secret_iam_member" "retention_database_accessor"
 resource "google_secret_manager_secret_iam_member" "runtime_temporal_accessor" {
   for_each = {
     for name in var.secret_names : name => name
-    if name == var.temporal_secret_name
+    if var.enable_agent_runtime && name == var.temporal_secret_name
   }
 
   secret_id = google_secret_manager_secret.application[each.key].id

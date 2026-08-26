@@ -161,7 +161,7 @@ The safe defaults create only the API/service foundation and secret containers w
 - Cloud Run service creation is disabled until an immutable image is supplied.
 - Identity Platform is disabled until the project has billing, a Google OAuth web client, and the auth policy is confirmed.
 - The external load balancer and managed certificate are disabled until DNS is ready.
-- Spanner is disabled because it is billable; enabling the Agent Gateway requires the current Graph schema and database IAM bindings.
+- Spanner is disabled because a new provisioned instance is billable; an existing manually created Free Trial instance can be selected with `use_existing_spanner` and `spanner_instance_id`. Enabling the Agent Gateway requires the current Graph schema and database IAM bindings.
 - Cloud SQL is disabled because it is billable; when enabled it is the control-plane database for Drizzle migrations and API runtime state.
 - Cloud Storage is disabled unless a globally unique bucket name is provided. The API uses object-admin access for upload rollback; the Agent Gateway uses separate read/write data-plane access.
 

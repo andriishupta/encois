@@ -9,6 +9,21 @@ resource "terraform_data" "edge_requirements" {
   }
 }
 
+resource "terraform_data" "spanner_requirements" {
+  count = var.enable_spanner || var.use_existing_spanner ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = !(var.enable_spanner && var.use_existing_spanner)
+      error_message = "enable_spanner and use_existing_spanner cannot both be true."
+    }
+    precondition {
+      condition     = !var.use_existing_spanner || var.spanner_instance_id != ""
+      error_message = "spanner_instance_id must be set when use_existing_spanner is true."
+    }
+  }
+}
+
 resource "terraform_data" "application_requirements" {
   count = var.enable_dashboard || var.enable_api || var.enable_agent_runtime || var.enable_agent_gateway ? 1 : 0
 
@@ -62,8 +77,8 @@ resource "terraform_data" "application_requirements" {
       error_message = "A production API requires artifact_bucket_name for source revisions and evidence artifacts."
     }
     precondition {
-      condition     = !var.enable_api || var.environment != "production" || var.enable_spanner
-      error_message = "A production API requires enable_spanner for the Context Graph admin surface."
+      condition     = !var.enable_api || var.environment != "production" || local.spanner_enabled
+      error_message = "A production API requires a managed or existing Spanner instance for the Context Graph admin surface."
     }
     precondition {
       condition     = !var.enable_agent_runtime || var.temporal_namespace != ""

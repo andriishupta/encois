@@ -879,11 +879,11 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       }
 
       dynamic "env" {
-        for_each = var.enable_spanner ? [true] : []
+        for_each = local.spanner_enabled ? [true] : []
 
         content {
           name  = "SPANNER_DATABASE"
-          value = "projects/${var.project_id}/instances/${google_spanner_instance.context[0].name}/databases/${google_spanner_database.context[0].name}"
+          value = local.spanner_database_resource
         }
       }
 
@@ -984,8 +984,8 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       error_message = "artifact_bucket_name must be set when the Agent Gateway is enabled."
     }
     precondition {
-      condition     = var.enable_spanner
-      error_message = "enable_spanner must be true when the Agent Gateway is enabled."
+      condition     = local.spanner_enabled
+      error_message = "A managed or existing Spanner instance must be configured when the Agent Gateway is enabled."
     }
     precondition {
       condition     = var.enable_api

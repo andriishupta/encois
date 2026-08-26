@@ -136,7 +136,7 @@ resource "google_project_iam_member" "api_connector_secret_broker" {
 }
 
 resource "google_project_iam_member" "gateway_spanner_user" {
-  count = var.enable_spanner && var.enable_agent_gateway ? 1 : 0
+  count = local.spanner_enabled && var.enable_agent_gateway ? 1 : 0
 
   project = var.project_id
   role    = "roles/spanner.databaseUser"

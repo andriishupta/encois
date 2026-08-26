@@ -21,6 +21,7 @@ RUN rm -rf /out/dist && cp -R /server-dist /out/dist
 FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
+ENV NODE_ENV=production
 ARG ENCOIS_VERSION=1.0.0
 LABEL org.opencontainers.image.title="Encois API Gateway" \
       org.opencontainers.image.version="${ENCOIS_VERSION}"

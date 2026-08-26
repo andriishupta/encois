@@ -373,9 +373,21 @@ variable "secret_names" {
 }
 
 variable "enable_spanner" {
-  description = "Optional Spanner foundation for normalized company context. Disabled by default because it is a billable resource."
+  description = "Create a new provisioned Spanner instance and database for normalized company context. Disabled by default because it is a billable resource."
   type        = bool
   default     = false
+}
+
+variable "use_existing_spanner" {
+  description = "Use an existing Spanner instance and database instead of creating them. Intended for a manually created Spanner Free Trial instance."
+  type        = bool
+  default     = false
+}
+
+variable "spanner_instance_id" {
+  description = "Existing Spanner instance ID used when use_existing_spanner is true."
+  type        = string
+  default     = ""
 }
 
 variable "spanner_config" {
