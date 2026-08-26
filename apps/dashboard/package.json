@@ -7,12 +7,12 @@
     "dev": "vite",
     "build": "vite build && tsc -b",
     "lint": "tsc --noEmit",
-    "preview": "vite preview",
-    "test": "vitest run --passWithNoTests",
     "typecheck": "vite build --emptyOutDir false && tsc --noEmit",
     "biome:check": "biome check ./src ./vite.config.ts",
+    "biome:format": "biome format --write ./src ./vite.config.ts",
     "biome:write": "biome check --write ./src ./vite.config.ts",
-    "biome:format": "biome format --write ./src ./vite.config.ts"
+    "test": "vitest run --passWithNoTests",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
