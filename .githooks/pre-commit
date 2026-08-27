@@ -5,10 +5,10 @@ ROOT_DIR="$(git rev-parse --show-toplevel)"
 readonly ROOT_DIR
 cd "$ROOT_DIR"
 
-printf '%s\n' 'Running TypeScript formatting and checks...'
+printf '%s\n' 'Running staged formatting...'
 pnpm format:staged
-printf '%s\n' 'Running Biome, TypeScript, and Go checks in parallel...'
-pnpm checks:parallel
+printf '%s\n' 'Reviewing staged projects in parallel...'
+pnpm checks:staged
 
 git diff --check
 pnpm stage:formatted

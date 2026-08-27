@@ -73,11 +73,11 @@ For local commits, install the tracked pre-commit hook once:
 pnpm hooks:install
 ```
 
-The hook formats only staged TypeScript and Go files, runs workspace lint/type
-validation and Go `gofmt`, `go vet`, and `go test` in parallel, and performs one
-final `git add` only after every job succeeds. Failed jobs do not cancel the
-other parallel jobs; their exit codes are collected and any failure prevents
-the final staging step. It does not invoke `git commit` or amend an existing
+The hook runs Biome formatting/checks only on staged TypeScript files, formats
+staged Go files with `gofmt`, and runs no-emit TypeScript checks or `go vet` only
+for affected projects/modules. Affected checks run in parallel. It does not run
+a full build or tests, and performs one final `git add` only after every job
+succeeds. It does not invoke `git commit` or amend an existing
 commit, so the current commit message and `git commit -s` sign-off are
 preserved.
 

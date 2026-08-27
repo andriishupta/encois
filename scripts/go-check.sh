@@ -18,40 +18,70 @@ for argument in "$@"; do
   fi
 done
 
+declare -a CHECK_MODULES=()
+
+if [[ "$STAGED_ONLY" == true ]]; then
+  while IFS= read -r -d '' file; do
+    for module in "${GO_MODULES[@]}"; do
+      case "$file" in
+        "$module"/*)
+          CHECK_MODULES+=("$module")
+          break
+          ;;
+      esac
+    done
+  done < <(git -C "$ROOT_DIR" diff --cached --name-only --diff-filter=ACMR -z -- \
+    "packages/contracts" "apps/agent-gateway" "apps/agent-runtime")
+
+  if ((${#CHECK_MODULES[@]} == 0)); then
+    printf '%s\n' 'No staged Go files; skipping Go review.'
+    exit 0
+  fi
+
+  # The Go contracts package is imported by both Go applications.
+  for file in "${CHECK_MODULES[@]}"; do
+    if [[ "$file" == "packages/contracts" ]]; then
+      CHECK_MODULES+=("apps/agent-gateway" "apps/agent-runtime")
+      break
+    fi
+  done
+else
+  CHECK_MODULES=("${GO_MODULES[@]}")
+fi
+
+declare -a UNIQUE_MODULES=()
+for module in "${CHECK_MODULES[@]}"; do
+  already_added=false
+  for existing_module in "${UNIQUE_MODULES[@]}"; do
+    if [[ "$existing_module" == "$module" ]]; then
+      already_added=true
+      break
+    fi
+  done
+  if [[ "$already_added" == false ]]; then
+    UNIQUE_MODULES+=("$module")
+  fi
+done
+
 run_module_checks() {
   local module="$1"
   module_dir="$ROOT_DIR/$module"
   printf 'Go checks %s\n' "$module"
   (
     cd "$module_dir"
-    if [[ "$STAGED_ONLY" == true ]]; then
-      unformatted=""
-      while IFS= read -r -d '' file; do
-        case "$file" in
-          "$module"/*.go|"$module"/**/*.go)
-            if [[ -f "$ROOT_DIR/$file" ]]; then
-              file_unformatted="$(gofmt -l "$ROOT_DIR/$file")"
-              if [[ -n "$file_unformatted" ]]; then
-                unformatted+="${file_unformatted}"$'\n'
-              fi
-            fi
-            ;;
-        esac
-      done < <(git -C "$ROOT_DIR" diff --cached --name-only --diff-filter=ACMR -z -- "$module")
-    else
+    if [[ "$STAGED_ONLY" == false ]]; then
       unformatted="$(find . -type f -name '*.go' -not -path './vendor/*' -exec gofmt -l {} +)"
-    fi
-    if [[ -n "$unformatted" ]]; then
-      printf 'Unformatted Go files in %s:\n%s\n' "$module" "$unformatted" >&2
-      exit 1
+      if [[ -n "$unformatted" ]]; then
+        printf 'Unformatted Go files in %s:\n%s\n' "$module" "$unformatted" >&2
+        exit 1
+      fi
     fi
     go vet ./...
-    go test ./...
   )
 }
 
 declare -a PIDS=()
-for module in "${GO_MODULES[@]}"; do
+for module in "${UNIQUE_MODULES[@]}"; do
   run_module_checks "$module" &
   PIDS+=("$!")
 done
