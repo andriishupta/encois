@@ -780,7 +780,7 @@ function ActivityRow({
     <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:gap-4">
       <span className="min-w-0 flex-1 font-medium">{event.activityName}</span>
       <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <EventStatus status={event.status} />
+        <EventStatus status={event.status} reason={event.statusReason} />
         {attempt ? ` · ${attempt}` : ""}
         {shard ? ` · ${shard}` : ""}
         {duration ? ` · ${duration}` : ""}
@@ -809,7 +809,7 @@ function EventRow({
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <EventStatus status={event.status} />
+        <EventStatus status={event.status} reason={event.statusReason} />
         {shard ? <span>shard: {shard}</span> : null}
         {event.evidenceRef ? (
           <span className="font-mono">{event.evidenceRef}</span>
@@ -853,7 +853,7 @@ function TraceRow({
         </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <EventStatus status={event.status} />
+        <EventStatus status={event.status} reason={event.statusReason} />
         {event.activityName ? (
           <span>activity: {event.activityName}</span>
         ) : null}
@@ -896,12 +896,18 @@ function TraceRow({
   );
 }
 
-function EventStatus({ status }: { status: string }) {
+function EventStatus({
+  status,
+  reason,
+}: {
+  status: string;
+  reason?: WorkflowStatusReason;
+}) {
   const knownStatus = Object.values(WorkflowExecutionStatus).find(
     (value) => value === status,
   );
   return knownStatus ? (
-    <WorkflowStatusIndicator status={knownStatus} compact />
+    <WorkflowStatusIndicator status={knownStatus} reason={reason} compact />
   ) : (
     <span>{status}</span>
   );

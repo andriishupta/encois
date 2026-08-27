@@ -234,6 +234,13 @@ function isWorkflowEvent(value: unknown): value is WorkflowEventProjection {
   )
     return false;
   if (
+    value.statusReason !== undefined &&
+    !Object.values(WorkflowStatusReason).includes(
+      value.statusReason as WorkflowStatusReason,
+    )
+  )
+    return false;
+  if (
     value.evidence !== undefined &&
     (!Array.isArray(value.evidence) ||
       value.evidence.some(

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	contracts "github.com/andriishupta/encois/packages/contracts"
 	aiplatform "google.golang.org/api/aiplatform/v1beta1"
@@ -15,6 +16,8 @@ type gcpStore struct {
 	service         *aiplatform.Service
 	reasoningEngine string
 }
+
+const providerHierarchyScopeKey = "organization_scope_ids"
 
 func NewGCPStore(ctx context.Context, reasoningEngine, googleCloudLocation string) (Store, error) {
 	reasoningEngine = strings.TrimRight(strings.TrimSpace(reasoningEngine), "/")
@@ -63,15 +66,9 @@ func validateReasoningEngineResource(reasoningEngine, googleCloudLocation string
 }
 
 func (s *gcpStore) Execute(ctx context.Context, request Request) (Result, error) {
-	scope := map[string]string{
-		"organization_id":  request.OrganizationID,
-		"agent_definition": request.MemoryScope.AgentDefinition,
-	}
-	if request.MemoryScope.ProjectID != "" {
-		scope["project_id"] = request.MemoryScope.ProjectID
-	}
-	if request.MemoryScope.UserID != "" {
-		scope["user_id"] = request.MemoryScope.UserID
+	scope, err := providerScope(request)
+	if err != nil {
+		return Result{}, err
 	}
 	switch request.Operation {
 	case "retrieve":
@@ -96,14 +93,12 @@ func (s *gcpStore) target(ctx context.Context, request Request) (*aiplatform.Goo
 	if err != nil {
 		return nil, fmt.Errorf("get Agent Platform memory: %w", err)
 	}
-	if value.Scope["organization_id"] != request.OrganizationID || value.Scope["agent_definition"] != request.MemoryScope.AgentDefinition {
-		return nil, fmt.Errorf("memory target scope does not match the request")
+	expected, err := providerScope(request)
+	if err != nil {
+		return nil, err
 	}
-	if value.Scope["project_id"] != request.MemoryScope.ProjectID {
-		return nil, fmt.Errorf("memory target project scope does not match the request")
-	}
-	if value.Scope["user_id"] != request.MemoryScope.UserID {
-		return nil, fmt.Errorf("memory target user scope does not match the request")
+	if err := validateProviderMemoryScope(value.Scope, expected); err != nil {
+		return nil, fmt.Errorf("memory target scope does not match the request: %w", err)
 	}
 	return value, nil
 }
@@ -119,7 +114,7 @@ func (s *gcpStore) correct(ctx context.Context, request Request) (Result, error)
 	if err != nil {
 		return Result{}, fmt.Errorf("patch Agent Platform memory: %w", err)
 	}
-	if err := s.wait(ctx, operation); err != nil {
+	if _, err := s.wait(ctx, operation); err != nil {
 		return Result{}, err
 	}
 	updated, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(request.TargetMemoryID).Context(ctx).Do()
@@ -137,30 +132,51 @@ func (s *gcpStore) delete(ctx context.Context, request Request) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("delete Agent Platform memory: %w", err)
 	}
-	if err := s.wait(ctx, operation); err != nil {
+	if _, err := s.wait(ctx, operation); err != nil {
 		return Result{}, err
 	}
 	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{}}, nil
 }
 
-func (s *gcpStore) wait(ctx context.Context, operation *aiplatform.GoogleLongrunningOperation) error {
+func (s *gcpStore) wait(ctx context.Context, operation *aiplatform.GoogleLongrunningOperation) (*aiplatform.GoogleLongrunningOperation, error) {
 	if operation == nil || operation.Done {
 		if operation != nil && operation.Error != nil {
-			return fmt.Errorf("Agent Platform memory operation failed: %s", operation.Error.Message)
+			return operation, fmt.Errorf("Agent Platform memory operation failed: %s", operation.Error.Message)
 		}
-		return nil
+		return operation, nil
 	}
 	if operation.Name == "" {
-		return fmt.Errorf("Agent Platform memory operation returned no name")
+		return operation, fmt.Errorf("Agent Platform memory operation returned no name")
 	}
-	completed, err := s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Wait(operation.Name).Timeout("30s").Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("wait for Agent Platform memory operation: %w", err)
+
+	// Memory Bank exposes the long-running operation, but its Wait endpoint
+	// returns UNIMPLEMENTED. Poll the supported Get endpoint instead.
+	for {
+		current, err := s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Get(operation.Name).Context(ctx).Do()
+		if err != nil {
+			return operation, fmt.Errorf("poll Agent Platform memory operation: %w", err)
+		}
+		if current == nil {
+			return operation, fmt.Errorf("Agent Platform memory operation returned no state")
+		}
+		*operation = *current
+		if current.Done {
+			if current.Error != nil {
+				return current, fmt.Errorf("Agent Platform memory operation failed: %s", current.Error.Message)
+			}
+			return current, nil
+		}
+
+		timer := time.NewTimer(2 * time.Second)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return operation, fmt.Errorf("wait for Agent Platform memory operation: %w", ctx.Err())
+		case <-timer.C:
+		}
 	}
-	if completed != nil && completed.Error != nil {
-		return fmt.Errorf("Agent Platform memory operation failed: %s", completed.Error.Message)
-	}
-	return nil
 }
 
 func (s *gcpStore) retrieve(ctx context.Context, request Request, scope map[string]string) (Result, error) {
@@ -187,9 +203,7 @@ func (s *gcpStore) retrieve(ctx context.Context, request Request, scope map[stri
 		if item == nil || item.Memory == nil {
 			continue
 		}
-		// Agent Platform Memory Bank is scoped by request, but keep the organization
-		// boundary explicit at the adapter boundary as defense in depth.
-		if item.Memory.Scope["organization_id"] != request.OrganizationID {
+		if err := validateProviderMemoryScope(item.Memory.Scope, scope); err != nil {
 			continue
 		}
 		records = append(records, recordFromMemory(item.Memory))
@@ -210,8 +224,8 @@ func (s *gcpStore) distill(ctx context.Context, request Request, scope map[strin
 	if err != nil {
 		return Result{}, fmt.Errorf("generate Agent Platform memory: %w", err)
 	}
-	if operation != nil && !operation.Done && operation.Name != "" {
-		operation, err = s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Wait(operation.Name).Timeout("30s").Context(ctx).Do()
+	if operation != nil && !operation.Done {
+		operation, err = s.wait(ctx, operation)
 		if err != nil {
 			return Result{}, fmt.Errorf("wait for Agent Platform memory generation: %w", err)
 		}
@@ -244,6 +258,9 @@ type generatedMemoryRecord struct {
 }
 
 func generatedRecords(operation *aiplatform.GoogleLongrunningOperation, request Request, reasoningEngine string) ([]Record, error) {
+	if request.Distillation == nil {
+		return nil, fmt.Errorf("Agent Platform generated memories require distillation context")
+	}
 	if operation == nil || len(operation.Response) == 0 {
 		return nil, fmt.Errorf("Agent Platform memory generation returned no generated memories")
 	}
@@ -253,15 +270,19 @@ func generatedRecords(operation *aiplatform.GoogleLongrunningOperation, request 
 	}
 	records := make([]Record, 0, len(response.GeneratedMemories))
 	prefix := strings.TrimRight(reasoningEngine, "/") + "/memories/"
+	expectedScope, err := providerScope(request)
+	if err != nil {
+		return nil, err
+	}
 	for _, generated := range response.GeneratedMemories {
-		if generated.Action != "" && generated.Action != "CREATED" && generated.Action != "UPDATED" {
+		if generated.Action != "CREATED" && generated.Action != "UPDATED" {
 			continue
 		}
 		memory := generated.Memory
 		if strings.TrimSpace(memory.Name) == "" || !strings.HasPrefix(memory.Name, prefix) {
 			continue
 		}
-		if err := validateGeneratedMemoryScope(memory.Scope, request); err != nil {
+		if err := validateProviderMemoryScope(memory.Scope, expectedScope); err != nil {
 			return nil, err
 		}
 		observedAt := memory.UpdateTime
@@ -291,16 +312,34 @@ func generatedRecords(operation *aiplatform.GoogleLongrunningOperation, request 
 	return records, nil
 }
 
-func validateGeneratedMemoryScope(scope map[string]string, request Request) error {
-	expected := map[string]string{
-		"organization_id":  request.OrganizationID,
-		"agent_definition": request.MemoryScope.AgentDefinition,
-		"project_id":       request.MemoryScope.ProjectID,
-		"user_id":          request.MemoryScope.UserID,
+func providerScope(request Request) (map[string]string, error) {
+	hierarchyIDs := normalizedScopeIDs(request.Scope.IDs)
+	if len(hierarchyIDs) == 0 {
+		return nil, fmt.Errorf("memory hierarchy scope must contain at least one id")
 	}
+	encodedHierarchyIDs, err := json.Marshal(hierarchyIDs)
+	if err != nil {
+		return nil, fmt.Errorf("encode memory hierarchy scope: %w", err)
+	}
+	expected := map[string]string{
+		"organization_id":         request.OrganizationID,
+		"agent_definition":        request.MemoryScope.AgentDefinition,
+		providerHierarchyScopeKey: string(encodedHierarchyIDs),
+	}
+	if request.MemoryScope.ProjectID != "" {
+		expected["project_id"] = request.MemoryScope.ProjectID
+	}
+	if request.MemoryScope.UserID != "" {
+		expected["user_id"] = request.MemoryScope.UserID
+	}
+	return expected, nil
+}
+
+func validateProviderMemoryScope(scope, expected map[string]string) error {
 	for key, value := range expected {
-		if actual, ok := scope[key]; ok && actual != value {
-			return fmt.Errorf("generated memory scope %q does not match the request", key)
+		actual, ok := scope[key]
+		if !ok || actual != value {
+			return fmt.Errorf("provider memory scope %q does not match the request", key)
 		}
 	}
 	return nil

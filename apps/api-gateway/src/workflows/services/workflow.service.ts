@@ -16,6 +16,7 @@ import {
   parseWorkflowBlueprint,
   TemporalWorkflowType,
   WorkflowExecutionStatus,
+  WorkflowStatusReason,
 } from "@encois/contracts";
 import {
   auditEvents,
@@ -546,6 +547,7 @@ function sourceFreshness(value: unknown): SourceFreshness | undefined {
 type RuntimeWorkflowStepResult = {
   stepId: string;
   status: string;
+  statusReason?: WorkflowStatusReason;
   data?: JsonObject;
   evidenceRefs: readonly string[];
   provenance?: DataProvenance;
@@ -579,6 +581,13 @@ export function parseRuntimeWorkflowResult(
     if (rawStep.data !== undefined && !isJsonObject(rawStep.data))
       return undefined;
     if (
+      rawStep.statusReason !== undefined &&
+      !Object.values(WorkflowStatusReason).includes(
+        rawStep.statusReason as WorkflowStatusReason,
+      )
+    )
+      return undefined;
+    if (
       rawStep.confidence !== undefined &&
       (typeof rawStep.confidence !== "number" ||
         !Number.isFinite(rawStep.confidence) ||
@@ -603,6 +612,9 @@ export function parseRuntimeWorkflowResult(
     steps.push({
       stepId: rawStep.stepId,
       status: rawStep.status,
+      ...(rawStep.statusReason
+        ? { statusReason: rawStep.statusReason as WorkflowStatusReason }
+        : {}),
       ...(isJsonObject(rawStep.data) ? { data: rawStep.data } : {}),
       evidenceRefs,
       ...(dataProvenance(rawStep.provenance)
@@ -670,6 +682,7 @@ async function projectRuntimeWorkflowResult(
           projectionKey,
           stepId: step.stepId,
           runtimeStatus: step.status,
+          ...(step.statusReason ? { statusReason: step.statusReason } : {}),
           ...(step.data ? { data: step.data } : {}),
           ...(evidenceRefs.length ? { evidenceRefs } : {}),
           ...(step.provenance
@@ -779,6 +792,11 @@ export function workflowEventProjection(
   const provenance = dataProvenance(metadata.provenance);
   const freshness = sourceFreshness(metadata.freshness);
   const confidence = metadataNumber(metadata, "confidence");
+  const statusReason = Object.values(WorkflowStatusReason).includes(
+    metadata.statusReason as WorkflowStatusReason,
+  )
+    ? (metadata.statusReason as WorkflowStatusReason)
+    : undefined;
   const evidence: readonly WorkflowEvidenceProjection[] = [...references].map(
     (reference) => ({
       reference,
@@ -815,6 +833,7 @@ export function workflowEventProjection(
     id: row.id,
     eventType: row.eventType,
     status: row.status,
+    ...(statusReason ? { statusReason } : {}),
     ...(row.activityName ? { activityName: row.activityName } : {}),
     ...(row.agentRunId ? { agentRunId: row.agentRunId } : {}),
     ...(row.evidenceRef ? { evidenceRef: row.evidenceRef } : {}),

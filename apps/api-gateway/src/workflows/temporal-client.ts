@@ -180,6 +180,26 @@ function parseTemporalRuntimeStatus(
   return { status: record.status, ...(statusReason ? { statusReason } : {}) };
 }
 
+export function parseTemporalResultStatus(
+  value: unknown,
+): TemporalRuntimeStatus | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as { status?: unknown; statusReason?: unknown };
+  if (
+    record.status !== WorkflowExecutionStatus.Completed &&
+    record.status !== WorkflowExecutionStatus.Waiting &&
+    record.status !== WorkflowExecutionStatus.Partial &&
+    record.status !== WorkflowExecutionStatus.Failed
+  )
+    return undefined;
+  const statusReason = Object.values(WorkflowStatusReason).includes(
+    record.statusReason as WorkflowStatusReason,
+  )
+    ? (record.statusReason as WorkflowStatusReason)
+    : undefined;
+  return { status: record.status, ...(statusReason ? { statusReason } : {}) };
+}
+
 async function temporalRuntimeStatus(
   handle: TemporalStatusHandle,
   status: WorkflowRunStatus,
@@ -213,7 +233,7 @@ async function temporalResultStatus(
     return undefined;
   try {
     const result = await handle.result();
-    return parseTemporalRuntimeStatus(result);
+    return parseTemporalResultStatus(result);
   } catch {
     return undefined;
   }

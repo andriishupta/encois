@@ -564,6 +564,7 @@ export type WorkflowEventProjection = {
   id: string;
   eventType: string;
   status: string;
+  statusReason?: WorkflowStatusReason;
   activityName?: string;
   agentRunId?: string;
   evidenceRef?: string;

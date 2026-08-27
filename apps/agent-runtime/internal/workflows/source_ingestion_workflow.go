@@ -56,21 +56,27 @@ func SourceIngestionWorkflow(ctx workflow.Context, input SourceIngestionWorkflow
 		return SourceIngestionWorkflowResult{}, err
 	}
 
-	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+	validationActivityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 1,
 		},
 	})
-	if err := workflow.ExecuteActivity(activityCtx, "ValidateSourceIngestionContract", input).Get(ctx, nil); err != nil {
+	if err := workflow.ExecuteActivity(validationActivityCtx, "ValidateSourceIngestionContract", input).Get(ctx, nil); err != nil {
 		return SourceIngestionWorkflowResult{}, err
 	}
 
+	processingActivityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 1,
+		},
+	})
 	var result SourceIngestionWorkflowResult
-	if err := workflow.ExecuteActivity(activityCtx, "ProcessSourceRevision", input).Get(ctx, &result); err != nil {
+	if err := workflow.ExecuteActivity(processingActivityCtx, "ProcessSourceRevision", input).Get(ctx, &result); err != nil {
 		return SourceIngestionWorkflowResult{}, err
 	}
-	if err := workflow.ExecuteActivity(activityCtx, "ValidateSourceIngestionResult", result).Get(ctx, nil); err != nil {
+	if err := workflow.ExecuteActivity(validationActivityCtx, "ValidateSourceIngestionResult", result).Get(ctx, nil); err != nil {
 		return SourceIngestionWorkflowResult{}, err
 	}
 	return result, nil

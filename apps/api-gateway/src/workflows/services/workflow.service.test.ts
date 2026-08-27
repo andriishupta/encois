@@ -33,6 +33,7 @@ describe("workflow event projections", () => {
         durationMs: 840,
         attempt: 2,
         redacted: true,
+        statusReason: "degraded_evidence",
       },
       occurredAt: new Date("2026-08-22T10:02:00.000Z"),
       organizationId: "org-1",
@@ -52,6 +53,7 @@ describe("workflow event projections", () => {
       attempt: 2,
       redacted: true,
     });
+    expect(event.statusReason).toBe("degraded_evidence");
   });
 
   it("accepts only typed Temporal step results and preserves evidence metadata", () => {
@@ -61,7 +63,8 @@ describe("workflow event projections", () => {
       steps: [
         {
           stepId: "collect",
-          status: "completed",
+          status: "partial",
+          statusReason: "degraded_evidence",
           evidenceRefs: ["github://acme/checkout"],
           provenance: {
             source: "github",
@@ -96,11 +99,25 @@ describe("workflow event projections", () => {
 
     expect(result?.steps[0]).toMatchObject({
       stepId: "collect",
+      statusReason: "degraded_evidence",
       evidenceRefs: ["github://acme/checkout"],
       provenance: { source: "github", sourceRecordId: "acme/checkout" },
       confidence: 0.88,
       freshness: [{ source: "github", status: "fresh" }],
     });
+    expect(
+      parseRuntimeWorkflowResult({
+        contractVersion: "blueprint-workflow-result.v1",
+        status: "partial",
+        steps: [
+          {
+            stepId: "collect",
+            status: "partial",
+            statusReason: "not_a_reason",
+          },
+        ],
+      }),
+    ).toBeUndefined();
     expect(
       parseRuntimeWorkflowResult({
         contractVersion: "blueprint-workflow-result.v1",

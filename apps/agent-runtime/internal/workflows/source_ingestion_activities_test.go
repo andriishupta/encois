@@ -13,6 +13,12 @@ import (
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
+type invalidMemoryResultStore struct{}
+
+func (invalidMemoryResultStore) Execute(context.Context, memory.Request) (memory.Result, error) {
+	return memory.Result{}, nil
+}
+
 func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
@@ -161,5 +167,28 @@ func TestGatewaySourceModeFailsWithoutArtifactReference(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "artifactRef is required for gateway source mode") {
 		t.Fatalf("expected strict gateway source failure, got %v", err)
+	}
+}
+
+func TestSourceIngestionRejectsInvalidMemoryResult(t *testing.T) {
+	activity := NewSourceIngestionActivities(nil, invalidMemoryResultStore{}, "mock")
+	_, err := activity.ProcessSourceRevision(context.Background(), SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-invalid-memory-result",
+		WorkflowID:       "workflow:org-1:source:revision",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		Scope:            map[string]any{"ids": []string{"project-1"}},
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindManual,
+		Trigger:          contracts.IngestionTriggerManual,
+		ReadScope:        map[string]any{"ids": []string{"project-1"}},
+		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "validate source memory result") {
+		t.Fatalf("expected invalid memory result to fail closed, got %v", err)
 	}
 }

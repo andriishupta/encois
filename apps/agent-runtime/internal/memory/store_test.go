@@ -54,6 +54,11 @@ func TestMockStoreDistillsAndRetrievesScopedMemory(t *testing.T) {
 	if err != nil || len(result.Memories) != 1 {
 		t.Fatalf("expected one scoped mock memory, result=%+v err=%v", result, err)
 	}
+	retrieval.Scope = Scope{IDs: []string{"team-2"}}
+	otherScope, err := store.Execute(context.Background(), retrieval)
+	if err != nil || len(otherScope.Memories) != 0 {
+		t.Fatalf("memory crossed hierarchy scope: result=%+v err=%v", otherScope, err)
+	}
 }
 
 func TestMockStoreAppliesApprovedMemoryOperationsWithinScope(t *testing.T) {
@@ -231,10 +236,11 @@ func TestGeneratedRecordsUseProviderMemoryNames(t *testing.T) {
 	request := Request{
 		RequestID:      "memory-gcp-1",
 		OrganizationID: "org-1",
+		Scope:          Scope{IDs: []string{"team-1"}},
 		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1", ProjectID: "project-1"},
 		Distillation:   &Distillation{Summary: "Fallback fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
 	}
-	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-1","fact":"Provider fact.","scope":{"organization_id":"org-1","agent_definition":"context.synthesizer@1","project_id":"project-1"},"updateTime":"2026-08-20T17:00:00Z"}}]}`)}
+	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-1","fact":"Provider fact.","scope":{"organization_id":"org-1","agent_definition":"context.synthesizer@1","organization_scope_ids":"[\"team-1\"]","project_id":"project-1"},"updateTime":"2026-08-20T17:00:00Z"}}]}`)}
 	records, err := generatedRecords(operation, request, "projects/demo/locations/us-central1/reasoningEngines/engine-1")
 	if err != nil || len(records) != 1 {
 		t.Fatalf("expected one generated memory, records=%+v err=%v", records, err)
@@ -248,11 +254,45 @@ func TestGeneratedRecordsRejectOutOfScopeProviderMemory(t *testing.T) {
 	request := Request{
 		RequestID:      "memory-gcp-2",
 		OrganizationID: "org-1",
+		Scope:          Scope{IDs: []string{"team-1"}},
 		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1"},
 		Distillation:   &Distillation{Summary: "Fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
 	}
 	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-2","fact":"Fact.","scope":{"organization_id":"other-org","agent_definition":"context.synthesizer@1"}}}]}`)}
 	if _, err := generatedRecords(operation, request, "projects/demo/locations/us-central1/reasoningEngines/engine-1"); err == nil {
 		t.Fatal("expected generated memory scope mismatch to fail")
+	}
+}
+
+func TestProviderScopeIsDeterministicAndRequiresHierarchy(t *testing.T) {
+	request := Request{
+		OrganizationID: "org-1",
+		Scope:          Scope{IDs: []string{"team-2", "team-1", "team-2"}},
+		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1"},
+	}
+	scope, err := providerScope(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope[providerHierarchyScopeKey] != `["team-1","team-2"]` {
+		t.Fatalf("unexpected hierarchy scope: %q", scope[providerHierarchyScopeKey])
+	}
+	request.Scope.IDs = nil
+	if _, err := providerScope(request); err == nil {
+		t.Fatal("expected empty hierarchy scope to fail")
+	}
+}
+
+func TestGeneratedRecordsRejectMissingProviderHierarchyScope(t *testing.T) {
+	request := Request{
+		RequestID:      "memory-gcp-missing-scope",
+		OrganizationID: "org-1",
+		Scope:          Scope{IDs: []string{"team-1"}},
+		MemoryScope:    MemoryScope{AgentDefinition: "context.synthesizer@1"},
+		Distillation:   &Distillation{Summary: "Fact.", EvidenceRefs: []string{"source:1"}, ObservedAt: "2026-08-20T16:00:00Z"},
+	}
+	operation := &aiplatform.GoogleLongrunningOperation{Response: []byte(`{"generatedMemories":[{"action":"CREATED","memory":{"name":"projects/demo/locations/us-central1/reasoningEngines/engine-1/memories/memory-3","fact":"Fact.","scope":{"organization_id":"org-1","agent_definition":"context.synthesizer@1"}}}]}`)}
+	if _, err := generatedRecords(operation, request, "projects/demo/locations/us-central1/reasoningEngines/engine-1"); err == nil {
+		t.Fatal("expected missing provider hierarchy scope to fail")
 	}
 }

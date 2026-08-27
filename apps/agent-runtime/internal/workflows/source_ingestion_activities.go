@@ -201,9 +201,17 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 		PolicyVersion: input.PolicyVersion, AgentDefinition: "source-ingestion", Operation: "distill", MemoryScope: memory.MemoryScope{AgentDefinition: "source-ingestion"},
 		Distillation: &memory.Distillation{Summary: summary, EvidenceRefs: evidenceRefs, ObservedAt: raw.ObservedAt, RedactionStatus: contractschemas.RedactionApplied, RedactionVersion: "source-redaction-1"},
 	}
-	_, err = a.memory.Execute(ctx, memory.SanitizeRequest(memoryRequest))
+	memoryRequest = memory.SanitizeRequest(memoryRequest)
+	if err := memory.ValidateRequest(memoryRequest); err != nil {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("validate source memory request: %w", err)
+	}
+	memoryResult, err := a.memory.Execute(ctx, memoryRequest)
 	if err != nil {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("distill source memory: %w", err)
+	}
+	memoryResult = memory.SanitizeResult(memoryResult)
+	if err := memory.ValidateResult(memoryResult); err != nil {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("validate source memory result: %w", err)
 	}
 	return SourceIngestionWorkflowResult{ContractVersion: string(contractschemas.ContractSourceIngestionResult), RequestID: input.RequestID, SourceID: input.SourceID, SourceRevisionID: input.SourceRevisionID, Status: contractschemas.IngestionStatusCompleted, Stage: "memory_distilled", FactsCount: len(facts), EvidenceRefs: evidenceRefs, Freshness: []contractschemas.SourceFreshness{{Source: provenance["source"].(string), ObservedAt: raw.ObservedAt, IngestedAt: ingestedAt, Status: contractschemas.FreshnessFresh}}}, nil
 }
@@ -252,5 +260,5 @@ func scopeIDs(scope map[string]any) []string {
 			return ids
 		}
 	}
-	return []string{"*"}
+	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -172,7 +173,29 @@ func (s *MockStore) Execute(_ context.Context, request Request) (Result, error) 
 }
 
 func scopeKey(request Request) string {
-	return strings.Join([]string{request.OrganizationID, request.MemoryScope.AgentDefinition, request.MemoryScope.ProjectID, request.MemoryScope.UserID}, "\x00")
+	return strings.Join([]string{
+		request.OrganizationID,
+		request.MemoryScope.AgentDefinition,
+		request.MemoryScope.ProjectID,
+		request.MemoryScope.UserID,
+		strings.Join(normalizedScopeIDs(request.Scope.IDs), "\x1f"),
+	}, "\x00")
+}
+
+func normalizedScopeIDs(values []string) []string {
+	unique := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			unique[value] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(unique))
+	for value := range unique {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func safeMemoryID(parts ...string) string {

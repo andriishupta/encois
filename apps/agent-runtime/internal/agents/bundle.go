@@ -94,10 +94,11 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	}
 
 	coordinator, err := llmagent.New(llmagent.Config{
-		Name:        "coordinator",
-		Description: "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
-		Model:       model,
-		Instruction: BuildInstruction("coordinator", "workflow-change-plan.v1") + "\nCoordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
+		Name:         "coordinator",
+		Description:  "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
+		Model:        model,
+		Instruction:  BuildInstruction("coordinator", "workflow-change-plan.v1") + "\nCoordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts. Every changes item must include kind exactly equal to create, update, deprecate, restore, set_current, or cancel; never use an empty kind.",
+		OutputSchema: WorkflowChangePlanSchema(),
 		// The coordinator owns cross-source planning and must use the deeper
 		// reasoning profile configured for high-responsibility agents.
 		GenerateContentConfig: deepThinkingConfig,
@@ -110,7 +111,8 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
 		Model:                 model,
-		Instruction:           BuildInstruction("workflow_creator", "workflow-change-plan.v1") + "\nPropose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
+		Instruction:           BuildInstruction("workflow_creator", "workflow-change-plan.v1") + "\nPropose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions. Every changes item must include kind exactly equal to create, update, deprecate, restore, set_current, or cancel; never use an empty kind.",
+		OutputSchema:          WorkflowChangePlanSchema(),
 		GenerateContentConfig: deepThinkingConfig,
 	})
 	if err != nil {

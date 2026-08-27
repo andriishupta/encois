@@ -162,9 +162,32 @@ async function reconcileSourceIngestion(
   } catch {
     return;
   }
-  if (projection?.status !== "completed") return;
+  if (!projection) return;
+  if (
+    projection.status === "failed" ||
+    projection.status === "cancelled" ||
+    projection.status === "partial"
+  ) {
+    await projectSourceIngestionFailure(
+      db,
+      principal,
+      run,
+      projection.statusMessage ??
+        `Source ingestion workflow ${projection.status}.`,
+    );
+    return;
+  }
+  if (projection.status !== "completed") return;
   const reader = options.workflowClient as unknown as WorkflowResultReader;
-  if (typeof reader.GetResult !== "function") return;
+  if (typeof reader.GetResult !== "function") {
+    await projectSourceIngestionFailure(
+      db,
+      principal,
+      run,
+      "Source ingestion completed without a readable result.",
+    );
+    return;
+  }
   const rawResult = await reader
     .GetResult(
       run.temporalWorkflowId,
@@ -172,7 +195,15 @@ async function reconcileSourceIngestion(
       options.namespace,
     )
     .catch(() => null);
-  if (!isSourceIngestionResult(rawResult)) return;
+  if (!isSourceIngestionResult(rawResult)) {
+    await projectSourceIngestionFailure(
+      db,
+      principal,
+      run,
+      "Source ingestion returned an invalid result contract.",
+    );
+    return;
+  }
   const nextStatus =
     rawResult.status === "completed" ||
     rawResult.status === "deferred" ||
@@ -223,6 +254,47 @@ async function reconcileSourceIngestion(
           : KnowledgeSourceStatus.Failed,
       updatedAt: new Date(),
     })
+    .where(
+      and(
+        eq(knowledgeSources.id, run.sourceId),
+        eq(knowledgeSources.organizationId, principal.organizationId),
+      ),
+    );
+}
+
+async function projectSourceIngestionFailure(
+  db: QueryDatabase,
+  principal: AosPrincipal,
+  run: typeof sourceIngestionRuns.$inferSelect,
+  message: string,
+): Promise<void> {
+  const now = new Date();
+  await db
+    .update(sourceIngestionRuns)
+    .set({
+      status: "failed",
+      error: message.slice(0, 2000),
+      completedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(sourceIngestionRuns.id, run.id),
+        eq(sourceIngestionRuns.organizationId, principal.organizationId),
+      ),
+    );
+  await db
+    .update(sourceRevisions)
+    .set({ status: SourceRevisionStatus.Failed })
+    .where(
+      and(
+        eq(sourceRevisions.id, run.sourceRevisionId),
+        eq(sourceRevisions.organizationId, principal.organizationId),
+      ),
+    );
+  await db
+    .update(knowledgeSources)
+    .set({ status: KnowledgeSourceStatus.Failed, updatedAt: now })
     .where(
       and(
         eq(knowledgeSources.id, run.sourceId),
