@@ -92,6 +92,23 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			},
 		},
 		{
+			name:   "agent result",
+			schema: SchemaAgentResult,
+			value: map[string]any{
+				"contractVersion": "agent-result.v1", "status": "success", "summary": "Grounded result.",
+				"sources": []string{"source://one"}, "evidence": []any{map[string]any{"reference": "source://one", "claim": "Observed fact."}}, "warnings": []string{},
+			},
+		},
+		{
+			name:   "agent instructions",
+			schema: SchemaAgentInstructions,
+			value: map[string]any{
+				"contractVersion": "agent-instructions.v1", "role": "test-agent", "outputContract": "agent-result.v1",
+				"must": []string{"Return JSON."}, "mustNot": []string{"Invent facts."},
+				"inputExample": map[string]any{}, "outputExample": map[string]any{},
+			},
+		},
+		{
 			name:   "tool manifest",
 			schema: SchemaToolManifest,
 			value: map[string]any{

@@ -84,7 +84,7 @@
   },
   "properties": {
     "contractVersion": { "const": "blueprint-workflow-result.v1" },
-    "status": { "enum": ["completed", "waiting", "failed"] },
+    "status": { "enum": ["completed", "waiting", "failed", "partial"] },
     "statusReason": {
       "enum": [
         "temporary_error",

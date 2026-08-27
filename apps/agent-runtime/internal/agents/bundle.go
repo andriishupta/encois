@@ -97,7 +97,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		Name:        "coordinator",
 		Description: "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
 		Model:       model,
-		Instruction: "Coordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
+		Instruction: BuildInstruction("coordinator", "workflow-change-plan.v1") + "\nCoordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
 		// The coordinator owns cross-source planning and must use the deeper
 		// reasoning profile configured for high-responsibility agents.
 		GenerateContentConfig: deepThinkingConfig,
@@ -110,7 +110,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
 		Model:                 model,
-		Instruction:           "Propose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
+		Instruction:           BuildInstruction("workflow_creator", "workflow-change-plan.v1") + "\nPropose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
 		GenerateContentConfig: deepThinkingConfig,
 	})
 	if err != nil {
@@ -118,10 +118,11 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	}
 
 	standardAgent, err := llmagent.New(llmagent.Config{
-		Name:        "routine_summarizer",
-		Description: "Summarizes approved evidence for routine specialist work.",
-		Model:       model,
-		Instruction: "Summarize only the supplied structured evidence. Do not invent facts, permissions, tools, or actions.",
+		Name:         "routine_summarizer",
+		Description:  "Summarizes approved evidence for routine specialist work.",
+		Model:        model,
+		Instruction:  BuildInstruction("routine_summarizer", "agent-result.v1") + "\nSummarize only the supplied structured evidence. Do not invent facts, permissions, tools, or actions.",
+		OutputSchema: AgentResultSchema(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create standard summarizer: %w", err)
@@ -148,16 +149,17 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 // scheduled; this method does not let model output create capabilities.
 func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string, input map[string]any) (string, error) {
 	if b != nil && b.Mode == ModeMock {
-		return localmock.AgentStepSummary(definition), nil
+		return localmock.AgentStepJSON(definition)
 	}
 	if b == nil || b.AgentModel == nil {
 		return "", nil
 	}
 	agentDefinition, err := llmagent.New(llmagent.Config{
-		Name:        "blueprint_agent_step",
-		Description: "Executes one approved Encois Agent Definition inside a generic Blueprint.",
-		Model:       b.AgentModel,
-		Instruction: fmt.Sprintf("Execute the approved Agent Definition %q. Use only the supplied structured input and approved tool results. Return a concise structured result with evidence references where available. Do not make authorization decisions.", definition),
+		Name:         "blueprint_agent_step",
+		Description:  "Executes one approved Encois Agent Definition inside a generic Blueprint.",
+		Model:        b.AgentModel,
+		Instruction:  BuildInstruction("blueprint_agent_step", "agent-result.v1") + fmt.Sprintf("\nExecute the approved Agent Definition %q. Use only the supplied structured input and approved tool results. Return a concise structured result with evidence references where available. Do not make authorization decisions.", definition),
+		OutputSchema: AgentResultSchema(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("create blueprint agent step: %w", err)

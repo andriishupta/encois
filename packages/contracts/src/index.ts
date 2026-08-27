@@ -4,6 +4,7 @@ import {
   type AccessLevel,
   type AgentMemoryOperation,
   type AgentMemoryStatus,
+  type AgentResultStatus,
   type ArtifactRetentionClass,
   type AuthAccessStatus,
   ContractVersion,
@@ -66,6 +67,7 @@ export {
   AccessLevel,
   AgentMemoryOperation,
   AgentMemoryStatus,
+  AgentResultStatus,
   ArtifactRetentionClass,
   AuthAccessStatus,
   ContractVersion,
@@ -801,6 +803,31 @@ export type BlueprintWorkflowResult = {
   status: WorkflowResultStatus;
   statusReason?: WorkflowStatusReason;
   steps: readonly BlueprintWorkflowStepResult[];
+};
+
+export type AgentEvidence = {
+  reference: string;
+  claim: string;
+};
+
+export type AgentResult = {
+  contractVersion: typeof ContractVersion.AgentResult;
+  status: AgentResultStatus;
+  summary: string;
+  sources: readonly string[];
+  evidence: readonly AgentEvidence[];
+  warnings: readonly string[];
+  data?: JsonObject;
+};
+
+export type AgentInstructions = {
+  contractVersion: typeof ContractVersion.AgentInstructions;
+  role: string;
+  outputContract: string;
+  must: readonly string[];
+  mustNot: readonly string[];
+  inputExample: JsonObject;
+  outputExample: JsonObject;
 };
 
 export type BlueprintWorkflowStepResult = {

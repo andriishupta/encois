@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.com/schemas/agent-instructions.v1.json",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "role",
+    "outputContract",
+    "must",
+    "mustNot",
+    "inputExample",
+    "outputExample"
+  ],
+  "properties": {
+    "contractVersion": { "const": "agent-instructions.v1" },
+    "role": { "type": "string", "minLength": 1 },
+    "outputContract": { "type": "string", "minLength": 1 },
+    "must": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "maxItems": 20
+    },
+    "mustNot": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "maxItems": 20
+    },
+    "inputExample": { "type": "object" },
+    "outputExample": { "type": "object" }
+  },
+  "additionalProperties": false
+}

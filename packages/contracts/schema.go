@@ -19,6 +19,8 @@ type SchemaName string
 const (
 	SchemaWorkflowBlueprint     SchemaName = "workflowBlueprint"
 	SchemaWorkflowResult        SchemaName = "workflowResult"
+	SchemaAgentResult           SchemaName = "agentResult"
+	SchemaAgentInstructions     SchemaName = "agentInstructions"
 	SchemaWorkflowSignal        SchemaName = "workflowSignal"
 	SchemaExecutionContext      SchemaName = "executionContext"
 	SchemaToolRequest           SchemaName = "toolRequest"
@@ -49,6 +51,8 @@ var schemaFiles embed.FS
 var schemaPaths = map[SchemaName]string{
 	SchemaWorkflowBlueprint:     "schemas/workflow-blueprint.v1.json",
 	SchemaWorkflowResult:        "schemas/blueprint-workflow-result.v1.json",
+	SchemaAgentResult:           "schemas/agent-result.v1.json",
+	SchemaAgentInstructions:     "schemas/agent-instructions.v1.json",
 	SchemaWorkflowSignal:        "schemas/workflow-signal.v1.json",
 	SchemaExecutionContext:      "schemas/execution-context.v1.json",
 	SchemaToolRequest:           "schemas/tool-request.v1.json",

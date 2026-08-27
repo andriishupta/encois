@@ -303,10 +303,22 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	resultStatus := contracts.WorkflowResultCompleted
 	var resultReason contracts.WorkflowStatusReason
 	for _, stepResult := range results {
-		if stepResult.Status == string(contracts.WorkflowResultWaiting) {
-			resultStatus = contracts.WorkflowResultWaiting
+		switch stepResult.Status {
+		case string(contracts.WorkflowResultFailed):
+			resultStatus = contracts.WorkflowResultFailed
 			if stepResult.StatusReason != "" {
 				resultReason = stepResult.StatusReason
+			}
+		case string(contracts.WorkflowResultPartial):
+			if resultStatus != contracts.WorkflowResultFailed {
+				resultStatus = contracts.WorkflowResultPartial
+			}
+		case string(contracts.WorkflowResultWaiting):
+			if resultStatus != contracts.WorkflowResultFailed && resultStatus != contracts.WorkflowResultPartial {
+				resultStatus = contracts.WorkflowResultWaiting
+				if stepResult.StatusReason != "" {
+					resultReason = stepResult.StatusReason
+				}
 			}
 		}
 	}

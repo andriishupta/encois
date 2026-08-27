@@ -3,10 +3,16 @@ import {
   type ErrorObject,
   type ValidateFunction,
 } from "ajv/dist/2020.js";
+import agentInstructionsSchema from "../schemas/agent-instructions.v1.json" with {
+  type: "json",
+};
 import agentMemorySchema from "../schemas/agent-memory.v1.json" with {
   type: "json",
 };
 import agentMemoryResultSchema from "../schemas/agent-memory-result.v1.json" with {
+  type: "json",
+};
+import agentResultSchema from "../schemas/agent-result.v1.json" with {
   type: "json",
 };
 import artifactReadSchema from "../schemas/artifact-read.v1.json" with {
@@ -94,6 +100,8 @@ export const CONTRACT_SCHEMA_FILES = {
   graphQueryResult: "graph-query-result.v1.json",
   agentMemory: "agent-memory.v1.json",
   agentMemoryResult: "agent-memory-result.v1.json",
+  agentResult: "agent-result.v1.json",
+  agentInstructions: "agent-instructions.v1.json",
   toolManifest: "tool-manifest.v1.json",
   workflowUpdate: "workflow-update.v1.json",
   workflowChangePlan: "workflow-change-plan.v1.json",
@@ -130,6 +138,8 @@ const schemas: Record<ContractSchemaName, object> = {
   graphQueryResult: graphQueryResultSchema,
   agentMemory: agentMemorySchema,
   agentMemoryResult: agentMemoryResultSchema,
+  agentResult: agentResultSchema,
+  agentInstructions: agentInstructionsSchema,
   toolManifest: toolManifestSchema,
   workflowUpdate: workflowUpdateSchema,
   workflowChangePlan: workflowChangePlanSchema,

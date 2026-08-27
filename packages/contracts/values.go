@@ -8,6 +8,8 @@ const (
 	ContractExecutionContext      ContractVersion = "execution-context.v1"
 	ContractWorkflowBlueprint     ContractVersion = "workflow-blueprint.v1"
 	ContractWorkflowResult        ContractVersion = "blueprint-workflow-result.v1"
+	ContractAgentResult           ContractVersion = "agent-result.v1"
+	ContractAgentInstructions     ContractVersion = "agent-instructions.v1"
 	ContractWorkflowSignal        ContractVersion = "workflow-signal.v1"
 	ContractToolRequest           ContractVersion = "tool-request.v1"
 	ContractToolResult            ContractVersion = "tool-result.v1"
@@ -78,7 +80,44 @@ const (
 	WorkflowResultCompleted WorkflowResultStatus = "completed"
 	WorkflowResultWaiting   WorkflowResultStatus = "waiting"
 	WorkflowResultFailed    WorkflowResultStatus = "failed"
+	WorkflowResultPartial   WorkflowResultStatus = "partial"
 )
+
+type AgentResultStatus string
+
+const (
+	AgentResultSuccess     AgentResultStatus = "success"
+	AgentResultPartial     AgentResultStatus = "partial"
+	AgentResultFailure     AgentResultStatus = "failure"
+	AgentResultNoEvidence  AgentResultStatus = "no_evidence"
+	AgentResultNoSources   AgentResultStatus = "no_sources"
+	AgentResultNeedsReview AgentResultStatus = "needs_review"
+)
+
+type AgentEvidence struct {
+	Reference string `json:"reference"`
+	Claim     string `json:"claim"`
+}
+
+type AgentResult struct {
+	ContractVersion ContractVersion   `json:"contractVersion"`
+	Status          AgentResultStatus `json:"status"`
+	Summary         string            `json:"summary"`
+	Sources         []string          `json:"sources"`
+	Evidence        []AgentEvidence   `json:"evidence"`
+	Warnings        []string          `json:"warnings"`
+	Data            map[string]any    `json:"data,omitempty"`
+}
+
+type AgentInstructions struct {
+	ContractVersion ContractVersion `json:"contractVersion"`
+	Role            string          `json:"role"`
+	OutputContract  string          `json:"outputContract"`
+	Must            []string        `json:"must"`
+	MustNot         []string        `json:"mustNot"`
+	InputExample    map[string]any  `json:"inputExample"`
+	OutputExample   map[string]any  `json:"outputExample"`
+}
 
 type GraphQueryStatus string
 

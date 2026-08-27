@@ -71,6 +71,7 @@ import {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const temporalStartTimeoutMs = 5_000;
+const onboardingInitializationTimeoutMs = 2 * 60_000;
 
 function publicOnboardingError(error: unknown): string {
   const message = (
@@ -580,13 +581,41 @@ export async function getOrganizationForPrincipal(
         principal.organizationId,
         options.namespace,
       )) ?? null;
-    if (coordinatorState?.status !== "SUSPENDED") return projection;
+
+    if (
+      coordinatorState?.status === "READY" ||
+      coordinatorState?.onboardingComplete === true
+    ) {
+      const [ready] = await db
+        .update(organizationOnboarding)
+        .set({
+          status: OrganizationOnboardingStatus.Ready,
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          eq(organizationOnboarding.organizationId, principal.organizationId),
+        )
+        .returning();
+      return ready
+        ? { ...projection, onboarding: projectOnboarding(ready) }
+        : projection;
+    }
+
+    const initializationAgeMs =
+      Date.now() - context.onboarding.updatedAt.getTime();
+    const initializationExpired =
+      initializationAgeMs >= onboardingInitializationTimeoutMs;
+    if (coordinatorState?.status !== "SUSPENDED" && !initializationExpired)
+      return projection;
 
     const [failed] = await db
       .update(organizationOnboarding)
       .set({
         status: OrganizationOnboardingStatus.Failed,
-        lastError: publicOnboardingError(coordinatorState.lastError),
+        lastError: coordinatorState
+          ? publicOnboardingError(coordinatorState.lastError)
+          : "The Coordinator did not report completion in time. Check the Agent Runtime and try again.",
         updatedAt: new Date(),
       })
       .where(

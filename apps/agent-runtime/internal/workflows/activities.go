@@ -147,14 +147,80 @@ func (a *Activities) ExecuteBlueprintStep(ctx context.Context, input BlueprintSt
 		if err != nil {
 			return BlueprintStepResult{}, err
 		}
-		return BlueprintStepResult{StepID: input.Step.ID, Status: "model-generated", Data: map[string]any{
-			"summary":         summary,
+		agentResult, err := agents.DecodeAgentResult(summary)
+		if err != nil {
+			return BlueprintStepResult{}, err
+		}
+		if err := validateAgentEvidence(agentResult, graph.EvidenceRefs, input.PriorResults); err != nil {
+			return BlueprintStepResult{}, err
+		}
+		stepStatus, statusReason := agents.AgentResultStepStatus(agentResult)
+		data := map[string]any{
+			"summary":         agentResult.Summary,
+			"resultStatus":    string(agentResult.Status),
+			"sources":         agentResult.Sources,
+			"evidence":        agentResult.Evidence,
+			"warnings":        agentResult.Warnings,
+			"agentResult":     agentResult,
 			"agentDefinition": input.Step.AgentDefinition,
 			"graphQuery":      graphQueryForStep(input.Step),
-		}, EvidenceRefs: graph.EvidenceRefs, Freshness: graph.Freshness, Trace: executionTrace(ctx, startedAt, "model-generated", "", nil, agentModelName(a.agentBundle))}, nil
+		}
+		return BlueprintStepResult{
+			StepID:       input.Step.ID,
+			Status:       stepStatus,
+			StatusReason: statusReason,
+			Data:         data,
+			EvidenceRefs: agentResultEvidenceRefs(agentResult),
+			Freshness:    graph.Freshness,
+			Trace:        executionTrace(ctx, startedAt, string(agentResult.Status), "", nil, agentModelName(a.agentBundle)),
+		}, nil
 	default:
 		return BlueprintStepResult{}, fmt.Errorf("step kind %q is handled by the workflow, not an activity", input.Step.Kind)
 	}
+}
+
+func validateAgentEvidence(
+	result contractschemas.AgentResult,
+	graphEvidenceRefs []string,
+	priorResults map[string]BlueprintStepResult,
+) error {
+	allowed := make(map[string]struct{}, len(graphEvidenceRefs))
+	for _, reference := range graphEvidenceRefs {
+		allowed[reference] = struct{}{}
+	}
+	for _, prior := range priorResults {
+		for _, reference := range prior.EvidenceRefs {
+			allowed[reference] = struct{}{}
+		}
+	}
+	for _, reference := range agentResultEvidenceRefs(result) {
+		if _, ok := allowed[reference]; !ok {
+			return fmt.Errorf("agent result referenced evidence outside the supplied scope: %q", reference)
+		}
+	}
+	return nil
+}
+
+func agentResultEvidenceRefs(result contractschemas.AgentResult) []string {
+	seen := make(map[string]struct{}, len(result.Sources)+len(result.Evidence))
+	refs := make([]string, 0, len(result.Sources)+len(result.Evidence))
+	add := func(reference string) {
+		if reference == "" {
+			return
+		}
+		if _, ok := seen[reference]; ok {
+			return
+		}
+		seen[reference] = struct{}{}
+		refs = append(refs, reference)
+	}
+	for _, reference := range result.Sources {
+		add(reference)
+	}
+	for _, evidence := range result.Evidence {
+		add(evidence.Reference)
+	}
+	return refs
 }
 
 func executionTrace(ctx context.Context, startedAt time.Time, outcome, tool string, provenance *contractschemas.DataProvenance, model string) *contractschemas.WorkflowTrace {

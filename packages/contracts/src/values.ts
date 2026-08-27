@@ -3,6 +3,8 @@ export const ContractVersion = {
   ExecutionContext: "execution-context.v1",
   WorkflowBlueprint: "workflow-blueprint.v1",
   WorkflowResult: "blueprint-workflow-result.v1",
+  AgentResult: "agent-result.v1",
+  AgentInstructions: "agent-instructions.v1",
   WorkflowSignal: "workflow-signal.v1",
   ToolRequest: "tool-request.v1",
   ToolResult: "tool-result.v1",
@@ -138,9 +140,21 @@ export const WorkflowResultStatus = {
   Completed: "completed",
   Waiting: "waiting",
   Failed: "failed",
+  Partial: "partial",
 } as const;
 export type WorkflowResultStatus =
   (typeof WorkflowResultStatus)[keyof typeof WorkflowResultStatus];
+
+export const AgentResultStatus = {
+  Success: "success",
+  Partial: "partial",
+  Failure: "failure",
+  NoEvidence: "no_evidence",
+  NoSources: "no_sources",
+  NeedsReview: "needs_review",
+} as const;
+export type AgentResultStatus =
+  (typeof AgentResultStatus)[keyof typeof AgentResultStatus];
 
 export const ToolResultStatus = {
   Completed: "completed",

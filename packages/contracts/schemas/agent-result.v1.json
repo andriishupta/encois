@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encois.com/schemas/agent-result.v1.json",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "status",
+    "summary",
+    "sources",
+    "evidence",
+    "warnings"
+  ],
+  "properties": {
+    "contractVersion": { "const": "agent-result.v1" },
+    "status": {
+      "enum": [
+        "success",
+        "partial",
+        "failure",
+        "no_evidence",
+        "no_sources",
+        "needs_review"
+      ]
+    },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "maxItems": 100
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reference", "claim"],
+        "properties": {
+          "reference": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 100
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 },
+      "maxItems": 20
+    },
+    "data": { "type": "object" }
+  },
+  "additionalProperties": false
+}

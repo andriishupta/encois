@@ -920,6 +920,8 @@ type WorkflowOutput = {
   text: string;
   activityName?: string;
   occurredAt: string;
+  resultStatus?: string;
+  warnings: readonly string[];
 };
 
 function RunDetailsCard({
@@ -1167,9 +1169,24 @@ function WorkflowOutputCard({
           ) : null}
           {output ? (
             <>
+              {output.resultStatus ? (
+                <p className="mt-4 text-xs font-medium text-muted-foreground">
+                  Agent result: {humanizeKey(output.resultStatus)}
+                </p>
+              ) : null}
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
                 {output.text}
               </p>
+              {output.warnings.length ? (
+                <div className="mt-4 rounded-md border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                  <p className="font-medium">Warnings</p>
+                  <ul className="mt-1 list-inside list-disc">
+                    {output.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <p className="mt-4 text-xs text-muted-foreground">
                 Produced {formatDate(output.occurredAt)}
               </p>
@@ -1194,9 +1211,23 @@ function extractWorkflowOutput(
         text,
         ...(event.activityName ? { activityName: event.activityName } : {}),
         occurredAt: event.occurredAt,
+        ...(typeof data?.resultStatus === "string"
+          ? { resultStatus: data.resultStatus }
+          : {}),
+        warnings: extractOutputWarnings(data),
       };
   }
   return undefined;
+}
+
+function extractOutputWarnings(
+  value: Record<string, unknown> | undefined,
+): readonly string[] {
+  if (!value || !Array.isArray(value.warnings)) return [];
+  return value.warnings.filter(
+    (warning): warning is string =>
+      typeof warning === "string" && warning.trim().length > 0,
+  );
 }
 
 function extractOutputText(

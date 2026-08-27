@@ -642,6 +642,26 @@ async function projectRuntimeWorkflowResult(
     database,
     principal.organizationId,
     async (db) => {
+      const runtimeStatus = workflowStatusFromRuntimeResult(result.status);
+      if (runtimeStatus) {
+        await db
+          .update(workflowRuns)
+          .set({
+            status: runtimeStatus,
+            ...(runtimeStatus === WorkflowExecutionStatus.Completed ||
+            runtimeStatus === WorkflowExecutionStatus.Failed ||
+            runtimeStatus === WorkflowExecutionStatus.Partial
+              ? { completedAt: occurredAt }
+              : {}),
+            updatedAt: occurredAt,
+          })
+          .where(
+            and(
+              eq(workflowRuns.id, workflowRunId),
+              eq(workflowRuns.organizationId, principal.organizationId),
+            ),
+          );
+      }
       for (const step of result.steps) {
         const projectionKey = `workflow-result:${workflowRunId}:${step.stepId}`;
         const evidenceRefs = [...step.evidenceRefs];
@@ -727,6 +747,23 @@ async function projectRuntimeWorkflowResult(
       }
     },
   );
+}
+
+function workflowStatusFromRuntimeResult(
+  status: string,
+): WorkflowExecutionStatus | undefined {
+  switch (status) {
+    case "completed":
+      return WorkflowExecutionStatus.Completed;
+    case "partial":
+      return WorkflowExecutionStatus.Partial;
+    case "failed":
+      return WorkflowExecutionStatus.Failed;
+    case "waiting":
+      return WorkflowExecutionStatus.Waiting;
+    default:
+      return undefined;
+  }
 }
 
 export function workflowEventProjection(
@@ -823,9 +860,15 @@ async function syncWorkflowProjection(
       const preservePaused =
         run.status === WorkflowExecutionStatus.Paused &&
         !completedStatuses.has(projection.status);
+      const preserveRuntimeResult =
+        projection.status === WorkflowExecutionStatus.Completed &&
+        (run.status === WorkflowExecutionStatus.Failed ||
+          run.status === WorkflowExecutionStatus.Partial);
       const effectiveStatus = preservePaused
         ? WorkflowExecutionStatus.Paused
-        : projection.status;
+        : preserveRuntimeResult
+          ? run.status
+          : projection.status;
       await db
         .update(workflowRuns)
         .set({
