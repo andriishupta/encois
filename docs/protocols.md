@@ -205,7 +205,7 @@ the business meaning of a tool result.
 The repository reserves `agent-memory.v1` and `agent-memory-result.v1` for
 scoped agent-memory retrieval and evidence-linked distillation. The Go Runtime
 exposes this through an Activity-side `memory.Store` boundary with a scoped
-local mock and a Vertex AI Memory Bank adapter selected by `AGENT_MEMORY_MODE`.
+local mock and an Agent Platform Memory Bank adapter selected by `AGENT_MEMORY_MODE`.
 Memory results are summaries and references, not raw provider payloads or
 Workflow history.
 

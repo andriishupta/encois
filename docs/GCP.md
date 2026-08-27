@@ -116,7 +116,7 @@ mode does not manage or delete the instance; the database named by
 `infra/spanner-schema.sql`.
 
 Graph, Workflow Memory, and artifact scope semantics are documented separately
-in [`memory.md`](memory.md). In particular, the current Vertex Memory Bank
+in [`memory.md`](memory.md). In particular, the current Agent Platform Memory Bank
 adapter does not yet encode the full Encois organization-unit hierarchy into
 provider memory scope; the API and Agent Gateway authorization boundary remains
 mandatory.
@@ -134,9 +134,9 @@ For local development, the Agent Gateway and Runtime can select in-process
 mock data adapters with `AGENT_GATEWAY_DATA_MODE=mock` and
 `AGENT_MEMORY_MODE=mock`. The `watch:ai` profile selects
 `AGENT_GATEWAY_DATA_MODE=hybrid`: it uses ADC-backed Spanner Graph plus local
-emulator storage and provider fixtures, while the Runtime uses real Vertex AI
-Gemini and the configured Vertex AI Reasoning Engine. Hosted deployments select
-`gcp`, use ADC, and must provide the bucket, Spanner database, and Vertex AI
+emulator storage and provider fixtures, while the Runtime uses real Gemini through
+Agent Platform and the configured Agent Platform Reasoning Engine. Hosted deployments select
+`gcp`, use ADC, and must provide the bucket, Spanner database, and Agent Platform
 Reasoning Engine resource.
 The API uses Temporal for workflow execution in every environment. Local
 fixture data is created by an explicit seed script and is never selected as an

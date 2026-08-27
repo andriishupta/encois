@@ -121,6 +121,8 @@ export type ListPage<T> = {
   };
 };
 
+const DEFAULT_LIST_LIMIT = 10;
+
 export type KnowledgeSourceDetail = {
   source: KnowledgeSource;
   revisions: readonly SourceRevision[];
@@ -1150,7 +1152,10 @@ export function listWorkflows(
   input: ListQueryInput = {},
 ): Promise<readonly WorkflowExecutionProjection[]> {
   return request<unknown>(
-    `/workflows${listQuery({ ...input, limit: input.limit ?? 10 })}`,
+    `/workflows${listQuery({
+      ...input,
+      limit: input.limit ?? DEFAULT_LIST_LIMIT,
+    })}`,
   ).then((value) => parseList(value, isWorkflowProjection, "workflow list"));
 }
 
@@ -1167,9 +1172,10 @@ export function listWorkflowsPage(
 export function listWorkflowTemplates(
   input: ListQueryInput & { category?: string } = {},
 ): Promise<readonly WorkflowTemplateProjection[]> {
-  return listWorkflowTemplatesPage({ ...input, limit: input.limit ?? 50 }).then(
-    (page) => page.items,
-  );
+  return listWorkflowTemplatesPage({
+    ...input,
+    limit: input.limit ?? DEFAULT_LIST_LIMIT,
+  }).then((page) => page.items);
 }
 
 export function listWorkflowTemplatesPage(
@@ -1189,7 +1195,7 @@ export function listWorkflowBlueprints(
 ): Promise<readonly WorkflowBlueprintProjection[]> {
   return listWorkflowBlueprintsPage({
     ...input,
-    limit: input.limit ?? 100,
+    limit: input.limit ?? DEFAULT_LIST_LIMIT,
   }).then((page) => page.items);
 }
 
@@ -1290,7 +1296,7 @@ export async function submitWorkflowCreation(
 }
 
 export function listWorkflowPlans(
-  limit = 100,
+  limit = DEFAULT_LIST_LIMIT,
 ): Promise<readonly WorkflowPlanRecord[]> {
   return listWorkflowPlansPage({ limit }).then((page) => page.items);
 }
@@ -1341,7 +1347,7 @@ export async function updateWorkflowPlan(
 }
 
 export function listWorkflowPlannerVersions(
-  limit = 100,
+  limit = DEFAULT_LIST_LIMIT,
 ): Promise<readonly WorkflowPlannerVersionProjection[]> {
   const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
   return request<unknown>(
@@ -1583,7 +1589,7 @@ export async function updateWorkflow(
 export function listIntegrations(
   options: { scopeUnitId?: string } = {},
 ): Promise<readonly IntegrationProjection[]> {
-  return listIntegrationsPage({ ...options, limit: 100 }).then(
+  return listIntegrationsPage({ ...options, limit: DEFAULT_LIST_LIMIT }).then(
     (page) => page.items,
   );
 }
@@ -1635,9 +1641,10 @@ export async function createIntegration(
 export function listKnowledgeSources(
   options: { scopeUnitId?: string } = {},
 ): Promise<readonly KnowledgeSource[]> {
-  return listKnowledgeSourcesPage({ ...options, limit: 100 }).then(
-    (page) => page.items,
-  );
+  return listKnowledgeSourcesPage({
+    ...options,
+    limit: DEFAULT_LIST_LIMIT,
+  }).then((page) => page.items);
 }
 
 export function listKnowledgeSourcesPage(
@@ -2076,7 +2083,7 @@ export async function queryAgentMemory(
 }
 
 export function listMemoryChanges(
-  limit = 100,
+  limit = DEFAULT_LIST_LIMIT,
 ): Promise<readonly MemoryChangeRecord[]> {
   const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
   return request<unknown>(`/context/memory/changes?limit=${boundedLimit}`).then(
@@ -2205,9 +2212,10 @@ export function listNotificationsPage(
 export function listNotifications(
   input: ListQueryInput = {},
 ): Promise<readonly NotificationProjection[]> {
-  return listNotificationsPage({ ...input, limit: input.limit ?? 100 }).then(
-    (page) => page.items,
-  );
+  return listNotificationsPage({
+    ...input,
+    limit: input.limit ?? DEFAULT_LIST_LIMIT,
+  }).then((page) => page.items);
 }
 
 export function listRecommendations(): Promise<

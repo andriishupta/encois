@@ -8,6 +8,7 @@ import (
 
 	contracts "github.com/andriishupta/encois/packages/contracts"
 	aiplatform "google.golang.org/api/aiplatform/v1beta1"
+	"google.golang.org/api/option"
 )
 
 type gcpStore struct {
@@ -15,15 +16,50 @@ type gcpStore struct {
 	reasoningEngine string
 }
 
-func NewGCPStore(ctx context.Context, reasoningEngine string) (Store, error) {
-	if strings.TrimSpace(reasoningEngine) == "" {
-		return nil, fmt.Errorf("GCP memory mode requires VERTEX_MEMORY_REASONING_ENGINE")
+func NewGCPStore(ctx context.Context, reasoningEngine, googleCloudLocation string) (Store, error) {
+	reasoningEngine = strings.TrimRight(strings.TrimSpace(reasoningEngine), "/")
+	if reasoningEngine == "" {
+		return nil, fmt.Errorf("GCP memory mode requires AGENT_PLATFORM_MEMORY_REASONING_ENGINE")
 	}
-	service, err := aiplatform.NewService(ctx)
+	googleCloudLocation = strings.ToLower(strings.TrimSpace(googleCloudLocation))
+	if !validGoogleCloudLocation(googleCloudLocation) {
+		return nil, fmt.Errorf("GOOGLE_CLOUD_LOCATION must contain only lowercase letters, digits, and hyphens")
+	}
+	if err := validateReasoningEngineResource(reasoningEngine, googleCloudLocation); err != nil {
+		return nil, err
+	}
+	endpoint := "https://" + googleCloudLocation + "-aiplatform.googleapis.com/"
+	if googleCloudLocation == "global" {
+		endpoint = "https://aiplatform.googleapis.com/"
+	}
+	service, err := aiplatform.NewService(ctx, option.WithEndpoint(endpoint))
 	if err != nil {
-		return nil, fmt.Errorf("create Vertex AI Memory Bank client: %w", err)
+		return nil, fmt.Errorf("create Agent Platform Memory Bank client: %w", err)
 	}
-	return &gcpStore{service: service, reasoningEngine: strings.TrimRight(reasoningEngine, "/")}, nil
+	return &gcpStore{service: service, reasoningEngine: reasoningEngine}, nil
+}
+
+func validGoogleCloudLocation(location string) bool {
+	if location == "" {
+		return false
+	}
+	for _, value := range location {
+		if (value < 'a' || value > 'z') && (value < '0' || value > '9') && value != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func validateReasoningEngineResource(reasoningEngine, googleCloudLocation string) error {
+	parts := strings.Split(reasoningEngine, "/")
+	if len(parts) != 6 || parts[0] != "projects" || parts[1] == "" || parts[2] != "locations" || parts[3] == "" || parts[4] != "reasoningEngines" || parts[5] == "" {
+		return fmt.Errorf("AGENT_PLATFORM_MEMORY_REASONING_ENGINE must be a full Reasoning Engine resource name")
+	}
+	if parts[3] != googleCloudLocation {
+		return fmt.Errorf("Reasoning Engine location %q must match GOOGLE_CLOUD_LOCATION %q", parts[3], googleCloudLocation)
+	}
+	return nil
 }
 
 func (s *gcpStore) Execute(ctx context.Context, request Request) (Result, error) {
@@ -58,7 +94,7 @@ func (s *gcpStore) target(ctx context.Context, request Request) (*aiplatform.Goo
 	}
 	value, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(target).Context(ctx).Do()
 	if err != nil {
-		return nil, fmt.Errorf("get Vertex AI memory: %w", err)
+		return nil, fmt.Errorf("get Agent Platform memory: %w", err)
 	}
 	if value.Scope["organization_id"] != request.OrganizationID || value.Scope["agent_definition"] != request.MemoryScope.AgentDefinition {
 		return nil, fmt.Errorf("memory target scope does not match the request")
@@ -81,14 +117,14 @@ func (s *gcpStore) correct(ctx context.Context, request Request) (Result, error)
 	}
 	operation, err := s.service.Projects.Locations.ReasoningEngines.Memories.Patch(request.TargetMemoryID, &aiplatform.GoogleCloudAiplatformV1beta1Memory{Fact: request.ReplacementSummary}).UpdateMask("fact").Context(ctx).Do()
 	if err != nil {
-		return Result{}, fmt.Errorf("patch Vertex AI memory: %w", err)
+		return Result{}, fmt.Errorf("patch Agent Platform memory: %w", err)
 	}
 	if err := s.wait(ctx, operation); err != nil {
 		return Result{}, err
 	}
 	updated, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(request.TargetMemoryID).Context(ctx).Do()
 	if err != nil {
-		return Result{}, fmt.Errorf("get updated Vertex AI memory: %w", err)
+		return Result{}, fmt.Errorf("get updated Agent Platform memory: %w", err)
 	}
 	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{recordFromMemory(updated)}}, nil
 }
@@ -99,7 +135,7 @@ func (s *gcpStore) delete(ctx context.Context, request Request) (Result, error) 
 	}
 	operation, err := s.service.Projects.Locations.ReasoningEngines.Memories.Delete(request.TargetMemoryID).Context(ctx).Do()
 	if err != nil {
-		return Result{}, fmt.Errorf("delete Vertex AI memory: %w", err)
+		return Result{}, fmt.Errorf("delete Agent Platform memory: %w", err)
 	}
 	if err := s.wait(ctx, operation); err != nil {
 		return Result{}, err
@@ -110,19 +146,19 @@ func (s *gcpStore) delete(ctx context.Context, request Request) (Result, error) 
 func (s *gcpStore) wait(ctx context.Context, operation *aiplatform.GoogleLongrunningOperation) error {
 	if operation == nil || operation.Done {
 		if operation != nil && operation.Error != nil {
-			return fmt.Errorf("Vertex AI memory operation failed: %s", operation.Error.Message)
+			return fmt.Errorf("Agent Platform memory operation failed: %s", operation.Error.Message)
 		}
 		return nil
 	}
 	if operation.Name == "" {
-		return fmt.Errorf("Vertex AI memory operation returned no name")
+		return fmt.Errorf("Agent Platform memory operation returned no name")
 	}
 	completed, err := s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Wait(operation.Name).Timeout("30s").Context(ctx).Do()
 	if err != nil {
-		return fmt.Errorf("wait for Vertex AI memory operation: %w", err)
+		return fmt.Errorf("wait for Agent Platform memory operation: %w", err)
 	}
 	if completed != nil && completed.Error != nil {
-		return fmt.Errorf("Vertex AI memory operation failed: %s", completed.Error.Message)
+		return fmt.Errorf("Agent Platform memory operation failed: %s", completed.Error.Message)
 	}
 	return nil
 }
@@ -144,14 +180,14 @@ func (s *gcpStore) retrieve(ctx context.Context, request Request, scope map[stri
 	}
 	response, err := s.service.Projects.Locations.ReasoningEngines.Memories.Retrieve(s.reasoningEngine, retrieve).Context(ctx).Do()
 	if err != nil {
-		return Result{}, fmt.Errorf("retrieve Vertex AI memories: %w", err)
+		return Result{}, fmt.Errorf("retrieve Agent Platform memories: %w", err)
 	}
 	records := make([]Record, 0, len(response.RetrievedMemories))
 	for _, item := range response.RetrievedMemories {
 		if item == nil || item.Memory == nil {
 			continue
 		}
-		// Vertex Memory Bank is scoped by request, but keep the organization
+		// Agent Platform Memory Bank is scoped by request, but keep the organization
 		// boundary explicit at the adapter boundary as defense in depth.
 		if item.Memory.Scope["organization_id"] != request.OrganizationID {
 			continue
@@ -172,16 +208,16 @@ func (s *gcpStore) distill(ctx context.Context, request Request, scope map[strin
 		},
 	}).Context(ctx).Do()
 	if err != nil {
-		return Result{}, fmt.Errorf("generate Vertex AI memory: %w", err)
+		return Result{}, fmt.Errorf("generate Agent Platform memory: %w", err)
 	}
 	if operation != nil && !operation.Done && operation.Name != "" {
 		operation, err = s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Wait(operation.Name).Timeout("30s").Context(ctx).Do()
 		if err != nil {
-			return Result{}, fmt.Errorf("wait for Vertex AI memory generation: %w", err)
+			return Result{}, fmt.Errorf("wait for Agent Platform memory generation: %w", err)
 		}
 	}
 	if operation != nil && operation.Error != nil {
-		return Result{}, fmt.Errorf("Vertex AI memory generation failed: %s", operation.Error.Message)
+		return Result{}, fmt.Errorf("Agent Platform memory generation failed: %s", operation.Error.Message)
 	}
 	records, err := generatedRecords(operation, request, s.reasoningEngine)
 	if err != nil {
@@ -209,11 +245,11 @@ type generatedMemoryRecord struct {
 
 func generatedRecords(operation *aiplatform.GoogleLongrunningOperation, request Request, reasoningEngine string) ([]Record, error) {
 	if operation == nil || len(operation.Response) == 0 {
-		return nil, fmt.Errorf("Vertex AI memory generation returned no generated memories")
+		return nil, fmt.Errorf("Agent Platform memory generation returned no generated memories")
 	}
 	var response generatedMemoriesResponse
 	if err := json.Unmarshal(operation.Response, &response); err != nil {
-		return nil, fmt.Errorf("decode Vertex AI generated memories: %w", err)
+		return nil, fmt.Errorf("decode Agent Platform generated memories: %w", err)
 	}
 	records := make([]Record, 0, len(response.GeneratedMemories))
 	prefix := strings.TrimRight(reasoningEngine, "/") + "/memories/"
@@ -250,7 +286,7 @@ func generatedRecords(operation *aiplatform.GoogleLongrunningOperation, request 
 		})
 	}
 	if len(records) == 0 {
-		return nil, fmt.Errorf("Vertex AI memory generation completed without a created or updated memory")
+		return nil, fmt.Errorf("Agent Platform memory generation completed without a created or updated memory")
 	}
 	return records, nil
 }

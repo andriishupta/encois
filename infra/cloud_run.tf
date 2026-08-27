@@ -558,13 +558,18 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       }
 
       env {
-        name  = "GOOGLE_GENAI_USE_VERTEXAI"
+        name  = "GOOGLE_CLOUD_LOCATION"
+        value = var.google_cloud_location
+      }
+
+      env {
+        name  = "GOOGLE_GENAI_USE_AGENT_PLATFORM"
         value = "true"
       }
 
       env {
-        name  = "GOOGLE_CLOUD_LOCATION"
-        value = var.region
+        name  = "GOOGLE_CLOUD_MODEL_LOCATION"
+        value = var.google_cloud_model_location
       }
 
       env {
@@ -573,8 +578,8 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       }
 
       env {
-        name  = "VERTEX_MEMORY_REASONING_ENGINE"
-        value = var.vertex_memory_reasoning_engine
+        name  = "AGENT_PLATFORM_MEMORY_REASONING_ENGINE"
+        value = var.agent_platform_memory_reasoning_engine
       }
 
       dynamic "env" {
@@ -716,8 +721,8 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       error_message = "The current Go runtime requires enable_agent_gateway because tool Activities use the private HTTP Gateway."
     }
     precondition {
-      condition     = !var.enable_agent_runtime || var.vertex_memory_reasoning_engine != ""
-      error_message = "vertex_memory_reasoning_engine must be set when the hosted Agent Runtime is enabled."
+      condition     = !var.enable_agent_runtime || var.agent_platform_memory_reasoning_engine != ""
+      error_message = "agent_platform_memory_reasoning_engine must be set when the hosted Agent Runtime is enabled."
     }
     precondition {
       condition     = !var.enable_agent_runtime || contains(var.secret_names, var.agent_gateway_secret_name)

@@ -146,7 +146,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       env.TEMPORAL_TLS_CLIENT_CERT_PATH?.trim() || undefined,
     temporalTlsClientKeyPath:
       env.TEMPORAL_TLS_CLIENT_KEY_PATH?.trim() || undefined,
-    temporalNamespace: env.TEMPORAL_NAMESPACE?.trim() || "default",
+    temporalNamespace: env.TEMPORAL_NAMESPACE?.trim() || "encois",
     temporalTaskQueue:
       env.TEMPORAL_TASK_QUEUE?.trim() || "encois-agent-runtime",
     workflowRunRetentionDays: positiveInteger(

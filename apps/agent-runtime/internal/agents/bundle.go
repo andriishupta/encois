@@ -15,13 +15,13 @@ import (
 )
 
 type Config struct {
-	Mode                string
-	APIKey              string
-	UseVertexAI         bool
-	GoogleCloudProject  string
-	GoogleCloudLocation string
-	ModelName           string
-	ReasoningThinking   string
+	Mode                     string
+	APIKey                   string
+	UseAgentPlatform         bool
+	GoogleCloudProject       string
+	GoogleCloudModelLocation string
+	ModelName                string
+	ReasoningThinking        string
 }
 
 type Bundle struct {
@@ -70,18 +70,18 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 		bundle.Enabled = true
 		return bundle, nil
 	}
-	if !cfg.UseVertexAI && cfg.APIKey == "" {
+	if !cfg.UseAgentPlatform && cfg.APIKey == "" {
 		return nil, fmt.Errorf("Gemini credentials are required for AGENT_AI_MODE=gemini; use AGENT_AI_MODE=mock explicitly for local fixtures")
 	}
 
 	clientConfig := &genai.ClientConfig{APIKey: cfg.APIKey}
-	if cfg.UseVertexAI {
+	if cfg.UseAgentPlatform {
 		// Cloud Run uses the service account's Application Default Credentials;
-		// no long-lived Gemini API key is required for Vertex AI mode.
+		// no long-lived Gemini API key is required for Agent Platform mode.
 		clientConfig = &genai.ClientConfig{
 			Backend:  genai.BackendVertexAI,
 			Project:  cfg.GoogleCloudProject,
-			Location: cfg.GoogleCloudLocation,
+			Location: cfg.GoogleCloudModelLocation,
 		}
 	}
 

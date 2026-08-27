@@ -225,7 +225,7 @@ variable "temporal_address" {
 variable "temporal_namespace" {
   description = "Temporal Cloud namespace used by the worker."
   type        = string
-  default     = ""
+  default     = "encois"
 }
 
 variable "temporal_secret_name" {
@@ -354,10 +354,32 @@ variable "artifact_bucket_name" {
   default     = ""
 }
 
-variable "vertex_memory_reasoning_engine" {
-  description = "Full Vertex AI Reasoning Engine resource name hosting the project's Memory Bank. Required when the hosted runtime is enabled."
+variable "agent_platform_memory_reasoning_engine" {
+  description = "Full Agent Platform Reasoning Engine resource name hosting the project's Memory Bank. Required when the hosted runtime is enabled."
   type        = string
   default     = ""
+}
+
+variable "google_cloud_model_location" {
+  description = "Gemini model endpoint location. Use the supported multi-region us, eu, or global endpoint independently of the infrastructure region."
+  type        = string
+  default     = "us"
+
+  validation {
+    condition     = contains(["global", "us", "eu"], var.google_cloud_model_location)
+    error_message = "google_cloud_model_location must be global, us, or eu."
+  }
+}
+
+variable "google_cloud_location" {
+  description = "Regional Agent Platform endpoint for the configured Memory Bank Reasoning Engine, for example us-east1."
+  type        = string
+  default     = "us-east1"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.google_cloud_location))
+    error_message = "google_cloud_location must contain only lowercase letters, digits, and hyphens."
+  }
 }
 
 variable "artifact_retention_days" {

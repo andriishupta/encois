@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
@@ -52,11 +51,7 @@ type SourceIngestionWorkflowResult struct {
 // SourceIngestionWorkflow is intentionally a small, durable coordinator for
 // the common ingestion pipeline. Acquisition and parsing remain Activities so
 // provider SDKs, PDF/OCR, Graph, and Memory adapters can evolve independently.
-func SourceIngestionWorkflow(ctx workflow.Context, args converter.EncodedValues) (SourceIngestionWorkflowResult, error) {
-	var input SourceIngestionWorkflowInput
-	if err := args.Get(&input); err != nil {
-		return SourceIngestionWorkflowResult{}, fmt.Errorf("decode source ingestion input: %w", err)
-	}
+func SourceIngestionWorkflow(ctx workflow.Context, input SourceIngestionWorkflowInput) (SourceIngestionWorkflowResult, error) {
 	if err := validateSourceIngestionWorkflowInput(input); err != nil {
 		return SourceIngestionWorkflowResult{}, err
 	}

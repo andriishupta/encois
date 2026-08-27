@@ -102,7 +102,7 @@ assert_http_status 403 \
   cd apps/agent-runtime
   AGENT_RUNTIME_HTTP_ADDR=":${runtime_port}" \
   TEMPORAL_HOST_PORT="$temporal_address" \
-  TEMPORAL_NAMESPACE=default \
+  TEMPORAL_NAMESPACE=encois \
   TEMPORAL_TASK_QUEUE=encois-agent-runtime \
   AGENT_AI_MODE=mock \
   AGENT_SOURCE_MODE=mock \
@@ -115,13 +115,13 @@ runtime_pid=$!
 wait_for_http "${runtime_address}/health/ready"
 
 TEMPORAL_ADDRESS="$temporal_address" \
-TEMPORAL_NAMESPACE=default \
+TEMPORAL_NAMESPACE=encois \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
 pnpm smoke:release
 
 TEMPORAL_ADDRESS="$temporal_address" \
-TEMPORAL_NAMESPACE=default \
+TEMPORAL_NAMESPACE=encois \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
 pnpm smoke:approval

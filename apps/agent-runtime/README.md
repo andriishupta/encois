@@ -19,10 +19,10 @@ Configuration is environment-based:
   the Cloud Run `PORT` value. Use `:8090` locally when the Agent Gateway uses
   its default `:8080`;
 - `TEMPORAL_HOST_PORT` — defaults to `127.0.0.1:7233`;
-- `TEMPORAL_NAMESPACE` — defaults to `default`;
+- `TEMPORAL_NAMESPACE` — defaults to `encois`;
 - `TEMPORAL_TASK_QUEUE` — defaults to `encois-agent-runtime`;
 - `TEMPORAL_API_KEY` — optional Temporal Cloud API key;
-- `AGENT_AI_MODE` — `gemini` (default) uses the configured Gemini/Vertex AI
+- `AGENT_AI_MODE` — `gemini` (default) uses the configured Gemini/Agent Platform
   backend; `mock` enables the deterministic local fixture in
   `internal/mock` and requires no model credentials;
 - `AGENT_SOURCE_MODE` — `gateway` (default) requires an artifact reference and
@@ -39,20 +39,25 @@ Configuration is environment-based:
   control-plane route;
 - `CONTROL_PLANE_AUDIENCE` — optional Cloud Run URL; when set, the client also
   sends a Google ID token for Cloud Run IAM;
-- `GOOGLE_GENAI_USE_VERTEXAI` — set to `true` in Cloud Run to use Vertex AI with
-  Application Default Credentials instead of a long-lived Gemini API key;
-- `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` — Vertex AI project and
-  region; the location defaults to `us-central1`;
+- `GOOGLE_GENAI_USE_AGENT_PLATFORM` — set to `true` in Cloud Run to use Agent
+  Platform with Application Default Credentials instead of a long-lived Gemini
+  API key;
+- `GOOGLE_CLOUD_PROJECT` — Google Cloud project;
+- `GOOGLE_CLOUD_LOCATION` — regional Agent Platform endpoint for the configured
+  Memory Bank Reasoning Engine, for example `us-east1`;
+- `GOOGLE_CLOUD_MODEL_LOCATION` — Gemini model endpoint location, normally the
+  supported `us`, `eu`, or `global` multi-region. This is separate from the
+  physical Memory Bank, Spanner, and Cloud Run regions;
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — required for `AGENT_AI_MODE=gemini`
-  unless Vertex AI mode is enabled. Use `AGENT_AI_MODE=mock` explicitly when
+  unless Agent Platform mode is enabled. Use `AGENT_AI_MODE=mock` explicitly when
   the local workflow should produce a deterministic AI result;
-- `AGENT_MEMORY_MODE` — `gcp` (default) calls Vertex AI Memory Bank through the
+- `AGENT_MEMORY_MODE` — `gcp` (default) calls Agent Platform Memory Bank through the
   configured Reasoning Engine; use the explicit `mock` value for local/test
   runs;
 - `AGENT_MEMORY_FIXTURE` — set to `local` with mock memory to enable the
   deterministic organization-scoped local fixture;
-- `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
-  name required by `AGENT_MEMORY_MODE=gcp`;
+- `AGENT_PLATFORM_MEMORY_REASONING_ENGINE` — full Agent Platform Reasoning
+  Engine resource name required by `AGENT_MEMORY_MODE=gcp`;
 - `GEMINI_MODEL` — the model used by every ADK role, including routine
   specialists, the Coordinator, and the Workflow Creator; defaults to
   `gemini-3.7-flash`. High-level roles use the separate thinking-level setting
@@ -151,7 +156,7 @@ Agent-specific Memory Bank access has a separate typed boundary in
 `internal/memory`. It supports scoped `retrieve` and evidence-linked
 `distill` requests, validates the canonical contracts, and is registered as the
 `ExecuteAgentMemory` Activity. `AGENT_MEMORY_MODE=mock` is enabled explicitly
-by the local Compose configuration; `gcp` uses the official Vertex AI Memory
+by the local Compose configuration; `gcp` uses the official Agent Platform Memory
 Bank REST client. Memory operations are
 not Workflow state and are never a substitute for the company Graph or
 control-plane Postgres.

@@ -53,7 +53,6 @@ function WorkflowRecommendationsPage() {
       listWorkflowTemplates({
         status: "active",
         sort: "updated-desc",
-        limit: 5,
       }),
   });
   const blueprints = useQuery({
@@ -62,7 +61,6 @@ function WorkflowRecommendationsPage() {
       listWorkflowBlueprints({
         status: "approved",
         sort: "updated-desc",
-        limit: 5,
       }),
   });
   const [selected, setSelected] = useState<string[]>();
@@ -93,7 +91,7 @@ function WorkflowRecommendationsPage() {
           })),
       ]
         .filter((item) => !item.unavailable)
-        .slice(0, 5),
+        .slice(0, 10),
     [blueprints.data, templates.data],
   );
   const selectedWorkflows =
@@ -165,12 +163,9 @@ function WorkflowRecommendationsPage() {
           Choose your first workflows
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Select from the five active workflow options available to this
+          Select from the active workflow options available to this
           organization. The workspace stores product references and resolves
           runtime identifiers in the control plane.
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          More workflows can be selected later in configuration.
         </p>
       </div>
       <Card>
@@ -178,7 +173,8 @@ function WorkflowRecommendationsPage() {
           <CardTitle>Available workflow catalog</CardTitle>
           <CardDescription>
             Choose the workflow definitions the Coordinator should prepare for
-            this organization.
+            this organization. We show the active top 10, and you will be able
+            to select more later on the Dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">

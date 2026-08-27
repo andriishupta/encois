@@ -2,7 +2,7 @@ import { createApp } from "../apps/api-gateway/src/app.js";
 import { loadConfig } from "../apps/api-gateway/src/config.js";
 
 const temporalAddress = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
-const namespace = process.env.TEMPORAL_NAMESPACE ?? "default";
+const namespace = process.env.TEMPORAL_NAMESPACE ?? "encois";
 const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? "encois-agent-runtime";
 const timeoutMs = Number(process.env.ENCOIS_SMOKE_TIMEOUT_MS ?? 30_000);
 const workflowKey = process.env.ENCOIS_SMOKE_WORKFLOW_KEY ?? "approval-smoke";

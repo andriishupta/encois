@@ -85,7 +85,8 @@ function publicOnboardingError(error: unknown): string {
     return "The Coordinator did not respond in time. Check the agent runtime and try again.";
   if (
     message.includes("model") ||
-    message.includes("vertex") ||
+    message.includes("agent platform") ||
+    message.includes("aiplatform") ||
     message.includes("gemini")
   )
     return "The Coordinator could not access the configured AI model. Check the model configuration and try again.";

@@ -42,7 +42,7 @@ The selected platform shape is:
 - Temporal Cloud for durable workflows, timers, retries, signals, cancellation, parallel branches, and workflow history.
 - Go Agent Runtime using the Temporal Go SDK and Google ADK integration.
 - Vertex AI / Gemini for model calls and evidence synthesis.
-- Vertex AI Agent Engine Sessions and Memory Bank for session and agent-specific semantic memory.
+- Agent Platform Sessions and Memory Bank for session and agent-specific semantic memory.
 - Spanner Graph for the shared company knowledge graph, organization relationships, and normalized connected facts.
 - Cloud Storage for large raw payloads and investigation artifacts, with retention limits.
 - Secret Manager for connector credentials.
@@ -69,7 +69,7 @@ flowchart LR
     API --> Temporal[Temporal Cloud\nDurable workflows + history]
     Runtime[Go Agent Runtime\nworker process] -. polls task queues .-> Temporal
 
-    Runtime --> Gemini[Vertex AI\nGemini]
+    Runtime --> Gemini[Gemini through Agent Platform]
     Runtime --> Memory[Agent Engine\nSessions + Memory Bank]
     Runtime --> ToolGateway[Private Agent Gateway\npolicy + tool broker]
     ToolGateway --> MCP[MCP servers or API adapters]
@@ -363,7 +363,7 @@ Temporal Workflows
 The current repository implements the Workflow/Activity layer, ADK bundle,
 private Agent Gateway client, local mock data plane, and GCP adapters. The
 Agent Gateway owns Cloud Storage and Spanner access; Runtime Activities own
-scoped Vertex AI Memory Bank calls. The Runtime continues to receive
+scoped Agent Platform Memory Bank calls. The Runtime continues to receive
 references and stateless context, not connect to the Gateway API's control-plane
 Postgres. Hosted adapter validation, retention, deletion, and provider quality
 remain deployment concerns.
@@ -391,7 +391,7 @@ Generated DTO generation, hosted Temporal/Cloud Run deployment, and real
 provider adapters also remain pending. These Runtime Activities do not access
 Postgres and cannot approve or bypass the registry.
 
-In Google Cloud, the Runtime uses Vertex AI through the GenAI/ADK client with
+In Google Cloud, the Runtime uses Agent Platform through the GenAI/ADK client with
 Application Default Credentials and its dedicated service account. The
 Runtime-to-Gateway control-plane adapter can send both a Cloud Run ID token and
 the scoped Encois service token; Terraform grants the Runtime service account
@@ -716,7 +716,7 @@ team_id = platform       # optional
 
 Memory retrieval must use the exact authorized scope. Agent-specific memory must not become invisible cross-team knowledge.
 
-The current Vertex Memory Bank adapter maps organization, agent definition, and
+The current Agent Platform Memory Bank adapter maps organization, agent definition, and
 optional project/user scope, but does not yet materialize the full Encois
 organization-unit hierarchy in the provider scope. The API still performs the
 human authorization check and carries the effective unit scope in the request;
@@ -761,7 +761,7 @@ Agents may propose a relationship, but deterministic ingestion and validation co
 
 #### Raw artifacts and retrieval
 
-Cloud Storage holds large raw provider payloads, exports, and artifacts under organization-scoped paths. Vertex AI RAG Engine or another approved retrieval layer may index documents when semantic document search is needed. Raw payloads are not copied wholesale into prompts, Temporal history, Memory Bank, or graph properties.
+Cloud Storage holds large raw provider payloads, exports, and artifacts under organization-scoped paths. Agent Platform RAG Engine or another approved retrieval layer may index documents when semantic document search is needed. Raw payloads are not copied wholesale into prompts, Temporal history, Memory Bank, or graph properties.
 
 The normal data path is:
 
@@ -1083,7 +1083,7 @@ User: “Are we on track for the August 30 release, and what changed after yeste
 - Temporal Cloud versus self-hosted Temporal for customer deployments.
 - Exact Spanner Graph edition, region, and cost profile.
 - Native Temporal `googleadk` execution integration; the current Activity-level
-  ADK path already has a real Vertex AI Memory Bank adapter.
+  ADK path already has a real Agent Platform Memory Bank adapter.
 - Graph schema evolution and entity-resolution strategy.
 - Data retention, deletion, export, and residency controls.
 - Persisted explicit scope grants/restrictions and hierarchy administration.

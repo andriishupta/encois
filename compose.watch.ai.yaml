@@ -1,7 +1,7 @@
 name: encois-watch-ai
 
 # Local application and infrastructure with real GCP AI/context adapters.
-# Gemini, Vertex Memory Bank, and Spanner use ADC and GCP. Postgres, Temporal,
+# Gemini, Agent Platform Memory Bank, and Spanner use ADC and GCP. Postgres, Temporal,
 # Firebase Auth, Firebase Storage, and provider tools remain local fixtures.
 services:
   postgres:
@@ -23,7 +23,7 @@ services:
 
   temporal:
     image: ${TEMPORAL_IMAGE:-temporalio/temporal:1.8.2}
-    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-port", "8233"]
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-port", "8233", "--namespace", "${TEMPORAL_NAMESPACE:-encois}"]
     ports:
       - "7233:7233"
       - "8233:8233"
@@ -156,7 +156,7 @@ services:
       DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
       ENCOIS_WORKFLOW_MODE: temporal
       TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_NAMESPACE: default
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-encois}
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
     ports:
       - "8787:8787"
@@ -185,20 +185,21 @@ services:
     environment:
       AGENT_RUNTIME_HTTP_ADDR: ":8090"
       TEMPORAL_HOST_PORT: temporal:7233
-      TEMPORAL_NAMESPACE: default
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-encois}
       TEMPORAL_TASK_QUEUE: encois-agent-runtime
       AGENT_AI_MODE: gemini
       AGENT_SOURCE_MODE: gateway
       AGENT_MEMORY_MODE: gcp
       AGENT_RUNTIME_SERVICE_TOKEN: local-runtime-inspection-token
-      VERTEX_MEMORY_REASONING_ENGINE: ${VERTEX_MEMORY_REASONING_ENGINE:?set VERTEX_MEMORY_REASONING_ENGINE}
+      AGENT_PLATFORM_MEMORY_REASONING_ENGINE: ${AGENT_PLATFORM_MEMORY_REASONING_ENGINE:?set AGENT_PLATFORM_MEMORY_REASONING_ENGINE}
       CONTROL_PLANE_URL: http://api-gateway:8787
       CONTROL_PLANE_SERVICE_TOKEN: local-control-plane-token
       AGENT_GATEWAY_URL: http://agent-gateway:8080
       AGENT_GATEWAY_SERVICE_TOKEN: local-agent-runtime-token
-      GOOGLE_GENAI_USE_VERTEXAI: "true"
+      GOOGLE_GENAI_USE_AGENT_PLATFORM: "true"
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-east1}
+      GOOGLE_CLOUD_MODEL_LOCATION: ${GOOGLE_CLOUD_MODEL_LOCATION:-us}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
       GEMINI_REASONING_THINKING_LEVEL: ${GEMINI_REASONING_THINKING_LEVEL:-high}
       GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json

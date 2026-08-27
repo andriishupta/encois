@@ -17,7 +17,7 @@ API and Agent Gateway; neither service can start the production execution path
 without that shared Secret Manager value. When the
 API and Runtime are enabled together, it also wires the private control-plane
 URL, Cloud Run audience, shared application token, and Runtime service-account
-invoker grant. Vertex AI mode is enabled with Application Default Credentials;
+invoker grant. Agent Platform mode is enabled with Application Default Credentials;
 the Runtime does not need a Gemini API key in Cloud Run.
 
 This is still an infrastructure blueprint, not a verified deployment. The
@@ -53,8 +53,8 @@ flowchart LR
     Runtime[Cloud Run Go Agent Runtime] -. polls .-> Temporal
     Runtime --> Gateway[Private Agent Gateway]
     Gateway --> Providers[GitHub / Jira / Google / monitoring]
-    Runtime --> Gemini[Vertex AI / Gemini]
-    Runtime --> Memory[Vertex AI Memory Bank]
+    Runtime --> Gemini[Gemini through Agent Platform]
+    Runtime --> Memory[Agent Platform Memory Bank]
     Gateway --> Graph[(Optional Spanner Graph)]
     Gateway --> Objects[(Cloud Storage)]
     Gateway --> Secrets[Secret Manager]
@@ -179,7 +179,7 @@ The Agent Gateway gets access only to connector Secret Manager containers that t
 Gateway API creates for a connected integration. The API uses a small custom
 Secret Manager broker role to create the container, add a token version, and
 grant the private Gateway service account access to that one container. The Go
-runtime gets Vertex AI access and receives only scoped data references. Secret
+runtime gets Agent Platform access and receives only scoped data references. Secret
 values are added through the OAuth callback or a protected secret-management
 pipeline; Terraform manages platform IAM and static service secrets, not
 provider token payloads. The Google OAuth client secret is supplied through a

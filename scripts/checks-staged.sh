@@ -76,13 +76,15 @@ if ((checks_started == 0)); then
 fi
 
 exit_code=0
-for index in "${!PIDS[@]}"; do
-  if wait "${PIDS[$index]}"; then
-    printf '%s passed.\n' "${LABELS[$index]}"
-  else
-    printf '%s failed.\n' "${LABELS[$index]}" >&2
-    exit_code=1
-  fi
-done
+if ((${#PIDS[@]} > 0)); then
+  for index in "${!PIDS[@]}"; do
+    if wait "${PIDS[$index]}"; then
+      printf '%s passed.\n' "${LABELS[$index]}"
+    else
+      printf '%s failed.\n' "${LABELS[$index]}" >&2
+      exit_code=1
+    fi
+  done
+fi
 
 exit "$exit_code"

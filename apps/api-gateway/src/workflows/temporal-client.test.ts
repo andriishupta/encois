@@ -14,7 +14,7 @@ const config: AppConfig = {
   agentGatewayCapabilitySecret: "test-capability-secret",
   executionCapabilityTtlMs: 86_400_000,
   workflowMode: "temporal",
-  temporalNamespace: "default",
+  temporalNamespace: "encois",
   temporalTaskQueue: "test",
   workflowRunRetentionDays: 30,
 };

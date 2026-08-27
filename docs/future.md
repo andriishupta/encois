@@ -105,7 +105,7 @@ and a future AWS path can implement the same ports:
 | Provider secrets | Secret Manager | AWS Secrets Manager | Customer secret service |
 | Raw artifacts | Cloud Storage | S3 | Customer object storage |
 | Organization Memory Graph | Spanner Graph | Neptune or another graph adapter | Customer graph API |
-| Workflow Memory | Vertex AI Memory Bank | AWS/provider memory or vector adapter | Customer memory API |
+| Workflow Memory | Agent Platform Memory Bank | AWS/provider memory or vector adapter | Customer memory API |
 | Control-plane database | Cloud SQL / PostgreSQL | RDS or Aurora PostgreSQL | Customer PostgreSQL/API |
 | Runtime compute | Cloud Run / GKE | ECS, EKS, or Lambda where suitable | Customer Kubernetes/compute |
 | Events and scheduling | Pub/Sub / Cloud Scheduler | EventBridge, SNS/SQS, or Scheduler | Customer event platform |
@@ -150,7 +150,7 @@ The current MVP keeps provider access behind three small boundaries:
 | Boundary | Current implementation | Future replacement options |
 | --- | --- | --- |
 | Organization Memory Graph | Local adapter or tenant-keyed Spanner projection | Spanner Graph views, another graph store, or a customer-owned graph API |
-| Workflow Memory | Local adapter or Vertex AI Memory Bank adapter | Exact scoped provider reads, an Encois filtered projection, AWS memory, or a customer-owned memory API |
+| Workflow Memory | Local adapter or Agent Platform Memory Bank adapter | Exact scoped provider reads, an Encois filtered projection, AWS memory, or a customer-owned memory API |
 | Raw Artifacts | Local process adapter or Cloud Storage | S3-compatible storage or a customer-owned artifact API |
 
 The product contract should remain provider-neutral: organization ID,
@@ -162,7 +162,7 @@ not provider names.
 
 The current local and GCP paths are not equivalent in all respects. The API
 already authorizes organization-unit scope, and the Graph projection carries
-visibility scope. The current Vertex Memory Bank adapter uses exact provider
+visibility scope. The current Agent Platform Memory Bank adapter uses exact provider
 scope keys for organization, agent, and optional project/user, but does not yet
 materialize the full Encois unit hierarchy inside Memory Bank. A future change
 must choose between exact per-scope reads, a trusted Encois-side filtered

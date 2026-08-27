@@ -214,7 +214,7 @@ Memory Bank have typed local/GCP adapter boundaries; Cloud Storage and hosted
 provider wiring still require deployment configuration and smoke verification.
 The current cross-language contracts carry organization and execution scope,
 but provider-specific hierarchy mapping is intentionally not hidden in the
-contract. The current Vertex Memory Bank adapter does not yet provide complete
+contract. The current Agent Platform Memory Bank adapter does not yet provide complete
 Encois unit-level memory partitioning; future `visibilityScope` contract work
 must be versioned and tested before changing provider writes. See
 [`memory.md`](memory.md).

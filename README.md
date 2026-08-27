@@ -188,7 +188,7 @@ and Agent Runtime. Stop it with `pnpm run dev:watch:mock:down`.
 For a local flow that uses the real GCP context and AI services while keeping
 the rest local, copy `.env.local.ai.example` to `.env.local.ai`, set the ADC
 file path, and run `pnpm run dev:watch:ai`. This uses real Spanner Graph,
-Vertex AI Gemini, and Vertex Memory Bank; Postgres, Temporal, Firebase Auth and
+Gemini through Agent Platform, and Agent Platform Memory Bank; Postgres, Temporal, Firebase Auth and
 Storage emulators, and provider fixtures remain local. Stop it with
 `pnpm run dev:watch:ai:down`.
 
@@ -205,7 +205,7 @@ pnpm dev:local:prod
 ```
 
 This mode requires real Application Default Credentials, Cloud SQL/Postgres,
-Temporal Cloud, Identity Platform, Cloud Storage, Spanner, Vertex AI/Memory
+Temporal Cloud, Identity Platform, Cloud Storage, Spanner, Agent Platform Memory
 Bank, and Gemini access. It has no Firebase emulator, local Temporal server,
 local database, or mock data-plane fallback. Stop it with
 `pnpm dev:local:prod:down`.

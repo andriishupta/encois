@@ -44,8 +44,8 @@ flowchart TB
     end
 
     subgraph Knowledge[Knowledge and evidence plane]
-        Gemini[Vertex AI / Gemini\nADK model calls and synthesis]
-        Memory[Agent-specific Memory Bank\nTyped Runtime Activity + redaction boundary\nCurrent: mock or Vertex AI adapter]
+        Gemini[Gemini through Agent Platform\nADK model calls and synthesis]
+        Memory[Agent-specific Memory Bank\nTyped Runtime Activity + redaction boundary\nCurrent: mock or Agent Platform adapter]
         Graph[(Spanner Graph\nTyped query/upsert boundary\nCurrent: mock or Spanner adapter)]
         Storage[(Cloud Storage\nTyped artifact + retention boundary\nCurrent: mock or GCS adapter)]
     end
@@ -142,11 +142,11 @@ flowchart LR
     end
 
     SQL[(PostgreSQL)]
-    Google[Vertex AI / Gemini]
+    Google[Gemini through Agent Platform]
     Provider[External provider APIs / MCP]
     Evidence[(Cloud Storage\nCurrent: mock or GCS ArtifactStore)]
     CompanyGraph[(Spanner Graph\nCurrent: mock or Spanner GraphStore)]
-        AgentMemory[(Memory Bank\nCurrent: mock or Vertex AI adapter + redaction boundary)]
+        AgentMemory[(Memory Bank\nCurrent: mock or Agent Platform adapter + redaction boundary)]
 
     Dashboard --> Routes
     RuntimeClient -. private control plane .-> RuntimeControl

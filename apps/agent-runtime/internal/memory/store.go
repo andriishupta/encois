@@ -184,15 +184,15 @@ func safeMemoryID(parts ...string) string {
 	return value
 }
 
-func NewStore(ctx context.Context, mode, reasoningEngine string) (Store, func() error, error) {
+func NewStore(ctx context.Context, mode, agentPlatformReasoningEngine, googleCloudLocation string) (Store, func() error, error) {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "mock":
 		if strings.EqualFold(strings.TrimSpace(os.Getenv("AGENT_MEMORY_FIXTURE")), "local") {
 			return newFixtureMockStore(), func() error { return nil }, nil
 		}
 		return NewMockStore(), func() error { return nil }, nil
-	case "gcp", "vertex", "memory-bank":
-		store, err := NewGCPStore(ctx, reasoningEngine)
+	case "gcp", "memory-bank":
+		store, err := NewGCPStore(ctx, agentPlatformReasoningEngine, googleCloudLocation)
 		return store, func() error { return nil }, err
 	default:
 		return nil, nil, fmt.Errorf("unsupported agent memory mode %q", mode)

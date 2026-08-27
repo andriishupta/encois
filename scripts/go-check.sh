@@ -50,18 +50,22 @@ else
 fi
 
 declare -a UNIQUE_MODULES=()
-for module in "${CHECK_MODULES[@]}"; do
-  already_added=false
-  for existing_module in "${UNIQUE_MODULES[@]}"; do
-    if [[ "$existing_module" == "$module" ]]; then
-      already_added=true
-      break
+if ((${#CHECK_MODULES[@]} > 0)); then
+  for module in "${CHECK_MODULES[@]}"; do
+    already_added=false
+    if ((${#UNIQUE_MODULES[@]} > 0)); then
+      for existing_module in "${UNIQUE_MODULES[@]}"; do
+        if [[ "$existing_module" == "$module" ]]; then
+          already_added=true
+          break
+        fi
+      done
+    fi
+    if [[ "$already_added" == false ]]; then
+      UNIQUE_MODULES+=("$module")
     fi
   done
-  if [[ "$already_added" == false ]]; then
-    UNIQUE_MODULES+=("$module")
-  fi
-done
+fi
 
 run_module_checks() {
   local module="$1"
@@ -81,16 +85,20 @@ run_module_checks() {
 }
 
 declare -a PIDS=()
-for module in "${UNIQUE_MODULES[@]}"; do
-  run_module_checks "$module" &
-  PIDS+=("$!")
-done
+if ((${#UNIQUE_MODULES[@]} > 0)); then
+  for module in "${UNIQUE_MODULES[@]}"; do
+    run_module_checks "$module" &
+    PIDS+=("$!")
+  done
+fi
 
 exit_code=0
-for pid in "${PIDS[@]}"; do
-  if ! wait "$pid"; then
-    exit_code=1
-  fi
-done
+if ((${#PIDS[@]} > 0)); then
+  for pid in "${PIDS[@]}"; do
+    if ! wait "$pid"; then
+      exit_code=1
+    fi
+  done
+fi
 
 exit "$exit_code"

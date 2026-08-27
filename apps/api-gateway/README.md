@@ -157,7 +157,7 @@ browser-side mock graph data.
 
 `AGENT_RUNTIME_URL` and `AGENT_RUNTIME_SERVICE_TOKEN` configure the private
 read-only proxy used by `POST /api/v1/context/memory/query`. It uses the same
-tenant scope and admin permission boundary as graph inspection; Vertex AI
+tenant scope and admin permission boundary as graph inspection; Agent Platform
 Memory Bank remains owned by the Go Agent Runtime and is never called from the
 browser.
 

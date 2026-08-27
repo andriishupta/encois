@@ -23,7 +23,7 @@ const testConfig: AppConfig = {
   executionCapabilityTtlMs: 86_400_000,
   workflowMode: "temporal",
   temporalAddress: "temporal.test:7233",
-  temporalNamespace: "default",
+  temporalNamespace: "encois",
   temporalTaskQueue: "test",
   workflowRunRetentionDays: 30,
 };
@@ -1720,7 +1720,7 @@ describe("API Gateway", () => {
     const terminalProjection: WorkflowExecutionProjection = {
       workflowId: "workflow:org-1:encois.dynamic.v1:terminal",
       workflowType: "encois.dynamic.v1",
-      namespace: "default",
+      namespace: "encois",
       taskQueue: "test",
       status: "completed",
       organizationId: "org-1",
@@ -1776,7 +1776,7 @@ describe("API Gateway", () => {
     const projection: WorkflowExecutionProjection = {
       workflowId: "workflow:org-1:encois.dynamic.v1:update-test",
       workflowType: "encois.dynamic.v1",
-      namespace: "default",
+      namespace: "encois",
       taskQueue: "test",
       status: "running",
       organizationId: "org-1",

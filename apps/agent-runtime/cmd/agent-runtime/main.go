@@ -19,6 +19,7 @@ import (
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/observability"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/workflows"
+	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
 func main() {
@@ -51,21 +52,21 @@ func main() {
 	defer temporalClient.Close()
 
 	agentBundle, err := agents.NewBundle(context.Background(), agents.Config{
-		Mode:                cfg.AgentAIMode,
-		APIKey:              cfg.GeminiAPIKey,
-		UseVertexAI:         cfg.UseVertexAI,
-		GoogleCloudProject:  cfg.GoogleCloudProject,
-		GoogleCloudLocation: cfg.GoogleCloudLocation,
-		ModelName:           cfg.GeminiModel,
-		ReasoningThinking:   cfg.ReasoningThink,
+		Mode:                     cfg.AgentAIMode,
+		APIKey:                   cfg.GeminiAPIKey,
+		UseAgentPlatform:         cfg.UseAgentPlatform,
+		GoogleCloudProject:       cfg.GoogleCloudProject,
+		GoogleCloudModelLocation: cfg.GoogleCloudModelLocation,
+		ModelName:                cfg.GeminiModel,
+		ReasoningThinking:        cfg.ReasoningThink,
 	})
 	if err != nil {
 		logger.Error("failed to initialize ADK bundle", "error", err)
 		os.Exit(1)
 	}
 	modelBackend := agentBundle.Mode
-	if agentBundle.Mode == agents.ModeGemini && cfg.UseVertexAI {
-		modelBackend = "vertex-ai"
+	if agentBundle.Mode == agents.ModeGemini && cfg.UseAgentPlatform {
+		modelBackend = "agent-platform"
 	}
 	logger.Info("agent bundle initialized", "standardModel", agentBundle.ModelName, "reasoningModel", agentBundle.ReasoningModelName, "reasoningThinkingLevel", agentBundle.ReasoningThinkingLevel, "modelBackend", modelBackend, "geminiEnabled", agentBundle.Enabled)
 
@@ -74,7 +75,7 @@ func main() {
 	activities := workflows.NewActivities(agentBundle, cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)
 	controlPlaneClient := corecoordinator.NewHTTPClient(cfg.ControlPlaneURL, cfg.ControlPlaneToken, cfg.ControlPlaneAudience)
 	controlPlaneActivities := workflows.NewCoordinatorControlPlaneActivities(controlPlaneClient)
-	memoryStore, closeMemory, err := memory.NewStore(context.Background(), cfg.MemoryMode, cfg.MemoryReasoningEngine)
+	memoryStore, closeMemory, err := memory.NewStore(context.Background(), cfg.MemoryMode, cfg.AgentPlatformReasoningEngine, cfg.GoogleCloudLocation)
 	if err != nil {
 		logger.Error("failed to initialize agent memory", "error", err, "mode", cfg.MemoryMode)
 		os.Exit(1)
@@ -99,7 +100,9 @@ func main() {
 	})
 	w.RegisterWorkflow(coordinator.CoordinatorWorkflow)
 	w.RegisterWorkflow(coordinator.BootstrapProjectWorkflow)
-	w.RegisterWorkflow(workflows.SourceIngestionWorkflow)
+	w.RegisterWorkflowWithOptions(workflows.SourceIngestionWorkflow, workflow.RegisterOptions{
+		Name: string(contracts.WorkflowTypeSourceIngestion),
+	})
 	w.RegisterDynamicWorkflow(workflows.DynamicBlueprintWorkflow, workflow.DynamicRegisterOptions{})
 	w.RegisterActivity(workflows.ValidateBlueprintContract)
 	w.RegisterActivity(workflows.ValidateBlueprintResult)

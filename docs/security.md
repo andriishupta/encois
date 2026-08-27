@@ -223,7 +223,7 @@ Spanner Graph, Cloud Storage, Memory Bank, and any vector or retrieval system fo
 
 Current implementation note: the API authorizes Encois organization-unit scope
 before graph and memory requests. Graph facts carry visibility scope, while the
-current Vertex Memory Bank adapter uses exact organization/agent and optional
+current Agent Platform Memory Bank adapter uses exact organization/agent and optional
 project/user provider scope and does not yet encode the full unit hierarchy.
 This is a documented capability gap, not permission to widen access. Until the
 provider mapping is extended, unit-level Memory Bank isolation must not be

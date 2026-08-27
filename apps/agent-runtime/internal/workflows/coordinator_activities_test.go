@@ -2,10 +2,13 @@ package workflows
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/agents"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/coordinator"
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
 )
 
 func TestCreateBootstrapPlanIsExplicitlyDeferredWithoutModel(t *testing.T) {
@@ -99,12 +102,57 @@ func TestApplyAuthorizedCoordinatorScopeCopiesInputScope(t *testing.T) {
 		Scope: coordinator.WorkflowPlanScope{IDs: []string{"unit-1", "unit-2"}},
 	}
 
-	if err := applyAuthorizedCoordinatorScope(&plan, input.Scope); err != nil {
+	if err := normalizeWorkflowChangePlan(&plan, workflowPlanAuthority{
+		PlanID:         "plan-1",
+		CoordinatorID:  "coord-1",
+		OrganizationID: "org-1",
+		Scope:          &input.Scope,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	input.Scope.IDs[0] = "changed-after-normalization"
 
 	if plan.Scope == nil || len(plan.Scope.IDs) != 2 || plan.Scope.IDs[0] != "unit-1" {
 		t.Fatalf("expected copied authorized scope, got %+v", plan.Scope)
+	}
+}
+
+func TestNormalizeWorkflowChangePlanOverwritesModelOwnedMetadata(t *testing.T) {
+	plan := coordinator.WorkflowChangePlan{
+		ContractVersion: "wrong.v1",
+		PlanID:          "model-plan",
+		CoordinatorID:   "model-coordinator",
+		OrganizationID:  "model-organization",
+		ProjectID:       "model-project",
+		ObservedAt:      "",
+		EvidenceRefs:    []string{"model://evidence"},
+		Changes: []coordinator.WorkflowChange{{
+			EvidenceRefs: []string{"model://change-evidence"},
+			Blueprint:    &coordinator.WorkflowBlueprint{ContractVersion: "wrong-blueprint.v1"},
+		}},
+	}
+
+	if err := normalizeWorkflowChangePlan(&plan, workflowPlanAuthority{
+		PlanID:         "assigned-plan",
+		CoordinatorID:  "organization:org-1",
+		OrganizationID: "org-1",
+		ProjectID:      "project-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if plan.ContractVersion != coordinator.WorkflowChangePlanVersion || plan.PlanID != "assigned-plan" || plan.CoordinatorID != "organization:org-1" || plan.OrganizationID != "org-1" || plan.ProjectID != "project-1" {
+		t.Fatalf("runtime metadata was not normalized: %+v", plan)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, plan.ObservedAt); err != nil {
+		t.Fatalf("expected runtime observedAt, got %q: %v", plan.ObservedAt, err)
+	}
+	if plan.EvidenceRefs != nil || plan.Changes[0].EvidenceRefs != nil {
+		t.Fatalf("untrusted model evidence references were not removed: %+v", plan)
+	}
+	if plan.Changes[0].Blueprint.ContractVersion != string(contractschemas.ContractWorkflowBlueprint) {
+		t.Fatalf("blueprint contract version was not normalized: %+v", plan.Changes[0].Blueprint)
+	}
+	if strings.TrimSpace(plan.ObservedAt) == "" {
+		t.Fatal("expected non-empty observedAt")
 	}
 }

@@ -6,28 +6,29 @@ import (
 )
 
 type Config struct {
-	HTTPAddr              string
-	RuntimeServiceToken   string
-	TemporalHostPort      string
-	TemporalNamespace     string
-	TemporalAPIKey        string
-	TaskQueue             string
-	AgentAIMode           string
-	GeminiAPIKey          string
-	UseVertexAI           bool
-	GoogleCloudProject    string
-	GoogleCloudLocation   string
-	GeminiModel           string
-	ReasoningThink        string
-	AgentGatewayURL       string
-	AgentGatewayToken     string
-	AgentGatewayAudience  string
-	SourceMode            string
-	ControlPlaneURL       string
-	ControlPlaneToken     string
-	ControlPlaneAudience  string
-	MemoryMode            string
-	MemoryReasoningEngine string
+	HTTPAddr                     string
+	RuntimeServiceToken          string
+	TemporalHostPort             string
+	TemporalNamespace            string
+	TemporalAPIKey               string
+	TaskQueue                    string
+	AgentAIMode                  string
+	GeminiAPIKey                 string
+	UseAgentPlatform             bool
+	GoogleCloudProject           string
+	GoogleCloudLocation          string
+	GoogleCloudModelLocation     string
+	GeminiModel                  string
+	ReasoningThink               string
+	AgentGatewayURL              string
+	AgentGatewayToken            string
+	AgentGatewayAudience         string
+	SourceMode                   string
+	ControlPlaneURL              string
+	ControlPlaneToken            string
+	ControlPlaneAudience         string
+	MemoryMode                   string
+	AgentPlatformReasoningEngine string
 }
 
 func FromEnv() Config {
@@ -36,28 +37,29 @@ func FromEnv() Config {
 		geminiKey = os.Getenv("GOOGLE_API_KEY")
 	}
 	return Config{
-		HTTPAddr:              runtimeHTTPAddr(),
-		RuntimeServiceToken:   os.Getenv("AGENT_RUNTIME_SERVICE_TOKEN"),
-		TemporalHostPort:      envOrDefault("TEMPORAL_HOST_PORT", "127.0.0.1:7233"),
-		TemporalNamespace:     envOrDefault("TEMPORAL_NAMESPACE", "default"),
-		TemporalAPIKey:        os.Getenv("TEMPORAL_API_KEY"),
-		TaskQueue:             envOrDefault("TEMPORAL_TASK_QUEUE", "encois-agent-runtime"),
-		AgentAIMode:           envOrDefault("AGENT_AI_MODE", "gemini"),
-		GeminiAPIKey:          geminiKey,
-		UseVertexAI:           envBool("GOOGLE_GENAI_USE_VERTEXAI"),
-		GoogleCloudProject:    os.Getenv("GOOGLE_CLOUD_PROJECT"),
-		GoogleCloudLocation:   envOrDefault("GOOGLE_CLOUD_LOCATION", "us-central1"),
-		GeminiModel:           os.Getenv("GEMINI_MODEL"),
-		ReasoningThink:        reasoningThinkingFromEnv(),
-		AgentGatewayURL:       envOrDefault("AGENT_GATEWAY_URL", "http://127.0.0.1:8080"),
-		AgentGatewayToken:     os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
-		AgentGatewayAudience:  os.Getenv("AGENT_GATEWAY_AUDIENCE"),
-		SourceMode:            envOrDefault("AGENT_SOURCE_MODE", "gateway"),
-		ControlPlaneURL:       os.Getenv("CONTROL_PLANE_URL"),
-		ControlPlaneToken:     os.Getenv("CONTROL_PLANE_SERVICE_TOKEN"),
-		ControlPlaneAudience:  os.Getenv("CONTROL_PLANE_AUDIENCE"),
-		MemoryMode:            envOrDefault("AGENT_MEMORY_MODE", "gcp"),
-		MemoryReasoningEngine: os.Getenv("VERTEX_MEMORY_REASONING_ENGINE"),
+		HTTPAddr:                     runtimeHTTPAddr(),
+		RuntimeServiceToken:          os.Getenv("AGENT_RUNTIME_SERVICE_TOKEN"),
+		TemporalHostPort:             envOrDefault("TEMPORAL_HOST_PORT", "127.0.0.1:7233"),
+		TemporalNamespace:            envOrDefault("TEMPORAL_NAMESPACE", "encois"),
+		TemporalAPIKey:               os.Getenv("TEMPORAL_API_KEY"),
+		TaskQueue:                    envOrDefault("TEMPORAL_TASK_QUEUE", "encois-agent-runtime"),
+		AgentAIMode:                  envOrDefault("AGENT_AI_MODE", "gemini"),
+		GeminiAPIKey:                 geminiKey,
+		UseAgentPlatform:             envBool("GOOGLE_GENAI_USE_AGENT_PLATFORM"),
+		GoogleCloudProject:           os.Getenv("GOOGLE_CLOUD_PROJECT"),
+		GoogleCloudLocation:          envOrDefault("GOOGLE_CLOUD_LOCATION", "us-east1"),
+		GoogleCloudModelLocation:     envOrDefault("GOOGLE_CLOUD_MODEL_LOCATION", "us"),
+		GeminiModel:                  os.Getenv("GEMINI_MODEL"),
+		ReasoningThink:               reasoningThinkingFromEnv(),
+		AgentGatewayURL:              envOrDefault("AGENT_GATEWAY_URL", "http://127.0.0.1:8080"),
+		AgentGatewayToken:            os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
+		AgentGatewayAudience:         os.Getenv("AGENT_GATEWAY_AUDIENCE"),
+		SourceMode:                   envOrDefault("AGENT_SOURCE_MODE", "gateway"),
+		ControlPlaneURL:              os.Getenv("CONTROL_PLANE_URL"),
+		ControlPlaneToken:            os.Getenv("CONTROL_PLANE_SERVICE_TOKEN"),
+		ControlPlaneAudience:         os.Getenv("CONTROL_PLANE_AUDIENCE"),
+		MemoryMode:                   envOrDefault("AGENT_MEMORY_MODE", "gcp"),
+		AgentPlatformReasoningEngine: os.Getenv("AGENT_PLATFORM_MEMORY_REASONING_ENGINE"),
 	}
 }
 
@@ -74,11 +76,14 @@ func (c Config) Validate() error {
 	if c.SourceMode != "gateway" && c.SourceMode != "mock" {
 		return fmt.Errorf("unsupported AGENT_SOURCE_MODE %q; use gateway or explicit mock", c.SourceMode)
 	}
-	if c.AgentAIMode != "mock" && !c.UseVertexAI && c.GeminiAPIKey == "" {
-		return fmt.Errorf("Gemini credentials are required unless AGENT_AI_MODE=mock or GOOGLE_GENAI_USE_VERTEXAI=true")
+	if c.AgentAIMode != "mock" && !c.UseAgentPlatform && c.GeminiAPIKey == "" {
+		return fmt.Errorf("Gemini credentials are required unless AGENT_AI_MODE=mock or GOOGLE_GENAI_USE_AGENT_PLATFORM=true")
 	}
-	if c.MemoryMode != "mock" && c.MemoryReasoningEngine == "" {
-		return fmt.Errorf("VERTEX_MEMORY_REASONING_ENGINE is required unless AGENT_MEMORY_MODE=mock")
+	if c.MemoryMode != "mock" && c.AgentPlatformReasoningEngine == "" {
+		return fmt.Errorf("AGENT_PLATFORM_MEMORY_REASONING_ENGINE is required unless AGENT_MEMORY_MODE=mock")
+	}
+	if c.MemoryMode != "mock" && c.GoogleCloudLocation == "" {
+		return fmt.Errorf("GOOGLE_CLOUD_LOCATION is required unless AGENT_MEMORY_MODE=mock")
 	}
 	return nil
 }

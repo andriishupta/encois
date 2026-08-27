@@ -65,13 +65,13 @@ try {
   `;
   await seedClient`
     INSERT INTO workflow_runs (id, organization_id, definition_id, actor_user_id, temporal_namespace, temporal_task_queue, temporal_workflow_id, status, scope)
-    VALUES (${workflowRunId}, ${organizationId}, ${definitionId}, ${userId}, 'default', 'encois-agent-runtime', ${workflowId}, 'waiting', ${JSON.stringify({ ids: [unitId, "receipt-team"] })}::jsonb)
+    VALUES (${workflowRunId}, ${organizationId}, ${definitionId}, ${userId}, 'encois', 'encois-agent-runtime', ${workflowId}, 'waiting', ${JSON.stringify({ ids: [unitId, "receipt-team"] })}::jsonb)
   `;
 
   const projection: WorkflowExecutionProjection = {
     workflowId,
     workflowType: "encois.dynamic.v1",
-    namespace: "default",
+    namespace: "encois",
     taskQueue: "encois-agent-runtime",
     status: "waiting",
     organizationId,

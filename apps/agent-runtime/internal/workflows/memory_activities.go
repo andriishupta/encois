@@ -18,7 +18,7 @@ func NewMemoryActivities(store memory.Store) *MemoryActivities {
 }
 
 // ExecuteAgentMemory is an Activity boundary, not Workflow state. The same
-// contract is used by the local mock and Vertex AI Memory Bank adapters.
+// contract is used by the local mock and Agent Platform Memory Bank adapters.
 func (a *MemoryActivities) ExecuteAgentMemory(ctx context.Context, request memory.Request) (memory.Result, error) {
 	request = memory.SanitizeRequest(request)
 	if err := memory.ValidateRequest(request); err != nil {

@@ -5,7 +5,7 @@ import "testing"
 func validMockConfig() Config {
 	return Config{
 		TemporalHostPort:  "127.0.0.1:7233",
-		TemporalNamespace: "default",
+		TemporalNamespace: "encois",
 		TaskQueue:         "encois-agent-runtime",
 		AgentGatewayURL:   "http://127.0.0.1:8080",
 		AgentGatewayToken: "runtime-token",

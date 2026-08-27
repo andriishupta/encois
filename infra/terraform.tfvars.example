@@ -1,5 +1,7 @@
 project_id   = "replace-with-gcp-project-id"
 region       = "us-east1"
+google_cloud_location = "us-east1"
+google_cloud_model_location = "us"
 environment  = "demo"
 domain_name  = "encois.com"
 
@@ -26,8 +28,8 @@ spanner_instance_id      = ""
 
 # Required when the API or worker is enabled.
 temporal_address               = ""
-temporal_namespace             = ""
-vertex_memory_reasoning_engine = ""
+temporal_namespace             = "encois"
+agent_platform_memory_reasoning_engine = ""
 control_plane_service_user_id  = ""
 
 secret_names = [

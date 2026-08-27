@@ -63,7 +63,7 @@ human permissions.
 ### Workflow Memory
 
 The current Runtime boundary is a `MemoryStore` with a local mock adapter and a
-Vertex AI Memory Bank adapter. The API checks `MemoryRead` for retrieval and
+Agent Platform Memory Bank adapter. The API checks `MemoryRead` for retrieval and
 `MemoryManage` for memory changes. Memory changes are persisted as typed,
 scoped proposals and require the existing approval/apply boundary.
 
@@ -76,16 +76,16 @@ optional project_id
 optional user_id
 ```
 
-Vertex Memory Bank uses exact scope matching. The current adapter does not yet
+Agent Platform Memory Bank uses exact scope matching. The current adapter does not yet
 encode the Encois organization-unit hierarchy into the provider scope. The API
 does carry the caller's Encois unit scope into the request and authorizes it,
-but this must not be described as complete unit-level isolation inside Vertex
+but this must not be described as complete unit-level isolation inside Agent Platform
 Memory Bank. A future change is required if Memory Bank records themselves
 must be independently partitioned by department, team, or project.
 
 The local Memory adapter is deterministic and process-local. It is suitable
 for API/Runtime contract and permission walkthroughs, but its data is lost when
-the Runtime restarts and it does not prove Vertex Memory Bank behavior.
+the Runtime restarts and it does not prove Agent Platform Memory Bank behavior.
 
 Workflow results can contain a summary derived from memory or evidence. A user
 with workflow-result access may therefore see the approved result without
@@ -150,7 +150,7 @@ These are provider facts, not assumptions about Encois behavior:
   controls database roles and relational objects; it does not automatically
   understand Encois's user-to-unit hierarchy. Encois still needs API scope
   resolution and provider-side filtering or views for sensitive facts.
-- [Vertex AI Memory Bank scope](https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/memory-bank/fetch-memories)
+- [Agent Platform Memory Bank scope](https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/memory-bank/fetch-memories)
   is a dictionary/map and retrieval returns memories for the exact same scope.
   [Memory resources](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1beta1/projects.locations.reasoningEngines.memories)
   treat scope as immutable and do not provide an Encois-style hierarchical
@@ -169,7 +169,7 @@ The product should depend on small ports, not on GCP SDK types:
 
 ```text
 GraphStore       -> Spanner Graph adapter | future AWS graph adapter | customer API
-MemoryStore      -> Vertex Memory Bank   | future AWS memory adapter | customer API
+MemoryStore      -> Agent Platform Memory Bank | future AWS memory adapter | customer API
 ArtifactStore    -> Cloud Storage         | future S3 adapter        | customer API
 ```
 
@@ -183,7 +183,7 @@ provenance, freshness, retention, classification, redaction state
 ```
 
 Adapters translate this contract into provider semantics. Provider names such
-as Spanner, Vertex, GCS, AWS, or customer systems must not leak into product
+as Spanner, Agent Platform, GCS, AWS, or customer systems must not leak into product
 permissions or UI terminology. Provider-specific IDs and error details stay
 inside the adapter boundary.
 

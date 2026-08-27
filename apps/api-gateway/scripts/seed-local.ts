@@ -956,9 +956,9 @@ const integrationCatalogFixtures = [
     sortOrder: 202,
   },
   {
-    key: "vertex-ai",
-    provider: "vertex-ai",
-    displayName: "Vertex AI",
+    key: "agent-platform",
+    provider: "agent-platform",
+    displayName: "Agent Platform",
     description: "Google Cloud model access for approved AI workflow steps.",
     type: "ai",
     status: "disabled",

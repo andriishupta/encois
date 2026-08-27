@@ -11,7 +11,7 @@ The repository has four intentionally different Compose modes:
 | Mode | Command | Dependencies | Application containers |
 | --- | --- | --- | --- |
 | Watch mock | `pnpm run dev:watch:mock` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, mock data adapters | Development images with live reload |
-| Watch AI | `pnpm run dev:watch:ai` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, real Spanner and Vertex AI/Memory Bank | Development images with live reload |
+| Watch AI | `pnpm run dev:watch:ai` | Local Postgres, Temporal dev server, Firebase Auth and Storage Emulators, real Spanner and Agent Platform | Development images with live reload |
 | Watch prod | `pnpm run dev:watch:prod` | Managed services from `.env.local.prod` | Development images with live reload |
 | Local prod | `pnpm run dev:local:prod` | Managed services from `.env.local.prod` | Production Docker images, no watch mode |
 
@@ -19,7 +19,7 @@ Use Watch mock first for deterministic local workflows. Use Watch prod when
 you need to exercise real Temporal Cloud, Spanner, Memory Bank, Cloud Storage,
 Gemini, Identity Platform, and managed Postgres credentials while keeping
 source changes live. Use Local prod to validate the built production images.
-Use Watch AI when only Spanner, Vertex AI Gemini, and Vertex Memory Bank should
+Use Watch AI when only Spanner and Agent Platform should
 be real while the control plane and local emulators remain local.
 
 ## Start
@@ -168,7 +168,7 @@ Use this sequence when testing how the product components are connected:
 7. Inspect the resulting evidence, graph projection, and memory projection.
    Remember that local Graph and Memory state is process-local and resets when
    the corresponding Go service restarts. The local Memory adapter is useful
-   for contract and permission checks, not for validating Vertex AI Memory Bank
+   for contract and permission checks, not for validating Agent Platform Memory Bank
    scope semantics.
 8. Repeat the run with a missing or unsupported tool, an unavailable provider
    fixture, and a viewer account. Expected outcomes are an explicit failed or
@@ -378,7 +378,7 @@ pnpm dev:watch:ai
 ```
 
 The Agent Gateway uses real Spanner Graph and the local Firebase Storage
-emulator. The Agent Runtime uses Vertex AI Gemini and the configured Vertex
+emulator. The Agent Runtime uses Gemini through Agent Platform and the configured Agent Platform
 Memory Bank reasoning engine. Postgres, Temporal, Firebase Auth, and provider
 tools remain local. The ADC file is mounted read-only into the GCP-facing
 containers and must not be committed. Stop the stack with
@@ -393,7 +393,7 @@ connecting to the managed services configured in `.env.local.prod`:
 pnpm dev:watch:prod
 ```
 
-It uses `compose.watch.prod.yaml`, enables Gemini, Vertex Memory Bank, Temporal
+It uses `compose.watch.prod.yaml`, enables Gemini, Agent Platform Memory Bank, Temporal
 Cloud, Identity Platform, Cloud SQL/Postgres, Cloud Storage, and Spanner, and
 does not start local emulators or mock data-plane services. Stop it with:
 
@@ -413,7 +413,7 @@ cp .env.local.prod.example .env.local.prod
 pnpm dev:local:prod
 ```
 
-It uses `compose.local.prod.yaml` with `AGENT_AI_MODE=gemini`, Vertex/Memory
+It uses `compose.local.prod.yaml` with `AGENT_AI_MODE=gemini`, Agent Platform Memory
 Bank, Temporal Cloud, Identity Platform, Cloud SQL/Postgres, Cloud Storage,
 and Spanner. It has no local Postgres, Temporal server, Firebase emulator, or
 mock data-plane fallback. Set `LOCAL_UID` and `LOCAL_GID` to the values from
