@@ -411,14 +411,14 @@ provides durable state, waiting, retries, Signals, and recovery.
 
 The model cannot invent a tool, widen scope, select a different organization, or bypass the Agent Gateway.
 
-Model policy is role-specific. High-volume specialists, routine synthesis, and
-generic Blueprint Agent Definitions use the standard `GEMINI_MODEL` profile,
-defaulting to the stable `gemini-3.7-flash`. The Coordinator and Workflow
-Creator use a separate high-responsibility reasoning profile
-(`GEMINI_REASONING_MODEL`, default `gemini-3.1-pro-preview`) with
-`GEMINI_REASONING_THINKING_LEVEL=high`, because they make cross-source plans
-and propose changes to the workflow catalog. Other configuration names are
-intentionally not supported; before the first release,
+Model policy uses one model profile for every ADK role: high-volume
+specialists, routine synthesis, generic Blueprint Agent Definitions, the
+Coordinator, and the Workflow Creator all use `GEMINI_MODEL`, defaulting to
+`gemini-3.7-flash`. The Coordinator and Workflow Creator use the separate
+`GEMINI_REASONING_THINKING_LEVEL=high` setting for deeper generation on that
+same model, because they make cross-source plans and propose changes to the
+workflow catalog. Other configuration names are intentionally not supported;
+before the first release,
 configuration changes may be breaking and must be updated everywhere together.
 Thinking output is not exposed as chain-of-thought in logs or the UI; only
 validated decisions, evidence references, and structured results leave the
@@ -460,7 +460,8 @@ pending
   -> ready
 initializing
   -> failed
-  -> initializing   (explicit administrator retry)
+failed
+  -> pending         (explicit administrator reset)
 ```
 
 `pending`, `initializing`, `ready`, and `failed` are the persisted
@@ -478,12 +479,15 @@ back to the Gateway. `POST /organization/onboarding/start` persists
 marks the organization `ready` merely because a Workflow was started. The
 Coordinator performs its first reconciliation immediately, then reports
 `ready` only after required context validation succeeds or `failed` when
-bootstrap is deferred or errors. Retry is explicit, reuses the stable
-Coordinator identity, and does not fabricate progress or product records.
+bootstrap is deferred or errors. `POST /organization/onboarding/reset` is an
+explicit administrator recovery operation: it terminates the previous
+Coordinator execution, marks its control-plane run `cancelled`, clears the
+onboarding selections and failure message, and returns the organization to
+`pending` for a fresh onboarding pass.
 
 Until `ready`, a tenant is allowed to read/update onboarding settings, use the
 onboarding Source upload/ingestion path, browse the active Template and
-approved Blueprint catalogs, and start or retry onboarding when authorized.
+approved Blueprint catalogs, and start or reset onboarding when authorized.
 Ordinary dashboard, member/unit, integration, Workflow, Run, review, and
 other product routes are rejected with `ORGANIZATION_ONBOARDING_REQUIRED`
 and HTTP `409`. The route gate is applied before product authorization and

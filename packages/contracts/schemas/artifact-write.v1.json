@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/artifact-write.v1.json",
+  "$id": "https://encois.com/schemas/artifact-write.v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,7 +22,11 @@
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        "ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     }
   },
@@ -40,7 +44,9 @@
     "objectKey": { "type": "string", "minLength": 1 },
     "contentType": { "type": "string", "minLength": 1 },
     "dataRef": { "type": "string", "minLength": 1 },
-    "retentionClass": { "enum": ["ephemeral", "investigation", "source_snapshot", "legal_hold"] },
+    "retentionClass": {
+      "enum": ["ephemeral", "investigation", "source_snapshot", "legal_hold"]
+    },
     "retentionUntil": { "type": "string", "minLength": 1 }
   }
 }

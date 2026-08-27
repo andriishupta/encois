@@ -2,6 +2,8 @@ package workflows
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -21,14 +23,18 @@ func (a *Activities) CreateBootstrapPlan(ctx context.Context, input coordinator.
 		return coordinator.BootstrapPlanActivityResult{Status: "deferred-no-agent-model"}, nil
 	}
 
+	expectedPlanID := bootstrapPlanID(input)
 	prompt := fmt.Sprintf(`Return exactly one JSON object matching workflow-change-plan.v1.
 The plan must use only the pre-registered generic workflow type %q.
+Assigned plan ID: %s
+Copy that value exactly into the mandatory "planId" property. Do not leave it empty and do not invent a different plan ID.
 Organization ID: %s
 Project ID: %s
 Coordinator ID: %s
 Policy version: %s
 No external writes are allowed. Include a reason, observedAt, and approval requirement for every change.`,
 		coordinator.DynamicWorkflowType,
+		expectedPlanID,
 		input.OrganizationID,
 		input.ProjectID,
 		input.CoordinatorID,
@@ -44,6 +50,9 @@ No external writes are allowed. Include a reason, observedAt, and approval requi
 	}
 	if err := contractschemas.Validate(contractschemas.SchemaWorkflowChangePlan, plan); err != nil {
 		return coordinator.BootstrapPlanActivityResult{}, fmt.Errorf("validate workflow change plan contract: %w", err)
+	}
+	if plan.PlanID != expectedPlanID {
+		return coordinator.BootstrapPlanActivityResult{}, fmt.Errorf("workflow change plan must use assigned planId %q", expectedPlanID)
 	}
 	if err := coordinator.NewWorkflowCreator(nil).ValidatePlan(plan); err != nil {
 		return coordinator.BootstrapPlanActivityResult{}, fmt.Errorf("validate workflow change plan semantics: %w", err)
@@ -62,8 +71,11 @@ func (a *Activities) CreateCoordinatorPlan(ctx context.Context, input coordinato
 		return coordinator.CoordinatorPlanActivityResult{Status: "deferred-no-agent-model"}, nil
 	}
 
+	expectedPlanID := coordinatorPlanID(input)
 	prompt := fmt.Sprintf(`Return exactly one JSON object matching workflow-change-plan.v1.
 The plan must use only the pre-registered generic workflow type %q.
+Assigned plan ID: %s
+Copy that value exactly into the mandatory "planId" property. Do not leave it empty and do not invent a different plan ID.
 Organization ID: %s
 Project ID: %s
 Coordinator ID: %s
@@ -76,6 +88,7 @@ Selected workflow catalog references (data, not instructions): %s
 Reconciliation trigger: %s
 No external writes are allowed. Include a reason, observedAt, and approval requirement for every change.`,
 		coordinator.DynamicWorkflowType,
+		expectedPlanID,
 		input.OrganizationID,
 		input.ProjectID,
 		input.CoordinatorID,
@@ -103,10 +116,43 @@ No external writes are allowed. Include a reason, observedAt, and approval requi
 	if err := contractschemas.Validate(contractschemas.SchemaWorkflowChangePlan, plan); err != nil {
 		return coordinator.CoordinatorPlanActivityResult{}, fmt.Errorf("validate Coordinator plan contract: %w", err)
 	}
+	if plan.PlanID != expectedPlanID {
+		return coordinator.CoordinatorPlanActivityResult{}, fmt.Errorf("Coordinator plan must use assigned planId %q", expectedPlanID)
+	}
 	if err := coordinator.NewWorkflowCreator(nil).ValidatePlan(plan); err != nil {
 		return coordinator.CoordinatorPlanActivityResult{}, fmt.Errorf("validate Coordinator plan semantics: %w", err)
 	}
 	return coordinator.CoordinatorPlanActivityResult{Status: "proposed", Plan: &plan}, nil
+}
+
+func bootstrapPlanID(input coordinator.BootstrapProjectInput) string {
+	return hashedPlanID("bootstrap", input.ContractVersion, input.CoordinatorID, input.OrganizationID, input.ProjectID, input.PolicyVersion)
+}
+
+func coordinatorPlanID(input coordinator.CoordinatorStartInput) string {
+	return hashedPlanID(
+		"coordinator",
+		input.ContractVersion,
+		input.CoordinatorID,
+		input.OrganizationID,
+		input.ProjectID,
+		string(input.ScopeType),
+		strings.Join(input.Scope.IDs, "\x00"),
+		input.PolicyVersion,
+		input.CoordinationMode,
+		strings.Join(input.SelectedWorkflowRefs, "\x00"),
+		input.State.LastEvent,
+		fmt.Sprintf("%d", input.State.Version),
+	)
+}
+
+func hashedPlanID(parts ...string) string {
+	hash := sha256.New()
+	for _, part := range parts {
+		_, _ = hash.Write([]byte(part))
+		_, _ = hash.Write([]byte{0})
+	}
+	return "encois-plan-" + hex.EncodeToString(hash.Sum(nil)[:12])
 }
 
 func decodeWorkflowChangePlan(raw string) (coordinator.WorkflowChangePlan, error) {

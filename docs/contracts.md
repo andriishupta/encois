@@ -113,18 +113,23 @@ Coordinator run projection, and enqueues a `reconcile-requested`
 Only a versioned, service-authenticated `coordinator.v1` status callback may
 persist the `ready` or `failed` transition after the Coordinator has performed
 its initial reconciliation. The callback must be organization-scoped and
-match the active Coordinator identity. An administrator retry is idempotent,
-reuses that stable Coordinator identity, and returns the organization to
-`initializing`.
+match the active Coordinator identity. `POST
+/api/v1/organization/onboarding/reset` is an explicit administrator recovery
+operation: it terminates the previous Coordinator execution when present,
+marks its control-plane run as `cancelled`, clears the selected workflow
+references and failure message, and returns the organization to `pending`.
+The administrator then completes onboarding again and
+`POST /api/v1/organization/onboarding/start` creates the next initialization
+attempt.
 
 While the status is not `ready`, ordinary tenant product routes return
 `ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. The exceptions are the
-organization projection, onboarding update/start/retry, onboarding Source
-upload and ingestion, and active Template/current approved Blueprint
-catalog reads. Existing authentication and permission checks still apply to
-those exceptions. A user without `onboarding:manage` can inspect progress but
-cannot update or retry onboarding. `GET /health/ready` is service readiness,
-not organization onboarding readiness. See the complete route matrix in
+organization projection, onboarding update/start/reset, onboarding Source
+upload and ingestion, and active Template/current approved Blueprint catalog
+reads. Existing authentication and permission checks still apply to those
+exceptions. A user without `onboarding:manage` can inspect progress but cannot
+update or reset onboarding. `GET /health/ready` is service readiness, not
+organization onboarding readiness. See the complete route matrix in
 [`flows.md`](flows.md#onboarding-readiness-states) and the runtime boundary in
 [`architecture.md`](architecture.md#45-organization-onboarding-and-coordinator).
 
@@ -444,6 +449,12 @@ Blueprint versions:
 
 Gemini/ADK may propose the plan. Deterministic registry, permission, policy,
 and compatibility checks decide whether it can be persisted or started.
+
+For Coordinator-generated plans, the Runtime assigns a deterministic `planId`
+from the tenant-scoped reconciliation input before calling the model. The
+model must copy that value exactly; an omitted or changed ID is rejected before
+the plan reaches the Gateway. This keeps retries idempotent without accepting
+model-generated identity metadata.
 
 `workflow-change-plan.v1` is the single lifecycle contract. `create` carries a
 Blueprint, `update` carries a replacement plus its target, `deprecate`,

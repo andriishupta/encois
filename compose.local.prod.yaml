@@ -104,7 +104,6 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
-      GEMINI_REASONING_MODEL: ${GEMINI_REASONING_MODEL:-gemini-3.1-pro-preview}
       GEMINI_REASONING_THINKING_LEVEL: ${GEMINI_REASONING_THINKING_LEVEL:-high}
       GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
     volumes:

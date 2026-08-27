@@ -44,11 +44,11 @@ func TestValidateRequiresRealCredentialsOutsideMockModes(t *testing.T) {
 	}
 }
 
-func TestReasoningConfigurationUsesCanonicalNames(t *testing.T) {
-	t.Setenv("GEMINI_REASONING_MODEL", "gemini-reasoning-custom")
+func TestModelConfigurationUsesOneCanonicalName(t *testing.T) {
+	t.Setenv("GEMINI_MODEL", "gemini-model-custom")
 	t.Setenv("GEMINI_REASONING_THINKING_LEVEL", "medium")
-	if got := reasoningModelFromEnv(); got != "gemini-reasoning-custom" {
-		t.Fatalf("canonical reasoning model variable was not used: %q", got)
+	if got := FromEnv().GeminiModel; got != "gemini-model-custom" {
+		t.Fatalf("canonical model variable was not used: %q", got)
 	}
 	if got := reasoningThinkingFromEnv(); got != "medium" {
 		t.Fatalf("canonical reasoning thinking variable was not used: %q", got)

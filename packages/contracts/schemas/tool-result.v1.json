@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/tool-result.v1.json",
+  "$id": "https://encois.com/schemas/tool-result.v1.json",
   "type": "object",
   "required": ["contractVersion", "requestId", "tool", "status"],
   "$defs": {
@@ -18,7 +18,10 @@
         "observedAt": { "type": "string", "minLength": 1 },
         "ingestedAt": { "type": "string", "minLength": 1 },
         "transformationVersion": { "type": "string", "minLength": 1 },
-        "visibilityScope": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "visibilityScope": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     }
   },

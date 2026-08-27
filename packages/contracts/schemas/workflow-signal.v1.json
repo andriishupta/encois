@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/workflow-signal.v1.json",
+  "$id": "https://encois.com/schemas/workflow-signal.v1.json",
   "type": "object",
   "required": ["contractVersion", "signalName", "signalId", "payload"],
   "oneOf": [

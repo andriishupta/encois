@@ -1,5 +1,9 @@
 import { OrganizationOnboardingStatus, Permission } from "@encois/contracts";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsFetching,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -17,7 +21,7 @@ import {
 import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { startOrganizationOnboarding } from "@/lib/api";
+import { resetOrganizationOnboarding } from "@/lib/api";
 import { clearAuthStorage, getAuthSession } from "@/lib/auth";
 import { getBranding } from "@/lib/branding";
 import {
@@ -50,16 +54,23 @@ function OrganizationReadinessGate() {
   const { error, errorCode, isLoading, onboarding } = useOrganization();
   const canManageOnboarding = useCan(Permission.OnboardingManage);
   const queryClient = useQueryClient();
+  const isCheckingStatus =
+    useIsFetching({ queryKey: queryKeys.organization() }) > 0;
   const location = useLocation();
   const navigate = useNavigate();
   const authenticationError = errorCode === "UNAUTHENTICATED";
   const branding = getBranding();
-  const retryOnboarding = useMutation({
-    mutationFn: startOrganizationOnboarding,
+  const resetOnboarding = useMutation({
+    mutationFn: resetOrganizationOnboarding,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.organization(),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.organization(),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.sourcesRoot() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
+      ]);
+      await navigate({ to: "/onboarding/workspace" });
     },
   });
 
@@ -189,6 +200,27 @@ function OrganizationReadinessGate() {
                   "The Coordinator could not complete bootstrap. Retry setup from onboarding.")
                 : "Complete onboarding before using the dashboard, integrations, workflows, or organization administration."}
           </p>
+          <div className="mt-4 flex items-center gap-2 text-sm">
+            {initializing ? (
+              <LoaderCircle
+                className="size-4 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
+            ) : (
+              <span
+                className={
+                  failed
+                    ? "size-2 rounded-full bg-destructive"
+                    : "size-2 rounded-full bg-amber-500"
+                }
+                aria-hidden="true"
+              />
+            )}
+            <span className="text-muted-foreground">Workspace status:</span>
+            <span className="font-medium">
+              {initializing ? "Initializing" : failed ? "Failed" : "Pending"}
+            </span>
+          </div>
           {failed ? (
             <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-destructive">
@@ -230,9 +262,9 @@ function OrganizationReadinessGate() {
               </details>
             </div>
           ) : null}
-          {retryOnboarding.isError ? (
+          {resetOnboarding.isError ? (
             <p className="mt-4 text-sm text-destructive" role="alert">
-              Try again failed: {retryOnboarding.error.message}
+              Reset failed: {resetOnboarding.error.message}
             </p>
           ) : null}
           {!canManageOnboarding && !initializing ? (
@@ -244,27 +276,43 @@ function OrganizationReadinessGate() {
             <Button
               type="button"
               variant="outline"
+              disabled={isCheckingStatus}
               onClick={() =>
                 void queryClient.invalidateQueries({
                   queryKey: queryKeys.organization(),
                 })
               }
             >
-              {initializing ? "Check status" : "Refresh status"}
+              {isCheckingStatus ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : null}
+              {initializing
+                ? isCheckingStatus
+                  ? "Checking status…"
+                  : "Check status"
+                : isCheckingStatus
+                  ? "Refreshing…"
+                  : "Refresh status"}
             </Button>
             {canManageOnboarding && failed ? (
               <Button
                 type="button"
-                onClick={() => retryOnboarding.mutate()}
-                disabled={retryOnboarding.isPending}
+                variant="destructive"
+                onClick={() => resetOnboarding.mutate()}
+                disabled={resetOnboarding.isPending}
               >
                 <RotateCcw
                   className={
-                    retryOnboarding.isPending ? "animate-spin" : undefined
+                    resetOnboarding.isPending ? "animate-spin" : undefined
                   }
                   data-icon="inline-start"
                 />
-                {retryOnboarding.isPending ? "Trying again…" : "Try again"}
+                {resetOnboarding.isPending
+                  ? "Clearing setup…"
+                  : "Clear all and try again"}
               </Button>
             ) : null}
             {canManageOnboarding && !initializing ? (

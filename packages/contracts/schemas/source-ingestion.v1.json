@@ -1,16 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/source-ingestion.v1.json",
+  "$id": "https://encois.com/schemas/source-ingestion.v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "capability", "sourceId", "sourceRevisionId", "sourceKind", "trigger", "readScope", "visibilityScope"],
+  "required": [
+    "contractVersion",
+    "requestId",
+    "workflowId",
+    "organizationId",
+    "actorId",
+    "scope",
+    "policyVersion",
+    "capability",
+    "sourceId",
+    "sourceRevisionId",
+    "sourceKind",
+    "trigger",
+    "readScope",
+    "visibilityScope"
+  ],
   "$defs": {
     "scope": {
       "type": "object",
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        "ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     }
   },
@@ -27,12 +46,16 @@
     "capability": { "type": "string", "minLength": 1 },
     "sourceId": { "type": "string", "minLength": 1 },
     "sourceRevisionId": { "type": "string", "minLength": 1 },
-    "sourceKind": { "enum": ["integration", "uploaded_document", "manual", "media"] },
+    "sourceKind": {
+      "enum": ["integration", "uploaded_document", "manual", "media"]
+    },
     "provider": { "type": "string", "minLength": 1 },
     "artifactRef": { "type": "string", "minLength": 1 },
     "sourceObjectId": { "type": "string", "minLength": 1 },
     "contentType": { "type": "string", "minLength": 1 },
-    "trigger": { "enum": ["bootstrap", "manual", "webhook", "schedule", "reconcile"] },
+    "trigger": {
+      "enum": ["bootstrap", "manual", "webhook", "schedule", "reconcile"]
+    },
     "readScope": { "$ref": "#/$defs/scope" },
     "visibilityScope": { "$ref": "#/$defs/scope" }
   }

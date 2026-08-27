@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/tool-manifest.v1.json",
+  "$id": "https://encois.com/schemas/tool-manifest.v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -28,7 +28,12 @@
     "annotations": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"],
+      "required": [
+        "readOnlyHint",
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint"
+      ],
       "properties": {
         "readOnlyHint": { "type": "boolean" },
         "destructiveHint": { "type": "boolean" },

@@ -18,7 +18,6 @@ type Config struct {
 	GoogleCloudProject    string
 	GoogleCloudLocation   string
 	GeminiModel           string
-	ReasoningModel        string
 	ReasoningThink        string
 	AgentGatewayURL       string
 	AgentGatewayToken     string
@@ -48,8 +47,7 @@ func FromEnv() Config {
 		UseVertexAI:           envBool("GOOGLE_GENAI_USE_VERTEXAI"),
 		GoogleCloudProject:    os.Getenv("GOOGLE_CLOUD_PROJECT"),
 		GoogleCloudLocation:   envOrDefault("GOOGLE_CLOUD_LOCATION", "us-central1"),
-		GeminiModel:           envOrDefault("GEMINI_MODEL", "gemini-3.7-flash"),
-		ReasoningModel:        reasoningModelFromEnv(),
+		GeminiModel:           os.Getenv("GEMINI_MODEL"),
 		ReasoningThink:        reasoningThinkingFromEnv(),
 		AgentGatewayURL:       envOrDefault("AGENT_GATEWAY_URL", "http://127.0.0.1:8080"),
 		AgentGatewayToken:     os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
@@ -102,10 +100,6 @@ func envOrDefault(name, fallback string) string {
 func envBool(name string) bool {
 	value := os.Getenv(name)
 	return value == "1" || value == "true" || value == "TRUE"
-}
-
-func reasoningModelFromEnv() string {
-	return envOrDefault("GEMINI_REASONING_MODEL", "gemini-3.1-pro-preview")
 }
 
 func reasoningThinkingFromEnv() string {

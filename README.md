@@ -117,6 +117,14 @@ unknown visitors. These are private operator scripts, not a public management
 UI; the waitlist requires work email, company name, and a company website or
 LinkedIn URL, but never grants access.
 
+For a faster local onboarding reset, the root command creates a new
+organization, pending invite, and Firebase Auth Emulator user using the local
+Postgres URL and the default password `local-onboarding-1`:
+
+```bash
+pnpm run local:onboarding -- ob+1@local.test
+```
+
 The generic execution path can be smoke-tested locally when the Temporal CLI is
 installed:
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/agent-memory-result.v1.json",
+  "$id": "https://encois.com/schemas/agent-memory-result.v1.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["contractVersion", "requestId", "status", "memories"],
@@ -8,18 +8,34 @@
     "memory": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "agentDefinition", "summary", "evidenceRefs", "observedAt"],
+      "required": [
+        "id",
+        "agentDefinition",
+        "summary",
+        "evidenceRefs",
+        "observedAt"
+      ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "agentDefinition": { "type": "string", "minLength": 1 },
         "projectId": { "type": "string", "minLength": 1 },
         "userId": { "type": "string", "minLength": 1 },
         "summary": { "type": "string", "minLength": 1, "maxLength": 10000 },
-        "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "evidenceRefs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
         "observedAt": { "type": "string", "minLength": 1 },
         "workflowId": { "type": "string", "minLength": 1 },
         "runId": { "type": "string", "minLength": 1 },
-        "retentionClass": { "enum": ["ephemeral", "investigation", "source_snapshot", "legal_hold"] },
+        "retentionClass": {
+          "enum": [
+            "ephemeral",
+            "investigation",
+            "source_snapshot",
+            "legal_hold"
+          ]
+        },
         "retentionUntil": { "type": "string", "minLength": 1 },
         "freshness": {
           "type": "object",

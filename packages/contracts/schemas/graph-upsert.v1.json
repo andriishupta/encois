@@ -1,16 +1,31 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/graph-upsert.v1.json",
+  "$id": "https://encois.com/schemas/graph-upsert.v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "requestId", "workflowId", "organizationId", "actorId", "scope", "policyVersion", "capability", "nodes", "edges"],
+  "required": [
+    "contractVersion",
+    "requestId",
+    "workflowId",
+    "organizationId",
+    "actorId",
+    "scope",
+    "policyVersion",
+    "capability",
+    "nodes",
+    "edges"
+  ],
   "$defs": {
     "scope": {
       "type": "object",
       "additionalProperties": false,
       "required": ["ids"],
       "properties": {
-        "ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        "ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "provenance": {
@@ -25,20 +40,35 @@
         "observedAt": { "type": "string", "minLength": 1 },
         "ingestedAt": { "type": "string", "minLength": 1 },
         "transformationVersion": { "type": "string", "minLength": 1 },
-        "visibilityScope": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "visibilityScope": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "node": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "type", "properties"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "type": { "type": "string", "minLength": 1 }, "properties": { "type": "object" }, "provenance": { "$ref": "#/$defs/provenance" } }
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "properties": { "type": "object" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
     },
     "edge": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "sourceId", "targetId", "relationship", "properties"],
-      "properties": { "id": { "type": "string", "minLength": 1 }, "sourceId": { "type": "string", "minLength": 1 }, "targetId": { "type": "string", "minLength": 1 }, "relationship": { "type": "string", "minLength": 1 }, "properties": { "type": "object" }, "provenance": { "$ref": "#/$defs/provenance" } }
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "targetId": { "type": "string", "minLength": 1 },
+        "relationship": { "type": "string", "minLength": 1 },
+        "properties": { "type": "object" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
     }
   },
   "properties": {

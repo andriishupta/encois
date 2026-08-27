@@ -72,6 +72,33 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const temporalStartTimeoutMs = 5_000;
 
+function publicOnboardingError(error: unknown): string {
+  const message = (
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : ""
+  ).toLowerCase();
+  if (message.includes("timed out") || message.includes("timeout"))
+    return "The Coordinator did not respond in time. Check the agent runtime and try again.";
+  if (
+    message.includes("model") ||
+    message.includes("vertex") ||
+    message.includes("gemini")
+  )
+    return "The Coordinator could not access the configured AI model. Check the model configuration and try again.";
+  if (
+    message.includes("contract") ||
+    message.includes("schema") ||
+    message.includes("validation")
+  )
+    return "The Coordinator returned an invalid setup result. Check the onboarding configuration and try again.";
+  if (message.includes("temporal") || message.includes("workflow"))
+    return "The Coordinator workflow could not be completed. Check the runtime and try again.";
+  return "The Coordinator could not complete workspace setup. Try again or contact support.";
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -559,9 +586,7 @@ export async function getOrganizationForPrincipal(
       .update(organizationOnboarding)
       .set({
         status: OrganizationOnboardingStatus.Failed,
-        lastError:
-          coordinatorState.lastError?.slice(0, 1000) ||
-          "The Coordinator suspended onboarding without a detailed error.",
+        lastError: publicOnboardingError(coordinatorState.lastError),
         updatedAt: new Date(),
       })
       .where(
@@ -809,11 +834,18 @@ export async function startOrganizationOnboardingForPrincipal(
         principal.organizationId,
         context.onboarding.coordinatorId,
       );
-      await options.workflowClient.terminate(
-        previousWorkflowId,
-        principal.organizationId,
-        options.namespace,
-      );
+      try {
+        await options.workflowClient.terminate(
+          previousWorkflowId,
+          principal.organizationId,
+          options.namespace,
+        );
+      } catch (error) {
+        throw organizationError(
+          "ONBOARDING_START_FAILED",
+          publicOnboardingError(error),
+        );
+      }
     }
     await validateWorkflowCatalogSelections(
       db,
@@ -963,10 +995,7 @@ export async function startOrganizationOnboardingForPrincipal(
       // first successful bootstrap reconciliation.
       return projectOnboarding(initialized);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Coordinator could not be started.";
+      const message = publicOnboardingError(error);
       await db
         .update(organizationOnboarding)
         .set({
@@ -979,6 +1008,99 @@ export async function startOrganizationOnboardingForPrincipal(
         );
       throw organizationError("ONBOARDING_START_FAILED", message);
     }
+  });
+}
+
+export async function resetOrganizationOnboardingForPrincipal(
+  principal: AosPrincipal,
+  options?: OrganizationOnboardingServiceOptions,
+): Promise<OrganizationOnboardingProjection> {
+  return withContext(principal, async (context, db) => {
+    requirePermission(context, Permission.OnboardingManage);
+    if (context.onboarding.status === OrganizationOnboardingStatus.Ready) {
+      throw organizationError(
+        "ORGANIZATION_ONBOARDING_CONFLICT",
+        "Workspace onboarding is already ready and cannot be reset.",
+      );
+    }
+
+    const workflowId = buildCoordinatorWorkflowId(
+      principal.organizationId,
+      context.onboarding.coordinatorId,
+    );
+    if (options) {
+      try {
+        await options.workflowClient.terminate(
+          workflowId,
+          principal.organizationId,
+          options.namespace,
+        );
+      } catch (error) {
+        throw organizationError(
+          "ONBOARDING_START_FAILED",
+          publicOnboardingError(error),
+        );
+      }
+    }
+
+    const now = new Date();
+    const [reset] = await db
+      .update(organizationOnboarding)
+      .set({
+        status: OrganizationOnboardingStatus.Pending,
+        selectedWorkflows: [],
+        lastError: null,
+        updatedAt: now,
+      })
+      .where(
+        eq(organizationOnboarding.organizationId, principal.organizationId),
+      )
+      .returning();
+    if (!reset)
+      throw organizationError(
+        "ORGANIZATION_ONBOARDING_NOT_FOUND",
+        "Organization onboarding state not found.",
+      );
+
+    const [previousRun] = await db
+      .select({ id: workflowRuns.id, status: workflowRuns.status })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.organizationId, principal.organizationId),
+          eq(workflowRuns.temporalWorkflowId, workflowId),
+        ),
+      )
+      .limit(1);
+    if (previousRun && previousRun.status !== "cancelled") {
+      await db
+        .update(workflowRuns)
+        .set({
+          status: "cancelled",
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(workflowRuns.id, previousRun.id));
+      await db.insert(workflowEvents).values({
+        organizationId: principal.organizationId,
+        workflowRunId: previousRun.id,
+        eventType: "workflow_terminated_for_onboarding_retry",
+        status: "cancelled",
+        metadata: { source: "organization_onboarding_reset" },
+      });
+    }
+
+    await db.insert(auditEvents).values({
+      organizationId: principal.organizationId,
+      actorUserId: context.actor.userId,
+      action: "organization.onboarding.reset",
+      outcome: "accepted",
+      resourceType: "organization_onboarding",
+      resourceId: principal.organizationId,
+      scope: { organizationId: principal.organizationId },
+      metadata: { workflowId },
+    });
+    return projectOnboarding(reset);
   });
 }
 
@@ -1015,8 +1137,7 @@ export async function updateOrganizationOnboardingFromCoordinator(
         status: update.status,
         lastError:
           update.status === OrganizationOnboardingStatus.Failed
-            ? update.lastError?.slice(0, 1000) ||
-              "Coordinator bootstrap failed."
+            ? publicOnboardingError(update.lastError)
             : null,
         updatedAt: new Date(),
       })

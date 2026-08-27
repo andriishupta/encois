@@ -1900,6 +1900,19 @@ export async function startOrganizationOnboarding(): Promise<OrganizationOnboard
   return value;
 }
 
+export async function resetOrganizationOnboarding(): Promise<OrganizationOnboardingProjection> {
+  const value = await request<unknown>("/organization/onboarding/reset", {
+    method: "POST",
+  });
+  if (!isOrganizationOnboardingProjection(value))
+    throw createApiError(
+      200,
+      "The service returned an invalid onboarding response.",
+      "INVALID_RESPONSE",
+    );
+  return value;
+}
+
 export async function createOrganizationUnit(
   input: OrganizationUnitCreateRequest,
 ): Promise<OrganizationUnitProjection> {

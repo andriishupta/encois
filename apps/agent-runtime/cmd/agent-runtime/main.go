@@ -57,7 +57,6 @@ func main() {
 		GoogleCloudProject:  cfg.GoogleCloudProject,
 		GoogleCloudLocation: cfg.GoogleCloudLocation,
 		ModelName:           cfg.GeminiModel,
-		ReasoningModel:      cfg.ReasoningModel,
 		ReasoningThinking:   cfg.ReasoningThink,
 	})
 	if err != nil {

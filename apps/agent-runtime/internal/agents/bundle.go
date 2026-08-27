@@ -21,7 +21,6 @@ type Config struct {
 	GoogleCloudProject  string
 	GoogleCloudLocation string
 	ModelName           string
-	ReasoningModel      string
 	ReasoningThinking   string
 }
 
@@ -42,8 +41,7 @@ const (
 	ModeGemini = "gemini"
 	ModeMock   = "mock"
 
-	DefaultStandardModel  = "gemini-3.7-flash"
-	DefaultReasoningModel = "gemini-3.1-pro-preview"
+	DefaultModel = "gemini-3.7-flash"
 )
 
 func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
@@ -56,11 +54,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	}
 	modelName := cfg.ModelName
 	if modelName == "" {
-		modelName = DefaultStandardModel
-	}
-	reasoningModelName := cfg.ReasoningModel
-	if reasoningModelName == "" {
-		reasoningModelName = DefaultReasoningModel
+		modelName = DefaultModel
 	}
 	thinkingLevel, err := parseThinkingLevel(cfg.ReasoningThinking)
 	if err != nil {
@@ -69,7 +63,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	bundle := &Bundle{
 		Mode:                   mode,
 		ModelName:              modelName,
-		ReasoningModelName:     reasoningModelName,
+		ReasoningModelName:     modelName,
 		ReasoningThinkingLevel: thinkingLevel,
 	}
 	if mode == ModeMock {
@@ -95,10 +89,6 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Gemini model: %w", err)
 	}
-	reasoningModel, err := gemini.NewModel(ctx, reasoningModelName, clientConfig)
-	if err != nil {
-		return nil, fmt.Errorf("create reasoning Gemini model: %w", err)
-	}
 	deepThinkingConfig := &genai.GenerateContentConfig{
 		ThinkingConfig: &genai.ThinkingConfig{ThinkingLevel: thinkingLevel},
 	}
@@ -106,7 +96,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	coordinator, err := llmagent.New(llmagent.Config{
 		Name:        "coordinator",
 		Description: "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
-		Model:       reasoningModel,
+		Model:       model,
 		Instruction: "Coordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts.",
 		// The coordinator owns cross-source planning and must use the deeper
 		// reasoning profile configured for high-responsibility agents.
@@ -119,7 +109,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	workflowCreator, err := llmagent.New(llmagent.Config{
 		Name:                  "workflow_creator",
 		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
-		Model:                 reasoningModel,
+		Model:                 model,
 		Instruction:           "Propose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions.",
 		GenerateContentConfig: deepThinkingConfig,
 	})

@@ -11,6 +11,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { normalizeEmail } from "../src/auth/identity-platform.js";
 import { databaseUrl, parseOptions, required, slugify } from "./cli.js";
+import { ensureLocalControlPlaneMembership } from "./local-control-plane.js";
 
 const options = parseOptions(process.argv.slice(2));
 const email = normalizeEmail(required(options, "email"));
@@ -76,6 +77,8 @@ try {
       })
       .returning({ id: organizationUnits.id });
     if (!rootUnit) throw new Error("Organization root unit was not created.");
+
+    await ensureLocalControlPlaneMembership(tx, organization.id, rootUnit.id);
 
     await tx.insert(organizationOnboarding).values({
       organizationId: organization.id,

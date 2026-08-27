@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://contracts.encois.dev/workflow-blueprint-lifecycle.v1.json",
+  "$id": "https://encois.com/schemas/workflow-blueprint-lifecycle.v1.json",
   "title": "Workflow Blueprint lifecycle request",
   "type": "object",
   "additionalProperties": false,

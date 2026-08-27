@@ -9,7 +9,7 @@ import (
 )
 
 func TestWorkflowChangePlanJSONIsContractShaped(t *testing.T) {
-	raw, err := WorkflowChangePlanJSON("Organization ID: org-test\nProject ID: project-test\nCoordinator ID: coordinator-test")
+	raw, err := WorkflowChangePlanJSON("Assigned plan ID: plan-test\nOrganization ID: org-test\nProject ID: project-test\nCoordinator ID: coordinator-test")
 	if err != nil {
 		t.Fatalf("create mock plan: %v", err)
 	}
@@ -34,6 +34,12 @@ func TestWorkflowChangePlanJSONIsContractShaped(t *testing.T) {
 	}
 	if err := coordinator.NewWorkflowCreator(nil).ValidatePlan(typedPlan); err != nil {
 		t.Fatalf("mock plan must satisfy coordinator semantics: %v", err)
+	}
+}
+
+func TestWorkflowChangePlanJSONRequiresAssignedPlanID(t *testing.T) {
+	if _, err := WorkflowChangePlanJSON("Organization ID: org-test\nCoordinator ID: coordinator-test"); err == nil {
+		t.Fatal("expected an explicitly assigned plan id")
 	}
 }
 

@@ -53,14 +53,13 @@ Configuration is environment-based:
   deterministic organization-scoped local fixture;
 - `VERTEX_MEMORY_REASONING_ENGINE` — full Vertex AI Reasoning Engine resource
   name required by `AGENT_MEMORY_MODE=gcp`;
-- `GEMINI_MODEL` — the standard model for routine specialist execution and
-  evidence summarization; defaults to the stable `gemini-3.7-flash`.
+- `GEMINI_MODEL` — the model used by every ADK role, including routine
+  specialists, the Coordinator, and the Workflow Creator; defaults to
+  `gemini-3.7-flash`. High-level roles use the separate thinking-level setting
+  below, not a separate model.
 - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` — optional
   OTLP/HTTP trace endpoint. If unset, spans are created locally but are not
   exported; no provider or source mock is selected implicitly.
-- `GEMINI_REASONING_MODEL` — the higher-reasoning model used only by the
-  Coordinator and Workflow Creator for planning and decision proposals;
-  defaults to `gemini-3.1-pro-preview`.
 - `GEMINI_REASONING_THINKING_LEVEL` — defaults to `high`; supported values are
   `low`, `medium`, and `high`.
 

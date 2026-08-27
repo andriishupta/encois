@@ -1,18 +1,38 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://encois.dev/schemas/source-ingestion-result.v1.json",
+  "$id": "https://encois.com/schemas/source-ingestion-result.v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contractVersion", "requestId", "sourceId", "sourceRevisionId", "status", "stage", "factsCount", "evidenceRefs"],
+  "required": [
+    "contractVersion",
+    "requestId",
+    "sourceId",
+    "sourceRevisionId",
+    "status",
+    "stage",
+    "factsCount",
+    "evidenceRefs"
+  ],
   "properties": {
     "contractVersion": { "const": "source-ingestion-result.v1" },
     "requestId": { "type": "string", "minLength": 1 },
     "sourceId": { "type": "string", "minLength": 1 },
     "sourceRevisionId": { "type": "string", "minLength": 1 },
     "status": { "enum": ["completed", "deferred", "failed"] },
-    "stage": { "enum": ["acquired", "parsed", "normalized", "graph_projected", "memory_distilled"] },
+    "stage": {
+      "enum": [
+        "acquired",
+        "parsed",
+        "normalized",
+        "graph_projected",
+        "memory_distilled"
+      ]
+    },
     "factsCount": { "type": "integer", "minimum": 0 },
-    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "evidenceRefs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
     "freshness": { "type": "array" },
     "message": { "type": "string", "maxLength": 2000 }
   }

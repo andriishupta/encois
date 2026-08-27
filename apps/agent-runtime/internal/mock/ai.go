@@ -29,6 +29,10 @@ func WorkflowChangePlanJSON(prompt string) (string, error) {
 	coordinatorID := promptValue(prompt, "Coordinator ID:")
 	organizationID := promptValue(prompt, "Organization ID:")
 	projectID := promptValue(prompt, "Project ID:")
+	assignedPlanID := promptValue(prompt, "Assigned plan ID:")
+	if assignedPlanID == "" {
+		return "", fmt.Errorf("assigned plan ID is required for the mock workflow plan")
+	}
 	if coordinatorID == "" {
 		coordinatorID = "mock-coordinator"
 	}
@@ -58,7 +62,7 @@ func WorkflowChangePlanJSON(prompt string) (string, error) {
 
 	plan := map[string]any{
 		"contractVersion": "workflow-change-plan.v1",
-		"planId":          "mock-plan-" + safeID(coordinatorID),
+		"planId":          assignedPlanID,
 		"coordinatorId":   coordinatorID,
 		"organizationId":  organizationID,
 		"observedAt":      fixedObservedAt,
@@ -91,25 +95,4 @@ func promptValue(prompt, label string) string {
 		}
 	}
 	return ""
-}
-
-func safeID(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "coordinator"
-	}
-	var builder strings.Builder
-	for _, character := range value {
-		switch {
-		case character >= 'a' && character <= 'z':
-			builder.WriteRune(character)
-		case character >= 'A' && character <= 'Z':
-			builder.WriteRune(character + ('a' - 'A'))
-		case character >= '0' && character <= '9', character == '-', character == '_':
-			builder.WriteRune(character)
-		default:
-			builder.WriteRune('-')
-		}
-	}
-	return strings.Trim(builder.String(), "-")
 }

@@ -26,6 +26,7 @@ import {
   listOrganizationPermissionsForPrincipal,
   listOrganizationUnitsForPrincipal,
   type OrganizationOnboardingServiceOptions,
+  resetOrganizationOnboardingForPrincipal,
   startOrganizationOnboardingForPrincipal,
   updateOrganizationOnboardingForPrincipal,
   updateOrganizationPermissionForPrincipal,
@@ -228,6 +229,19 @@ export function createOrganizationRouter(
         data: await startOrganizationOnboardingForPrincipal(
           context.get("principal"),
           context.get("requestId"),
+          options,
+        ),
+      });
+    } catch (error) {
+      return errorResponse(context, error);
+    }
+  });
+
+  router.post("/onboarding/reset", async (context) => {
+    try {
+      return context.json({
+        data: await resetOrganizationOnboardingForPrincipal(
+          context.get("principal"),
           options,
         ),
       });

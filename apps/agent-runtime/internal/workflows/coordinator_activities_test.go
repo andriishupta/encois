@@ -25,6 +25,59 @@ func TestCreateBootstrapPlanIsExplicitlyDeferredWithoutModel(t *testing.T) {
 	}
 }
 
+func TestCreateCoordinatorPlanUsesAssignedIDInExplicitMockMode(t *testing.T) {
+	activities := NewActivities(&agents.Bundle{Mode: agents.ModeMock, Enabled: true}, "")
+	input := coordinator.CoordinatorStartInput{
+		ContractVersion:  coordinator.CoordinatorContractVersion,
+		CoordinatorID:    "organization:org-1",
+		OrganizationID:   "org-1",
+		ScopeType:        coordinator.ScopeOrganization,
+		Scope:            coordinator.WorkflowPlanScope{IDs: []string{"unit-1"}},
+		PolicyVersion:    "policy-read-only-fixture-v1",
+		CoordinationMode: "start-coordinator",
+		State: coordinator.CoordinatorState{
+			Status:              coordinator.StatusOnboarding,
+			OnboardingComplete:  false,
+			ReconciliationCount: 1,
+		},
+	}
+
+	result, err := activities.CreateCoordinatorPlan(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "proposed" || result.Plan == nil {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if result.Plan.PlanID != coordinatorPlanID(input) {
+		t.Fatalf("expected assigned plan id %q, got %q", coordinatorPlanID(input), result.Plan.PlanID)
+	}
+}
+
+func TestPlanIDIsStableForActivityRetryAndChangesWithCoordinatorState(t *testing.T) {
+	input := coordinator.CoordinatorStartInput{
+		ContractVersion: coordinator.CoordinatorContractVersion,
+		CoordinatorID:   "coord-1",
+		OrganizationID:  "org-1",
+		ScopeType:       coordinator.ScopeOrganization,
+		Scope:           coordinator.WorkflowPlanScope{IDs: []string{"unit-1"}},
+		PolicyVersion:   "policy-v1",
+		State: coordinator.CoordinatorState{
+			Version:             1,
+			ReconciliationCount: 1,
+		},
+	}
+
+	first := coordinatorPlanID(input)
+	if first == "" || first != coordinatorPlanID(input) {
+		t.Fatalf("expected deterministic plan id, got %q", first)
+	}
+	input.State.Version++
+	if first == coordinatorPlanID(input) {
+		t.Fatal("expected a new coordinator state version to produce a new plan id")
+	}
+}
+
 func TestDecodeWorkflowChangePlanAcceptsJsonCodeFence(t *testing.T) {
 	plan, err := decodeWorkflowChangePlan("```json\n{\"contractVersion\":\"workflow-change-plan.v1\",\"planId\":\"plan-1\",\"coordinatorId\":\"coord-1\",\"organizationId\":\"org-1\",\"observedAt\":\"2026-08-20T16:00:00.000Z\",\"changes\":[]}\n```")
 	if err != nil {

@@ -22,13 +22,13 @@ func TestMockBundleDoesNotRequireGeminiCredentials(t *testing.T) {
 	}
 }
 
-func TestBundleKeepsStandardAndReasoningModelProfilesSeparate(t *testing.T) {
+func TestBundleUsesOneModelForAllAgentRoles(t *testing.T) {
 	bundle, err := NewBundle(context.Background(), Config{Mode: ModeMock})
 	if err != nil {
 		t.Fatalf("create mock bundle: %v", err)
 	}
-	if bundle.ModelName != DefaultStandardModel || bundle.ReasoningModelName != DefaultReasoningModel {
-		t.Fatalf("unexpected default model profiles: standard=%q reasoning=%q", bundle.ModelName, bundle.ReasoningModelName)
+	if bundle.ModelName != DefaultModel || bundle.ReasoningModelName != DefaultModel {
+		t.Fatalf("unexpected default model: standard=%q highLevel=%q", bundle.ModelName, bundle.ReasoningModelName)
 	}
 	if bundle.ReasoningThinkingLevel == "" {
 		t.Fatal("reasoning profile must have an explicit thinking level")
@@ -36,15 +36,14 @@ func TestBundleKeepsStandardAndReasoningModelProfilesSeparate(t *testing.T) {
 
 	bundle, err = NewBundle(context.Background(), Config{
 		Mode:              ModeMock,
-		ModelName:         "gemini-3.7-flash",
-		ReasoningModel:    "gemini-3.1-pro-preview",
+		ModelName:         "gemini-3.7-flash-custom",
 		ReasoningThinking: "medium",
 	})
 	if err != nil {
 		t.Fatalf("create custom mock bundle: %v", err)
 	}
-	if bundle.ModelName != "gemini-3.7-flash" || bundle.ReasoningModelName != "gemini-3.1-pro-preview" || string(bundle.ReasoningThinkingLevel) != "MEDIUM" {
-		t.Fatalf("custom model profiles were not preserved: standard=%q reasoning=%q thinking=%q", bundle.ModelName, bundle.ReasoningModelName, bundle.ReasoningThinkingLevel)
+	if bundle.ModelName != "gemini-3.7-flash-custom" || bundle.ReasoningModelName != "gemini-3.7-flash-custom" || string(bundle.ReasoningThinkingLevel) != "MEDIUM" {
+		t.Fatalf("custom model was not applied to all roles: standard=%q highLevel=%q thinking=%q", bundle.ModelName, bundle.ReasoningModelName, bundle.ReasoningThinkingLevel)
 	}
 }
 

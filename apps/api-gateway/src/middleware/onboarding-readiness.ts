@@ -20,6 +20,8 @@ function isOnboardingRoute(method: string, path: string): boolean {
   if (method === "PATCH" && path === "/organization/onboarding") return true;
   if (method === "POST" && path === "/organization/onboarding/start")
     return true;
+  if (method === "POST" && path === "/organization/onboarding/reset")
+    return true;
   if (method === "GET" && path === "/sources") return true;
   if (method === "POST" && path === "/sources/uploads") return true;
   if (

@@ -30,6 +30,13 @@ From the repository root:
 pnpm run dev:watch:mock
 ```
 
+To fully reset Watch AI, remove its local volumes, rebuild every image without
+cache, and start the stack with fresh migrations and seed data:
+
+```bash
+pnpm run dev:watch:ai:rebuild
+```
+
 The stack starts:
 
 | Service | URL | Purpose |
@@ -270,6 +277,14 @@ pnpm run onboarding -- \
 The command returns the organization ID, invite ID, and Firebase UID. If
 Firebase user creation fails after the database transaction, it removes the
 new organization and its cascading invite/onboarding records.
+
+For the common local case, the root wrapper supplies the local Postgres URL,
+the Firebase Auth Emulator host, and the default password
+`local-onboarding-1`:
+
+```bash
+pnpm run local:onboarding -- ob+1@local.test
+```
 
 An onboarding row must never be created by a dashboard fallback or a normal
 `GET /api/v1/organization` read. To diagnose a missing row, inspect the

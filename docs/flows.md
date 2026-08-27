@@ -154,7 +154,7 @@ API or dashboard.
 | Missing row | The control plane has no onboarding record for the organization. | Block every ordinary tenant product route and return `ORGANIZATION_ONBOARDING_NOT_FOUND` with HTTP `503`. Do not create a row during `GET /organization`. | Migration, backfill, or an explicit repair flow creates the record. |
 | `pending` | The organization exists, but required onboarding configuration or source context is incomplete. | Keep the user in the onboarding surface. Ordinary dashboard reads and product mutations return `ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. | `PATCH /organization/onboarding` updates configuration; `POST /organization/onboarding/start` moves to `initializing`. |
 | `initializing` | The Coordinator start was accepted by Temporal and bootstrap/reconciliation is running. | Show progress and status only. Do not expose ordinary dashboard, membership, integration, workflow, or Run mutations. | A scoped Coordinator callback moves the record to `ready` or `failed`. |
-| `failed` | Bootstrap or required initial reconciliation failed or was deferred. | Keep the organization in the onboarding recovery surface. An administrator with `onboarding:manage` can retry; other users see that an administrator must resolve setup. | Retry reuses the idempotent Coordinator and moves to `initializing`; success moves to `ready`. |
+| `failed` | Bootstrap or required initial reconciliation failed or was deferred. | Keep the organization in the onboarding recovery surface. An administrator with `onboarding:manage` can clear the failed attempt and start over; other users see that an administrator must resolve setup. | `POST /organization/onboarding/reset` terminates the previous Coordinator execution, marks its control-plane run `cancelled`, clears onboarding selections, and moves to `pending`. The administrator then completes onboarding and starts a new attempt. |
 | `ready` | The Coordinator reported successful bootstrap and the API persisted the readiness transition. | Open the normal dashboard and all existing permission-scoped product surfaces. | A later product decision may explicitly return the organization to onboarding; the UI never invents that transition. |
 
 The service-level `GET /health/ready` endpoint is separate from tenant
@@ -163,7 +163,7 @@ dependencies are available; one organization being `pending` or `failed` does
 not make the service unhealthy.
 
 Before `ready`, the onboarding exception surface is limited to reading the
-organization projection, updating onboarding settings, starting or retrying
+organization projection, updating onboarding settings, starting or resetting
 the Coordinator, listing active Templates and approved Blueprints, and
 registering/uploading/ingesting onboarding Sources. Internal Coordinator
 callbacks are service-authenticated and are not browser routes. All other
@@ -176,7 +176,7 @@ and Temporal IDs on the server.
 Temporal start request is accepted. It does not return `ready` optimistically.
 The Coordinator performs one immediate bootstrap reconciliation, reports
 `ready` only after the required context validation succeeds, and reports
-`failed` for an error or deferred completion. Retry is an explicit action and
+`failed` for an error or deferred completion. Reset is an explicit action and
 does not fabricate progress, runs, or readiness.
 
 The Coordinator is a long-lived logical Workflow. It waits on Temporal timers,
@@ -205,7 +205,7 @@ The dashboard gate is deterministic and applies to every tenant route:
 missing onboarding row -> block product routes; show a data/migration error
 pending                -> show onboarding; reject ordinary tenant routes (409)
 initializing           -> show bootstrap progress; reject ordinary routes (409)
-failed                 -> show recovery/retry; reject ordinary routes (409)
+failed                 -> show recovery/reset; reject ordinary routes (409)
 ready                  -> render the scoped dashboard under existing permissions
 ```
 
