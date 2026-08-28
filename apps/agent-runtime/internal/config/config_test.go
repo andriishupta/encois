@@ -29,6 +29,16 @@ func TestValidateRequiresExplicitRuntimeDependencies(t *testing.T) {
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected unsupported source mode to fail closed")
 	}
+	config = validMockConfig()
+	config.AgentAIMode = ""
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected missing AI mode to fail closed")
+	}
+	config = validMockConfig()
+	config.MemoryMode = ""
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected missing memory mode to fail closed")
+	}
 }
 
 func TestValidateRequiresRealCredentialsOutsideMockModes(t *testing.T) {
@@ -38,9 +48,27 @@ func TestValidateRequiresRealCredentialsOutsideMockModes(t *testing.T) {
 		t.Fatal("expected Gemini credentials to be required")
 	}
 	config = validMockConfig()
+	config.AgentAIMode = "gemini"
+	config.UseAgentPlatform = true
+	config.GoogleCloudProject = "encois"
+	config.GoogleCloudModelLocation = "us"
+	if err := config.Validate(); err == nil {
+		t.Fatal("expected Gemini model name to be required")
+	}
+	config = validMockConfig()
 	config.MemoryMode = "gcp"
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected Memory Bank target to be required")
+	}
+}
+
+func TestFromEnvDoesNotSelectRuntimeModesImplicitly(t *testing.T) {
+	t.Setenv("AGENT_AI_MODE", "")
+	t.Setenv("AGENT_SOURCE_MODE", "")
+	t.Setenv("AGENT_MEMORY_MODE", "")
+	config := FromEnv()
+	if config.AgentAIMode != "" || config.SourceMode != "" || config.MemoryMode != "" {
+		t.Fatalf("runtime modes must be explicit: %#v", config)
 	}
 }
 

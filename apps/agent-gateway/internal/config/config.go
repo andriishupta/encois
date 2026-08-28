@@ -24,15 +24,13 @@ type Config struct {
 
 func FromEnv() Config {
 	return Config{
-		HTTPAddr:         envOrDefault("AGENT_GATEWAY_HTTP_ADDR", ":8080"),
-		GinMode:          os.Getenv("GIN_MODE"),
-		PolicyVersion:    envOrDefault("AGENT_GATEWAY_POLICY_VERSION", "policy-read-only-fixture-v1"),
-		ServiceToken:     os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
-		CapabilitySecret: os.Getenv("AGENT_GATEWAY_CAPABILITY_SECRET"),
-		// Hosted and non-test processes must use the real data plane by default.
-		// Local Compose and .env.example opt into mock mode explicitly.
-		DataMode:             envOrDefault("AGENT_GATEWAY_DATA_MODE", "gcp"),
-		StorageMode:          envOrDefault("AGENT_GATEWAY_STORAGE_MODE", "memory"),
+		HTTPAddr:             envOrDefault("AGENT_GATEWAY_HTTP_ADDR", ":8080"),
+		GinMode:              os.Getenv("GIN_MODE"),
+		PolicyVersion:        os.Getenv("AGENT_GATEWAY_POLICY_VERSION"),
+		ServiceToken:         os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
+		CapabilitySecret:     os.Getenv("AGENT_GATEWAY_CAPABILITY_SECRET"),
+		DataMode:             os.Getenv("AGENT_GATEWAY_DATA_MODE"),
+		StorageMode:          os.Getenv("AGENT_GATEWAY_STORAGE_MODE"),
 		StorageBucket:        os.Getenv("GCP_STORAGE_BUCKET"),
 		SpannerDatabase:      os.Getenv("SPANNER_DATABASE"),
 		GoogleCloudProject:   os.Getenv("GOOGLE_CLOUD_PROJECT"),
@@ -49,6 +47,9 @@ func (c Config) Validate() error {
 	}
 	if c.CapabilitySecret == "" {
 		return fmt.Errorf("AGENT_GATEWAY_CAPABILITY_SECRET is required")
+	}
+	if c.PolicyVersion == "" {
+		return fmt.Errorf("AGENT_GATEWAY_POLICY_VERSION is required")
 	}
 	if c.DataMode != "mock" && c.DataMode != "gcp" && c.DataMode != "hybrid" {
 		return fmt.Errorf("unsupported AGENT_GATEWAY_DATA_MODE %q; use gcp, hybrid, or explicit mock", c.DataMode)

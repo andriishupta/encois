@@ -5,34 +5,33 @@ package contracts
 type ContractVersion string
 
 const (
-	ContractExecutionContext      ContractVersion = "execution-context.v1"
-	ContractWorkflowBlueprint     ContractVersion = "workflow-blueprint.v1"
-	ContractWorkflowResult        ContractVersion = "blueprint-workflow-result.v1"
-	ContractAgentResult           ContractVersion = "agent-result.v1"
-	ContractAgentInstructions     ContractVersion = "agent-instructions.v1"
-	ContractWorkflowSignal        ContractVersion = "workflow-signal.v1"
-	ContractToolRequest           ContractVersion = "tool-request.v1"
-	ContractToolResult            ContractVersion = "tool-result.v1"
-	ContractArtifactWrite         ContractVersion = "artifact-write.v1"
-	ContractArtifactRead          ContractVersion = "artifact-read.v1"
-	ContractArtifactWriteResult   ContractVersion = "artifact-write-result.v1"
-	ContractGraphQuery            ContractVersion = "graph-query.v1"
-	ContractGraphUpsert           ContractVersion = "graph-upsert.v1"
-	ContractGraphQueryResult      ContractVersion = "graph-query-result.v1"
-	ContractAgentMemory           ContractVersion = "agent-memory.v1"
-	ContractAgentMemoryResult     ContractVersion = "agent-memory-result.v1"
-	ContractToolManifest          ContractVersion = "tool-manifest.v1"
-	ContractWorkflowUpdate        ContractVersion = "workflow-update.v1"
-	ContractWorkflowChangePlan    ContractVersion = "workflow-change-plan.v1"
-	ContractCoordinatorEvent      ContractVersion = "coordinator-event.v1"
-	ContractCoordinator           ContractVersion = "coordinator.v1"
-	ContractBootstrapProject      ContractVersion = "bootstrap-project.v1"
-	ContractAuthorizationCheck    ContractVersion = "authorization-check.v1"
-	ContractWorkflowDefinition    ContractVersion = "workflow-definition.v1"
-	ContractKnowledgeSource       ContractVersion = "knowledge-source.v1"
-	ContractSourceRevision        ContractVersion = "source-revision.v1"
-	ContractSourceIngestion       ContractVersion = "source-ingestion.v1"
-	ContractSourceIngestionResult ContractVersion = "source-ingestion-result.v1"
+	ContractExecutionContext           ContractVersion = "execution-context.v1"
+	ContractWorkflowBlueprint          ContractVersion = "workflow-blueprint.v1"
+	ContractWorkflowResult             ContractVersion = "blueprint-workflow-result.v1"
+	ContractAgentResult                ContractVersion = "agent-result.v1"
+	ContractAgentInstructions          ContractVersion = "agent-instructions.v1"
+	ContractWorkflowSignal             ContractVersion = "workflow-signal.v1"
+	ContractToolRequest                ContractVersion = "tool-request.v1"
+	ContractToolResult                 ContractVersion = "tool-result.v1"
+	ContractArtifactWrite              ContractVersion = "artifact-write.v1"
+	ContractArtifactRead               ContractVersion = "artifact-read.v1"
+	ContractArtifactWriteResult        ContractVersion = "artifact-write-result.v1"
+	ContractGraphQuery                 ContractVersion = "graph-query.v1"
+	ContractGraphUpsert                ContractVersion = "graph-upsert.v1"
+	ContractGraphQueryResult           ContractVersion = "graph-query-result.v1"
+	ContractAgentMemory                ContractVersion = "agent-memory.v1"
+	ContractAgentMemoryResult          ContractVersion = "agent-memory-result.v1"
+	ContractToolManifest               ContractVersion = "tool-manifest.v1"
+	ContractWorkflowUpdate             ContractVersion = "workflow-update.v1"
+	ContractWorkflowChangePlan         ContractVersion = "workflow-change-plan.v1"
+	ContractWorkflowBlueprintLifecycle ContractVersion = "workflow-blueprint-lifecycle.v1"
+	ContractCoordinatorEvent           ContractVersion = "coordinator-event.v1"
+	ContractCoordinator                ContractVersion = "coordinator.v1"
+	ContractBootstrapProject           ContractVersion = "bootstrap-project.v1"
+	ContractKnowledgeSource            ContractVersion = "knowledge-source.v1"
+	ContractSourceRevision             ContractVersion = "source-revision.v1"
+	ContractSourceIngestion            ContractVersion = "source-ingestion.v1"
+	ContractSourceIngestionResult      ContractVersion = "source-ingestion-result.v1"
 )
 
 type TemporalWorkflowType string
@@ -58,7 +57,6 @@ const (
 type WorkflowSignalName string
 
 const SignalBlueprintApproval WorkflowSignalName = "blueprint-approval"
-const SignalWorkflowControl WorkflowSignalName = "workflow-control"
 const SignalWorkflowPause WorkflowSignalName = "workflow-pause"
 const SignalWorkflowResume WorkflowSignalName = "workflow-resume"
 
@@ -81,6 +79,19 @@ const (
 	WorkflowResultWaiting   WorkflowResultStatus = "waiting"
 	WorkflowResultFailed    WorkflowResultStatus = "failed"
 	WorkflowResultPartial   WorkflowResultStatus = "partial"
+)
+
+type WorkflowExecutionStatus string
+
+const (
+	WorkflowExecutionQueued    WorkflowExecutionStatus = "queued"
+	WorkflowExecutionRunning   WorkflowExecutionStatus = "running"
+	WorkflowExecutionWaiting   WorkflowExecutionStatus = "waiting"
+	WorkflowExecutionPaused    WorkflowExecutionStatus = "paused"
+	WorkflowExecutionPartial   WorkflowExecutionStatus = "partial"
+	WorkflowExecutionFailed    WorkflowExecutionStatus = "failed"
+	WorkflowExecutionCompleted WorkflowExecutionStatus = "completed"
+	WorkflowExecutionCancelled WorkflowExecutionStatus = "cancelled"
 )
 
 type AgentResultStatus string
@@ -257,10 +268,13 @@ const (
 type IntegrationStatus string
 
 const (
-	IntegrationPending  IntegrationStatus = "pending"
-	IntegrationActive   IntegrationStatus = "active"
-	IntegrationDisabled IntegrationStatus = "disabled"
-	IntegrationError    IntegrationStatus = "error"
+	IntegrationPending     IntegrationStatus = "pending"
+	IntegrationAuthorized  IntegrationStatus = "authorized"
+	IntegrationActive      IntegrationStatus = "active"
+	IntegrationDegraded    IntegrationStatus = "degraded"
+	IntegrationNeedsReauth IntegrationStatus = "needs_reauth"
+	IntegrationDisabled    IntegrationStatus = "disabled"
+	IntegrationError       IntegrationStatus = "error"
 )
 
 type KnowledgeSourceKind string

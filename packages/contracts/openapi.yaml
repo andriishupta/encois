@@ -2197,7 +2197,6 @@ components:
         displayName: { type: string, minLength: 2, maxLength: 160 }
         provider: { type: string, minLength: 1, maxLength: 80 }
         type: { $ref: '#/components/schemas/IntegrationType' }
-        organizationUnitId: { type: string, format: uuid, deprecated: true, description: Compatibility field. Integrations are always organization-scoped. }
         grantedScopes:
           type: array
           items: { type: string, maxLength: 120 }
@@ -2331,6 +2330,12 @@ components:
         input: { type: object }
         scope: { type: object }
         blueprint: { type: object }
+    WorkflowExecutionStatus:
+      type: string
+      enum: [queued, running, waiting, paused, partial, failed, completed, cancelled]
+    WorkflowStatusReason:
+      type: string
+      enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
     WorkflowExecutionResponse:
       type: object
       required: [data]
@@ -2345,10 +2350,8 @@ components:
             namespace: { type: string }
             taskQueue: { type: string }
             blueprintId: { type: string }
-            status: { type: string, enum: [queued, running, waiting, paused, partial, failed, completed, cancelled] }
-            statusReason:
-              type: string
-              enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]
+            status: { $ref: '#/components/schemas/WorkflowExecutionStatus' }
+            statusReason: { $ref: '#/components/schemas/WorkflowStatusReason' }
             statusMessage: { type: string }
             retryAt: { type: string }
             completedAt: { type: string }
@@ -2387,7 +2390,7 @@ components:
         id: { type: string, format: uuid }
         eventType: { type: string }
         status: { type: string }
-        statusReason: { type: string }
+        statusReason: { $ref: '#/components/schemas/WorkflowStatusReason' }
         activityName: { type: string }
         agentRunId: { type: string }
         evidenceRef: { type: string }
@@ -2450,8 +2453,8 @@ components:
         trigger: { type: string }
         namespace: { type: string }
         taskQueue: { type: string }
-        status: { type: string }
-        statusReason: { type: string }
+        status: { $ref: '#/components/schemas/WorkflowExecutionStatus' }
+        statusReason: { $ref: '#/components/schemas/WorkflowStatusReason' }
         statusMessage: { type: string }
         retryAt: { type: string }
         completedAt: { type: string }

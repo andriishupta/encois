@@ -3,12 +3,14 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	contracts "github.com/andriishupta/encois/packages/contracts"
 	aiplatform "google.golang.org/api/aiplatform/v1beta1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
 
@@ -18,6 +20,8 @@ type gcpStore struct {
 }
 
 const providerHierarchyScopeKey = "organization_scope_ids"
+
+const memoryObservationTimeout = 30 * time.Second
 
 func NewGCPStore(ctx context.Context, reasoningEngine, googleCloudLocation string) (Store, error) {
 	reasoningEngine = strings.TrimRight(strings.TrimSpace(reasoningEngine), "/")
@@ -114,14 +118,17 @@ func (s *gcpStore) correct(ctx context.Context, request Request) (Result, error)
 	if err != nil {
 		return Result{}, fmt.Errorf("patch Agent Platform memory: %w", err)
 	}
-	if _, err := s.wait(ctx, operation); err != nil {
+	if err := completedOperationError(operation); err != nil {
+		return Result{}, fmt.Errorf("patch Agent Platform memory: %w", err)
+	}
+	updated, observed, err := s.observeMemoryUpdate(ctx, request.TargetMemoryID, request.ReplacementSummary)
+	if err != nil {
 		return Result{}, err
 	}
-	updated, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(request.TargetMemoryID).Context(ctx).Do()
-	if err != nil {
-		return Result{}, fmt.Errorf("get updated Agent Platform memory: %w", err)
+	if !observed {
+		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(contracts.MemoryStatusDeferred), Memories: []Record{}}, nil
 	}
-	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{recordFromMemory(updated)}}, nil
+	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(contracts.MemoryStatusCompleted), Memories: []Record{recordFromMemory(updated)}}, nil
 }
 
 func (s *gcpStore) delete(ctx context.Context, request Request) (Result, error) {
@@ -132,51 +139,25 @@ func (s *gcpStore) delete(ctx context.Context, request Request) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("delete Agent Platform memory: %w", err)
 	}
-	if _, err := s.wait(ctx, operation); err != nil {
+	if err := completedOperationError(operation); err != nil {
+		return Result{}, fmt.Errorf("delete Agent Platform memory: %w", err)
+	}
+	deleted, err := s.observeMemoryDeletion(ctx, request.TargetMemoryID)
+	if err != nil {
 		return Result{}, err
 	}
-	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: []Record{}}, nil
+	status := contracts.MemoryStatusDeferred
+	if deleted {
+		status = contracts.MemoryStatusCompleted
+	}
+	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(status), Memories: []Record{}}, nil
 }
 
-func (s *gcpStore) wait(ctx context.Context, operation *aiplatform.GoogleLongrunningOperation) (*aiplatform.GoogleLongrunningOperation, error) {
-	if operation == nil || operation.Done {
-		if operation != nil && operation.Error != nil {
-			return operation, fmt.Errorf("Agent Platform memory operation failed: %s", operation.Error.Message)
-		}
-		return operation, nil
+func completedOperationError(operation *aiplatform.GoogleLongrunningOperation) error {
+	if operation != nil && operation.Done && operation.Error != nil {
+		return fmt.Errorf("Agent Platform memory operation failed: %s", operation.Error.Message)
 	}
-	if operation.Name == "" {
-		return operation, fmt.Errorf("Agent Platform memory operation returned no name")
-	}
-
-	// Memory Bank exposes the long-running operation, but its Wait endpoint
-	// returns UNIMPLEMENTED. Poll the supported Get endpoint instead.
-	for {
-		current, err := s.service.Projects.Locations.ReasoningEngines.Memories.Operations.Get(operation.Name).Context(ctx).Do()
-		if err != nil {
-			return operation, fmt.Errorf("poll Agent Platform memory operation: %w", err)
-		}
-		if current == nil {
-			return operation, fmt.Errorf("Agent Platform memory operation returned no state")
-		}
-		*operation = *current
-		if current.Done {
-			if current.Error != nil {
-				return current, fmt.Errorf("Agent Platform memory operation failed: %s", current.Error.Message)
-			}
-			return current, nil
-		}
-
-		timer := time.NewTimer(2 * time.Second)
-		select {
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			return operation, fmt.Errorf("wait for Agent Platform memory operation: %w", ctx.Err())
-		case <-timer.C:
-		}
-	}
+	return nil
 }
 
 func (s *gcpStore) retrieve(ctx context.Context, request Request, scope map[string]string) (Result, error) {
@@ -224,20 +205,103 @@ func (s *gcpStore) distill(ctx context.Context, request Request, scope map[strin
 	if err != nil {
 		return Result{}, fmt.Errorf("generate Agent Platform memory: %w", err)
 	}
-	if operation != nil && !operation.Done {
-		operation, err = s.wait(ctx, operation)
+	if operation == nil {
+		return Result{}, fmt.Errorf("Agent Platform memory generation returned no operation")
+	}
+	if err := completedOperationError(operation); err != nil {
+		return Result{}, err
+	}
+	if operation.Done {
+		records, err := generatedRecords(operation, request, s.reasoningEngine)
 		if err != nil {
-			return Result{}, fmt.Errorf("wait for Agent Platform memory generation: %w", err)
+			return Result{}, err
 		}
+		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(contracts.MemoryStatusCompleted), Memories: records}, nil
 	}
-	if operation != nil && operation.Error != nil {
-		return Result{}, fmt.Errorf("Agent Platform memory generation failed: %s", operation.Error.Message)
-	}
-	records, err := generatedRecords(operation, request, s.reasoningEngine)
+	records, observed, err := s.observeGeneratedMemories(ctx, request, scope)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: "completed", Memories: records}, nil
+	if !observed {
+		return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(contracts.MemoryStatusDeferred), Memories: []Record{}}, nil
+	}
+	return Result{ContractVersion: string(contracts.ContractAgentMemoryResult), RequestID: request.RequestID, Status: string(contracts.MemoryStatusCompleted), Memories: records}, nil
+}
+
+func (s *gcpStore) observeGeneratedMemories(ctx context.Context, request Request, scope map[string]string) ([]Record, bool, error) {
+	deadline := time.Now().Add(memoryObservationTimeout)
+	queryRequest := request
+	queryRequest.Operation = "retrieve"
+	queryRequest.Query = request.Distillation.Summary
+	queryRequest.MaxResults = 10
+	for {
+		result, err := s.retrieve(ctx, queryRequest, scope)
+		if err != nil {
+			return nil, false, fmt.Errorf("observe generated Agent Platform memory: %w", err)
+		}
+		for _, record := range result.Memories {
+			if strings.TrimSpace(record.Summary) == strings.TrimSpace(request.Distillation.Summary) {
+				record.EvidenceRefs = append([]string(nil), request.Distillation.EvidenceRefs...)
+				return []Record{record}, true, nil
+			}
+		}
+		if !time.Now().Before(deadline) {
+			return nil, false, nil
+		}
+		if err := waitForMemoryObservation(ctx); err != nil {
+			return nil, false, err
+		}
+	}
+}
+
+func (s *gcpStore) observeMemoryUpdate(ctx context.Context, name, summary string) (*aiplatform.GoogleCloudAiplatformV1beta1Memory, bool, error) {
+	deadline := time.Now().Add(memoryObservationTimeout)
+	for {
+		value, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(name).Context(ctx).Do()
+		if err != nil {
+			return nil, false, fmt.Errorf("observe updated Agent Platform memory: %w", err)
+		}
+		if value.Fact == summary {
+			return value, true, nil
+		}
+		if !time.Now().Before(deadline) {
+			return nil, false, nil
+		}
+		if err := waitForMemoryObservation(ctx); err != nil {
+			return nil, false, err
+		}
+	}
+}
+
+func (s *gcpStore) observeMemoryDeletion(ctx context.Context, name string) (bool, error) {
+	deadline := time.Now().Add(memoryObservationTimeout)
+	for {
+		_, err := s.service.Projects.Locations.ReasoningEngines.Memories.Get(name).Context(ctx).Do()
+		if err != nil {
+			var apiError *googleapi.Error
+			if errors.As(err, &apiError) && apiError.Code == 404 {
+				return true, nil
+			}
+			return false, fmt.Errorf("observe deleted Agent Platform memory: %w", err)
+		}
+		if !time.Now().Before(deadline) {
+			return false, nil
+		}
+		if err := waitForMemoryObservation(ctx); err != nil {
+			return false, err
+		}
+	}
+}
+
+func waitForMemoryObservation(ctx context.Context) error {
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("observe Agent Platform memory: %w", ctx.Err())
+	case <-timer.C:
+		return nil
+	}
 }
 
 type generatedMemoriesResponse struct {
@@ -346,5 +410,9 @@ func validateProviderMemoryScope(scope, expected map[string]string) error {
 }
 
 func recordFromMemory(value *aiplatform.GoogleCloudAiplatformV1beta1Memory) Record {
-	return Record{ID: value.Name, Summary: value.Fact, AgentDefinition: value.Scope["agent_definition"], ProjectID: value.Scope["project_id"], UserID: value.Scope["user_id"], ObservedAt: value.UpdateTime, EvidenceRefs: []string{}, WorkflowID: value.Scope["workflow_id"], RunID: value.Scope["run_id"]}
+	observedAt := value.UpdateTime
+	if observedAt == "" {
+		observedAt = value.CreateTime
+	}
+	return Record{ID: value.Name, Summary: value.Fact, AgentDefinition: value.Scope["agent_definition"], ProjectID: value.Scope["project_id"], UserID: value.Scope["user_id"], ObservedAt: observedAt, EvidenceRefs: []string{}, WorkflowID: value.Scope["workflow_id"], RunID: value.Scope["run_id"]}
 }

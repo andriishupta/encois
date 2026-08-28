@@ -8,7 +8,7 @@ import {
   WorkflowExecutionStatus,
   WorkflowSignalName,
   type WorkflowStatusReason,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { CircleDashed, FileText, RefreshCw } from "lucide-react";
@@ -43,6 +43,7 @@ import {
 import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 import { useCan } from "@/lib/permissions";
+import { invalidateWorkflowExecutionQueries } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 
 const terminalRunStatuses: ReadonlySet<WorkflowExecutionStatus> = new Set([
@@ -92,34 +93,13 @@ function WorkflowDetailPage() {
         payload: { stepId: "workflow", approved: true },
       }),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflow(workflowId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowEvents(workflowId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowRunListRoot(),
-        }),
-      ]);
+      await invalidateWorkflowExecutionQueries(queryClient, workflowId);
     },
   });
   const cancellation = useMutation({
     mutationFn: () => cancelWorkflow(workflowId),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflow(workflowId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowEvents(workflowId),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowRunListRoot(),
-        }),
-      ]);
+      await invalidateWorkflowExecutionQueries(queryClient, workflowId);
     },
   });
   const control = useMutation({
@@ -135,29 +115,13 @@ function WorkflowDetailPage() {
         payload: {},
       }),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflow(workflowId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowEvents(workflowId),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowRunListRoot(),
-        }),
-      ]);
+      await invalidateWorkflowExecutionQueries(queryClient, workflowId);
     },
   });
   const rerun = useMutation({
     mutationFn: () => rerunWorkflow(workflowId),
     onSuccess: async (nextWorkflow) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowRunListRoot(),
-        }),
-      ]);
+      await invalidateWorkflowExecutionQueries(queryClient);
       await navigate({
         to: "/workflows/$workflowId",
         params: { workflowId: nextWorkflow.workflowId },

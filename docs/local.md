@@ -112,7 +112,7 @@ and provider adapters at the edges:
 | Boundary | Local behavior | What it proves |
 | --- | --- | --- |
 | Dashboard, API Gateway, Postgres | Real processes and persisted control-plane data | Auth, organization scope, permissions, source/workflow/run projections |
-| Temporal | Real local Temporal Server in Namespace `default` | Workflow start, Activities, retries, Signals, and worker execution |
+| Temporal | Real local Temporal Server in Namespace `encois` | Workflow start, Activities, retries, Signals, and worker execution |
 | Agent Runtime | Real Go worker with `AGENT_AI_MODE=mock` | Blueprint interpretation and runtime state transitions without model credentials |
 | Agent Gateway | Real private policy/tool broker; artifact access uses the Firebase Storage Emulator while Graph/provider adapters remain mocked | Service authentication, capability/policy checks, and local Source ingestion |
 | Jira/GitHub and other providers | Deterministic adapter fixtures | Stable tool schemas and success/failure handling, not live provider behavior |
@@ -187,13 +187,13 @@ not replace the full manual source, permission, graph, or memory walkthrough.
 
 ## Temporal inspection and failure diagnosis
 
-The containerized stack uses Temporal Namespace `default`, address
+The containerized stack uses Temporal Namespace `encois`, address
 `127.0.0.1:7233`, and task queue `encois-agent-runtime`:
 
 ```bash
 temporal workflow list \
   --address 127.0.0.1:7233 \
-  --namespace default
+  --namespace encois
 ```
 
 Use the Temporal UI at `http://localhost:8233` to open a run and inspect its

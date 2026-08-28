@@ -13,6 +13,8 @@ import (
 	contracts "github.com/andriishupta/encois/packages/contracts"
 )
 
+const blueprintWorkflowControlSignal = "workflow-control"
+
 type BlueprintWorkflowInput struct {
 	ContractVersion string                        `json:"contractVersion"`
 	Blueprint       coordinator.WorkflowBlueprint `json:"blueprint,omitempty"`
@@ -155,7 +157,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 		return BlueprintWorkflowResult{}, fmt.Errorf("register blueprint context update: %w", err)
 	}
 	approvalChannel := workflow.GetSignalChannel(ctx, string(contracts.SignalBlueprintApproval))
-	controlChannel := workflow.GetSignalChannel(ctx, string(contracts.SignalWorkflowControl))
+	controlChannel := workflow.GetSignalChannel(ctx, blueprintWorkflowControlSignal)
 	pendingApprovals := make(map[string]BlueprintApprovalSignal)
 	processedSignalIDs := make(map[string]bool)
 	paused := false

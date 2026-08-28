@@ -34,6 +34,11 @@ import {
 } from "@encois/persistence";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../../application-error.js";
+import {
   hasPermission,
   isOrganizationAdministrator,
 } from "../../auth/authorization.js";
@@ -60,7 +65,7 @@ import {
 
 type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
 
-export type SourceServiceError = Error & { code: string };
+export type SourceServiceError = ApplicationError;
 
 export type SourceSummary = {
   source: KnowledgeSource;
@@ -235,7 +240,9 @@ async function reconcileSourceIngestion(
     .set({
       status: completed
         ? SourceRevisionStatus.Active
-        : SourceRevisionStatus.Failed,
+        : nextStatus === "deferred"
+          ? SourceRevisionStatus.Pending
+          : SourceRevisionStatus.Failed,
       ingestedAt: completed ? new Date() : undefined,
     })
     .where(
@@ -307,18 +314,13 @@ export function sourceServiceError(
   code: string,
   message: string,
 ): SourceServiceError {
-  const error = new Error(message) as SourceServiceError;
-  error.code = code;
-  return error;
+  return applicationError(code, message);
 }
 
 export function isSourceServiceError(
   error: unknown,
 ): error is SourceServiceError {
-  return (
-    error instanceof Error &&
-    typeof (error as Partial<SourceServiceError>).code === "string"
-  );
+  return isApplicationError(error);
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -1408,6 +1410,7 @@ function sourceIngestionInput(
       ? { sourceObjectId: revision.sourceObjectId }
       : {}),
     ...(revision.contentType ? { contentType: revision.contentType } : {}),
+    observedAt: revision.observedAt ?? revision.createdAt,
     trigger,
     readScope: source.readScope,
     visibilityScope: source.visibilityScope,

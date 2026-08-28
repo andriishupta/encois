@@ -96,11 +96,6 @@ function temporalStatus(value: string): WorkflowRunStatus {
       return WorkflowExecutionStatus.Completed;
     case "CANCELLED":
       return WorkflowExecutionStatus.Cancelled;
-    case "FAILED":
-    case "TERMINATED":
-    case "TIMED_OUT":
-    case "UNSPECIFIED":
-    case "UNKNOWN":
     default:
       return WorkflowExecutionStatus.Failed;
   }
@@ -119,8 +114,6 @@ function temporalStatusMessage(value: string): string | undefined {
     case "PAUSED":
     case "CONTINUED_AS_NEW":
       return undefined;
-    case "UNSPECIFIED":
-    case "UNKNOWN":
     default:
       return `Temporal reported an unsupported workflow status: ${value}.`;
   }

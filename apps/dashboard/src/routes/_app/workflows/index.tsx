@@ -2,12 +2,12 @@ import type {
   WorkflowBlueprintProjection,
   WorkflowBlueprintStatus,
   WorkflowExecutionProjection,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import {
   Permission,
   TemporalWorkflowType,
   WorkflowExecutionStatus,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import {
   useInfiniteQuery,
   useMutation,

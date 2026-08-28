@@ -10,7 +10,10 @@ import {
 } from "@xyflow/react";
 import { useEffect, useMemo } from "react";
 import "@xyflow/react/dist/style.css";
-import type { GraphInspectionProjection, GraphNode } from "@encois/contracts";
+import type {
+  GraphInspectionProjection,
+  GraphNode,
+} from "@encois/contracts/browser";
 import {
   FitViewOnContentChange,
   InteractiveMiniMap,

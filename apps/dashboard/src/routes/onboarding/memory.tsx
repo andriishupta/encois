@@ -1,4 +1,4 @@
-import { KnowledgeSourceKind } from "@encois/contracts";
+import { KnowledgeSourceKind } from "@encois/contracts/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {

@@ -1,5 +1,5 @@
-import type { WorkflowTemplateProjection } from "@encois/contracts";
-import { Permission } from "@encois/contracts";
+import type { WorkflowTemplateProjection } from "@encois/contracts/browser";
+import { Permission } from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";

@@ -3,7 +3,7 @@ import {
   isPermission,
   type PermissionKey,
   permissionIncludes,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { initializeApp } from "firebase/app";
 import {
   type Auth,

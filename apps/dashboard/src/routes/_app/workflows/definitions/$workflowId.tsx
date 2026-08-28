@@ -1,5 +1,5 @@
-import type { WorkflowBlueprintProjection } from "@encois/contracts";
-import { Permission } from "@encois/contracts";
+import type { WorkflowBlueprintProjection } from "@encois/contracts/browser";
+import { Permission } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

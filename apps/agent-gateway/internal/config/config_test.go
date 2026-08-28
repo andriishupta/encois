@@ -6,6 +6,7 @@ func validMockConfig() Config {
 	return Config{
 		ServiceToken:     "gateway-token",
 		CapabilitySecret: "capability-secret",
+		PolicyVersion:    "policy-read-only-fixture-v1",
 		DataMode:         "mock",
 		StorageMode:      "memory",
 	}
@@ -24,6 +25,15 @@ func TestValidateRequiresExplicitGatewayCredentials(t *testing.T) {
 	config.DataMode = "implicit-mock"
 	if err := config.Validate(); err == nil {
 		t.Fatal("expected unsupported data mode to fail closed")
+	}
+}
+
+func TestFromEnvDoesNotSelectDataPlaneImplicitly(t *testing.T) {
+	t.Setenv("AGENT_GATEWAY_DATA_MODE", "")
+	t.Setenv("AGENT_GATEWAY_STORAGE_MODE", "")
+	config := FromEnv()
+	if config.DataMode != "" || config.StorageMode != "" {
+		t.Fatalf("gateway data-plane modes must be explicit: %#v", config)
 	}
 }
 

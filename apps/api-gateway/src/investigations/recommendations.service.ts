@@ -16,6 +16,11 @@ import {
   withOrganizationContext,
 } from "@encois/persistence";
 import { and, eq } from "drizzle-orm";
+import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../application-error.js";
 import { getGrantedPermissions } from "../auth/authorization.js";
 import { database } from "../database.js";
 import { listIntegrationsForPrincipal } from "../integrations/services/integrations.service.js";
@@ -26,21 +31,16 @@ import {
   type WorkflowServiceOptions,
 } from "../workflows/services/workflow.service.js";
 
-export type RecommendationServiceError = Error & { code: string };
+export type RecommendationServiceError = ApplicationError;
 
 function error(code: string, message: string): RecommendationServiceError {
-  const value = new Error(message) as RecommendationServiceError;
-  value.code = code;
-  return value;
+  return applicationError(code, message);
 }
 
 export function isRecommendationServiceError(
   value: unknown,
 ): value is RecommendationServiceError {
-  return (
-    value instanceof Error &&
-    typeof (value as Partial<RecommendationServiceError>).code === "string"
-  );
+  return isApplicationError(value);
 }
 
 function localUserId(principal: AosPrincipal): string {

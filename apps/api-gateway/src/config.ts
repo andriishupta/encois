@@ -86,6 +86,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       );
     }
   }
+  const agentGatewayPolicyVersion = env.AGENT_GATEWAY_POLICY_VERSION?.trim();
+  if (!agentGatewayPolicyVersion) {
+    throw new Error("AGENT_GATEWAY_POLICY_VERSION is required.");
+  }
 
   return {
     bodyLimitBytes: positiveInteger(
@@ -128,8 +132,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       env.REQUEST_TIMEOUT_MS,
       DEFAULTS.requestTimeoutMs,
     ),
-    agentGatewayPolicyVersion:
-      env.AGENT_GATEWAY_POLICY_VERSION?.trim() || "policy-read-only-fixture-v1",
+    agentGatewayPolicyVersion,
     agentGatewayCapabilitySecret:
       env.AGENT_GATEWAY_CAPABILITY_SECRET?.trim() ||
       (nodeEnv === "development" || nodeEnv === "test"

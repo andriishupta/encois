@@ -1,5 +1,8 @@
-import type { WorkflowChangePlan, WorkflowPlanRecord } from "@encois/contracts";
-import { Permission } from "@encois/contracts";
+import type {
+  WorkflowChangePlan,
+  WorkflowPlanRecord,
+} from "@encois/contracts/browser";
+import { Permission } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -26,6 +29,7 @@ import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate } from "@/lib/formatters";
 import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
+import { invalidateWorkflowPlanQueries } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/workflows/plans/$planId")({
@@ -88,14 +92,14 @@ function WorkflowPlanDetailPage() {
   const approve = useMutation({
     mutationFn: () => approveWorkflowPlan(planId),
     onSuccess: async () => {
-      await invalidatePlanQueries(queryClient, planId);
+      await invalidateWorkflowPlanQueries(queryClient, planId);
     },
   });
   const apply = useMutation({
     mutationFn: () => applyWorkflowPlan(planId),
     onSuccess: async () => {
       await Promise.all([
-        invalidatePlanQueries(queryClient, planId),
+        invalidateWorkflowPlanQueries(queryClient, planId),
         queryClient.invalidateQueries({
           queryKey: queryKeys.workflowBlueprintsRoot(),
         }),
@@ -378,16 +382,6 @@ function PlanValue({ label, value }: { label: string; value: string }) {
       <p className="mt-1 break-words">{value}</p>
     </div>
   );
-}
-
-async function invalidatePlanQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  planId: string,
-) {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlan(planId) }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlansRoot() }),
-  ]);
 }
 
 function planStatusLabel(status: WorkflowPlanRecord["status"]): string {

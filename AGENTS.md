@@ -173,7 +173,7 @@ pnpm -r lint
 pnpm -r test
 pnpm --filter @encois/dashboard dev
 pnpm --filter @encois/api-gateway dev
-(cd apps/agent-gateway && AGENT_GATEWAY_DATA_MODE=mock go run .)
+(cd apps/agent-gateway && AGENT_GATEWAY_DATA_MODE=mock AGENT_GATEWAY_POLICY_VERSION=policy-read-only-fixture-v1 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret go run .)
 (cd apps/agent-runtime && AGENT_AI_MODE=mock AGENT_MEMORY_MODE=mock go run .)
 ```
 

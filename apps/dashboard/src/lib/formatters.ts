@@ -1,7 +1,7 @@
 import type {
   WorkflowExecutionStatus,
   WorkflowStatusReason,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 
 export function humanizeKey(value: string): string {
   return value

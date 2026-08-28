@@ -27,8 +27,8 @@ func TestBundleUsesOneModelForAllAgentRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create mock bundle: %v", err)
 	}
-	if bundle.ModelName != DefaultModel || bundle.ReasoningModelName != DefaultModel {
-		t.Fatalf("unexpected default model: standard=%q highLevel=%q", bundle.ModelName, bundle.ReasoningModelName)
+	if bundle.ModelName != "" || bundle.ReasoningModelName != "" {
+		t.Fatalf("mock mode must not invent a model: standard=%q highLevel=%q", bundle.ModelName, bundle.ReasoningModelName)
 	}
 	if bundle.ReasoningThinkingLevel == "" {
 		t.Fatal("reasoning profile must have an explicit thinking level")
@@ -50,5 +50,18 @@ func TestBundleUsesOneModelForAllAgentRoles(t *testing.T) {
 func TestInvalidAgentAIModeIsRejected(t *testing.T) {
 	if _, err := NewBundle(context.Background(), Config{Mode: "unknown"}); err == nil {
 		t.Fatal("expected unsupported AI mode error")
+	}
+}
+
+func TestUnconfiguredBundleFailsClosed(t *testing.T) {
+	bundle := &Bundle{Mode: ModeGemini}
+	if _, err := bundle.RunAgentStep(context.Background(), "session", "agent", nil); err == nil {
+		t.Fatal("expected missing agent model to fail")
+	}
+	if _, err := bundle.Summarize(context.Background(), "session", "prompt"); err == nil {
+		t.Fatal("expected missing standard runner to fail")
+	}
+	if _, err := bundle.CreateWorkflowPlan(context.Background(), "session", "prompt"); err == nil {
+		t.Fatal("expected missing workflow creator runner to fail")
 	}
 }

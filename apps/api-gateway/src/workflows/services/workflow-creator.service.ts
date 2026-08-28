@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
-  isJsonObject,
   type JsonObject,
   Permission,
   parseWorkflowBlueprint,
@@ -40,7 +39,11 @@ import {
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
-import { localUserId, workflowServiceError } from "./workflow.service.js";
+import {
+  localUserId,
+  stableSerialize,
+  workflowServiceError,
+} from "./workflow-service-common.js";
 import { listWorkflowTemplatesForPrincipal } from "./workflow-template.service.js";
 
 function slug(value: string, fallback: string): string {
@@ -50,17 +53,6 @@ function slug(value: string, fallback: string): string {
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-|-$/gu, "");
   return (normalized || fallback).slice(0, 72);
-}
-
-function stableSerialize(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
-  if (isJsonObject(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
 }
 
 function planId(

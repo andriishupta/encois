@@ -1,4 +1,4 @@
-import { Permission, type SavedInvestigation } from "@encois/contracts";
+import { Permission, type SavedInvestigation } from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Bookmark, Plus } from "lucide-react";

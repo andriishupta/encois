@@ -164,7 +164,7 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "AGENT_GATEWAY_POLICY_VERSION"
-        value = "policy-read-only-fixture-v1"
+        value = var.agent_gateway_policy_version
       }
 
       env {
@@ -441,6 +441,10 @@ resource "google_cloud_run_v2_service" "api" {
     precondition {
       condition     = var.api_image != ""
       error_message = "api_image must be set when enable_api is true."
+    }
+    precondition {
+      condition     = var.agent_gateway_policy_version != ""
+      error_message = "agent_gateway_policy_version must be set when enable_api is true."
     }
     precondition {
       condition     = !var.enable_cloud_sql || contains(var.secret_names, "cloud-sql-runtime-url")
@@ -855,6 +859,16 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       }
 
       env {
+        name  = "AGENT_GATEWAY_STORAGE_MODE"
+        value = "gcs"
+      }
+
+      env {
+        name  = "AGENT_GATEWAY_POLICY_VERSION"
+        value = var.agent_gateway_policy_version
+      }
+
+      env {
         name  = "GIN_MODE"
         value = "release"
       }
@@ -975,6 +989,10 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
     precondition {
       condition     = var.agent_gateway_image != ""
       error_message = "agent_gateway_image must be set when enable_agent_gateway is true."
+    }
+    precondition {
+      condition     = var.agent_gateway_policy_version != ""
+      error_message = "agent_gateway_policy_version must be set when enable_agent_gateway is true."
     }
     precondition {
       condition     = contains(var.secret_names, var.agent_gateway_secret_name)

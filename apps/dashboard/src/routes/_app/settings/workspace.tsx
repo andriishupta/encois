@@ -1,5 +1,5 @@
-import type { OrganizationOnboardingProjection } from "@encois/contracts";
-import { CoordinationMode, Permission } from "@encois/contracts";
+import type { OrganizationOnboardingProjection } from "@encois/contracts/browser";
+import { CoordinationMode, Permission } from "@encois/contracts/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { CircleAlert, Radio, SlidersHorizontal, Sparkles } from "lucide-react";

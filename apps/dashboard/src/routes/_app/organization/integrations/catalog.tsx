@@ -4,7 +4,7 @@ import {
   type IntegrationProjection,
   IntegrationType,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,

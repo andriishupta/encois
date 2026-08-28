@@ -1,4 +1,4 @@
-import { Permission } from "@encois/contracts";
+import { Permission } from "@encois/contracts/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

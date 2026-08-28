@@ -1,7 +1,7 @@
 import {
   type WorkflowExecutionProjection,
   WorkflowExecutionStatus,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {

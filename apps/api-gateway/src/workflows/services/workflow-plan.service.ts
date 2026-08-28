@@ -24,13 +24,15 @@ import type { AosPrincipal } from "../../middleware/aos.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
 import type { WorkflowClient } from "../temporal-client.js";
 import {
+  validateWorkflowChangePlan,
+  type WorkflowChangePlanInput,
+} from "./workflow.service.js";
+import {
   isWorkflowServiceError,
   localUserId,
   stableSerialize,
-  validateWorkflowChangePlan,
-  type WorkflowChangePlanInput,
   workflowServiceError,
-} from "./workflow.service.js";
+} from "./workflow-service-common.js";
 
 export type WorkflowPlanRecord = {
   planId: string;

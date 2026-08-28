@@ -40,21 +40,16 @@ type Bundle struct {
 const (
 	ModeGemini = "gemini"
 	ModeMock   = "mock"
-
-	DefaultModel = "gemini-3.7-flash"
 )
 
 func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
-	if mode == "" {
-		mode = ModeGemini
-	}
 	if mode != ModeGemini && mode != ModeMock {
 		return nil, fmt.Errorf("unsupported agent AI mode %q; use mock or gemini", cfg.Mode)
 	}
-	modelName := cfg.ModelName
-	if modelName == "" {
-		modelName = DefaultModel
+	modelName := strings.TrimSpace(cfg.ModelName)
+	if mode == ModeGemini && modelName == "" {
+		return nil, fmt.Errorf("Gemini model name is required")
 	}
 	thinkingLevel, err := parseThinkingLevel(cfg.ReasoningThinking)
 	if err != nil {
@@ -154,7 +149,7 @@ func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string,
 		return localmock.AgentStepJSON(definition)
 	}
 	if b == nil || b.AgentModel == nil {
-		return "", nil
+		return "", fmt.Errorf("agent model is not configured")
 	}
 	agentDefinition, err := llmagent.New(llmagent.Config{
 		Name:         "blueprint_agent_step",
@@ -195,7 +190,7 @@ func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (strin
 		return localmock.Summary(), nil
 	}
 	if b == nil || b.StandardRunner == nil {
-		return "", nil
+		return "", fmt.Errorf("standard agent runner is not configured")
 	}
 
 	content := genai.NewContentFromText(prompt, genai.RoleUser)
@@ -221,7 +216,7 @@ func (b *Bundle) CreateWorkflowPlan(ctx context.Context, sessionID, prompt strin
 		return localmock.WorkflowChangePlanJSON(prompt)
 	}
 	if b == nil || b.WorkflowCreatorRunner == nil {
-		return "", nil
+		return "", fmt.Errorf("workflow creator runner is not configured")
 	}
 
 	content := genai.NewContentFromText(prompt, genai.RoleUser)

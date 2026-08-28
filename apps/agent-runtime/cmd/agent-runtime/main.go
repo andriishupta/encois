@@ -88,7 +88,7 @@ func main() {
 	if cfg.AgentGatewayURL != "" {
 		agentGateway = gatewayclient.NewWithAudience(cfg.AgentGatewayURL, cfg.AgentGatewayToken, cfg.AgentGatewayAudience)
 	}
-	sourceActivities := workflows.NewSourceIngestionActivities(agentGateway, memoryStore, cfg.SourceMode)
+	sourceActivities := workflows.NewSourceIngestionActivities(agentGateway, memoryStore, workflows.SourceIngestionConfig{Mode: cfg.SourceMode})
 	w := worker.New(temporalClient, cfg.TaskQueue, worker.Options{
 		OnFatalError: func(err error) {
 			healthServer.Ready.Store(false)

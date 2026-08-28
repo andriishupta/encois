@@ -15,6 +15,7 @@
     "sourceId",
     "sourceRevisionId",
     "sourceKind",
+    "observedAt",
     "trigger",
     "readScope",
     "visibilityScope"
@@ -53,6 +54,7 @@
     "artifactRef": { "type": "string", "minLength": 1 },
     "sourceObjectId": { "type": "string", "minLength": 1 },
     "contentType": { "type": "string", "minLength": 1 },
+    "observedAt": { "type": "string", "format": "date-time" },
     "trigger": {
       "enum": ["bootstrap", "manual", "webhook", "schedule", "reconcile"]
     },

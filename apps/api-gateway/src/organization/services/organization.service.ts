@@ -57,6 +57,11 @@ import {
   or,
 } from "drizzle-orm";
 import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../../application-error.js";
+import {
   getGrantedPermissions,
   isOrganizationAdministratorRole,
 } from "../../auth/authorization.js";
@@ -143,9 +148,8 @@ export type CoordinatorOnboardingStatusUpdate = {
   lastError?: string;
 };
 
-export type OrganizationServiceError = Error & {
-  code: OrganizationServiceErrorCode;
-};
+export type OrganizationServiceError =
+  ApplicationError<OrganizationServiceErrorCode>;
 
 export type OrganizationOnboardingServiceOptions = {
   workflowClient: WorkflowClient;
@@ -158,17 +162,13 @@ function organizationError(
   code: OrganizationServiceErrorCode,
   message: string,
 ): OrganizationServiceError {
-  const error = new Error(message) as OrganizationServiceError;
-  error.code = code;
-  return error;
+  return applicationError(code, message);
 }
 
 export function isOrganizationServiceError(
   error: unknown,
 ): error is OrganizationServiceError {
-  return (
-    error instanceof Error && "code" in error && typeof error.code === "string"
-  );
+  return isApplicationError(error);
 }
 
 function requireUuid(value: string, field: string): void {

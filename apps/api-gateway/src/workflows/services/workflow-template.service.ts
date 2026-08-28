@@ -16,6 +16,11 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../../application-error.js";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import type { ListPage, ListQuery, ListSort } from "../list-query.js";
@@ -42,14 +47,13 @@ export type WorkflowTemplateProjection = {
   template: WorkflowTemplate;
 };
 
-export type WorkflowTemplateServiceError = Error & {
-  code: "PERSISTENCE_UNAVAILABLE";
-};
+export type WorkflowTemplateServiceError =
+  ApplicationError<"PERSISTENCE_UNAVAILABLE">;
 
 export function isWorkflowTemplateServiceError(
   error: unknown,
 ): error is WorkflowTemplateServiceError {
-  return error instanceof Error && error.message === "PERSISTENCE_UNAVAILABLE";
+  return isApplicationError(error) && error.code === "PERSISTENCE_UNAVAILABLE";
 }
 
 export function parseWorkflowTemplateQuery(input: WorkflowTemplateQuery): {
@@ -115,7 +119,11 @@ export async function listWorkflowTemplatesPageForPrincipal(
   principal: AosPrincipal,
   input: WorkflowTemplateQuery & Pick<ListQuery, "status" | "sort" | "offset">,
 ): Promise<ListPage<WorkflowTemplateProjection>> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database)
+    throw applicationError(
+      "PERSISTENCE_UNAVAILABLE",
+      "Workflow template persistence is unavailable.",
+    );
 
   const query = parseWorkflowTemplateQuery(input);
   const status =

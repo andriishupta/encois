@@ -1,4 +1,4 @@
-import { Permission, type PermissionKey } from "@encois/contracts";
+import { Permission, type PermissionKey } from "@encois/contracts/browser";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {

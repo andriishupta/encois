@@ -3,7 +3,7 @@ import {
   type KnowledgeSourceCreateRequest,
   KnowledgeSourceKind,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

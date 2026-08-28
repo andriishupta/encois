@@ -295,9 +295,6 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1(supports-color@8.1.1)
-      shadcn:
-        specifier: ^4.18.0
-        version: 4.18.0(supports-color@8.1.1)(typescript@5.9.3)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.6.0
@@ -320,6 +317,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.0.2
         version: 5.2.0(supports-color@8.1.1)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12))
+      shadcn:
+        specifier: ^4.18.0
+        version: 4.18.0(supports-color@8.1.1)(typescript@5.9.3)
       tailwindcss:
         specifier: ^4.1.12
         version: 4.3.3

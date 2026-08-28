@@ -35,9 +35,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown application error";
 }
 
-function isApiErrorLike(
-  error: unknown,
-): error is { name: "ApiError"; status: number } {
+function isApiErrorLike(error: unknown): error is {
+  name: "ApiError";
+  status: number;
+  requestId?: string;
+  traceId?: string;
+} {
   return (
     error instanceof Error &&
     error.name === "ApiError" &&
@@ -53,9 +56,11 @@ function diagnosticsFor(
   const location =
     typeof window === "undefined" ? "unknown" : window.location.href;
   const errorStack = error instanceof Error ? error.stack : undefined;
+  const apiError = isApiErrorLike(error) ? error : undefined;
 
   return [
-    `Trace ID: ${traceId}`,
+    `Trace ID: ${apiError?.traceId ?? traceId}`,
+    apiError?.requestId ? `Request ID: ${apiError.requestId}` : "",
     `Location: ${location}`,
     `Time: ${new Date().toISOString()}`,
     `Error: ${errorMessage(error)}`,
@@ -121,9 +126,11 @@ export function AppErrorPage({
   const [fallbackTraceId] = useState(createTraceId);
   const authenticated = Boolean(getAuthSession());
   const identity = getAuthIdentity();
-  const stableTraceId = traceId ?? fallbackTraceId;
-  const diagnostics = diagnosticsFor(error, stableTraceId, componentStack);
   const apiFailure = isApiErrorLike(error);
+  const stableTraceId = apiFailure
+    ? (error.traceId ?? traceId ?? fallbackTraceId)
+    : (traceId ?? fallbackTraceId);
+  const diagnostics = diagnosticsFor(error, stableTraceId, componentStack);
   const destination = authenticated ? "/" : "/login";
 
   async function copyDiagnostics() {

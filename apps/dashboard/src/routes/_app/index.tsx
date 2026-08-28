@@ -1,7 +1,7 @@
 import {
   Permission,
   type WorkflowRecentActivityProjection,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {

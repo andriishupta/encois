@@ -39,6 +39,7 @@ From this directory:
 
 ```bash
 AGENT_GATEWAY_DATA_MODE=mock \
+AGENT_GATEWAY_POLICY_VERSION=policy-read-only-fixture-v1 \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
 AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret \
 go run ./cmd/agent-gateway
@@ -53,8 +54,10 @@ Google ID token for the Gateway audience; the Encois service token remains a
 separate application-level check. Set the same high-entropy
 `AGENT_GATEWAY_CAPABILITY_SECRET` in the Gateway API and Agent Gateway; every
 internal execution request must carry a signed capability bound to its exact
-organization, workflow, actor, policy version, and scope. Missing service or
-capability configuration makes readiness fail closed.
+organization, workflow, actor, policy version, and scope. Missing service,
+capability, or policy-version configuration makes readiness fail closed. The
+fixture policy version is valid only in explicit local mock profiles; hosted
+profiles must name their deployed read-only policy version.
 
 Set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to
 an OTLP/HTTP collector when one is available. The service creates spans for

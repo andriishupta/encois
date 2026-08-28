@@ -12,26 +12,26 @@ import {
   withOrganizationContext,
 } from "@encois/persistence";
 import { and, desc, eq } from "drizzle-orm";
+import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../application-error.js";
 import { hasAnyPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 
-export type InvestigationServiceError = Error & { code: string };
+export type InvestigationServiceError = ApplicationError;
 
 function error(code: string, message: string): InvestigationServiceError {
-  const value = new Error(message) as InvestigationServiceError;
-  value.code = code;
-  return value;
+  return applicationError(code, message);
 }
 
 export function isInvestigationServiceError(
   value: unknown,
 ): value is InvestigationServiceError {
-  return (
-    value instanceof Error &&
-    typeof (value as Partial<InvestigationServiceError>).code === "string"
-  );
+  return isApplicationError(value);
 }
 
 type QueryDatabase = PersistenceDatabase | PersistenceTransaction;

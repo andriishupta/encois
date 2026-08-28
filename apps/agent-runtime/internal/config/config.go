@@ -43,22 +43,22 @@ func FromEnv() Config {
 		TemporalNamespace:            envOrDefault("TEMPORAL_NAMESPACE", "encois"),
 		TemporalAPIKey:               os.Getenv("TEMPORAL_API_KEY"),
 		TaskQueue:                    envOrDefault("TEMPORAL_TASK_QUEUE", "encois-agent-runtime"),
-		AgentAIMode:                  envOrDefault("AGENT_AI_MODE", "gemini"),
+		AgentAIMode:                  os.Getenv("AGENT_AI_MODE"),
 		GeminiAPIKey:                 geminiKey,
 		UseAgentPlatform:             envBool("GOOGLE_GENAI_USE_AGENT_PLATFORM"),
 		GoogleCloudProject:           os.Getenv("GOOGLE_CLOUD_PROJECT"),
-		GoogleCloudLocation:          envOrDefault("GOOGLE_CLOUD_LOCATION", "us-east1"),
-		GoogleCloudModelLocation:     envOrDefault("GOOGLE_CLOUD_MODEL_LOCATION", "us"),
+		GoogleCloudLocation:          os.Getenv("GOOGLE_CLOUD_LOCATION"),
+		GoogleCloudModelLocation:     os.Getenv("GOOGLE_CLOUD_MODEL_LOCATION"),
 		GeminiModel:                  os.Getenv("GEMINI_MODEL"),
 		ReasoningThink:               reasoningThinkingFromEnv(),
 		AgentGatewayURL:              envOrDefault("AGENT_GATEWAY_URL", "http://127.0.0.1:8080"),
 		AgentGatewayToken:            os.Getenv("AGENT_GATEWAY_SERVICE_TOKEN"),
 		AgentGatewayAudience:         os.Getenv("AGENT_GATEWAY_AUDIENCE"),
-		SourceMode:                   envOrDefault("AGENT_SOURCE_MODE", "gateway"),
+		SourceMode:                   os.Getenv("AGENT_SOURCE_MODE"),
 		ControlPlaneURL:              os.Getenv("CONTROL_PLANE_URL"),
 		ControlPlaneToken:            os.Getenv("CONTROL_PLANE_SERVICE_TOKEN"),
 		ControlPlaneAudience:         os.Getenv("CONTROL_PLANE_AUDIENCE"),
-		MemoryMode:                   envOrDefault("AGENT_MEMORY_MODE", "gcp"),
+		MemoryMode:                   os.Getenv("AGENT_MEMORY_MODE"),
 		AgentPlatformReasoningEngine: os.Getenv("AGENT_PLATFORM_MEMORY_REASONING_ENGINE"),
 	}
 }
@@ -76,8 +76,23 @@ func (c Config) Validate() error {
 	if c.SourceMode != "gateway" && c.SourceMode != "mock" {
 		return fmt.Errorf("unsupported AGENT_SOURCE_MODE %q; use gateway or explicit mock", c.SourceMode)
 	}
+	if c.AgentAIMode != "gemini" && c.AgentAIMode != "mock" {
+		return fmt.Errorf("unsupported AGENT_AI_MODE %q; use gemini or explicit mock", c.AgentAIMode)
+	}
+	if c.MemoryMode != "gcp" && c.MemoryMode != "mock" {
+		return fmt.Errorf("unsupported AGENT_MEMORY_MODE %q; use gcp or explicit mock", c.MemoryMode)
+	}
 	if c.AgentAIMode != "mock" && !c.UseAgentPlatform && c.GeminiAPIKey == "" {
 		return fmt.Errorf("Gemini credentials are required unless AGENT_AI_MODE=mock or GOOGLE_GENAI_USE_AGENT_PLATFORM=true")
+	}
+	if c.AgentAIMode == "gemini" && c.GeminiModel == "" {
+		return fmt.Errorf("GEMINI_MODEL is required for AGENT_AI_MODE=gemini")
+	}
+	if c.AgentAIMode == "gemini" && c.GoogleCloudModelLocation == "" {
+		return fmt.Errorf("GOOGLE_CLOUD_MODEL_LOCATION is required for AGENT_AI_MODE=gemini")
+	}
+	if c.AgentAIMode == "gemini" && c.UseAgentPlatform && c.GoogleCloudProject == "" {
+		return fmt.Errorf("GOOGLE_CLOUD_PROJECT is required when GOOGLE_GENAI_USE_AGENT_PLATFORM=true")
 	}
 	if c.MemoryMode != "mock" && c.AgentPlatformReasoningEngine == "" {
 		return fmt.Errorf("AGENT_PLATFORM_MEMORY_REASONING_ENGINE is required unless AGENT_MEMORY_MODE=mock")

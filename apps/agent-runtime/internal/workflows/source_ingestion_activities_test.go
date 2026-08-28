@@ -19,11 +19,23 @@ func (invalidMemoryResultStore) Execute(context.Context, memory.Request) (memory
 	return memory.Result{}, nil
 }
 
+type deferredMemoryStore struct{}
+
+func (deferredMemoryStore) Execute(_ context.Context, request memory.Request) (memory.Result, error) {
+	return memory.Result{
+		ContractVersion: string(contracts.ContractAgentMemoryResult),
+		RequestID:       request.RequestID,
+		Status:          string(contracts.MemoryStatusDeferred),
+		Memories:        []memory.Record{},
+	}, nil
+}
+
 func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-1",
 		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-1",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -34,6 +46,7 @@ func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 		SourceKind:       contracts.SourceKindUploadedDocument,
 		ArtifactRef:      "artifact://memory/source-1/revision-1",
 		ContentType:      "text/markdown",
+		ObservedAt:       "2026-08-27T10:00:00Z",
 		Trigger:          contracts.IngestionTriggerManual,
 		ReadScope:        map[string]any{"ids": []string{"project-1"}},
 		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
@@ -42,7 +55,8 @@ func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	if err := ValidateSourceIngestionContract(context.Background(), input); err != nil {
 		t.Fatalf("expected valid source ingestion contract: %v", err)
 	}
-	result, err := ProcessSourceRevision(context.Background(), input)
+	activity := NewSourceIngestionActivities(nil, memory.NewMockStore(), SourceIngestionConfig{Mode: "mock"})
+	result, err := activity.ProcessSourceRevision(context.Background(), input)
 	if err != nil {
 		t.Fatalf("process source revision: %v", err)
 	}
@@ -115,11 +129,12 @@ func TestGatewaySourceModeReadsArtifactAndProjectsGraphWithExplicitEmptyEdges(t 
 	}))
 	defer server.Close()
 
-	activity := NewSourceIngestionActivities(gatewayclient.New(server.URL, "token"), memory.NewMockStore(), "gateway")
+	activity := NewSourceIngestionActivities(gatewayclient.New(server.URL, "token"), memory.NewMockStore(), SourceIngestionConfig{Mode: "gateway"})
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-gateway-source",
 		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-gateway-source",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -131,6 +146,7 @@ func TestGatewaySourceModeReadsArtifactAndProjectsGraphWithExplicitEmptyEdges(t 
 		ArtifactRef:      "gs://bucket/source-1/revision-1.txt",
 		ContentType:      "text/plain",
 		Provider:         "jira",
+		ObservedAt:       "2026-08-27T10:00:00Z",
 		Trigger:          contracts.IngestionTriggerManual,
 		ReadScope:        map[string]any{"ids": []string{"project-1"}},
 		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
@@ -148,11 +164,12 @@ func TestGatewaySourceModeReadsArtifactAndProjectsGraphWithExplicitEmptyEdges(t 
 }
 
 func TestGatewaySourceModeFailsWithoutArtifactReference(t *testing.T) {
-	activity := NewSourceIngestionActivities(nil, memory.NewMockStore(), "gateway")
+	activity := NewSourceIngestionActivities(nil, memory.NewMockStore(), SourceIngestionConfig{Mode: "gateway"})
 	_, err := activity.ProcessSourceRevision(context.Background(), SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-gateway-source",
 		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-gateway-source",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -161,6 +178,7 @@ func TestGatewaySourceModeFailsWithoutArtifactReference(t *testing.T) {
 		SourceID:         "source-1",
 		SourceRevisionID: "revision-1",
 		SourceKind:       contracts.SourceKindUploadedDocument,
+		ObservedAt:       "2026-08-27T10:00:00Z",
 		Trigger:          contracts.IngestionTriggerManual,
 		ReadScope:        map[string]any{"ids": []string{"project-1"}},
 		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
@@ -171,11 +189,12 @@ func TestGatewaySourceModeFailsWithoutArtifactReference(t *testing.T) {
 }
 
 func TestSourceIngestionRejectsInvalidMemoryResult(t *testing.T) {
-	activity := NewSourceIngestionActivities(nil, invalidMemoryResultStore{}, "mock")
+	activity := NewSourceIngestionActivities(nil, invalidMemoryResultStore{}, SourceIngestionConfig{Mode: "mock"})
 	_, err := activity.ProcessSourceRevision(context.Background(), SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),
 		RequestID:        "request-invalid-memory-result",
 		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-invalid-memory-result",
 		OrganizationID:   "org-1",
 		ActorID:          "actor-1",
 		PolicyVersion:    "policy-1",
@@ -184,11 +203,43 @@ func TestSourceIngestionRejectsInvalidMemoryResult(t *testing.T) {
 		SourceID:         "source-1",
 		SourceRevisionID: "revision-1",
 		SourceKind:       contracts.SourceKindManual,
+		ObservedAt:       "2026-08-27T10:00:00Z",
 		Trigger:          contracts.IngestionTriggerManual,
 		ReadScope:        map[string]any{"ids": []string{"project-1"}},
 		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "validate source memory result") {
 		t.Fatalf("expected invalid memory result to fail closed, got %v", err)
+	}
+}
+
+func TestSourceIngestionReturnsDeferredWhileMemoryGenerationIsPending(t *testing.T) {
+	activity := NewSourceIngestionActivities(nil, deferredMemoryStore{}, SourceIngestionConfig{Mode: "mock"})
+	result, err := activity.ProcessSourceRevision(context.Background(), SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-deferred-memory",
+		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-deferred-memory",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		Scope:            map[string]any{"ids": []string{"project-1"}},
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindManual,
+		ObservedAt:       "2026-08-27T10:00:00Z",
+		Trigger:          contracts.IngestionTriggerManual,
+		ReadScope:        map[string]any{"ids": []string{"project-1"}},
+		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != contracts.IngestionStatusDeferred || result.Stage != "graph_projected" {
+		t.Fatalf("expected deferred ingestion after graph projection, got %+v", result)
+	}
+	if err := ValidateSourceIngestionResult(context.Background(), result); err != nil {
+		t.Fatalf("expected valid deferred ingestion result: %v", err)
 	}
 }

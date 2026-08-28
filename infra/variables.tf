@@ -240,6 +240,12 @@ variable "agent_gateway_secret_name" {
   default     = "agent-gateway-service-token"
 }
 
+variable "agent_gateway_policy_version" {
+  description = "Deployed read-only policy version shared by the API and Agent Gateway. Fixture policy versions are for explicit local mock profiles only."
+  type        = string
+  default     = ""
+}
+
 variable "agent_runtime_secret_name" {
   description = "Secret containing the private Agent Runtime service token used by the API memory-inspection boundary."
   type        = string

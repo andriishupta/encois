@@ -2,7 +2,7 @@ import {
   type AgentMemoryRecord,
   type MemoryChangeRecord,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

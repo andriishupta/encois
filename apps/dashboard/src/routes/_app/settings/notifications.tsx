@@ -1,4 +1,4 @@
-import { Permission } from "@encois/contracts";
+import { Permission } from "@encois/contracts/browser";
 import {
   useInfiniteQuery,
   useMutation,

@@ -1,4 +1,4 @@
-import { validateWaitlistRequest } from "@encois/contracts";
+import { validateWaitlistRequest } from "@encois/contracts/browser";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Activity, ArrowLeft, Check } from "lucide-react";
 import { type FormEvent, useState } from "react";

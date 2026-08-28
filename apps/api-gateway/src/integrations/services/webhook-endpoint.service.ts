@@ -13,6 +13,11 @@ import {
 } from "@encois/persistence";
 import { and, eq } from "drizzle-orm";
 import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../../application-error.js";
+import {
   hasPermission,
   isOrganizationAdministrator,
 } from "../../auth/authorization.js";
@@ -33,10 +38,8 @@ function localUserId(principal: AosPrincipal): string | null {
   return /^[0-9a-f-]{36}$/iu.test(candidate) ? candidate : null;
 }
 
-function serviceError(code: string): Error & { code: string } {
-  const error = new Error(code) as Error & { code: string };
-  error.code = code;
-  return error;
+function serviceError(code: string): ApplicationError {
+  return applicationError(code, code);
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -444,9 +447,6 @@ export async function setWebhookEndpointStatus(
 
 export function isWebhookEndpointServiceError(
   error: unknown,
-): error is Error & { code: string } {
-  return (
-    error instanceof Error &&
-    typeof (error as Partial<{ code: string }>).code === "string"
-  );
+): error is ApplicationError {
+  return isApplicationError(error);
 }

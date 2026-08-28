@@ -1,7 +1,7 @@
 import type {
   WorkflowEventProjection,
   WorkflowExecutionStatus,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 
 export type WorkflowNodeStatus =
   | "completed"

@@ -3,8 +3,8 @@ import type {
   WorkflowCreationIntent,
   WorkflowPlanRecord,
   WorkflowTemplateProjection,
-} from "@encois/contracts";
-import { Permission, WorkflowStepKind } from "@encois/contracts";
+} from "@encois/contracts/browser";
+import { Permission, WorkflowStepKind } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

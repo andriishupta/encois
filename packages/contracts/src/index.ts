@@ -141,7 +141,7 @@ export type DataProvenance = {
 
 export type KnowledgeSourceScope = ExecutionScope;
 
-/** Wire-compatible Source representation. The public product term is Source. */
+/** Canonical wire representation for a product Source. */
 export type KnowledgeSource = {
   contractVersion: typeof ContractVersion.KnowledgeSource;
   id: string;
@@ -159,12 +159,6 @@ export type KnowledgeSource = {
   createdAt: string;
   updatedAt: string;
 };
-
-/**
- * User-facing terminology is Source. Keep the wire-compatible KnowledgeSource
- * alias while older runtime and generated contracts are migrated independently.
- */
-export type Source = KnowledgeSource;
 
 export type SourceRevision = {
   contractVersion: typeof ContractVersion.SourceRevision;
@@ -209,6 +203,7 @@ export type SourceIngestionRequest = ExecutionEnvelope & {
   artifactRef?: string;
   sourceObjectId?: string;
   contentType?: string;
+  observedAt: string;
   trigger: SourceIngestionTrigger;
   readScope: KnowledgeSourceScope;
   visibilityScope: KnowledgeSourceScope;
@@ -651,8 +646,6 @@ export type IntegrationCreateRequest = {
   displayName: string;
   provider: string;
   type?: IntegrationType;
-  /** Deprecated compatibility field. Integrations are always organization-scoped. */
-  organizationUnitId?: string;
   grantedScopes?: readonly string[];
 };
 

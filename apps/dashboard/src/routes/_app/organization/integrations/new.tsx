@@ -2,7 +2,7 @@ import {
   type IntegrationCreateRequest,
   IntegrationType,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,

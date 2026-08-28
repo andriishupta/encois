@@ -12,7 +12,7 @@ import {
   type WorkflowPlannerVersionProjection,
   type WorkflowPlanRecord,
   type WorkflowStep,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {

@@ -214,7 +214,7 @@ func NewStore(ctx context.Context, mode, agentPlatformReasoningEngine, googleClo
 			return newFixtureMockStore(), func() error { return nil }, nil
 		}
 		return NewMockStore(), func() error { return nil }, nil
-	case "gcp", "memory-bank":
+	case "gcp":
 		store, err := NewGCPStore(ctx, agentPlatformReasoningEngine, googleCloudLocation)
 		return store, func() error { return nil }, err
 	default:

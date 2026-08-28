@@ -1,4 +1,7 @@
-import { type PermissionKey, permissionIncludes } from "@encois/contracts";
+import {
+  type PermissionKey,
+  permissionIncludes,
+} from "@encois/contracts/browser";
 import {
   createContext,
   type ReactNode,

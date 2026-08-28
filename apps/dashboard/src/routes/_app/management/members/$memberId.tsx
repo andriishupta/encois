@@ -1,4 +1,4 @@
-import { Permission } from "@encois/contracts";
+import { Permission } from "@encois/contracts/browser";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { OrganizationPermissionsPage } from "../permissions";

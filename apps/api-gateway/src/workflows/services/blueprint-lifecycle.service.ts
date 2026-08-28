@@ -14,11 +14,14 @@ import {
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
-import { stableSerialize, workflowServiceError } from "./workflow.service.js";
 import {
   submitWorkflowPlan,
   type WorkflowPlanRecord,
 } from "./workflow-plan.service.js";
+import {
+  stableSerialize,
+  workflowServiceError,
+} from "./workflow-service-common.js";
 
 function slug(value: string, fallback: string): string {
   const normalized = value

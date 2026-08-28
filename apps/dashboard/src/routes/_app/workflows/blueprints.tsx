@@ -1,8 +1,8 @@
 import type {
   WorkflowBlueprintProjection,
   WorkflowBlueprintStatus,
-} from "@encois/contracts";
-import { Permission } from "@encois/contracts";
+} from "@encois/contracts/browser";
+import { Permission } from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   createFileRoute,

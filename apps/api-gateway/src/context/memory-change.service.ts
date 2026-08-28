@@ -18,7 +18,7 @@ import { hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 import { createExecutionCapability } from "../security/execution-capability.js";
-import { localUserId } from "../workflows/services/workflow.service.js";
+import { localUserId } from "../workflows/services/workflow-service-common.js";
 import { GraphServiceError } from "./graph.service.js";
 import {
   type MemoryRuntimeClient,

@@ -14,11 +14,11 @@ const (
 	ArtifactWriteContractVersion       = string(contracts.ContractArtifactWrite)
 	ArtifactReadContractVersion        = string(contracts.ContractArtifactRead)
 	ArtifactWriteResultContractVersion = string(contracts.ContractArtifactWriteResult)
-	AuthorizationContractVersion       = string(contracts.ContractAuthorizationCheck)
+	AuthorizationContractVersion       = "authorization-check.v1"
 	ToolResultContractVersion          = string(contracts.ContractToolResult)
 	ToolManifestContractVersion        = string(contracts.ContractToolManifest)
 	WorkflowBlueprintContractVersion   = string(contracts.ContractWorkflowBlueprint)
-	WorkflowDefinitionContractVersion  = string(contracts.ContractWorkflowDefinition)
+	WorkflowDefinitionContractVersion  = "workflow-definition.v1"
 )
 
 type Scope struct {

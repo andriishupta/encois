@@ -18,6 +18,7 @@ type SourceIngestionWorkflowInput struct {
 	RequestID        string                           `json:"requestId"`
 	TraceID          string                           `json:"traceId,omitempty"`
 	WorkflowID       string                           `json:"workflowId"`
+	RunID            string                           `json:"runId,omitempty"`
 	OrganizationID   string                           `json:"organizationId"`
 	ActorID          string                           `json:"actorId"`
 	PolicyVersion    string                           `json:"policyVersion"`
@@ -30,6 +31,7 @@ type SourceIngestionWorkflowInput struct {
 	ArtifactRef      string                           `json:"artifactRef,omitempty"`
 	SourceObjectID   string                           `json:"sourceObjectId,omitempty"`
 	ContentType      string                           `json:"contentType,omitempty"`
+	ObservedAt       string                           `json:"observedAt"`
 	Trigger          contracts.SourceIngestionTrigger `json:"trigger"`
 	ReadScope        map[string]any                   `json:"readScope"`
 	VisibilityScope  map[string]any                   `json:"visibilityScope"`
@@ -55,6 +57,7 @@ func SourceIngestionWorkflow(ctx workflow.Context, input SourceIngestionWorkflow
 	if err := validateSourceIngestionWorkflowInput(input); err != nil {
 		return SourceIngestionWorkflowResult{}, err
 	}
+	input.RunID = workflow.GetInfo(ctx).WorkflowExecution.RunID
 
 	validationActivityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute,
@@ -92,7 +95,7 @@ func validateSourceIngestionWorkflowInput(input SourceIngestionWorkflowInput) er
 	if !workflowIDBelongsToOrganization(input.WorkflowID, input.OrganizationID) {
 		return fmt.Errorf("workflow id is outside the organization scope")
 	}
-	if input.SourceID == "" || input.SourceRevisionID == "" || input.Trigger == "" || input.SourceKind == "" {
+	if input.SourceID == "" || input.SourceRevisionID == "" || input.ObservedAt == "" || input.Trigger == "" || input.SourceKind == "" {
 		return fmt.Errorf("source ingestion source identity is incomplete")
 	}
 	return nil

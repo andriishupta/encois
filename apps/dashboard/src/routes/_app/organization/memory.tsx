@@ -2,7 +2,7 @@ import {
   type GraphInspectionParams,
   type GraphInspectorQueryName,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { CircleAlert, Network, ShieldCheck } from "lucide-react";

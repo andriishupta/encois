@@ -1,4 +1,7 @@
-import { OrganizationOnboardingStatus, Permission } from "@encois/contracts";
+import {
+  OrganizationOnboardingStatus,
+  Permission,
+} from "@encois/contracts/browser";
 import {
   useIsFetching,
   useMutation,

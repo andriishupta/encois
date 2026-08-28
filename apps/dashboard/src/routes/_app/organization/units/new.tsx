@@ -1,4 +1,7 @@
-import { type OrganizationUnitType, Permission } from "@encois/contracts";
+import {
+  type OrganizationUnitType,
+  Permission,
+} from "@encois/contracts/browser";
 import {
   createFileRoute,
   Link,

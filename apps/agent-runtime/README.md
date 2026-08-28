@@ -22,10 +22,10 @@ Configuration is environment-based:
 - `TEMPORAL_NAMESPACE` — defaults to `encois`;
 - `TEMPORAL_TASK_QUEUE` — defaults to `encois-agent-runtime`;
 - `TEMPORAL_API_KEY` — optional Temporal Cloud API key;
-- `AGENT_AI_MODE` — `gemini` (default) uses the configured Gemini/Agent Platform
+- `AGENT_AI_MODE` — `gemini` uses the configured Gemini/Agent Platform
   backend; `mock` enables the deterministic local fixture in
   `internal/mock` and requires no model credentials;
-- `AGENT_SOURCE_MODE` — `gateway` (default) requires an artifact reference and
+- `AGENT_SOURCE_MODE` — `gateway` requires an artifact reference and
   reads it through Agent Gateway; `mock` is an explicit deterministic source
   fixture mode. Gateway mode never falls back to fabricated source content;
 - `AGENT_GATEWAY_URL` — defaults to `http://127.0.0.1:8080`;
@@ -51,7 +51,7 @@ Configuration is environment-based:
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — required for `AGENT_AI_MODE=gemini`
   unless Agent Platform mode is enabled. Use `AGENT_AI_MODE=mock` explicitly when
   the local workflow should produce a deterministic AI result;
-- `AGENT_MEMORY_MODE` — `gcp` (default) calls Agent Platform Memory Bank through the
+- `AGENT_MEMORY_MODE` — `gcp` calls Agent Platform Memory Bank through the
   configured Reasoning Engine; use the explicit `mock` value for local/test
   runs;
 - `AGENT_MEMORY_FIXTURE` — set to `local` with mock memory to enable the

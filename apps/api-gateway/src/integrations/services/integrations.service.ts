@@ -1161,11 +1161,6 @@ export async function createIntegrationForPrincipal(
         (unit) => unit.type === "organization" && unit.parentId === null,
       );
       if (!rootUnit) throw new Error("ORGANIZATION_ROOT_NOT_FOUND");
-      if (
-        request.organizationUnitId &&
-        request.organizationUnitId !== rootUnit.id
-      )
-        throw new Error("INTEGRATION_ORGANIZATION_SCOPED");
       const [integration] = await db
         .insert(integrations)
         .values({

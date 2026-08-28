@@ -11,7 +11,7 @@ variable "state_bucket_name" {
 variable "state_bucket_location" {
   description = "Location for the Terraform state bucket."
   type        = string
-  default     = "EU"
+  default     = "US-EAST1"
 }
 
 variable "deployer_account_id" {

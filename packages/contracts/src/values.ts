@@ -27,8 +27,6 @@ export const ContractVersion = {
   SourceIngestionResult: "source-ingestion-result.v1",
   Coordinator: "coordinator.v1",
   BootstrapProject: "bootstrap-project.v1",
-  AuthorizationCheck: "authorization-check.v1",
-  WorkflowDefinition: "workflow-definition.v1",
 } as const;
 export type ContractVersion =
   (typeof ContractVersion)[keyof typeof ContractVersion];

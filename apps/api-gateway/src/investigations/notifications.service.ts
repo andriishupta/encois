@@ -30,26 +30,26 @@ import {
   isNull,
   or,
 } from "drizzle-orm";
+import {
+  type ApplicationError,
+  applicationError,
+  isApplicationError,
+} from "../application-error.js";
 import { hasAnyPermission, hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
 import type { ListPage, ListQuery } from "../list-query.js";
 import type { AosPrincipal } from "../middleware/aos.js";
 
-export type NotificationServiceError = Error & { code: string };
+export type NotificationServiceError = ApplicationError;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function error(code: string, message: string): NotificationServiceError {
-  const value = new Error(message) as NotificationServiceError;
-  value.code = code;
-  return value;
+  return applicationError(code, message);
 }
 export function isNotificationServiceError(
   value: unknown,
 ): value is NotificationServiceError {
-  return (
-    value instanceof Error &&
-    typeof (value as Partial<NotificationServiceError>).code === "string"
-  );
+  return isApplicationError(value);
 }
 function userId(principal: AosPrincipal): string {
   const value = principal.userId ?? principal.actorId;

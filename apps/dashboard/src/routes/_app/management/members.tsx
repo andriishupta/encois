@@ -1,7 +1,7 @@
 import {
   type OrganizationMembershipStatus,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import {
   createFileRoute,
   Link,

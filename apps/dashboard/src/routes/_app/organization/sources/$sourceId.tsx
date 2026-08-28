@@ -3,7 +3,7 @@ import {
   Permission,
   type SourceRevision,
   SourceRevisionStatus,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
@@ -38,6 +38,7 @@ import {
 } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { formatDate, humanizeKey } from "@/lib/formatters";
+import { invalidateSourceQueries } from "@/lib/query-invalidation";
 import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/_app/organization/sources/$sourceId")({
@@ -68,12 +69,7 @@ function SourceDetailPage() {
     mutationFn: (revisionId: string) =>
       startSourceIngestion(sourceId, revisionId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.source(sourceId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.sourcesRoot(),
-      });
+      await invalidateSourceQueries(queryClient, sourceId);
       setError(null);
     },
     onError: (cause) =>
@@ -115,12 +111,7 @@ function SourceDetailPage() {
           : {}),
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.source(sourceId),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.sourcesRoot(),
-      });
+      await invalidateSourceQueries(queryClient, sourceId);
       setRevision("");
       setArtifactRef("");
       setSourceObjectId("");

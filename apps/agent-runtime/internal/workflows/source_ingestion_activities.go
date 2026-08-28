@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/gatewayclient"
 	"github.com/andriishupta/encois/apps/agent-runtime/internal/memory"
@@ -43,7 +42,7 @@ func (mockSourceReader) Read(_ context.Context, input SourceIngestionWorkflowInp
 	} else {
 		text += "mock Source content\n"
 	}
-	return RawSource{Bytes: []byte(text), ContentType: contentType, ArtifactRef: input.ArtifactRef, SourceID: input.SourceID, ObservedAt: time.Now().UTC().Format(time.RFC3339)}, nil
+	return RawSource{Bytes: []byte(text), ContentType: contentType, ArtifactRef: input.ArtifactRef, SourceID: input.SourceID, ObservedAt: input.ObservedAt}, nil
 }
 
 type gatewaySourceReader struct {
@@ -76,26 +75,28 @@ func (r gatewaySourceReader) Read(ctx context.Context, input SourceIngestionWork
 	if contentType == "" {
 		contentType = input.ContentType
 	}
-	return RawSource{Bytes: result.Bytes, ContentType: contentType, ArtifactRef: input.ArtifactRef, SourceID: input.SourceID, ObservedAt: time.Now().UTC().Format(time.RFC3339)}, nil
+	return RawSource{Bytes: result.Bytes, ContentType: contentType, ArtifactRef: input.ArtifactRef, SourceID: input.SourceID, ObservedAt: input.ObservedAt}, nil
+}
+
+type SourceIngestionConfig struct {
+	Mode string
 }
 
 type SourceIngestionActivities struct {
-	reader  SourceReader
-	gateway *gatewayclient.Client
-	memory  memory.Store
-	mode    string
+	reader    SourceReader
+	gateway   *gatewayclient.Client
+	memory    memory.Store
+	mode      string
+	extractor SourceTextExtractor
 }
 
-func NewSourceIngestionActivities(gateway *gatewayclient.Client, store memory.Store, sourceModes ...string) *SourceIngestionActivities {
-	mode := "gateway"
-	if len(sourceModes) > 0 && sourceModes[0] != "" {
-		mode = sourceModes[0]
-	}
+func NewSourceIngestionActivities(gateway *gatewayclient.Client, store memory.Store, config SourceIngestionConfig) *SourceIngestionActivities {
+	mode := config.Mode
 	var reader SourceReader = gatewaySourceReader{client: gateway}
 	if mode == "mock" {
 		reader = mockSourceReader{}
 	}
-	return &SourceIngestionActivities{reader: reader, gateway: gateway, memory: store, mode: mode}
+	return &SourceIngestionActivities{reader: reader, gateway: gateway, memory: store, mode: mode, extractor: NewSourceTextExtractor()}
 }
 
 func ValidateSourceIngestionContract(_ context.Context, input SourceIngestionWorkflowInput) error {
@@ -109,7 +110,7 @@ func ValidateSourceIngestionContract(_ context.Context, input SourceIngestionWor
 		"scope":      input.Scope, "sourceId": input.SourceID, "sourceRevisionId": input.SourceRevisionID,
 		"sourceKind": input.SourceKind, "trigger": input.Trigger, "readScope": input.ReadScope, "visibilityScope": input.VisibilityScope,
 	}
-	for key, value := range map[string]any{"traceId": input.TraceID, "provider": input.Provider, "artifactRef": input.ArtifactRef, "sourceObjectId": input.SourceObjectID, "contentType": input.ContentType} {
+	for key, value := range map[string]any{"traceId": input.TraceID, "runId": input.RunID, "provider": input.Provider, "artifactRef": input.ArtifactRef, "sourceObjectId": input.SourceObjectID, "contentType": input.ContentType, "observedAt": input.ObservedAt} {
 		if stringValue, ok := value.(string); ok && stringValue != "" {
 			payload[key] = stringValue
 		}
@@ -135,16 +136,10 @@ func ValidateSourceIngestionResult(_ context.Context, result SourceIngestionWork
 	return nil
 }
 
-// ProcessSourceRevision is kept as a local fixture entry point for unit tests;
-// production workers register the injected method below.
-func ProcessSourceRevision(ctx context.Context, input SourceIngestionWorkflowInput) (SourceIngestionWorkflowResult, error) {
-	return NewSourceIngestionActivities(nil, memory.NewMockStore(), "mock").ProcessSourceRevision(ctx, input)
-}
-
 func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, input SourceIngestionWorkflowInput) (SourceIngestionWorkflowResult, error) {
 	ctx, span := observability.StartSpan(ctx, "agent-runtime.source-ingestion", attribute.String("encois.source_id", input.SourceID), attribute.String("encois.source_revision_id", input.SourceRevisionID))
 	defer span.End()
-	if a == nil || a.reader == nil {
+	if a == nil || a.reader == nil || a.extractor == nil {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("source reader is not configured")
 	}
 	if a.memory == nil {
@@ -157,7 +152,10 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 	if err != nil {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("acquire source revision: %w", err)
 	}
-	text := normalizeSourceText(raw.Bytes, raw.ContentType, input.ArtifactRef)
+	text, err := a.extractor.Extract(raw.Bytes, raw.ContentType)
+	if err != nil {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("parse source revision: %w", err)
+	}
 	facts := extractFacts(text)
 	if len(facts) == 0 {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("source revision contained no extractable text")
@@ -197,7 +195,7 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 	summary := strings.Join(facts, " ")
 	memoryRequest := memory.Request{
 		ContractVersion: string(contractschemas.ContractAgentMemory), RequestID: input.RequestID + ":memory", WorkflowID: input.WorkflowID,
-		TraceID: input.TraceID, RunID: "", OrganizationID: input.OrganizationID, ActorID: input.ActorID, Scope: memory.Scope{IDs: scopeIDs(input.VisibilityScope)}, Capability: input.Capability,
+		TraceID: input.TraceID, RunID: input.RunID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, Scope: memory.Scope{IDs: scopeIDs(input.VisibilityScope)}, Capability: input.Capability,
 		PolicyVersion: input.PolicyVersion, AgentDefinition: "source-ingestion", Operation: "distill", MemoryScope: memory.MemoryScope{AgentDefinition: "source-ingestion"},
 		Distillation: &memory.Distillation{Summary: summary, EvidenceRefs: evidenceRefs, ObservedAt: raw.ObservedAt, RedactionStatus: contractschemas.RedactionApplied, RedactionVersion: "source-redaction-1"},
 	}
@@ -213,20 +211,13 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 	if err := memory.ValidateResult(memoryResult); err != nil {
 		return SourceIngestionWorkflowResult{}, fmt.Errorf("validate source memory result: %w", err)
 	}
+	if memoryResult.Status == string(contractschemas.MemoryStatusDeferred) {
+		return SourceIngestionWorkflowResult{ContractVersion: string(contractschemas.ContractSourceIngestionResult), RequestID: input.RequestID, SourceID: input.SourceID, SourceRevisionID: input.SourceRevisionID, Status: contractschemas.IngestionStatusDeferred, Stage: "graph_projected", FactsCount: len(facts), EvidenceRefs: evidenceRefs, Freshness: []contractschemas.SourceFreshness{{Source: provenance["source"].(string), ObservedAt: raw.ObservedAt, IngestedAt: ingestedAt, Status: contractschemas.FreshnessFresh}}, Message: "Agent Platform accepted the memory generation request, but the generated memory is not visible yet."}, nil
+	}
+	if memoryResult.Status != string(contractschemas.MemoryStatusCompleted) {
+		return SourceIngestionWorkflowResult{}, fmt.Errorf("unexpected source memory status %q", memoryResult.Status)
+	}
 	return SourceIngestionWorkflowResult{ContractVersion: string(contractschemas.ContractSourceIngestionResult), RequestID: input.RequestID, SourceID: input.SourceID, SourceRevisionID: input.SourceRevisionID, Status: contractschemas.IngestionStatusCompleted, Stage: "memory_distilled", FactsCount: len(facts), EvidenceRefs: evidenceRefs, Freshness: []contractschemas.SourceFreshness{{Source: provenance["source"].(string), ObservedAt: raw.ObservedAt, IngestedAt: ingestedAt, Status: contractschemas.FreshnessFresh}}}, nil
-}
-
-func normalizeSourceText(bytes []byte, contentType, artifactRef string) string {
-	if strings.HasPrefix(contentType, "text/") || contentType == "application/json" || contentType == "" {
-		return string(bytes)
-	}
-	var builder strings.Builder
-	for _, value := range string(bytes) {
-		if unicode.IsLetter(value) || unicode.IsDigit(value) || unicode.IsSpace(value) || strings.ContainsRune(".,:;!?-_()/", value) {
-			builder.WriteRune(value)
-		}
-	}
-	return strings.TrimSpace(builder.String())
 }
 
 func extractFacts(text string) []string {

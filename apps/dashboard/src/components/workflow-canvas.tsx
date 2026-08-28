@@ -15,7 +15,7 @@ import "@xyflow/react/dist/style.css";
 import type {
   WorkflowEventProjection,
   WorkflowExecutionStatus,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { CircleDashed, GitBranch, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {

@@ -2,7 +2,7 @@ import {
   type KnowledgeSource,
   KnowledgeSourceStatus,
   Permission,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { FileText, Plus, Search, Waypoints } from "lucide-react";

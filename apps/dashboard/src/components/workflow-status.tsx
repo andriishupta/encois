@@ -1,7 +1,7 @@
 import type {
   WorkflowExecutionStatus,
   WorkflowStatusReason,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import {
   AlertTriangle,
   CheckCircle2,

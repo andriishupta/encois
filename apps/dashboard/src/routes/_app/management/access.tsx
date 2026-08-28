@@ -1,5 +1,5 @@
-import type { OrganizationAccessRequestRecord } from "@encois/contracts";
-import { Permission } from "@encois/contracts";
+import type { OrganizationAccessRequestRecord } from "@encois/contracts/browser";
+import { Permission } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Check, CircleAlert, Clock3, Send, ShieldCheck, X } from "lucide-react";

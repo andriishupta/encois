@@ -4,7 +4,7 @@ import {
   type IntegrationUpdateRequest,
   Permission,
   type WebhookEndpointProjection,
-} from "@encois/contracts";
+} from "@encois/contracts/browser";
 import {
   useMutation,
   useQueries,

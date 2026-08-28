@@ -14,11 +14,6 @@ function parseCreate(value: unknown): IntegrationCreate | null {
   )
     return null;
   if (
-    value.organizationUnitId !== undefined &&
-    typeof value.organizationUnitId !== "string"
-  )
-    return null;
-  if (
     value.grantedScopes !== undefined &&
     (!Array.isArray(value.grantedScopes) ||
       value.grantedScopes.some((scope) => typeof scope !== "string"))
@@ -33,9 +28,6 @@ function parseCreate(value: unknown): IntegrationCreate | null {
   return {
     displayName: value.displayName,
     provider: value.provider,
-    ...(typeof value.organizationUnitId === "string"
-      ? { organizationUnitId: value.organizationUnitId }
-      : {}),
     ...(Array.isArray(value.grantedScopes)
       ? { grantedScopes: value.grantedScopes as string[] }
       : {}),
@@ -73,7 +65,6 @@ export const createIntegrationRoute: Handler<GatewayEnv> = async (context) => {
     const status = [
       "FORBIDDEN",
       "SCOPE_DENIED",
-      "INTEGRATION_ORGANIZATION_SCOPED",
       "IDENTITY_NOT_RESOLVED",
     ].includes(code)
       ? 403
@@ -83,9 +74,7 @@ export const createIntegrationRoute: Handler<GatewayEnv> = async (context) => {
     const message =
       code === "PERSISTENCE_UNAVAILABLE"
         ? "Database access is not configured."
-        : code === "INTEGRATION_ORGANIZATION_SCOPED"
-          ? "Integrations are organization-scoped. Create a Source for an organization unit."
-          : "The integration could not be registered.";
+        : "The integration could not be registered.";
     return context.json({ error: { code, message } }, status);
   }
 };

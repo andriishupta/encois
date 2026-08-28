@@ -1,4 +1,4 @@
-import { Permission } from "@encois/contracts";
+import { Permission } from "@encois/contracts/browser";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Building2, Plus } from "lucide-react";
 import { OrganizationCanvas } from "@/components/organization-canvas";

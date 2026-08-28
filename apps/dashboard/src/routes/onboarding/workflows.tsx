@@ -1,4 +1,4 @@
-import { CoordinationMode } from "@encois/contracts";
+import { CoordinationMode } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {

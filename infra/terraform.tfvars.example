@@ -1,15 +1,15 @@
-project_id   = "replace-with-gcp-project-id"
-region       = "us-east1"
-google_cloud_location = "us-east1"
+project_id                  = "replace-with-gcp-project-id"
+region                      = "us-east1"
+google_cloud_location       = "us-east1"
 google_cloud_model_location = "us"
-environment  = "demo"
-domain_name  = "encois.com"
+environment                 = "demo"
+domain_name                 = "encois.com"
 
 # Hosted Identity Platform uses Google-only sign-in. Supply the OAuth client
 # secret through TF_VAR_google_oauth_client_secret or a protected CI secret.
-identity_include_localhost  = false
-google_oauth_client_id      = ""
-google_oauth_client_secret  = ""
+identity_include_localhost = false
+google_oauth_client_id     = ""
+google_oauth_client_secret = ""
 
 # Keep these false until container images and the GCP project are ready.
 enable_identity_platform = false
@@ -27,10 +27,11 @@ spanner_instance_id      = ""
 # spanner_instance_id  = "encois-graph-memory"
 
 # Required when the API or worker is enabled.
-temporal_address               = ""
-temporal_namespace             = "encois"
+temporal_address                       = ""
+temporal_namespace                     = "encois"
 agent_platform_memory_reasoning_engine = ""
-control_plane_service_user_id  = ""
+control_plane_service_user_id          = ""
+agent_gateway_policy_version           = "replace-with-deployed-read-policy-version"
 
 secret_names = [
   "cloud-sql-runtime-url",
@@ -49,13 +50,13 @@ secret_names = [
 artifact_bucket_name = ""
 
 # Set these only when the corresponding service is enabled.
-dashboard_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"
-api_image           = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
-agent_runtime_image = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
-agent_gateway_image = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"
-migration_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/migrations:replace-with-immutable-tag"
-retention_image     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/retention:replace-with-immutable-tag"
-retention_organization_ids = []
+dashboard_image                     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/dashboard:replace-with-immutable-tag"
+api_image                           = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/api:replace-with-immutable-tag"
+agent_runtime_image                 = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-runtime:replace-with-immutable-tag"
+agent_gateway_image                 = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/agent-gateway:replace-with-immutable-tag"
+migration_image                     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/migrations:replace-with-immutable-tag"
+retention_image                     = "us-east1-docker.pkg.dev/replace-with-gcp-project-id/containers/retention:replace-with-immutable-tag"
+retention_organization_ids          = []
 integration_health_organization_ids = []
 
 # These stable URLs are intentionally explicit to avoid a Terraform dependency

@@ -1,4 +1,4 @@
-import { Permission } from "@encois/contracts";
+import { Permission } from "@encois/contracts/browser";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { WorkflowRunList } from "@/components/workflow-run-list";
 import { getAuthSession, hasPermission } from "@/lib/auth";
