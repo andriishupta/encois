@@ -7,7 +7,6 @@
     "build": "pnpm run typecheck",
     "biome:check": "biome check cypress cypress.config.ts",
     "biome:format": "biome format --write cypress cypress.config.ts",
-    "biome:write": "biome check --write cypress cypress.config.ts",
     "e2e": "cypress run",
     "e2e:open": "cypress open",
     "format": "pnpm run biome:format",

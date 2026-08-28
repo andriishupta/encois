@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if ! command -v temporal >/dev/null 2>&1; then
-  echo "temporal CLI is required; install it before running smoke:release:local" >&2
+  echo "temporal CLI is required; install it before running scripts/smoke-release-local.sh" >&2
   exit 1
 fi
 
@@ -118,10 +118,10 @@ TEMPORAL_ADDRESS="$temporal_address" \
 TEMPORAL_NAMESPACE=encois \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
-pnpm smoke:release
+pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-release-flow.ts
 
 TEMPORAL_ADDRESS="$temporal_address" \
 TEMPORAL_NAMESPACE=encois \
 TEMPORAL_TASK_QUEUE=encois-agent-runtime \
 AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
-pnpm smoke:approval
+pnpm --filter @encois/api-gateway exec tsx ../../scripts/smoke-approval-flow.ts

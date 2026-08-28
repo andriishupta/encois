@@ -82,8 +82,6 @@ commit, so the current commit message and `git commit -s` sign-off are
 preserved.
 
 For manual Biome fixes, use `pnpm biome:write` for formatting and safe fixes.
-Use `pnpm biome:write:unsafe` only when you explicitly want Biome's unsafe
-fixes, which can change code semantics.
 
 The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
 privileged Drizzle migrations, creates the restricted `api_gateway_runtime`
@@ -145,13 +143,10 @@ Self-hosted deployments can set `VITE_PRODUCT_NAME`, `VITE_WORKSPACE_NAME`,
 authenticated, the organization name returned by the control plane remains the
 primary workspace identity.
 
-The local synthetic execution smoke command is `pnpm smoke:release`; it is
-opt-in and expects Temporal, Agent Gateway, and the Go Runtime to be started
-separately. `pnpm smoke:approval` exercises the generic approval Signal path.
-`pnpm smoke:release:local` provides the repeatable local harness: it starts a
-Temporal dev server and both Go services, checks the private Agent Gateway
-`401`/`403` boundary, waits for readiness, runs the release and approval smokes,
-and cleans up the child processes. The CI job uses
+The CI job runs `bash scripts/smoke-release-local.sh` for the opt-in local
+execution smoke. It starts a Temporal dev server and both Go services, checks
+the private Agent Gateway `401`/`403` boundary, waits for readiness, runs the
+release and approval flows, and cleans up the child processes. The job uses
 `temporalio/setup-temporal@v0` with CLI `v1.8.2`; hosted Temporal Cloud and
 Cloud Run validation remain a separate deployment check.
 
@@ -281,9 +276,10 @@ pnpm run dev:watch:mock
 It runs `compose.watch.mock.yaml` with Postgres, the Temporal development server,
 the migration job, API Gateway, Agent Gateway, Agent Runtime, and the Vite
 dashboard with live reload. The Runtime is configured with `AGENT_AI_MODE=mock`, so this path is
-deterministic and does not require GCP or Gemini credentials. The existing
-`pnpm smoke:release:local` remains the smaller backend acceptance smoke used by
-CI; it is not a replacement for the interactive Compose stack.
+deterministic and does not require GCP or Gemini credentials. The CI-only
+backend acceptance smoke is kept as
+`scripts/smoke-release-local.sh`; it is not a replacement for the interactive
+Compose stack.
 
 ### Option A — recommended now: local application, manual cloud deploy
 

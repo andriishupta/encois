@@ -48,7 +48,8 @@ Architecture references:
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
 - [`docs/memory.md`](docs/memory.md) — current Graph/Workflow Memory/artifact boundaries, scope semantics, and provider-neutral future adapters.
 - [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
-- [`docs/local.md`](docs/local.md) — complete local Compose, Auth Emulator, onboarding, and reset flow.
+- [`docs/local.md`](docs/local.md) — complete local Compose, Auth Emulator, and onboarding flow.
+- [`docs/scripts.md`](docs/scripts.md) — supported root commands and script ownership rules.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical meanings for Worker, Workflow, Activity, Agent, Integration, MCP, and related terms.
 
 ## Prerequisites
@@ -117,46 +118,6 @@ unknown visitors. These are private operator scripts, not a public management
 UI; the waitlist requires work email, company name, and a company website or
 LinkedIn URL, but never grants access.
 
-For a faster local onboarding reset, the root command creates a new
-organization, pending invite, and Firebase Auth Emulator user using the local
-Postgres URL and the default password `local-onboarding-1`:
-
-```bash
-pnpm run local:onboarding -- ob+1@local.test
-```
-
-The generic execution path can be smoke-tested locally when the Temporal CLI is
-installed:
-
-```bash
-temporal server start-dev --headless --log-level error
-```
-
-In separate terminals, start `apps/agent-gateway` with explicit local mock
-mode, `AGENT_GATEWAY_CAPABILITY_SECRET=local-execution-capability-secret`, and
-`AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token`, start
-`apps/agent-runtime` with explicit `AGENT_AI_MODE=mock` and
-`AGENT_MEMORY_MODE=mock`, then run:
-
-```bash
-TEMPORAL_ADDRESS=127.0.0.1:7233 \
-AGENT_GATEWAY_SERVICE_TOKEN=local-agent-runtime-token \
-pnpm smoke:release
-```
-
-This exercises API → Temporal → Go Runtime → Agent Gateway → synthetic tools →
-API projection. The local harness additionally runs an approval workflow that
-waits for an API Signal and resumes in the Go Worker. Both passed locally;
-hosted Temporal/Cloud Run smoke is still a deployment step.
-
-With the Temporal CLI installed, `pnpm smoke:release:local` starts the Temporal
-dev server and both Go services automatically, waits for readiness, executes
-the release and approval smokes, and cleans up the child processes. It defaults
-to ports `7234`, `8081`, and `8091` so it can run beside the containerized
-local stack; override them with `ENCOIS_SMOKE_TEMPORAL_PORT`,
-`ENCOIS_SMOKE_AGENT_GATEWAY_PORT`, and `ENCOIS_SMOKE_AGENT_RUNTIME_PORT` when
-those ports are occupied.
-
 For the full containerized watch-mock stack, run:
 
 ```bash
@@ -177,8 +138,8 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `owner@local.test` / `local-password-1234`. Compose uses the local Temporal
 stack for workflow execution; the seed script creates explicit organization
 and source fixtures but is not selected as an API workflow backend.
-See [`docs/local.md`](docs/local.md) for the onboarding and database
-verification flow. Follow service logs with
+See [`docs/local.md`](docs/local.md) for the onboarding and local flow. Follow
+service logs with
 `docker compose -f compose.watch.mock.yaml logs -f`.
 
 This local service mode includes live reload: the Dashboard uses Vite HMR, the

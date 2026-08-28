@@ -279,7 +279,7 @@ jobs:
       - name: Run local release and approval smoke
         env:
           CI: true
-        run: pnpm smoke:release:local
+        run: bash scripts/smoke-release-local.sh
 
   containers:
     name: Build ${{ matrix.name }} image

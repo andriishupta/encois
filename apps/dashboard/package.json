@@ -10,9 +10,7 @@
     "typecheck": "tsc --noEmit",
     "biome:check": "biome check ./src ./vite.config.ts",
     "biome:format": "biome format --write ./src ./vite.config.ts",
-    "biome:write": "biome check --write ./src ./vite.config.ts",
-    "test": "vitest run --passWithNoTests",
-    "preview": "vite preview"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -26,7 +26,7 @@ const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim();
 const migrationUrl = databaseUrl();
 
 if (process.env.NODE_ENV === "production")
-  throw new Error("The local onboarding command cannot run in production.");
+  throw new Error("The onboarding command cannot run in production.");
 if (!emulatorHost)
   throw new Error(
     "FIREBASE_AUTH_EMULATOR_HOST is required; this command only supports the Firebase Auth Emulator.",

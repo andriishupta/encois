@@ -17,7 +17,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "biome:check": "biome check ./src ./scripts ./drizzle.config.ts",
     "biome:format": "biome format --write ./src ./scripts ./drizzle.config.ts",
-    "biome:write": "biome check --write ./src ./scripts ./drizzle.config.ts",
     "test": "vitest run --passWithNoTests",
     "test:integration": "vitest run src/database.integration.test.ts",
     "db:generate": "node scripts/generate-migration.mjs",

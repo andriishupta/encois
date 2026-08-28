@@ -51,18 +51,6 @@ The stack starts:
 | Agent Runtime | http://localhost:8090 | Go Temporal Worker with Mock AI and local data adapters |
 | PostgreSQL | localhost:5432 | Encois control-plane database |
 
-To apply new local database migrations without rebuilding the rest of the
-stack, run:
-
-```bash
-pnpm run migration:watch:mock
-```
-
-This rebuilds only the `migrations` image, runs the one-shot migration job,
-and removes its disposable container. A plain `docker compose run migrations`
-does not necessarily rebuild the image, so it can run an older migration
-bundle.
-
 `local-auth-seed` runs after migrations. It creates one deterministic local
 dataset for `Sun Inc`. It includes hierarchical units, users with
 different roles and scopes, organization Integrations, unit-scoped Sources with revisions and
@@ -134,8 +122,8 @@ Use this sequence when testing how the product components are connected:
    Temporal UI, and Emulator UI.
 2. Sign in as `owner@local.test`. Confirm that the organization, units,
    integrations, Sources, workflows, graph, and memory pages load.
-   Run `pnpm run verify:watch:mock:api` if the auth, invite, or scope boundary is
-   the subject of the check.
+   Check the relevant API response and Compose logs if the auth, invite, or
+   scope boundary is the subject of the check.
 3. Repeat the same navigation as `manager@local.test`, `dev@local.test`, and
    `viewer@local.test`. The visible hierarchy may include context needed to
    explain the organization, but reads and mutations must remain within the
@@ -173,17 +161,6 @@ Use this sequence when testing how the product components are connected:
 8. Repeat the run with a missing or unsupported tool, an unavailable provider
    fixture, and a viewer account. Expected outcomes are an explicit failed or
    denied run with a stable error, never a fabricated successful result.
-
-For a smaller backend-only check, use:
-
-```bash
-pnpm smoke:release:local
-```
-
-It starts an isolated local Temporal server and Go services, runs the release
-and approval flows, and cleans up those child processes. It is useful for
-verifying the execution boundary without logging into the Dashboard; it does
-not replace the full manual source, permission, graph, or memory walkthrough.
 
 ## Temporal inspection and failure diagnosis
 
@@ -278,14 +255,6 @@ The command returns the organization ID, invite ID, and Firebase UID. If
 Firebase user creation fails after the database transaction, it removes the
 new organization and its cascading invite/onboarding records.
 
-For the common local case, the root wrapper supplies the local Postgres URL,
-the Firebase Auth Emulator host, and the default password
-`local-onboarding-1`:
-
-```bash
-pnpm run local:onboarding -- ob+1@local.test
-```
-
 An onboarding row must never be created by a dashboard fallback or a normal
 `GET /api/v1/organization` read. To diagnose a missing row, inspect the
 control-plane migration/backfill and repair the data through the operator
@@ -308,42 +277,6 @@ The existing organization permissions screen is available at
 `/organization/permissions`. Operator invite scripts support adding a single
 user (`auth:invite-user`) or revoking an invite. A bulk invite editor is not
 part of this local MVP fixture and remains a separate product-surface task.
-
-After the seed completes, verify the expected tenant, onboarding, source, and
-integration fixtures with:
-
-```bash
-docker compose -f compose.watch.mock.yaml run --rm local-auth-seed \
-  node dist/scripts/verify-local.js
-
-docker compose -f compose.watch.mock.yaml run --rm \
-  -e LOCAL_API_URL=http://api-gateway:8787/api/v1 \
-  local-auth-seed node dist/scripts/verify-local-api.js
-```
-
-The same checks are available from the repository root:
-
-```bash
-pnpm run verify:watch:mock
-pnpm run verify:watch:mock:api
-pnpm run verify:production-auth
-```
-
-`verify:production-auth` checks the source and Docker target boundaries without
-building or starting services. After production artifacts already exist, add
-`-- --artifacts` to scan the generated files as well.
-
-The repository runners remove only disposable migration containers left in a
-`Created` or failed state before starting a seed or verification command. This
-keeps an interrupted Compose bootstrap from blocking the next local check;
-Postgres volumes and application containers are not removed.
-
-The second command signs in through the Firebase Auth Emulator and verifies
-owner and Viewer access, Engineering/Development hierarchy scopes, onboarding
-invite acceptance and `onboarding:manage`, Temporal workflow list access, and
-the seeded persisted workflow boundary. The persisted fixture runs are not
-created in Temporal; their detail page should therefore expose the runtime
-availability error instead of pretending that an execution exists.
 
 ## Useful checks
 
@@ -432,37 +365,13 @@ required for a useful end-to-end test. Stop it with:
 pnpm dev:local:prod:down
 ```
 
-## Reset
+## Stop
 
 To stop the stack:
 
 ```bash
 pnpm run dev:watch:mock:down
 ```
-
-To reset only the known local fixture organizations and accounts (without
-touching unrelated database data):
-
-```bash
-docker compose -f compose.watch.mock.yaml run --rm local-auth-seed \
-  node dist/scripts/reset-local.js
-docker compose -f compose.watch.mock.yaml run --rm local-auth-seed
-```
-
-The reset is deliberately scoped to the fixture slugs/emails. It does not
-delete Docker volumes. The Agent Runtime memory mock and Agent Gateway graph /
-artifact mocks are process-scoped, so restart those two services after a
-manual reset to clear their in-memory state as well. The same operation is
-available as:
-
-```bash
-pnpm run watch:mock:reset
-```
-
-The seed is safe to run repeatedly and will not create duplicate memberships,
-integrations, revisions, or onboarding rows.
-To run only the idempotent seed without resetting fixtures, use
-`pnpm run watch:mock:seed`.
 
 ## Verification scope
 
