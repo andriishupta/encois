@@ -44,33 +44,11 @@ native ADK/Temporal step integration is not yet used. The available
 candidate that requires Temporal Go SDK `v1.45.0` and a compatible ADK revision;
 it is not yet a repository dependency. Canonical schema
 validation is now shared by the TypeScript API, Go Runtime, and Agent Gateway;
-the `tool-manifest.v1` catalog schema and `workflow-change-plan.v1` proposal
-schema are also shared and checked at their respective Go boundaries.
-The lifecycle-aware `workflow-change-plan.v1` schema is embedded and
-fixture-validated. The Gateway validates and submits this single contract,
-applies create/update/deprecate/restore/set_current changes, and supports cancel-only Temporal
-plans through its Temporal client. Database-backed application and hosted
-verification remain pending. The bootstrap
-Workflow can return a validated plan proposal. The Runtime also contains a
-narrow `corecoordinator.Client`, a service-token HTTP adapter, and registered
-Activities for the private Coordinator routes; those Activities do not access
-Postgres. Reconciliation now invokes the proposal and submit Activities after
-a signal or timer. The separate `coordinator-event.v1` envelope and Runtime
-receiver provide the generic lifecycle shape and deduplicate scoped events.
-Gateway plan approval/application now enqueue tenant-scoped events in a
-transactional outbox. The API has a bounded lease/retry dispatcher, a Temporal
-sink, and an always-on dispatcher loop running alongside the HTTP server in the
-API image. Applied plans with an explicit `start` intent now emit `workflowStarts`
-and the Coordinator starts those immutable snapshots through the private
-Gateway Activity. Cloud Run Job/Cloud Scheduler wiring, persisted manifests,
-and a hosted Temporal/Cloud Run smoke path remain deferred implementation work.
-
-An executable plan change may carry an explicit `start` intent containing a
-business key and optional business input. Applying the plan converts those
-intents into `workflowStarts` in `coordinator-event.v1`. The Coordinator does
-not infer starts from registry changes: it invokes the private Gateway start
-boundary only for those explicit intents. This keeps plan application,
-approval, and execution start separate and makes replay idempotent.
+the `tool-manifest.v1` catalog schema is also shared and checked at its Go
+boundary. The Gateway directly resolves and persists approved Blueprints; the
+Coordinator only reports onboarding state. Blueprint creation and optional
+Workflow start remain deterministic, scoped, and idempotent. Database-backed
+application and hosted verification remain pending.
 
 ## What each standard does
 
@@ -109,18 +87,14 @@ GET  /v1/workflows/{workflowId}/events
 GET  /v1/workflows/activity
 POST /v1/workflows/{workflowId}/signals
 POST /v1/workflows/{workflowId}/updates
-POST /v1/workflows/plans/validate
-POST /v1/workflows/plans
-POST /v1/workflows/plans/{planId}/approve
-POST /v1/workflows/plans/{planId}/apply
+POST /v1/workflows/blueprints/preview
+POST /v1/workflows/blueprints/from-intent
 ```
 
 Private Runtime/Coordinator boundary:
 
 ```text
-POST /v1/internal/coordinator/plans/validate
-POST /v1/internal/coordinator/plans
-POST /v1/internal/coordinator/workflows
+POST /v1/internal/coordinator/onboarding-status
 ```
 
 The public request contains a Blueprint identity/version and business input.
@@ -133,39 +107,12 @@ The latter is resolved by the Gateway API inside the organization-scoped
 transaction and copied into Temporal input; the Go Runtime never reads the
 registry database.
 
-The plan-validation endpoint is a non-mutating preview for
-`workflow-change-plan.v1`. It checks tenant identity and required
-scopes and returns `validated_not_applied`; database storage, approval, and
-application remain separate control-plane operations. When Postgres is
-configured, the submit route stores a proposal idempotently as `proposed`, and
-the approval route transitions it to `approved` with an audit event. The
-private Coordinator route uses the same service layer; it cannot bypass the
-approval step or start a Blueprint that is not resolved as an approved
-registry snapshot.
-
-When Postgres is configured, `POST /v1/workflows/plans` persists the validated
-v1 proposal with an idempotent `planId` and status `proposed`. The approval
-route transitions it to `approved` and writes an audit event, but does not start
-or mutate a Temporal Workflow. Applying an approved create/update/deprecate/
-restore/set_current plan persists, changes lifecycle state, or changes the
-current pointer for tenant-scoped Blueprint snapshots; the private
-Coordinator start route accepts only a registry reference and the Gateway
-passes the resolved immutable snapshot to the generic Temporal Workflow. The
-The v1 cancel operation is supported only for cancel-only plans. The Gateway
-checks organization ownership, cancels each targeted Temporal Workflow, and
-then marks the approved plan applied. A repeated cancellation is idempotent;
-mixed Blueprint-registry and Temporal-execution changes remain rejected.
-
-The Runtime-to-Gateway Coordinator boundary is intentionally small:
-
-```text
-Go Coordinator Activity
-  -> X-Encois-Service-Token + X-Organization-ID
-  -> POST /v1/internal/coordinator/plans
-  -> human approval/application in the Gateway control plane
-  -> POST /v1/internal/coordinator/workflows
-  -> approved Blueprint snapshot -> Temporal
-```
+Blueprint creation is a single public flow: the preview resolves a Template or
+approved Blueprint, and the submit route persists the approved Blueprint and
+optionally starts its generic Temporal Workflow. The Gateway checks
+organization ownership, required scopes, provider bindings, and Blueprint
+validity before persistence or start. The private Coordinator route only
+receives onboarding status updates.
 
 ### 2. Workflow Blueprint protocol
 
@@ -350,7 +297,7 @@ Blueprint: customer-launch@1.0.0
   1. crm.check_customer_commitments
   2. docs.validate_public_changelog
   3. support.check_open_escalations     parallel
-  4. launch-planner@2                   depends on 1, 2, 3
+  4. launch-readiness-agent@2            depends on 1, 2, 3
 ```
 
 Both use the same Temporal Workflow type, the same workflow start envelope,

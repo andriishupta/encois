@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   ContractVersion,
   type JsonObject,
@@ -8,9 +8,9 @@ import {
   TemporalWorkflowType,
   type WorkflowBlueprint,
   type WorkflowBlueprintProjection,
-  type WorkflowChangePlan,
   type WorkflowCreationIntent,
   type WorkflowCreationPreview,
+  type WorkflowCreationResult,
   type WorkflowProviderBindingProjection,
   WorkflowStepKind,
   type WorkflowTemplate,
@@ -25,6 +25,7 @@ import {
   organizationUnits,
   withOrganizationContext,
   workflowBlueprints,
+  workflowDefinitions,
 } from "@encois/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
@@ -40,6 +41,10 @@ import {
 } from "../../security/organization-scope.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
 import {
+  startWorkflow,
+  type WorkflowServiceOptions,
+} from "./workflow.service.js";
+import {
   localUserId,
   stableSerialize,
   workflowServiceError,
@@ -53,24 +58,6 @@ function slug(value: string, fallback: string): string {
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-|-$/gu, "");
   return (normalized || fallback).slice(0, 72);
-}
-
-function planId(
-  principal: AosPrincipal,
-  intent: WorkflowCreationIntent,
-  blueprint: WorkflowBlueprint,
-): string {
-  const digest = createHash("sha256")
-    .update(
-      stableSerialize({
-        organizationId: principal.organizationId,
-        intent,
-        blueprint,
-      }),
-    )
-    .digest("hex")
-    .slice(0, 20);
-  return `plan:${slug(intent.businessKey ?? intent.name, "workflow")}:${digest}`;
 }
 
 function workflowKey(intent: WorkflowCreationIntent): string {
@@ -152,24 +139,15 @@ function blueprintFromStoredRow(
   return blueprint;
 }
 
-function previewFromPlan(
+function previewFromBlueprint(
   intent: WorkflowCreationIntent,
   blueprint: WorkflowBlueprint,
   source: WorkflowCreationPreview["source"],
   requiredCapabilities: readonly string[],
   providerBindings: readonly WorkflowProviderBindingProjection[],
 ): WorkflowCreationPreview {
-  const plan: WorkflowChangePlan = {
-    contractVersion: ContractVersion.WorkflowChangePlan,
-    planId: "pending",
-    coordinatorId: "pending",
-    organizationId: "pending",
-    observedAt: new Date().toISOString(),
-    changes: [],
-  };
   return {
     intent,
-    plan,
     blueprint,
     source,
     warnings: [
@@ -180,7 +158,7 @@ function previewFromPlan(
             "Optional provider slots are not connected and will be skipped by the runtime.",
           ]
         : []),
-      "The Blueprint is not persisted until the plan is approved and applied.",
+      "The Blueprint will be persisted when you create the workflow.",
     ],
     requiredCapabilities,
     providerBindings,
@@ -512,7 +490,7 @@ export function assertWorkflowProviderBindingsReady(
   if (!missing) return;
   throw workflowServiceError(
     "INTEGRATION_CAPABILITY_MISSING",
-    `Configure a matching Source in the selected scope for the required ${missing.slotKey} capability before submitting this workflow plan.`,
+    `Configure a matching Source in the selected scope for the required ${missing.slotKey} capability before creating this workflow.`,
   );
 }
 
@@ -522,7 +500,6 @@ async function resolveBlueprint(
 ): Promise<{
   blueprint: WorkflowBlueprint;
   source: WorkflowCreationPreview["source"];
-  sourceSchemaVersion: string;
   requiredCapabilities: readonly string[];
   providerBindings: readonly WorkflowProviderBindingProjection[];
 }> {
@@ -568,7 +545,6 @@ async function resolveBlueprint(
         providerBindings,
       ),
       source: { kind: "template", key: selected.key, title: selected.title },
-      sourceSchemaVersion: selected.template.schemaVersion,
       requiredCapabilities: selected.requiredCapabilities,
       providerBindings,
     };
@@ -620,9 +596,8 @@ async function resolveBlueprint(
     intent.scope?.ids,
   );
   return {
-    blueprint: { ...blueprint, name: intent.name.trim() || blueprint.name },
+    blueprint,
     source: { kind: "blueprint", key: row.blueprintId, title: row.name },
-    sourceSchemaVersion: ContractVersion.WorkflowBlueprint,
     requiredCapabilities: [
       ...new Set(
         bindingTemplate.providerSlots.flatMap((slot) => slot.capabilities),
@@ -643,51 +618,186 @@ export async function previewWorkflowCreation(
       "Workflow name must contain between 2 and 160 characters.",
     );
   const resolved = await resolveBlueprint(principal, { ...intent, name });
-  const preview = previewFromPlan(
+  const preview = previewFromBlueprint(
     { ...intent, name },
     resolved.blueprint,
     resolved.source,
     resolved.requiredCapabilities,
     resolved.providerBindings,
   );
-  const plan: WorkflowChangePlan = {
-    contractVersion: ContractVersion.WorkflowChangePlan,
-    planId: planId(principal, { ...intent, name }, resolved.blueprint),
-    coordinatorId: `organization:${principal.organizationId}`,
-    organizationId: principal.organizationId,
-    scope: { ids: [...(intent.scope?.ids ?? principal.scope)] },
-    observedAt: new Date().toISOString(),
-    metadata: {
-      planner: {
-        name:
-          intent.mode === "manual"
-            ? "manual-workflow-planner"
-            : "workflow-creator",
-        version: "1.0.0",
-      },
-      sourceSchemaVersion: resolved.sourceSchemaVersion,
-      ...(intent.prompt?.trim()
-        ? {
-            promptVersion: "workflow-creation-input.v1",
-            promptHash: createHash("sha256")
-              .update(intent.prompt.trim())
-              .digest("hex"),
-          }
-        : {}),
-    },
-    changes: [
-      {
-        kind: "create",
-        blueprint: resolved.blueprint,
-        start: intent.start
-          ? { key: workflowKey(intent), businessInput: businessInput(intent) }
-          : undefined,
-        reason: intent.description?.trim() || resolved.blueprint.purpose,
-        requiresApproval: resolved.blueprint.requiresApproval === true,
-      },
-    ],
+  return preview;
+}
+
+function blueprintProjection(
+  row: typeof workflowBlueprints.$inferSelect,
+): WorkflowBlueprintProjection {
+  const blueprint = parseWorkflowBlueprint(row.blueprint);
+  if (!blueprint)
+    throw workflowServiceError(
+      "BLUEPRINT_INVALID",
+      `Blueprint ${row.blueprintId}@${row.version} is invalid.`,
+    );
+  return {
+    blueprintId: row.blueprintId,
+    version: row.version,
+    name: row.name,
+    purpose: blueprint.purpose,
+    workflowType: blueprint.workflowType,
+    status: row.status,
+    isCurrent: row.isCurrent,
+    steps: blueprint.steps,
+    ...(blueprint.requiredScopes
+      ? { requiredScopes: blueprint.requiredScopes }
+      : {}),
+    ...(blueprint.requiresApproval !== undefined
+      ? { requiresApproval: blueprint.requiresApproval }
+      : {}),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    ...(row.approvedAt ? { approvedAt: row.approvedAt.toISOString() } : {}),
   };
-  return { ...preview, plan };
+}
+
+export async function createWorkflowFromIntent(
+  principal: AosPrincipal,
+  intent: WorkflowCreationIntent,
+  options: WorkflowServiceOptions,
+): Promise<WorkflowCreationResult> {
+  if (!database)
+    throw workflowServiceError(
+      "DATABASE_UNAVAILABLE",
+      "Blueprint registry access is not configured.",
+    );
+  const userId = localUserId(principal);
+  if (!userId)
+    throw workflowServiceError(
+      "IDENTITY_NOT_RESOLVED",
+      "The identity is not linked to a local user.",
+    );
+  const preview = await previewWorkflowCreation(principal, intent);
+  assertWorkflowProviderBindingsReady(preview.providerBindings);
+  const blueprint = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsManage)))
+        throw workflowServiceError(
+          "FORBIDDEN",
+          "The user cannot create workflow Blueprints.",
+        );
+      if (preview.source.kind === "blueprint") {
+        const [stored] = await db
+          .select()
+          .from(workflowBlueprints)
+          .where(
+            and(
+              eq(workflowBlueprints.organizationId, principal.organizationId),
+              eq(workflowBlueprints.blueprintId, preview.blueprint.blueprintId),
+              eq(workflowBlueprints.version, preview.blueprint.version),
+              eq(workflowBlueprints.status, "approved"),
+              isNull(workflowBlueprints.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!stored)
+          throw workflowServiceError(
+            "WORKFLOW_BLUEPRINT_NOT_FOUND",
+            "The selected approved Blueprint is no longer available.",
+          );
+        return blueprintProjection(stored);
+      }
+
+      await db
+        .insert(workflowDefinitions)
+        .values({
+          organizationId: principal.organizationId,
+          key: preview.blueprint.workflowType,
+          version: "v1",
+          status: "approved",
+          inputSchemaRef: preview.blueprint.inputSchemaRef,
+          outputSchemaRef: preview.blueprint.outputSchemaRef,
+        })
+        .onConflictDoNothing();
+
+      const [existing] = await db
+        .select()
+        .from(workflowBlueprints)
+        .where(
+          and(
+            eq(workflowBlueprints.organizationId, principal.organizationId),
+            eq(workflowBlueprints.blueprintId, preview.blueprint.blueprintId),
+            eq(workflowBlueprints.version, preview.blueprint.version),
+            isNull(workflowBlueprints.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        if (
+          existing.status !== "approved" ||
+          stableSerialize(existing.blueprint) !==
+            stableSerialize(preview.blueprint)
+        )
+          throw workflowServiceError(
+            "WORKFLOW_BLUEPRINT_CONFLICT",
+            `Blueprint ${preview.blueprint.blueprintId}@${preview.blueprint.version} already exists with different content.`,
+          );
+        return blueprintProjection(existing);
+      }
+
+      const now = new Date();
+      const [created] = await db
+        .insert(workflowBlueprints)
+        .values({
+          organizationId: principal.organizationId,
+          blueprintId: preview.blueprint.blueprintId,
+          version: preview.blueprint.version,
+          workflowType: preview.blueprint.workflowType,
+          name: preview.blueprint.name,
+          blueprint: preview.blueprint as unknown as Record<string, unknown>,
+          status: "approved",
+          isCurrent: true,
+          approvedAt: now,
+        })
+        .returning();
+      if (!created)
+        throw workflowServiceError(
+          "BLUEPRINT_DATABASE_FAILED",
+          "The workflow Blueprint could not be persisted.",
+        );
+      await db.insert(auditEvents).values({
+        organizationId: principal.organizationId,
+        actorUserId: userId,
+        action: "workflow_blueprint_created",
+        outcome: "accepted",
+        resourceType: "workflow_blueprint",
+        resourceId: `${created.blueprintId}@${created.version}`,
+        scope: { ids: principal.scope },
+        metadata: {
+          source: preview.source.kind,
+          sourceKey: preview.source.key,
+        },
+      });
+      return blueprintProjection(created);
+    },
+  );
+
+  if (!intent.start) return { blueprint };
+  const workflow = await startWorkflow(
+    principal,
+    {
+      workflowType: blueprint.workflowType,
+      key: workflowKey(intent),
+      blueprintId: blueprint.blueprintId,
+      blueprintVersion: blueprint.version,
+      scope: intent.scope,
+      input: businessInput(intent),
+      idempotencyKey: workflowKey(intent),
+    },
+    randomUUID(),
+    randomUUID(),
+    options,
+  );
+  return { blueprint, ...(workflow ? { workflow } : {}) };
 }
 
 export async function listWorkflowBlueprintsForPrincipal(
@@ -737,7 +847,6 @@ export async function listWorkflowBlueprintsPageForPrincipal(
         workflowType: blueprint.workflowType,
         status: row.status,
         isCurrent: row.isCurrent,
-        ...(row.sourcePlanId ? { sourcePlanId: row.sourcePlanId } : {}),
         steps: blueprint.steps,
         ...(blueprint.requiredScopes
           ? { requiredScopes: blueprint.requiredScopes }

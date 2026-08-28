@@ -109,12 +109,8 @@ func main() {
 	w.RegisterActivity(workflows.ValidateSourceIngestionContract)
 	w.RegisterActivity(workflows.ValidateSourceIngestionResult)
 	w.RegisterActivity(sourceActivities.ProcessSourceRevision)
-	w.RegisterActivity(activities.CreateBootstrapPlan)
-	w.RegisterActivity(activities.CreateCoordinatorPlan)
 	w.RegisterActivity(activities.ExecuteBlueprintStep)
 	w.RegisterActivity(memoryActivities.ExecuteAgentMemory)
-	w.RegisterActivity(controlPlaneActivities.SubmitWorkflowChangePlan)
-	w.RegisterActivity(controlPlaneActivities.StartApprovedWorkflow)
 	w.RegisterActivity(controlPlaneActivities.UpdateOnboardingStatus)
 
 	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: healthServer.Handler()}

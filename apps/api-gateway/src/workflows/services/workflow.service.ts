@@ -3,17 +3,14 @@ import type {
   ExecutionScope,
   JsonObject,
   WorkflowBlueprint,
-  WorkflowChangePlan,
 } from "@encois/contracts";
 import {
   ContractVersion,
   isJsonObject,
-  isRegisteredAgentDefinition,
   Permission,
   parseWorkflowBlueprint,
   TemporalWorkflowType,
   WorkflowExecutionStatus,
-  WorkflowStepKind,
 } from "@encois/contracts";
 import {
   auditEvents,
@@ -75,8 +72,6 @@ export type WorkflowServiceOptions = {
   capabilityTtlMs?: number;
   workflowRunRetentionDays?: number;
 };
-
-export type WorkflowChangePlanInput = WorkflowChangePlan;
 
 function workflowScopeIsVisible(
   scope: unknown,
@@ -1766,213 +1761,4 @@ export async function updateWorkflow(
       },
     );
   }
-}
-
-export type WorkflowPlanValidationResult = {
-  planId: string;
-  organizationId: string;
-  changeCount: number;
-  approvalRequired: boolean;
-  status: "validated_not_applied";
-  applyStatus: "deferred_database_and_approval";
-};
-
-/**
- * Validate a model- or user-proposed plan without applying it. Database storage,
- * human approval, and Blueprint revision application are deliberately separate
- * steps so a proposal can never mutate the registry by accident.
- */
-export async function validateWorkflowChangePlan(
-  principal: AosPrincipal,
-  plan: WorkflowChangePlanInput,
-): Promise<WorkflowPlanValidationResult> {
-  if (!database) {
-    if (!hasPrincipalPermission(principal, Permission.WorkflowsManage)) {
-      throw workflowServiceError(
-        "FORBIDDEN",
-        "The user cannot validate workflow change plans.",
-      );
-    }
-  } else {
-    const canManage = await withOrganizationContext(
-      database,
-      principal.organizationId,
-      (db) => hasPermission(db, principal, Permission.WorkflowsManage),
-    );
-    if (!canManage)
-      throw workflowServiceError(
-        "FORBIDDEN",
-        "The user cannot validate workflow change plans.",
-      );
-  }
-
-  if (plan.organizationId !== principal.organizationId) {
-    throw workflowServiceError(
-      "FORBIDDEN",
-      "The workflow plan belongs to a different organization.",
-    );
-  }
-
-  if (plan.scope) {
-    if (
-      plan.scope.ids.length === 0 ||
-      plan.scope.ids.some((scope) => !scope.trim())
-    ) {
-      throw workflowServiceError(
-        "WORKFLOW_PLAN_INVALID",
-        "The workflow plan scope must contain at least one organization-unit id.",
-      );
-    }
-    if (
-      !principal.scope.includes("*") &&
-      plan.scope.ids.some((scope) => !principal.scope.includes(scope))
-    ) {
-      throw workflowServiceError(
-        "SCOPE_DENIED",
-        "The workflow plan scope exceeds the caller's organization-unit scope.",
-      );
-    }
-  }
-
-  const requiredScopes = new Set(
-    plan.changes.flatMap((change) =>
-      change.blueprint?.requiredScopes
-        ? [...change.blueprint.requiredScopes]
-        : [],
-    ),
-  );
-
-  for (const [index, change] of plan.changes.entries()) {
-    for (const step of change.blueprint?.steps ?? []) {
-      if (
-        step.kind === WorkflowStepKind.Agent &&
-        (!step.agentDefinition ||
-          !isRegisteredAgentDefinition(step.agentDefinition))
-      ) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} step ${step.id} uses an unregistered agent definition.`,
-        );
-      }
-    }
-  }
-
-  const missingScope = principal.scope.includes("*")
-    ? undefined
-    : [...requiredScopes].find((scope) => !principal.scope.includes(scope));
-  if (missingScope) {
-    throw workflowServiceError(
-      "SCOPE_DENIED",
-      `The current identity is missing required scope ${missingScope}.`,
-    );
-  }
-
-  for (const [index, change] of plan.changes.entries()) {
-    if (!change.start) continue;
-    if (change.kind !== "create" && change.kind !== "update") {
-      throw workflowServiceError(
-        "WORKFLOW_PLAN_INVALID",
-        `Change ${index} cannot start a non-executable change.`,
-      );
-    }
-    if (!change.blueprint || !change.start.key) {
-      throw workflowServiceError(
-        "WORKFLOW_PLAN_INVALID",
-        `Change ${index} has an incomplete start intent.`,
-      );
-    }
-  }
-
-  for (const [index, change] of plan.changes.entries()) {
-    if (change.kind === "update") {
-      if (
-        !change.targetBlueprintId ||
-        !change.targetBlueprintVersion ||
-        !change.blueprint
-      ) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} requires a Blueprint target and replacement.`,
-        );
-      }
-      if (change.targetWorkflowId) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} cannot target a Temporal execution.`,
-        );
-      }
-      if (change.blueprint.blueprintId !== change.targetBlueprintId) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} targets a different Blueprint id.`,
-        );
-      }
-      if (change.blueprint.version === change.targetBlueprintVersion) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} must publish a new Blueprint version.`,
-        );
-      }
-    } else if (
-      change.kind === "deprecate" ||
-      change.kind === "restore" ||
-      change.kind === "set_current"
-    ) {
-      if (!change.targetBlueprintId || !change.targetBlueprintVersion) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} requires a Blueprint target.`,
-        );
-      }
-      if (change.targetWorkflowId) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} cannot target a Temporal execution.`,
-        );
-      }
-      if (change.blueprint || change.start) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} cannot carry a Blueprint or start intent.`,
-        );
-      }
-    } else if (change.kind === "cancel") {
-      if (!change.targetWorkflowId) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} requires a Temporal workflow target.`,
-        );
-      }
-      if (
-        change.targetBlueprintId ||
-        change.targetBlueprintVersion ||
-        change.blueprint
-      ) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} cannot target a Blueprint registry object.`,
-        );
-      }
-    } else if (change.kind === "create") {
-      if (
-        change.targetBlueprintId ||
-        change.targetBlueprintVersion ||
-        change.targetWorkflowId
-      ) {
-        throw workflowServiceError(
-          "WORKFLOW_PLAN_INVALID",
-          `Change ${index} cannot include a lifecycle target.`,
-        );
-      }
-    }
-  }
-
-  return {
-    planId: plan.planId,
-    organizationId: plan.organizationId,
-    changeCount: plan.changes.length,
-    approvalRequired: plan.changes.some((change) => change.requiresApproval),
-    status: "validated_not_applied",
-    applyStatus: "deferred_database_and_approval",
-  };
 }

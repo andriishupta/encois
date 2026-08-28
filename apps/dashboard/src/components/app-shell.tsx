@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleGauge,
-  ClipboardCheck,
   FilePlus2,
   GitBranch,
   LayoutDashboard,
@@ -99,12 +98,6 @@ const workflowManagementNavigation: readonly NavigationItem[] = [
     to: "/workflows/blueprints",
     icon: GitBranch,
     permission: Permission.WorkflowsRead,
-  },
-  {
-    label: "Plans",
-    to: "/workflows/plans",
-    icon: ClipboardCheck,
-    permission: Permission.WorkflowsManage,
   },
   {
     label: "Templates",
@@ -648,7 +641,6 @@ type BreadcrumbRoute =
   | "/workflows/runs"
   | "/workflows/templates"
   | "/workflows/blueprints"
-  | "/workflows/plans"
   | "/workflows/memory"
   | "/workflows/memory/add"
   | "/organization"
@@ -683,14 +675,6 @@ function getBreadcrumbItems(
     return [{ label: "Workflows", to: "/workflows" }, { label: "Templates" }];
   if (pathname === "/workflows/blueprints")
     return [{ label: "Workflows", to: "/workflows" }, { label: "Blueprints" }];
-  if (pathname === "/workflows/plans")
-    return [{ label: "Workflows", to: "/workflows" }, { label: "Plans" }];
-  if (pathname.startsWith("/workflows/plans/"))
-    return [
-      { label: "Workflows", to: "/workflows" },
-      { label: "Plans", to: "/workflows/plans" },
-      { label: "Plan" },
-    ];
   if (pathname.startsWith("/workflows/definitions/"))
     return [
       { label: "Workflows", to: "/workflows" },

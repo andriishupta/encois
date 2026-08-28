@@ -1,7 +1,8 @@
 import type {
   WorkflowBlueprintProjection,
   WorkflowCreationIntent,
-  WorkflowPlanRecord,
+  WorkflowCreationPreview,
+  WorkflowCreationResult,
   WorkflowTemplateProjection,
 } from "@encois/contracts/browser";
 import { Permission, WorkflowStepKind } from "@encois/contracts/browser";
@@ -44,8 +45,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  applyWorkflowPlan,
-  approveWorkflowPlan,
   listWorkflowBlueprints,
   listWorkflowTemplates,
   previewWorkflowCreation,
@@ -91,8 +90,7 @@ const modeOptions: readonly {
   {
     mode: "blueprint",
     title: "Use an existing Blueprint",
-    description:
-      "Create a new workflow from an approved version in this organization.",
+    description: "Create a new workflow from an approved Blueprint.",
     icon: GitBranch,
   },
   {
@@ -117,17 +115,15 @@ function NewWorkflowPage() {
     search.blueprint ? "blueprint" : search.template ? "template" : null,
   );
   const [templateKey, setTemplateKey] = useState<string | undefined>(
-    () => search.template,
+    search.template,
   );
   const [blueprintKey, setBlueprintKey] = useState<string | undefined>(
-    () => search.blueprint,
+    search.blueprint,
   );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [runAfterApply, setRunAfterApply] = useState(true);
-  const [submittedPlanId, setSubmittedPlanId] = useState<string>();
-  const [createdPlan, setCreatedPlan] = useState<WorkflowPlanRecord>();
-  const [completed, setCompleted] = useState(false);
+  const [runAfterCreate, setRunAfterCreate] = useState(true);
+  const [created, setCreated] = useState<WorkflowCreationResult>();
 
   const templates = useQuery({
     queryKey: queryKeys.workflowTemplates(),
@@ -139,7 +135,6 @@ function NewWorkflowPage() {
     queryFn: () => listWorkflowBlueprints(),
     enabled: mode === "blueprint",
   });
-
   const selectedTemplate = useMemo(
     () => templates.data?.find((item) => item.key === templateKey),
     [templateKey, templates.data],
@@ -183,61 +178,15 @@ function NewWorkflowPage() {
     ...(executionScopeId ? { scope: { ids: [executionScopeId] } } : {}),
     start,
   });
-
   const preview = useMutation({
     mutationFn: () => previewWorkflowCreation(buildIntent(false)),
     onSuccess: () => setStage(3),
   });
-  const submit = useMutation({
-    mutationFn: () => submitWorkflowCreation(buildIntent(runAfterApply)),
-    onSuccess: async (plan) => {
-      setCreatedPlan(plan);
-      setSubmittedPlanId(plan.planId);
-      queryClient.setQueryData(queryKeys.workflowPlan(plan.planId), plan);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlansRoot(),
-      });
-      await navigate({
-        to: "/workflows/plans/$planId",
-        params: { planId: plan.planId },
-      });
-    },
-  });
-  const createAndApprove = useMutation({
-    mutationFn: async () => {
-      const plan = await submitWorkflowCreation(buildIntent(runAfterApply));
-      setCreatedPlan(plan);
-      setSubmittedPlanId(plan.planId);
-      return approveWorkflowPlan(plan.planId);
-    },
-    onSuccess: async (plan) => {
-      setSubmittedPlanId(plan.planId);
-      queryClient.setQueryData(queryKeys.workflowPlan(plan.planId), plan);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlansRoot(),
-      });
-      await navigate({
-        to: "/workflows/plans/$planId",
-        params: { planId: plan.planId },
-      });
-    },
-  });
-  const approve = useMutation({
-    mutationFn: () => approveWorkflowPlan(submittedPlanId ?? ""),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlansRoot(),
-      });
-    },
-  });
-  const apply = useMutation({
-    mutationFn: () => applyWorkflowPlan(submittedPlanId ?? ""),
-    onSuccess: async () => {
-      setCompleted(true);
+  const create = useMutation({
+    mutationFn: () => submitWorkflowCreation(buildIntent(runAfterCreate)),
+    onSuccess: async (result) => {
+      setCreated(result);
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowPlansRoot(),
-        }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.workflowBlueprintsRoot(),
         }),
@@ -248,7 +197,6 @@ function NewWorkflowPage() {
       ]);
     },
   });
-
   const sourceReady =
     mode === "template"
       ? selectedTemplate?.status === "active"
@@ -256,9 +204,6 @@ function NewWorkflowPage() {
         ? Boolean(blueprintKey)
         : false;
   const canPreview = Boolean(name.trim() && sourceReady && !preview.isPending);
-  const submitted = submit.data ?? createdPlan;
-  const approved =
-    approve.data ?? (submitted?.status === "approved" ? submitted : undefined);
 
   function chooseMode(nextMode: CreationMode) {
     setMode(nextMode);
@@ -266,25 +211,15 @@ function NewWorkflowPage() {
     setBlueprintKey(undefined);
     setStage(1);
     preview.reset();
-    submit.reset();
-    createAndApprove.reset();
-    approve.reset();
-    apply.reset();
-    setSubmittedPlanId(undefined);
-    setCreatedPlan(undefined);
-    setCompleted(false);
-  }
-
-  function goToPreview() {
-    preview.reset();
-    preview.mutate();
+    create.reset();
+    setCreated(undefined);
   }
 
   return (
     <div data-testid="workflow-create-page" className="flex flex-col gap-8">
       <PageHeader
         title="New workflow"
-        description="Create a governed workflow from a catalog template or an approved Blueprint. Internal identifiers and execution details are managed for you."
+        description="Create a Blueprint from a catalog Template or use an existing Blueprint. The Blueprint is stored immediately after review."
         actions={
           <Button variant="outline" asChild>
             <Link to="/workflows">
@@ -294,7 +229,6 @@ function NewWorkflowPage() {
           </Button>
         }
       />
-
       <fieldset
         className="m-0 grid gap-3 border-0 p-0 sm:grid-cols-3"
         aria-label="Workflow creation progress"
@@ -313,12 +247,11 @@ function NewWorkflowPage() {
         />
         <StepIndicator
           number="3"
-          label="Review and apply"
+          label="Preview Blueprint"
           active={stage === 3}
-          complete={completed}
+          complete={Boolean(created)}
         />
       </fieldset>
-
       {stage === 1 ? (
         <SourceStage
           mode={mode}
@@ -359,7 +292,10 @@ function NewWorkflowPage() {
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onBack={() => setStage(1)}
-          onPreview={goToPreview}
+          onPreview={() => {
+            preview.reset();
+            preview.mutate();
+          }}
           canPreview={canPreview}
           error={preview.error}
         />
@@ -367,38 +303,28 @@ function NewWorkflowPage() {
       {stage === 3 ? (
         <ReviewStage
           preview={preview.data}
+          created={created}
           isLoading={preview.isPending}
-          error={
-            preview.error ??
-            submit.error ??
-            createAndApprove.error ??
-            approve.error ??
-            apply.error
-          }
-          runAfterApply={runAfterApply}
-          onRunChange={setRunAfterApply}
-          submitted={submitted}
-          approved={approved}
-          completed={completed}
-          onSubmit={() => {
-            createAndApprove.reset();
-            submit.mutate();
-          }}
-          submitting={submit.isPending}
-          onCreateAndApprove={() => {
-            submit.reset();
-            createAndApprove.mutate();
-          }}
-          creatingAndApproving={createAndApprove.isPending}
-          onApprove={() => approve.mutate()}
-          approving={approve.isPending}
-          onApply={() => apply.mutate()}
-          applying={apply.isPending}
+          error={preview.error ?? create.error}
+          runAfterCreate={runAfterCreate}
+          onRunChange={setRunAfterCreate}
+          onCreate={() => create.mutate()}
+          creating={create.isPending}
           onBack={() => {
             preview.reset();
+            create.reset();
+            setCreated(undefined);
             setStage(2);
           }}
-          onOpenWorkflows={() => void navigate({ to: "/workflows" })}
+          onOpenBlueprints={() =>
+            void navigate({ to: "/workflows/blueprints" })
+          }
+          onOpenWorkflow={(workflowId) =>
+            void navigate({
+              to: "/workflows/$workflowId",
+              params: { workflowId },
+            })
+          }
         />
       ) : null}
     </div>
@@ -435,7 +361,7 @@ function SourceStage({
       <div>
         <h2 className="text-lg font-semibold">Choose a starting point</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select a reviewed template or an approved Blueprint to continue.
+          Select a Template or an existing approved Blueprint.
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
@@ -475,10 +401,10 @@ function SourceStage({
       {mode === "template" ? (
         <SelectionList
           title="Workflow templates"
-          description="Active templates can be used now. Disabled templates remain visible but cannot be selected."
+          description="Active Templates can be used now."
           loading={templatesLoading}
           error={error}
-          empty="No workflow templates are available in this scope."
+          empty="No workflow Templates are available in this scope."
           items={templates}
           selectedKey={selectedTemplateKey}
           getKey={(item) => item.key}
@@ -492,8 +418,8 @@ function SourceStage({
       ) : null}
       {mode === "blueprint" ? (
         <SelectionList
-          title="Current approved Blueprints"
-          description="Use the explicitly current approved revision for this organization. Historical revisions remain available in the registry."
+          title="Approved Blueprints"
+          description="Use an existing approved Blueprint in this organization."
           loading={blueprintsLoading}
           error={error}
           empty="No approved Blueprints are available in this scope."
@@ -514,8 +440,7 @@ function SourceStage({
               Describe the outcome <AvailabilityBadge />
             </CardTitle>
             <CardDescription>
-              AI-generated workflows are not available yet. Use an active
-              Template or an approved Blueprint.
+              AI-generated workflows are not available yet.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -560,8 +485,8 @@ function ConfigureStage({
       <CardHeader>
         <CardTitle>Configure workflow</CardTitle>
         <CardDescription>
-          Give this workflow a human name and choose the organization scope it
-          will execute against. Technical identifiers are generated for you.
+          Choose the workflow name and organization scope. Technical identifiers
+          are generated for you.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -575,36 +500,34 @@ function ConfigureStage({
           />
           <InfoItem label="Selected scope" value={currentScope} />
         </div>
-        <div className="flex flex-col gap-5">
-          <label
-            className="flex flex-col gap-2 text-sm font-medium"
-            htmlFor="workflow-name"
-          >
-            Workflow name
-            <input
-              data-testid="workflow-name"
-              id="workflow-name"
-              value={name}
-              onChange={(event) => onNameChange(event.target.value)}
-              placeholder="Release readiness — Checkout"
-              className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-            />
-          </label>
-          <label
-            className="flex flex-col gap-2 text-sm font-medium"
-            htmlFor="workflow-description"
-          >
-            Purpose{" "}
-            <span className="font-normal text-muted-foreground">Optional</span>
-            <input
-              id="workflow-description"
-              value={description}
-              onChange={(event) => onDescriptionChange(event.target.value)}
-              placeholder="Explain what this workflow should investigate."
-              className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-            />
-          </label>
-        </div>
+        <label
+          className="flex flex-col gap-2 text-sm font-medium"
+          htmlFor="workflow-name"
+        >
+          Workflow name
+          <input
+            data-testid="workflow-name"
+            id="workflow-name"
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
+            placeholder="Release readiness — Checkout"
+            className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+        </label>
+        <label
+          className="flex flex-col gap-2 text-sm font-medium"
+          htmlFor="workflow-description"
+        >
+          Purpose{" "}
+          <span className="font-normal text-muted-foreground">Optional</span>
+          <input
+            id="workflow-description"
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder="Explain what this workflow should investigate."
+            className="h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm font-normal outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+        </label>
         <OrganizationUnitSelect
           id="workflow-execution-scope"
           testId="workflow-execution-scope"
@@ -624,12 +547,12 @@ function ConfigureStage({
             Back
           </Button>
           <Button
-            data-testid="workflow-preview-plan"
+            data-testid="workflow-preview-blueprint"
             disabled={!canPreview || !executionScopeId}
             onClick={onPreview}
           >
             {canPreview && executionScopeId
-              ? "Preview plan"
+              ? "Preview Blueprint"
               : "Choose a scope to continue"}
             <ArrowRight data-icon="inline-end" />
           </Button>
@@ -641,55 +564,39 @@ function ConfigureStage({
 
 function ReviewStage({
   preview,
+  created,
   isLoading,
   error,
-  runAfterApply,
+  runAfterCreate,
   onRunChange,
-  submitted,
-  approved,
-  completed,
-  onSubmit,
-  submitting,
-  onCreateAndApprove,
-  creatingAndApproving,
-  onApprove,
-  approving,
-  onApply,
-  applying,
+  onCreate,
+  creating,
   onBack,
-  onOpenWorkflows,
+  onOpenBlueprints,
+  onOpenWorkflow,
 }: {
-  preview?: import("@encois/contracts").WorkflowCreationPreview;
+  preview?: WorkflowCreationPreview;
+  created?: WorkflowCreationResult;
   isLoading: boolean;
   error: Error | null;
-  runAfterApply: boolean;
+  runAfterCreate: boolean;
   onRunChange: (value: boolean) => void;
-  submitted?: WorkflowPlanRecord;
-  approved?: WorkflowPlanRecord;
-  completed: boolean;
-  onSubmit: () => void;
-  submitting: boolean;
-  onCreateAndApprove: () => void;
-  creatingAndApproving: boolean;
-  onApprove: () => void;
-  approving: boolean;
-  onApply: () => void;
-  applying: boolean;
+  onCreate: () => void;
+  creating: boolean;
   onBack: () => void;
-  onOpenWorkflows: () => void;
+  onOpenBlueprints: () => void;
+  onOpenWorkflow: (workflowId: string) => void;
 }) {
-  if (isLoading) {
+  if (isLoading)
     return (
       <Card>
         <CardContent className="flex min-h-72 items-center justify-center gap-3 text-sm text-muted-foreground">
           <LoaderCircle className="size-5 animate-spin" />
-          Validating the plan against scope and capabilities…
+          Building the Blueprint preview…
         </CardContent>
       </Card>
     );
-  }
-
-  if (error && !preview) {
+  if (error && !preview)
     return (
       <Card>
         <CardContent className="flex flex-col gap-5 pt-6">
@@ -701,25 +608,21 @@ function ReviewStage({
         </CardContent>
       </Card>
     );
-  }
-
   if (!preview) return null;
-
-  const finalPlan = approved ?? submitted;
-  const planStatus = completed
-    ? "applied"
-    : (approved?.status ?? submitted?.status);
   const missingRequiredProvider = preview.providerBindings.some(
     (binding) => binding.required && binding.status === "missing",
   );
+  const blueprint = created?.blueprint ?? preview.blueprint;
   return (
     <Card data-testid="workflow-review-stage">
       <CardHeader>
-        <CardTitle>Review and apply</CardTitle>
+        <CardTitle>
+          {created ? "Blueprint created" : "Preview Blueprint"}
+        </CardTitle>
         <CardDescription>
-          Preview is read-only. Submit stores a reviewable plan, approval
-          records the human decision, and apply writes the Blueprint registry or
-          starts a Run.
+          Review the resolved Blueprint. Creating it stores the approved
+          Blueprint immediately; future Blueprint revisions can be added
+          separately.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
@@ -728,26 +631,15 @@ function ReviewStage({
           <InfoItem label="Source" value={preview.source.title} />
           <InfoItem
             label="Steps"
-            value={String(preview.blueprint.steps?.length ?? 0)}
+            value={String(blueprint.steps?.length ?? 0)}
           />
-          <InfoItem
-            label="Blueprint approval"
-            value={preview.approvalRequired ? "Required" : "Not required"}
-          />
-          <InfoItem
-            label="Plan state"
-            value={planStatusLabel(planStatus ?? "preview")}
-          />
+          <InfoItem label="Version" value={blueprint.version} />
+          <InfoItem label="Status" value={created ? "Approved" : "Preview"} />
         </div>
-
-        <ProviderBindingList
-          bindings={preview.providerBindings}
-          completed={completed}
-        />
-
+        <ProviderBindingList bindings={preview.providerBindings} />
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Execution topology</h3>
-          {preview.blueprint.steps.map((step, index) => (
+          {blueprint.steps.map((step, index) => (
             <div
               key={step.id}
               className="flex items-center gap-3 rounded-lg border p-3"
@@ -769,43 +661,39 @@ function ReviewStage({
             </div>
           ))}
         </div>
-
-        <details className="rounded-lg border bg-muted/20 p-4 text-sm">
-          <summary className="cursor-pointer font-medium">
-            Technical details
-          </summary>
-          <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-            <p>Blueprint version: {preview.blueprint.version}</p>
-            <p>Purpose: {preview.blueprint.purpose}</p>
-            <p>
-              Capabilities:{" "}
-              {preview.requiredCapabilities?.length
-                ? preview.requiredCapabilities.join(", ")
-                : "None declared"}
-            </p>
-          </div>
-        </details>
-
-        {preview.warnings.filter(
-          (warning) =>
-            !completed ||
-            !warning.toLowerCase().includes("not persisted until"),
-        ).length ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-            <p className="font-medium">
-              {finalPlan ? "Apply notes" : "Before you apply"}
-            </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
-              {preview.warnings
-                .filter(
-                  (warning) =>
-                    !completed ||
-                    !warning.toLowerCase().includes("not persisted until"),
-                )
-                .map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-            </ul>
+        {!created ? (
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
+            <p className="text-sm font-medium">After creating the Blueprint</p>
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="radio"
+                checked={!runAfterCreate}
+                onChange={() => onRunChange(false)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-medium">Save Blueprint only</span>
+                <span className="block text-muted-foreground">
+                  Create the Blueprint now and start a Workflow later.
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="radio"
+                checked={runAfterCreate}
+                onChange={() => onRunChange(true)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-medium">
+                  Create and run Workflow
+                </span>
+                <span className="block text-muted-foreground">
+                  Persist the Blueprint and start its first Workflow.
+                </span>
+              </span>
+            </label>
           </div>
         ) : null}
         {missingRequiredProvider ? (
@@ -818,8 +706,8 @@ function ReviewStage({
                 A required provider Source is missing
               </p>
               <p className="mt-1 text-destructive/80">
-                Add a matching Source in the selected organization unit scope
-                before submitting this plan.
+                Add a matching Source in the selected scope before creating this
+                workflow.
               </p>
             </div>
             <Button variant="outline" asChild>
@@ -833,177 +721,58 @@ function ReviewStage({
             </Button>
           </div>
         ) : null}
-
-        {!finalPlan ? (
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
-            <p className="text-sm font-medium">After approval</p>
-            <label className="flex cursor-pointer items-start gap-3 text-sm">
-              <input
-                data-testid="workflow-save-approved"
-                type="radio"
-                checked={!runAfterApply}
-                onChange={() => onRunChange(false)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="block font-medium">
-                  Save as an approved workflow
-                </span>
-                <span className="block text-muted-foreground">
-                  Create the Blueprint now and start it later.
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 text-sm">
-              <input
-                type="radio"
-                checked={runAfterApply}
-                onChange={() => onRunChange(true)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="block font-medium">Run after apply</span>
-                <span className="block text-muted-foreground">
-                  Start the first investigation after the registry snapshot is
-                  applied.
-                </span>
-              </span>
-            </label>
-          </div>
-        ) : null}
-
-        {planStatus === "proposed" ? (
+        {created ? (
           <div
-            role="status"
-            className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"
-          >
-            <p className="font-medium">Plan submitted for approval</p>
-            <p className="mt-1 text-muted-foreground">
-              A workflow manager must approve this plan before the Blueprint can
-              be persisted.
-            </p>
-          </div>
-        ) : null}
-        {planStatus === "approved" ? (
-          <div
-            data-testid="workflow-plan-approved"
-            role="status"
-            className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"
-          >
-            <p className="font-medium">Plan approved</p>
-            <p className="mt-1 text-muted-foreground">
-              Apply will persist the immutable Blueprint revision
-              {runAfterApply ? " and request its first Run" : ""}.
-            </p>
-          </div>
-        ) : null}
-
-        {completed ? (
-          <div
-            data-testid="workflow-plan-applied"
+            data-testid="workflow-blueprint-created"
             className="flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm"
           >
             <CheckCircle2 className="mt-0.5 size-5 text-emerald-600" />
             <div>
-              <p className="font-medium">Plan applied</p>
+              <p className="font-medium">Blueprint is available</p>
               <p className="mt-1 text-muted-foreground">
-                The immutable Blueprint is now available to the Coordinator.{" "}
-                {runAfterApply
-                  ? "The first Run is starting; open Workflows to follow it."
-                  : "Open Workflows when you are ready to start a Run."}
+                {created.workflow
+                  ? "The first Workflow has been started."
+                  : "You can start a Workflow from this Blueprint later."}
               </p>
             </div>
           </div>
         ) : null}
-
         <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
-          <Button
-            variant="ghost"
-            onClick={onBack}
-            disabled={Boolean(finalPlan)}
-          >
+          <Button variant="ghost" onClick={onBack} disabled={Boolean(created)}>
             <ArrowLeft data-icon="inline-start" />
             Back
           </Button>
-          {completed ? (
-            <Button data-testid="workflow-open-list" onClick={onOpenWorkflows}>
-              Open workflows <ArrowRight data-icon="inline-end" />
+          {created?.workflow ? (
+            <Button
+              onClick={() => onOpenWorkflow(created.workflow?.workflowId ?? "")}
+            >
+              Open Workflow <ArrowRight data-icon="inline-end" />
             </Button>
-          ) : creatingAndApproving ? (
-            <Button disabled>
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-              Creating and approving…
-            </Button>
-          ) : !submitted ? (
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={onSubmit}
-                disabled={
-                  submitting || creatingAndApproving || missingRequiredProvider
-                }
-              >
-                {submitting ? (
-                  <LoaderCircle
-                    className="animate-spin"
-                    data-icon="inline-start"
-                  />
-                ) : (
-                  <Check data-icon="inline-start" />
-                )}
-                {submitting
-                  ? "Creating…"
-                  : missingRequiredProvider
-                    ? "Configure Source first"
-                    : "Create plan"}
-              </Button>
-              <Button
-                data-testid="workflow-create-and-approve"
-                onClick={onCreateAndApprove}
-                disabled={
-                  submitting || creatingAndApproving || missingRequiredProvider
-                }
-              >
-                {creatingAndApproving ? (
-                  <LoaderCircle
-                    className="animate-spin"
-                    data-icon="inline-start"
-                  />
-                ) : (
-                  <CheckCircle2 data-icon="inline-start" />
-                )}
-                {creatingAndApproving
-                  ? "Creating and approving…"
-                  : "Create and approve plan now"}
-              </Button>
-            </div>
-          ) : planStatus === "proposed" ? (
-            <Button onClick={onApprove} disabled={approving}>
-              {approving ? (
-                <LoaderCircle
-                  className="animate-spin"
-                  data-icon="inline-start"
-                />
-              ) : (
-                <Check data-icon="inline-start" />
-              )}
-              {approving ? "Approving…" : "Approve plan"}
+          ) : created ? (
+            <Button onClick={onOpenBlueprints}>
+              Open Blueprints <ArrowRight data-icon="inline-end" />
             </Button>
           ) : (
             <Button
-              data-testid="workflow-apply-plan"
-              onClick={onApply}
-              disabled={applying || planStatus !== "approved"}
+              data-testid="workflow-create-blueprint"
+              onClick={onCreate}
+              disabled={creating || missingRequiredProvider}
             >
-              {applying ? (
+              {creating ? (
                 <LoaderCircle
                   className="animate-spin"
                   data-icon="inline-start"
                 />
-              ) : (
+              ) : runAfterCreate ? (
                 <Play data-icon="inline-start" />
+              ) : (
+                <Check data-icon="inline-start" />
               )}
-              {applying ? "Applying…" : "Apply plan"}
+              {creating
+                ? "Creating…"
+                : runAfterCreate
+                  ? "Create Blueprint and run"
+                  : "Create Blueprint"}
             </Button>
           )}
         </div>
@@ -1014,18 +783,15 @@ function ReviewStage({
 
 function ProviderBindingList({
   bindings,
-  completed,
 }: {
-  bindings: readonly import("@encois/contracts").WorkflowProviderBindingProjection[];
-  completed: boolean;
+  bindings: WorkflowCreationPreview["providerBindings"];
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
       <div>
         <h3 className="text-sm font-semibold">Provider bindings</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Each requirement is resolved server-side through an organization
-          Integration and a matching Source in the selected scope.
+          Resolved server-side through an organization Integration and Source.
         </p>
       </div>
       {bindings.length ? (
@@ -1055,28 +821,20 @@ function ProviderBindingList({
                     className="text-[11px] font-medium"
                   />
                 </div>
-                {ready ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {binding.integrationName ??
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {ready
+                    ? (binding.integrationName ??
                       binding.provider ??
-                      "Active provider Source"}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-amber-700">
-                    {completed
-                      ? binding.required
-                        ? "This required binding was not resolved."
-                        : "This optional slot will be skipped by the runtime."
-                      : "Add a matching active Source before applying this plan."}
-                  </p>
-                )}
+                      "Active provider Source")
+                    : "Add a matching active Source before creating this workflow."}
+                </p>
               </div>
             );
           })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No external provider bindings are required by this source.
+          No external provider bindings are required.
         </p>
       )}
     </div>
@@ -1123,12 +881,7 @@ function SelectionList<T>({
             Loading available options…
           </div>
         ) : error ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
-          >
-            {error.message}
-          </p>
+          <ErrorCallout message={error.message} />
         ) : items.length === 0 ? (
           <EmptyPanel
             icon={GitBranch}
@@ -1173,7 +926,6 @@ function TemplateOption({
   item: WorkflowTemplateProjection;
   selected: boolean;
 }) {
-  const disabled = item.status !== "active";
   return (
     <>
       <span className="flex w-full items-start justify-between gap-3">
@@ -1183,7 +935,7 @@ function TemplateOption({
             {item.category}
           </span>
         </span>
-        {disabled ? (
+        {item.status !== "active" ? (
           <AvailabilityBadge label="Disabled" />
         ) : selected ? (
           <CheckCircle2 className="size-5" />
@@ -1226,7 +978,7 @@ function BlueprintOption({
       </span>
       <span className="mt-auto block text-xs text-muted-foreground">
         {item.steps?.length ?? 0} steps ·{" "}
-        {item.requiresApproval ? "Approval required" : "Read-only plan"}
+        {item.requiresApproval ? "Approval required" : "Read-only"}
       </span>
     </>
   );
@@ -1246,22 +998,15 @@ function StepIndicator({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
-        active && "border-foreground bg-accent/50",
-        complete && "border-emerald-500/40",
+        "flex items-center gap-3 rounded-lg border p-3",
+        active && "border-foreground bg-accent/40",
+        complete && "border-emerald-500/30",
       )}
     >
-      <span
-        className={cn(
-          "flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium",
-          complete && "bg-emerald-500 text-white",
-        )}
-      >
+      <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
         {complete ? <Check className="size-4" /> : number}
       </span>
-      <span className={cn(active ? "font-medium" : "text-muted-foreground")}>
-        {label}
-      </span>
+      <span className="text-sm font-medium">{label}</span>
     </div>
   );
 }
@@ -1269,39 +1014,27 @@ function StepIndicator({
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium" title={value}>
+        {value}
       </p>
-      <p className="mt-1 truncate text-sm font-medium">{value}</p>
     </div>
   );
 }
 
 function ErrorCallout({ message }: { message: string }) {
   return (
-    <div
+    <p
       role="alert"
       className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
     >
       {message}
-    </div>
+    </p>
   );
 }
 
-function stepLabel(kind: string, index: number): string {
-  if (kind === WorkflowStepKind.Tool) return `Evidence collection ${index + 1}`;
-  if (kind === WorkflowStepKind.Agent)
-    return `Specialist synthesis ${index + 1}`;
-  if (kind === WorkflowStepKind.Approval) return `Human approval ${index + 1}`;
-  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} step ${index + 1}`;
-}
-
-function planStatusLabel(
-  status: WorkflowPlanRecord["status"] | "preview",
-): string {
-  if (status === "preview") return "Preview only";
-  if (status === "proposed") return "Awaiting approval";
-  if (status === "approved") return "Approved · ready to apply";
-  if (status === "applied") return "Applied";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function stepLabel(kind: WorkflowStepKind, index: number): string {
+  if (kind === WorkflowStepKind.Tool) return `Read source ${index + 1}`;
+  if (kind === WorkflowStepKind.Agent) return `Synthesize context ${index + 1}`;
+  return `${kind[0]?.toUpperCase() ?? "S"}${kind.slice(1)} step ${index + 1}`;
 }

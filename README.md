@@ -130,14 +130,15 @@ Vite-served dashboard through `compose.watch.mock.yaml`. The local Runtime uses
 `AGENT_AI_MODE=mock`; the Agent Gateway and Memory Bank use local adapters, so
 no Gemini key or Google Cloud credentials are required. The dashboard uses the
 API Gateway and Temporal for workflow execution. Local fixture data is created
-by an explicit seed script and is not an API execution backend.
+by an explicit seed script; it also creates thirty real Temporal-backed demo
+executions and sixteen Source fixtures in the demo workspace.
 The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `http://localhost:5173`; the Firebase Emulator UI is at
 `http://localhost:4000`; and the API health endpoints are at
 `http://localhost:8787/health/live` and `/health/ready`. Local login uses
 `owner@local.test` / `local-password-1234`. Compose uses the local Temporal
-stack for workflow execution; the seed script creates explicit organization
-and source fixtures but is not selected as an API workflow backend.
+stack for workflow execution; the seed script requires that Temporal server
+and fails closed if it is unavailable.
 See [`docs/local.md`](docs/local.md) for the onboarding and local flow. Follow
 service logs with
 `docker compose -f compose.watch.mock.yaml logs -f`.

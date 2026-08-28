@@ -5,7 +5,6 @@ import {
 } from "@encois/contracts";
 
 export type WorkflowHttpStatus = 401 | 403 | 409 | 422 | 503;
-export type WorkflowPlanHttpStatus = 403 | 404 | 409 | 422 | 503;
 export type WorkflowCommandHttpStatus = 403 | 404 | 409 | 503;
 
 const unprocessableWorkflowErrors = new Set([
@@ -13,6 +12,15 @@ const unprocessableWorkflowErrors = new Set([
   "BLUEPRINT_VERSION_REQUIRED",
   "BLUEPRINT_NOT_FOUND",
   "BLUEPRINT_INVALID",
+  "WORKFLOW_NAME_INVALID",
+  "WORKFLOW_TEMPLATE_REQUIRED",
+  "WORKFLOW_TEMPLATE_NOT_FOUND",
+  "WORKFLOW_TEMPLATE_DISABLED",
+  "WORKFLOW_BLUEPRINT_REQUIRED",
+  "WORKFLOW_BLUEPRINT_NOT_FOUND",
+  "WORKFLOW_MANUAL_UNAVAILABLE",
+  "INTEGRATION_CAPABILITY_MISSING",
+  "BLUEPRINT_DATABASE_FAILED",
 ]);
 const unavailableWorkflowErrors = new Set([
   "DATABASE_UNAVAILABLE",
@@ -54,32 +62,7 @@ export function workflowErrorStatus(code: string): WorkflowHttpStatus {
   if (unprocessableWorkflowErrors.has(code)) return 422;
   if (unavailableWorkflowErrors.has(code)) return 503;
   if (code === "IDEMPOTENCY_CONFLICT") return 409;
-  return 401;
-}
-
-export function workflowPlanErrorStatus(
-  code: string,
-  fallback: 409 | 422 = 409,
-): WorkflowPlanHttpStatus {
-  if (code === "DATABASE_UNAVAILABLE") return 503;
-  if (
-    code === "WORKFLOW_PLAN_NOT_FOUND" ||
-    code === "WORKFLOW_BLUEPRINT_NOT_FOUND" ||
-    code === "WORKFLOW_BLUEPRINT_TARGET_NOT_FOUND"
-  )
-    return 404;
-  if (
-    code === "FORBIDDEN" ||
-    code === "SCOPE_DENIED" ||
-    code === "IDENTITY_NOT_RESOLVED"
-  )
-    return 403;
-  return fallback;
-}
-
-export function workflowValidationErrorStatus(code: string): 401 | 403 | 422 {
-  if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
-  if (code === "WORKFLOW_PLAN_INVALID") return 422;
+  if (code === "WORKFLOW_BLUEPRINT_CONFLICT") return 409;
   return 401;
 }
 
@@ -104,10 +87,6 @@ export function workflowCommandErrorStatus(
   if (code === "WORKFLOW_NOT_UPDATABLE" || code === "WORKFLOW_UPDATE_CONFLICT")
     return 409;
   return 503;
-}
-
-export function workflowResponseStatus(status: string): 200 | 202 {
-  return status === "proposed" ? 202 : 200;
 }
 
 export function workflowStartResponseStatus(

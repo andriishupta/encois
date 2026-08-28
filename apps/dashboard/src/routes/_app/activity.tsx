@@ -6,12 +6,8 @@ import {
   type MemoryChangeRecord,
   type OrganizationAccessRequestRecord,
   Permission,
-  type WorkflowBlueprintProjection,
   type WorkflowExecutionProjection,
   WorkflowExecutionStatus,
-  type WorkflowPlannerVersionProjection,
-  type WorkflowPlanRecord,
-  type WorkflowStep,
 } from "@encois/contracts/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
@@ -33,7 +29,7 @@ import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
-import { DescriptionPill, StatusPill } from "@/components/pill";
+import { StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -46,17 +42,12 @@ import { WorkflowStatusIndicator } from "@/components/workflow-status";
 import {
   applyMemoryChange,
   applyOrganizationAccessRequest,
-  applyWorkflowPlan,
   approveMemoryChange,
   approveOrganizationAccessRequest,
-  approveWorkflowPlan,
   listIntegrations,
   listKnowledgeSources,
   listMemoryChanges,
   listOrganizationAccessRequests,
-  listWorkflowBlueprints,
-  listWorkflowPlannerVersions,
-  listWorkflowPlans,
   listWorkflows,
   rejectMemoryChange,
   rejectOrganizationAccessRequest,
@@ -101,7 +92,6 @@ function ActivityPage() {
   const isOrganizationAdministrator =
     currentMember?.roleKey === "organization_admin";
   const canViewWorkflows = can(Permission.WorkflowsRead);
-  const canManageWorkflows = can(Permission.WorkflowsManage);
   const canViewSources = can(Permission.KnowledgeRead);
   const canViewIntegrations = can(Permission.IntegrationsRead);
   const canManageMemory = can(Permission.MemoryManage);
@@ -120,16 +110,6 @@ function ActivityPage() {
     queryFn: () => listIntegrations(),
     enabled: canViewIntegrations,
   });
-  const plans = useQuery({
-    queryKey: queryKeys.workflowPlans(),
-    queryFn: () => listWorkflowPlans(),
-    enabled: canManageWorkflows,
-  });
-  const plannerVersions = useQuery({
-    queryKey: queryKeys.workflowPlannerVersions(),
-    queryFn: () => listWorkflowPlannerVersions(),
-    enabled: canManageWorkflows,
-  });
   const memoryChanges = useQuery({
     queryKey: queryKeys.memoryChanges(),
     queryFn: () => listMemoryChanges(),
@@ -140,38 +120,6 @@ function ActivityPage() {
     queryKey: queryKeys.organizationAccessRequests(),
     queryFn: () => listOrganizationAccessRequests(),
     enabled: canViewOrganization,
-  });
-  const blueprints = useQuery({
-    queryKey: queryKeys.workflowBlueprints(),
-    queryFn: () => listWorkflowBlueprints(),
-    enabled: canManageWorkflows,
-  });
-  const [planActionError, setPlanActionError] = useState<string | null>(null);
-  const approvePlan = useMutation({
-    mutationFn: approveWorkflowPlan,
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.workflowPlansRoot(),
-      }),
-    onError: (error) => setPlanActionError(error.message),
-  });
-  const applyPlan = useMutation({
-    mutationFn: applyWorkflowPlan,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowPlansRoot(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowBlueprintsRoot(),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.workflows() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.workflowRunListRoot(),
-        }),
-      ]);
-    },
-    onError: (error) => setPlanActionError(error.message),
   });
   const [memoryActionError, setMemoryActionError] = useState<string | null>(
     null,
@@ -249,10 +197,6 @@ function ActivityPage() {
           IntegrationStatus.Disabled,
         ]).has(integration.status),
     ) ?? [];
-  const pendingPlans =
-    plans.data?.filter(
-      (plan) => plan.status === "proposed" || plan.status === "approved",
-    ) ?? [];
   const pendingMemoryChanges =
     memoryChanges.data?.filter(
       (change) => change.status === "proposed" || change.status === "approved",
@@ -267,10 +211,9 @@ function ActivityPage() {
     [unhealthySources.length, pendingIntegrations.length],
   );
   const decisionAttention = aggregateMetric(
-    [workflows, plans, memoryChanges, accessRequests],
+    [workflows, memoryChanges, accessRequests],
     [
       waitingRuns.length,
-      pendingPlans.length,
       pendingMemoryChanges.length,
       pendingAccessRequests.length,
     ],
@@ -280,14 +223,12 @@ function ActivityPage() {
     failedRuns.length +
     unhealthySources.length +
     pendingIntegrations.length +
-    pendingPlans.length +
     pendingMemoryChanges.length +
     pendingAccessRequests.length;
   const reviewQueries = [
     workflows,
     sources,
     integrations,
-    ...(canManageWorkflows ? [plans, plannerVersions, blueprints] : []),
     ...(canManageMemory ? [memoryChanges] : []),
     ...(canViewOrganization ? [accessRequests] : []),
   ];
@@ -349,10 +290,9 @@ function ActivityPage() {
             icon={ClipboardCheck}
             label="Approvals & changes"
             value={decisionAttention}
-            detail="Runs, Plans, memory, and access"
+            detail="Runs, memory, and access"
             to="/workflows/runs"
             secondaryLinks={[
-              { label: "Plans", to: "/workflows/plans" },
               { label: "Workflows", to: "/workflows" },
               { label: "Access", to: "/management/access" },
             ]}
@@ -437,19 +377,13 @@ function ActivityPage() {
           title="Approvals & changes"
           description="All decisions and scoped changes that may need an authorized action."
           icon={ClipboardCheck}
-          loading={[workflows, plans, memoryChanges, accessRequests].some(
+          loading={[workflows, memoryChanges, accessRequests].some(
             (query) => query.isLoading,
           )}
-          error={
-            workflows.error ??
-            plans.error ??
-            memoryChanges.error ??
-            accessRequests.error
-          }
+          error={workflows.error ?? memoryChanges.error ?? accessRequests.error}
           empty="No approval or scoped change is waiting for review."
           hasItems={
             waitingRuns.length > 0 ||
-            pendingPlans.length > 0 ||
             pendingMemoryChanges.length > 0 ||
             pendingAccessRequests.length > 0
           }
@@ -463,33 +397,6 @@ function ActivityPage() {
               <WorkflowReviewRow
                 key={workflow.workflowId}
                 workflow={workflow}
-              />
-            ))}
-          </ReviewSection>
-          <ReviewSection
-            title="Plans"
-            to="/workflows/plans"
-            empty="No Plan is waiting for approval or apply."
-          >
-            {planActionError ? (
-              <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Could not update the Plan: {planActionError}
-              </p>
-            ) : null}
-            {pendingPlans.map((plan) => (
-              <WorkflowPlanReviewRow
-                key={plan.planId}
-                plan={plan}
-                blueprints={blueprints.data ?? []}
-                busy={approvePlan.isPending || applyPlan.isPending}
-                onApprove={(planId) => {
-                  setPlanActionError(null);
-                  approvePlan.mutate(planId);
-                }}
-                onApply={(planId) => {
-                  setPlanActionError(null);
-                  applyPlan.mutate(planId);
-                }}
               />
             ))}
           </ReviewSection>
@@ -551,22 +458,6 @@ function ActivityPage() {
             </ReviewSection>
           ) : null}
         </ReviewCard>
-        {canManageWorkflows ? (
-          <ReviewCard
-            title="Planner history"
-            description="Persisted planner, source-schema, and prompt fingerprints used by workflow plans. Raw prompt text is never shown."
-            icon={ClipboardCheck}
-            to="/workflows"
-            loading={plannerVersions.isLoading}
-            error={plannerVersions.error}
-            empty="No planner version has been observed yet."
-            hasItems={Boolean(plannerVersions.data?.length)}
-          >
-            {(plannerVersions.data ?? []).map((version) => (
-              <PlannerVersionReviewRow key={version.id} version={version} />
-            ))}
-          </ReviewCard>
-        ) : null}
       </div>
     </div>
   );
@@ -575,7 +466,6 @@ function ActivityPage() {
 type ActivityRoute =
   | "/workflows"
   | "/workflows/runs"
-  | "/workflows/plans"
   | "/workflows/memory"
   | "/organization/sources"
   | "/organization/integrations"
@@ -662,7 +552,6 @@ function ReviewCard({
     | "/organization/sources"
     | "/organization/integrations"
     | "/workflows"
-    | "/workflows/plans"
     | "/workflows/memory"
     | "/management/access";
 }) {
@@ -860,124 +749,6 @@ function IntegrationReviewRow({
   );
 }
 
-function WorkflowPlanReviewRow({
-  plan,
-  blueprints,
-  busy,
-  onApprove,
-  onApply,
-}: {
-  plan: WorkflowPlanRecord;
-  blueprints: readonly WorkflowBlueprintProjection[];
-  busy: boolean;
-  onApprove: (planId: string) => void;
-  onApply: (planId: string) => void;
-}) {
-  const change = plan.plan.changes[0];
-  const label = change?.blueprint?.name ?? change?.reason ?? "Plan proposal";
-  const detail = `${change?.kind ?? "change"} · ${plan.status === "proposed" ? "awaiting approval" : "ready to apply"} · ${formatDate(plan.updatedAt)}`;
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-        <ClipboardCheck
-          className="size-4 text-muted-foreground"
-          aria-hidden="true"
-        />
-      </span>
-      <span className="min-w-0 flex-1">
-        <Link
-          className="block truncate text-sm font-medium hover:underline"
-          to="/workflows/plans/$planId"
-          params={{ planId: plan.planId }}
-        >
-          {label}
-        </Link>
-        <span className="block truncate text-xs text-muted-foreground">
-          {detail}
-        </span>
-        <PlanDiff plan={plan} blueprints={blueprints} />
-        <details className="mt-1 text-xs text-muted-foreground">
-          <summary className="cursor-pointer">Technical details</summary>
-          <code className="mt-1 block break-all">{plan.planId}</code>
-        </details>
-      </span>
-      <span className="flex shrink-0 gap-2">
-        {plan.status === "proposed" ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onApprove(plan.planId)}
-          >
-            Approve
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            disabled={busy}
-            onClick={() => onApply(plan.planId)}
-          >
-            Apply
-          </Button>
-        )}
-      </span>
-    </div>
-  );
-}
-
-function PlannerVersionReviewRow({
-  version,
-}: {
-  version: WorkflowPlannerVersionProjection;
-}) {
-  const planner =
-    [version.plannerName, version.plannerVersion].filter(Boolean).join("@") ||
-    "Planner metadata unavailable";
-  return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-          <ClipboardCheck
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{planner}</span>
-          <span className="block text-xs text-muted-foreground">
-            {version.usageCount} plan{version.usageCount === 1 ? "" : "s"} ·
-            last observed {formatDate(version.lastSeenAt)}
-          </span>
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5 text-xs">
-        <DescriptionPill>
-          Schema {version.sourceSchemaVersion ?? "Not reported"}
-        </DescriptionPill>
-        {version.promptVersion ? (
-          <DescriptionPill>Prompt {version.promptVersion}</DescriptionPill>
-        ) : null}
-        <DescriptionPill>
-          Fingerprint {version.versionHash.slice(0, 12)}
-        </DescriptionPill>
-      </div>
-      <details className="text-xs text-muted-foreground">
-        <summary className="cursor-pointer">Version history details</summary>
-        <div className="mt-2 flex flex-col gap-1">
-          <span>First observed: {formatDate(version.firstSeenAt)}</span>
-          <span>First plan: {version.firstPlanId}</span>
-          <span>Latest plan: {version.lastPlanId}</span>
-          {version.promptHash ? (
-            <span>Prompt hash: {version.promptHash}</span>
-          ) : (
-            <span>Prompt hash: Not reported</span>
-          )}
-        </div>
-      </details>
-    </div>
-  );
-}
-
 function MemoryChangeReviewRow({
   change,
   busy,
@@ -1126,122 +897,4 @@ function AccessRequestReviewRow({
       ) : null}
     </div>
   );
-}
-
-function PlanDiff({
-  plan,
-  blueprints,
-}: {
-  plan: WorkflowPlanRecord;
-  blueprints: readonly WorkflowBlueprintProjection[];
-}) {
-  const change = plan.plan.changes.find((candidate) => candidate.blueprint);
-  const target = change?.blueprint;
-  if (!target)
-    return (
-      <p className="mt-2 text-xs text-muted-foreground">
-        No Blueprint snapshot in this plan; review the target workflow command
-        before applying.
-      </p>
-    );
-  const baseline = blueprints
-    .filter(
-      (blueprint) =>
-        blueprint.blueprintId === target.blueprintId &&
-        blueprint.version !== target.version,
-    )
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-  const beforeById = new Map(
-    (baseline?.steps ?? []).map((step) => [step.id, step]),
-  );
-  const afterById = new Map(target.steps.map((step) => [step.id, step]));
-  const changedSteps = [
-    ...new Set([...beforeById.keys(), ...afterById.keys()]),
-  ].flatMap(
-    (
-      stepId,
-    ): Array<{ kind: "added" | "removed" | "changed"; step: WorkflowStep }> => {
-      const before = beforeById.get(stepId);
-      const after = afterById.get(stepId);
-      if (!before && after) return [{ kind: "added" as const, step: after }];
-      if (before && !after) return [{ kind: "removed" as const, step: before }];
-      if (before && after && JSON.stringify(before) !== JSON.stringify(after))
-        return [{ kind: "changed" as const, step: after }];
-      return [];
-    },
-  );
-  return (
-    <details className="mt-2 rounded-md border bg-muted/20 px-2.5 py-2 text-xs">
-      <summary className="cursor-pointer font-medium">
-        Review Blueprint diff · v{target.version}
-      </summary>
-      <div className="mt-2 flex flex-col gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          <DescriptionPill>
-            {baseline
-              ? `Compared with v${baseline.version}`
-              : "New Blueprint revision"}
-          </DescriptionPill>
-          <DescriptionPill>{target.steps.length} steps</DescriptionPill>
-          {plan.plan.metadata?.planner ? (
-            <DescriptionPill>
-              Planner {plan.plan.metadata.planner.name}@
-              {plan.plan.metadata.planner.version}
-            </DescriptionPill>
-          ) : null}
-          {plan.plan.metadata?.sourceSchemaVersion ? (
-            <DescriptionPill>
-              Schema {plan.plan.metadata.sourceSchemaVersion}
-            </DescriptionPill>
-          ) : null}
-          {plan.plan.metadata?.promptHash ? (
-            <DescriptionPill>Prompt hash recorded</DescriptionPill>
-          ) : null}
-        </div>
-        {changedSteps.length ? (
-          <div className="flex flex-col gap-1">
-            {changedSteps.map((item) => (
-              <div
-                key={`${item.kind}:${item.step.id}`}
-                className="flex items-center gap-2"
-              >
-                <span
-                  className={
-                    item.kind === "added"
-                      ? "text-emerald-700"
-                      : item.kind === "removed"
-                        ? "text-destructive"
-                        : "text-amber-700"
-                  }
-                >
-                  {item.kind}
-                </span>
-                <span className="font-medium">{item.step.id}</span>
-                <span className="text-muted-foreground">
-                  {stepSummary(item.step)}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground">
-            No step-level changes from the available baseline.
-          </p>
-        )}
-        {!baseline ? (
-          <p className="text-muted-foreground">
-            No previous approved revision is available for this Blueprint ID, so
-            this plan is treated as a new definition.
-          </p>
-        ) : null}
-      </div>
-    </details>
-  );
-}
-
-function stepSummary(step: WorkflowStep): string {
-  if (step.kind === "tool") return `tool · ${step.tool ?? "not specified"}`;
-  if (step.kind === "agent")
-    return `agent · ${step.agentDefinition ?? "not specified"}`;
-  return step.kind;
 }

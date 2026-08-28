@@ -1,3 +1,4 @@
+import { ContractVersion, type WorkflowBlueprint } from "@encois/contracts";
 import {
   createDatabase,
   type DatabaseTransaction,
@@ -17,10 +18,18 @@ import {
   users,
   webhookDeliveries,
   webhookEndpoints,
+  workflowBlueprints,
   workflowDefinitions,
   workflowEvents,
   workflowRuns,
 } from "@encois/database";
+import {
+  Client,
+  Connection,
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+  WorkflowNotFoundError,
+} from "@temporalio/client";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth, type UserRecord } from "firebase-admin/auth";
@@ -224,6 +233,7 @@ type FixtureOrganization = {
 type WorkflowFixtureStatus =
   | "running"
   | "waiting"
+  | "paused"
   | "partial"
   | "failed"
   | "completed";
@@ -236,43 +246,152 @@ type WorkflowFixture = {
   activityName: string;
 };
 
+function generatedWorkflowFixtures(
+  status: WorkflowFixtureStatus,
+  prefix: string,
+  count: number,
+  activityName: string,
+): readonly WorkflowFixture[] {
+  const scopeUnits = [
+    "engineering",
+    "development",
+    "checkout",
+    "payments-api",
+    "operations",
+    "customer-success",
+  ] as const;
+  const actorKeys = [
+    "owner",
+    "engineering-manager",
+    "dev-manager",
+    "viewer",
+  ] as const;
+  return Array.from({ length: count }, (_, index) => ({
+    key: `${prefix}-${String(index + 1).padStart(2, "0")}`,
+    status,
+    scopeUnit: scopeUnits[index % scopeUnits.length] ?? "root",
+    actorKey: actorKeys[index % actorKeys.length] ?? "owner",
+    activityName,
+  }));
+}
+
 const workflowFixtures: readonly WorkflowFixture[] = [
-  {
-    key: "release-readiness",
-    status: "running",
-    scopeUnit: "engineering",
-    actorKey: "owner",
-    activityName: "collect-code-changes",
-  },
-  {
-    key: "engineering-delivery-health",
-    status: "waiting",
-    scopeUnit: "engineering",
-    actorKey: "engineering-manager",
-    activityName: "review-evidence",
-  },
-  {
-    key: "automation-test-readiness",
-    status: "completed",
-    scopeUnit: "checkout",
-    actorKey: "dev-manager",
-    activityName: "assess-test-readiness",
-  },
-  {
-    key: "critical-issues",
-    status: "failed",
-    scopeUnit: "operations",
-    actorKey: "owner",
-    activityName: "collect-incidents",
-  },
-  {
-    key: "documentation-state",
-    status: "partial",
-    scopeUnit: "root",
-    actorKey: "owner",
-    activityName: "find-documentation-drift",
-  },
+  ...generatedWorkflowFixtures(
+    "running",
+    "release-readiness",
+    6,
+    "collect-code-changes",
+  ),
+  ...generatedWorkflowFixtures(
+    "waiting",
+    "delivery-health",
+    6,
+    "review-evidence",
+  ),
+  ...generatedWorkflowFixtures(
+    "completed",
+    "test-readiness",
+    8,
+    "assess-test-readiness",
+  ),
+  ...generatedWorkflowFixtures(
+    "paused",
+    "security-review",
+    5,
+    "await-operator-review",
+  ),
+  ...generatedWorkflowFixtures(
+    "failed",
+    "incident-investigation",
+    5,
+    "collect-incidents",
+  ),
 ];
+
+const temporalAddress =
+  process.env.TEMPORAL_ADDRESS?.trim() || "127.0.0.1:7233";
+const temporalNamespace = process.env.TEMPORAL_NAMESPACE?.trim() || "encois";
+const temporalTaskQueue =
+  process.env.TEMPORAL_TASK_QUEUE?.trim() || "encois-agent-runtime";
+const temporalPolicyVersion =
+  process.env.AGENT_GATEWAY_POLICY_VERSION?.trim() ||
+  "policy-read-only-fixture-v1";
+
+type TemporalSeedConnection = {
+  client: Client;
+  connection: Connection;
+};
+
+async function connectTemporal(): Promise<TemporalSeedConnection> {
+  const apiKey = process.env.TEMPORAL_API_KEY?.trim() || undefined;
+  const connection = await Connection.connect({
+    address: temporalAddress,
+    apiKey,
+    tls: Boolean(apiKey),
+  });
+  return {
+    connection,
+    client: new Client({ connection, namespace: temporalNamespace }),
+  };
+}
+
+function demoBlueprint(fixture: WorkflowFixture): WorkflowBlueprint {
+  const steps =
+    fixture.status === "waiting"
+      ? [
+          { id: "human-approval", kind: "approval" as const },
+          {
+            id: "after-approval",
+            kind: "transform" as const,
+            dependsOn: ["human-approval"],
+            input: { approved: true, fixture: true },
+          },
+        ]
+      : fixture.status === "completed"
+        ? [
+            {
+              id: "collect-evidence",
+              kind: "transform" as const,
+              input: {
+                fixture: true,
+                activity: fixture.activityName,
+                evidenceCount: 12,
+              },
+            },
+            {
+              id: "summarize",
+              kind: "transform" as const,
+              dependsOn: ["collect-evidence"],
+              input: { mergePriorResults: true },
+            },
+          ]
+        : [
+            {
+              id: fixture.status === "failed" ? "invalid-fixture-step" : "hold",
+              kind: "wait" as const,
+              input: {
+                duration:
+                  fixture.status === "failed" ? "not-a-duration" : "24h",
+              },
+            },
+          ];
+
+  return {
+    contractVersion: ContractVersion.WorkflowBlueprint,
+    blueprintId: fixture.key,
+    version: "1.0.0",
+    name: fixture.key
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" "),
+    workflowType: "encois.dynamic.v1",
+    purpose: `Demo investigation for ${fixture.activityName}.`,
+    enabled: true,
+    steps,
+    inputSchemaRef: "contract://workflow-blueprint.v1",
+    outputSchemaRef: "contract://blueprint-workflow-result.v1",
+  };
+}
 
 async function waitForAuthEmulator(): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -1396,37 +1515,115 @@ async function ensureWorkflowFixtures(
       throw new Error(
         `Workflow actor ${fixture.actorKey} is missing in ${organization.slug}.`,
       );
-
-    const workflowId = `workflow:${organization.id}:encois.dynamic.v1:${fixture.key}`;
-    const startedAt = new Date(now.getTime() - 25 * 60 * 1000);
-    const completedAt =
-      fixture.status === "completed" || fixture.status === "failed"
-        ? new Date(now.getTime() - 5 * 60 * 1000)
-        : null;
-    const runValues = {
+    const blueprint = demoBlueprint(fixture);
+    const blueprintValues = {
       organizationId: organization.id,
-      definitionId: definitionRow.id,
-      actorUserId: actor.id,
-      temporalNamespace: "local-fixture",
-      temporalTaskQueue: "encois-agent-runtime",
-      temporalWorkflowId: workflowId,
-      temporalRunId: null,
-      blueprintId: fixture.key,
-      blueprintVersion: "1.0.0",
-      trigger: "local-fixture",
-      status: fixture.status,
-      scope: { ids: [unit.id] },
-      businessInput: { fixture: true, temporalExecution: "not-created" },
-      inputRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
-      resultRef: completedAt
-        ? `artifact://local/${organization.id}/workflows/${fixture.key}/result.json`
-        : null,
-      startedAt,
-      completedAt,
-      retentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      blueprintId: blueprint.blueprintId,
+      version: blueprint.version,
+      workflowType: blueprint.workflowType,
+      name: blueprint.name,
+      blueprint: blueprint as unknown as Record<string, unknown>,
+      status: "approved" as const,
+      isCurrent: true,
+      approvedAt: now,
       updatedAt: now,
     } as const;
-    const [existingRun] = await tx
+    const [existingBlueprint] = await tx
+      .select({ id: workflowBlueprints.id })
+      .from(workflowBlueprints)
+      .where(
+        and(
+          eq(workflowBlueprints.organizationId, organization.id),
+          eq(workflowBlueprints.blueprintId, blueprint.blueprintId),
+          eq(workflowBlueprints.version, blueprint.version),
+        ),
+      )
+      .limit(1);
+    if (existingBlueprint)
+      await tx
+        .update(workflowBlueprints)
+        .set(blueprintValues)
+        .where(eq(workflowBlueprints.id, existingBlueprint.id));
+    else await tx.insert(workflowBlueprints).values(blueprintValues);
+  }
+}
+
+async function seedTemporalWorkflowFixtures(
+  temporal: Client,
+  organization: FixtureOrganization,
+  usersByKey: ReadonlyMap<string, FixtureUser>,
+): Promise<void> {
+  const [definition] = await database.db
+    .select({ id: workflowDefinitions.id })
+    .from(workflowDefinitions)
+    .where(
+      and(
+        eq(workflowDefinitions.organizationId, organization.id),
+        eq(workflowDefinitions.key, "encois.dynamic.v1"),
+        eq(workflowDefinitions.version, "v1"),
+      ),
+    )
+    .limit(1);
+  if (!definition)
+    throw new Error("Local workflow definition was not created.");
+
+  for (const fixture of workflowFixtures) {
+    const unit = organization.units.get(fixture.scopeUnit);
+    const actor = usersByKey.get(fixture.actorKey);
+    if (!unit || !actor)
+      throw new Error(`Workflow fixture ${fixture.key} is incomplete.`);
+    const blueprint = demoBlueprint(fixture);
+    const workflowId = `workflow:${organization.id}:encois.dynamic.v1:${fixture.key}`;
+    const handle = temporal.workflow.getHandle(workflowId);
+    try {
+      await handle.describe();
+    } catch (error) {
+      if (!(error instanceof WorkflowNotFoundError)) throw error;
+      await temporal.workflow.start("encois.dynamic.v1", {
+        args: [
+          {
+            contractVersion: ContractVersion.WorkflowBlueprint,
+            actorId: actor.id,
+            organizationId: organization.id,
+            requestId: `seed-local:${fixture.key}`,
+            traceId: `seed-local:${organization.id}:${fixture.key}`,
+            workflowId,
+            policyVersion: temporalPolicyVersion,
+            scope: { ids: [unit.id] },
+            capability: "local-seed-capability",
+            blueprint,
+            businessInput: {
+              fixture: true,
+              workspace: "organization-sun",
+              activity: fixture.activityName,
+            },
+            idempotencyKey: `seed-local:${fixture.key}`,
+          },
+        ],
+        taskQueue: temporalTaskQueue,
+        workflowId,
+        memo: {
+          encoisRequestHash: `seed-local:${fixture.key}`,
+          encoisWorkflowType: "encois.dynamic.v1",
+          encoisBlueprintId: blueprint.blueprintId,
+          encoisBlueprintVersion: blueprint.version,
+          encoisTrigger: "local-demo-seed",
+        },
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+      });
+    }
+
+    if (fixture.status === "paused")
+      await handle.signal("workflow-control", {
+        signalId: `seed-local:pause:${fixture.key}`,
+        action: "workflow-pause",
+        reason: "Local demo workspace fixture.",
+      });
+
+    const description = await handle.describe();
+    const now = new Date();
+    const [existingRun] = await database.db
       .select({ id: workflowRuns.id })
       .from(workflowRuns)
       .where(
@@ -1436,72 +1633,99 @@ async function ensureWorkflowFixtures(
         ),
       )
       .limit(1);
-    const run = existingRun
-      ? (
-          await tx
-            .update(workflowRuns)
-            .set(runValues)
-            .where(eq(workflowRuns.id, existingRun.id))
-            .returning({ id: workflowRuns.id })
-        )[0]
-      : (
-          await tx
-            .insert(workflowRuns)
-            .values(runValues)
-            .returning({ id: workflowRuns.id })
-        )[0];
-    if (!run)
-      throw new Error(`Local workflow run ${fixture.key} was not created.`);
+    const runValues = {
+      organizationId: organization.id,
+      definitionId: definition.id,
+      actorUserId: actor.id,
+      temporalNamespace,
+      temporalTaskQueue,
+      temporalWorkflowId: workflowId,
+      temporalRunId: description.runId,
+      blueprintId: blueprint.blueprintId,
+      blueprintVersion: blueprint.version,
+      trigger: "local-demo-seed",
+      status: "queued" as const,
+      scope: { ids: [unit.id] },
+      businessInput: {
+        fixture: true,
+        workspace: "organization-sun",
+        activity: fixture.activityName,
+      },
+      inputRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
+      resultRef: null,
+      startedAt: description.startTime ?? now,
+      completedAt: description.closeTime ?? null,
+      retentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: now,
+    } as const;
+    await database.db.transaction(async (tx) => {
+      const run = existingRun
+        ? (
+            await tx
+              .update(workflowRuns)
+              .set(runValues)
+              .where(eq(workflowRuns.id, existingRun.id))
+              .returning({ id: workflowRuns.id })
+          )[0]
+        : (
+            await tx
+              .insert(workflowRuns)
+              .values(runValues)
+              .returning({ id: workflowRuns.id })
+          )[0];
+      if (!run)
+        throw new Error(`Local workflow run ${fixture.key} was not created.`);
 
-    const eventValues = [
-      {
-        eventType: "workflow_started",
-        status: "running",
-        activityName: "workflow-start",
-        evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
-        metadata: { fixture: true, temporalExecution: "not-created" },
-      },
-      {
-        eventType:
-          fixture.status === "failed" ? "workflow_failed" : "workflow_status",
-        status: fixture.status,
-        activityName: fixture.activityName,
-        evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/evidence.json`,
-        metadata: {
-          fixture: true,
-          temporalExecution: "not-created",
-          ...(fixture.status === "failed"
-            ? { error: "The local fixture has no Temporal execution." }
-            : {}),
+      const eventValues = [
+        {
+          eventType: "workflow_started",
+          status: "running",
+          activityName: "workflow-start",
+          evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
+          metadata: {
+            fixture: true,
+            temporalNamespace,
+            temporalRunId: description.runId,
+          },
         },
-      },
-    ] as const;
-    for (const event of eventValues) {
-      const [existingEvent] = await tx
-        .select({ id: workflowEvents.id })
-        .from(workflowEvents)
-        .where(
-          and(
-            eq(workflowEvents.organizationId, organization.id),
-            eq(workflowEvents.workflowRunId, run.id),
-            eq(workflowEvents.eventType, event.eventType),
-            eq(workflowEvents.activityName, event.activityName),
-          ),
-        )
-        .limit(1);
-      if (existingEvent) {
-        await tx
-          .update(workflowEvents)
-          .set({ ...event, occurredAt: now })
-          .where(eq(workflowEvents.id, existingEvent.id));
-      } else {
-        await tx.insert(workflowEvents).values({
-          organizationId: organization.id,
-          workflowRunId: run.id,
-          ...event,
-        });
+        {
+          eventType: "workflow_fixture_seeded",
+          status: fixture.status,
+          activityName: fixture.activityName,
+          evidenceRef: `artifact://local/${organization.id}/workflows/${fixture.key}/evidence.json`,
+          metadata: {
+            fixture: true,
+            temporalWorkflowId: workflowId,
+            temporalRunId: description.runId,
+          },
+        },
+      ] as const;
+      for (const event of eventValues) {
+        const [existingEvent] = await tx
+          .select({ id: workflowEvents.id })
+          .from(workflowEvents)
+          .where(
+            and(
+              eq(workflowEvents.organizationId, organization.id),
+              eq(workflowEvents.workflowRunId, run.id),
+              eq(workflowEvents.eventType, event.eventType),
+              eq(workflowEvents.activityName, event.activityName),
+            ),
+          )
+          .limit(1);
+        if (existingEvent)
+          await tx
+            .update(workflowEvents)
+            .set({ ...event, occurredAt: now })
+            .where(eq(workflowEvents.id, existingEvent.id));
+        else
+          await tx.insert(workflowEvents).values({
+            organizationId: organization.id,
+            workflowRunId: run.id,
+            ...event,
+          });
       }
-    }
+    });
   }
 }
 
@@ -1588,202 +1812,363 @@ async function seedFixtures(): Promise<unknown> {
       ),
     );
 
-  return database.db.transaction(async (tx) => {
-    await ensureIntegrationCatalog(tx);
-    const organizationsBySlug = new Map<string, FixtureOrganization>();
-    for (const fixture of organizationsFixture)
-      organizationsBySlug.set(
-        fixture.slug,
-        await ensureOrganization(tx, fixture),
-      );
+  const temporal = await connectTemporal();
+  try {
+    const seeded = await database.db.transaction(async (tx) => {
+      await ensureIntegrationCatalog(tx);
+      const organizationsBySlug = new Map<string, FixtureOrganization>();
+      for (const fixture of organizationsFixture)
+        organizationsBySlug.set(
+          fixture.slug,
+          await ensureOrganization(tx, fixture),
+        );
 
-    const usersByKey = new Map<string, FixtureUser>();
-    for (const spec of activeUsers) {
-      const organization = organizationsBySlug.get(spec.organizationSlug);
-      const identity = identities.get(spec.email);
-      if (!organization || !identity)
-        throw new Error(`Active fixture ${spec.key} is incomplete.`);
-      usersByKey.set(
-        spec.key,
-        await ensureActiveFixtureUser(tx, organization, identity, spec),
-      );
-    }
-    for (const spec of onboardingUsers) {
-      const organization = organizationsBySlug.get(spec.organizationSlug);
-      if (!organization)
-        throw new Error(
-          `Onboarding fixture ${spec.email} has no organization.`,
+      const usersByKey = new Map<string, FixtureUser>();
+      for (const spec of activeUsers) {
+        const organization = organizationsBySlug.get(spec.organizationSlug);
+        const identity = identities.get(spec.email);
+        if (!organization || !identity)
+          throw new Error(`Active fixture ${spec.key} is incomplete.`);
+        usersByKey.set(
+          spec.key,
+          await ensureActiveFixtureUser(tx, organization, identity, spec),
         );
-      await ensurePendingInvite(tx, organization, spec);
-    }
+      }
+      for (const spec of onboardingUsers) {
+        const organization = organizationsBySlug.get(spec.organizationSlug);
+        if (!organization)
+          throw new Error(
+            `Onboarding fixture ${spec.email} has no organization.`,
+          );
+        await ensurePendingInvite(tx, organization, spec);
+      }
 
-    const outputOrganizations: unknown[] = [];
-    for (const organizationSpec of organizationsFixture) {
-      const organization = organizationsBySlug.get(organizationSpec.slug);
-      if (!organization)
-        throw new Error(
-          `Organization fixture ${organizationSpec.slug} was not created.`,
-        );
-      const owner = usersByKey.get("owner");
-      const engineeringUnit = organization.units.get("engineering");
-      const customerSuccessUnit = organization.units.get("customer-success");
-      if (!owner || !engineeringUnit || !customerSuccessUnit)
-        throw new Error(
-          `Organization fixture ${organizationSpec.slug} is incomplete.`,
-        );
-      const firstIntegration = await ensureIntegration(
-        tx,
-        organization,
-        "GitHub",
-        "github",
-        owner.id,
-      );
-      const secondIntegration = await ensureIntegration(
-        tx,
-        organization,
-        "Jira",
-        "jira",
-        owner.id,
-      );
-      const thirdIntegration = await ensureIntegration(
-        tx,
-        organization,
-        "Slack",
-        "slack",
-        owner.id,
-        "disabled",
-      );
-      const sources = [
-        await ensureKnowledgeSource(
+      const outputOrganizations: unknown[] = [];
+      for (const organizationSpec of organizationsFixture) {
+        const organization = organizationsBySlug.get(organizationSpec.slug);
+        if (!organization)
+          throw new Error(
+            `Organization fixture ${organizationSpec.slug} was not created.`,
+          );
+        const owner = usersByKey.get("owner");
+        const engineeringUnit = organization.units.get("engineering");
+        const customerSuccessUnit = organization.units.get("customer-success");
+        if (!owner || !engineeringUnit || !customerSuccessUnit)
+          throw new Error(
+            `Organization fixture ${organizationSpec.slug} is incomplete.`,
+          );
+        const firstIntegration = await ensureIntegration(
           tx,
           organization,
-          "github-engineering",
-          "GitHub Engineering Source",
-          "integration",
-          engineeringUnit.slug,
-          "active",
+          "GitHub",
           "github",
-          firstIntegration.id,
-        ),
-        await ensureKnowledgeSource(
-          tx,
-          organization,
-          "jira-customer-success",
-          "Jira Customer Success Source",
-          "integration",
-          customerSuccessUnit.slug,
-          "active",
-          "jira",
-          secondIntegration.id,
-        ),
-        await ensureKnowledgeSource(
-          tx,
-          organization,
-          "handbook",
-          "Company handbook",
-          "manual",
-          "root",
-          "active",
-        ),
-        await ensureKnowledgeSource(
-          tx,
-          organization,
-          "incident-log",
-          "Incident log Source",
-          "integration",
-          customerSuccessUnit.slug,
-          "failed",
-          "slack",
-          thirdIntegration.id,
-        ),
-      ];
-      const [githubSource, jiraSource, handbookSource, incidentSource] =
-        sources;
-      if (!githubSource || !jiraSource || !handbookSource || !incidentSource)
-        throw new Error(
-          `Organization fixture ${organizationSpec.slug} has incomplete sources.`,
+          owner.id,
         );
-      await ensureSourceIngestion(
-        tx,
-        organization,
-        githubSource,
-        "completed",
-        "memory_distilled",
-        48,
-      );
-      await ensureSourceIngestion(
-        tx,
-        organization,
-        jiraSource,
-        "completed",
-        "memory_distilled",
-        17,
-      );
-      await ensureSourceIngestion(
-        tx,
-        organization,
-        handbookSource,
-        "completed",
-        "graph_projected",
-        12,
-      );
-      await ensureSourceIngestion(
-        tx,
-        organization,
-        incidentSource,
-        "failed",
-        "acquired",
-        0,
-      );
-      await ensureWebhookFixture(
-        tx,
-        organization,
-        "github",
-        "github-events",
-        firstIntegration.id,
-      );
-      await ensureWebhookFixture(
-        tx,
-        organization,
-        "jira",
-        "jira-events",
-        secondIntegration.id,
-      );
-      await ensureWorkflowFixtures(tx, organization, usersByKey);
-      outputOrganizations.push({
-        id: organization.id,
-        slug: organization.slug,
-        name: organization.name,
-        units: [...organization.units.values()],
-        integrations: [firstIntegration, secondIntegration, thirdIntegration],
-        sources: sources.map(({ id, name, revisionId }) => ({
-          id,
-          name,
-          revisionId,
+        const secondIntegration = await ensureIntegration(
+          tx,
+          organization,
+          "Jira",
+          "jira",
+          owner.id,
+        );
+        const thirdIntegration = await ensureIntegration(
+          tx,
+          organization,
+          "Slack",
+          "slack",
+          owner.id,
+          "disabled",
+        );
+        const fourthIntegration = await ensureIntegration(
+          tx,
+          organization,
+          "PagerDuty",
+          "pagerduty",
+          owner.id,
+          "error",
+        );
+        const fifthIntegration = await ensureIntegration(
+          tx,
+          organization,
+          "Google Drive",
+          "google-drive",
+          owner.id,
+          "pending",
+        );
+        const sixthIntegration = await ensureIntegration(
+          tx,
+          organization,
+          "Linear",
+          "linear",
+          owner.id,
+          "disabled",
+        );
+        const sources = [
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "github-engineering",
+            "GitHub Engineering Source",
+            "integration",
+            engineeringUnit.slug,
+            "active",
+            "github",
+            firstIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "jira-customer-success",
+            "Jira Customer Success Source",
+            "integration",
+            customerSuccessUnit.slug,
+            "active",
+            "jira",
+            secondIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "handbook",
+            "Company handbook",
+            "manual",
+            "root",
+            "active",
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "incident-log",
+            "Incident log Source",
+            "integration",
+            customerSuccessUnit.slug,
+            "failed",
+            "slack",
+            thirdIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "github-checkout",
+            "GitHub Checkout Source",
+            "integration",
+            "checkout",
+            "active",
+            "github",
+            firstIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "jira-engineering",
+            "Jira Engineering Source",
+            "integration",
+            "engineering",
+            "active",
+            "jira",
+            secondIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "jira-payments",
+            "Jira Payments API Source",
+            "integration",
+            "payments-api",
+            "active",
+            "jira",
+            secondIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "github-operations",
+            "GitHub Operations Source",
+            "integration",
+            "operations",
+            "degraded",
+            "github",
+            firstIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "jira-support-escalations",
+            "Jira Support Escalations",
+            "integration",
+            "customer-success",
+            "degraded",
+            "jira",
+            secondIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "architecture-decisions",
+            "Architecture Decisions",
+            "manual",
+            "engineering",
+            "active",
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "release-notes",
+            "Release Notes",
+            "manual",
+            "development",
+            "active",
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "security-advisories",
+            "Security Advisories",
+            "manual",
+            "root",
+            "active",
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "pagerduty-incidents",
+            "PagerDuty Incidents",
+            "integration",
+            "operations",
+            "failed",
+            "pagerduty",
+            fourthIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "drive-program-roadmap",
+            "Google Drive Program Roadmap",
+            "integration",
+            "root",
+            "ingesting",
+            "google-drive",
+            fifthIntegration.id,
+          ),
+          await ensureKnowledgeSource(
+            tx,
+            organization,
+            "linear-legacy-projects",
+            "Linear Legacy Projects",
+            "integration",
+            "development",
+            "failed",
+            "linear",
+            sixthIntegration.id,
+          ),
+        ];
+        if (sources.length !== 16)
+          throw new Error(
+            `Organization fixture ${organizationSpec.slug} has incomplete sources.`,
+          );
+        const ingestionStatuses = [
+          ["completed", "memory_distilled", 48],
+          ["completed", "memory_distilled", 17],
+          ["completed", "graph_projected", 12],
+          ["failed", "acquired", 0],
+          ["completed", "memory_distilled", 31],
+          ["completed", "memory_distilled", 24],
+          ["completed", "memory_distilled", 19],
+          ["failed", "acquired", 0],
+          ["failed", "acquired", 0],
+          ["completed", "graph_projected", 14],
+          ["completed", "graph_projected", 9],
+          ["completed", "graph_projected", 22],
+          ["failed", "acquired", 0],
+          ["running", "graph_projected", 7],
+          ["failed", "acquired", 0],
+          ["failed", "acquired", 0],
+        ] as const;
+        for (const [index, source] of sources.entries()) {
+          const ingestion = ingestionStatuses[index];
+          if (!ingestion)
+            throw new Error(`Ingestion fixture ${index} is missing.`);
+          await ensureSourceIngestion(
+            tx,
+            organization,
+            source,
+            ingestion[0],
+            ingestion[1],
+            ingestion[2],
+          );
+        }
+        await ensureWebhookFixture(
+          tx,
+          organization,
+          "github",
+          "github-events",
+          firstIntegration.id,
+        );
+        await ensureWebhookFixture(
+          tx,
+          organization,
+          "jira",
+          "jira-events",
+          secondIntegration.id,
+        );
+        await ensureWorkflowFixtures(tx, organization, usersByKey);
+        outputOrganizations.push({
+          id: organization.id,
+          slug: organization.slug,
+          name: organization.name,
+          units: [...organization.units.values()],
+          integrations: [
+            firstIntegration,
+            secondIntegration,
+            thirdIntegration,
+            fourthIntegration,
+            fifthIntegration,
+            sixthIntegration,
+          ],
+          sources: sources.map(({ id, name, revisionId }) => ({
+            id,
+            name,
+            revisionId,
+          })),
+        });
+      }
+      return {
+        organizations: outputOrganizations,
+        activeUsers: activeUsers.map((user) => ({
+          email: user.email,
+          password: user.password,
+          organization: user.organizationSlug,
+          role: user.roleKey,
+          scope: user.unitSlug,
         })),
-      });
-    }
+        onboardingUsers: onboardingUsers.map((user) => ({
+          email: user.email,
+          password: user.password,
+          organization: user.organizationSlug,
+          scope: user.unitSlug,
+        })),
+        seedOrganization: organizationsBySlug.get("organization-sun"),
+        seedUsersByKey: usersByKey,
+      };
+    });
+    if (!seeded.seedOrganization)
+      throw new Error("Local organization fixture was not created.");
+    await seedTemporalWorkflowFixtures(
+      temporal.client,
+      seeded.seedOrganization,
+      seeded.seedUsersByKey,
+    );
     return {
-      organizations: outputOrganizations,
-      activeUsers: activeUsers.map((user) => ({
-        email: user.email,
-        password: user.password,
-        organization: user.organizationSlug,
-        role: user.roleKey,
-        scope: user.unitSlug,
-      })),
-      onboardingUsers: onboardingUsers.map((user) => ({
-        email: user.email,
-        password: user.password,
-        organization: user.organizationSlug,
-        scope: user.unitSlug,
-      })),
-      workflowMode:
-        "temporal (persisted fixture runs intentionally have no execution)",
+      organizations: seeded.organizations,
+      activeUsers: seeded.activeUsers,
+      onboardingUsers: seeded.onboardingUsers,
+      workflowMode: `temporal (${workflowFixtures.length} real demo executions)`,
       memoryMode:
         "mock (process-scoped; source ingestion warms it when workflows execute)",
     };
-  });
+  } finally {
+    await temporal.connection.close();
+  }
 }
 
 try {

@@ -23,7 +23,7 @@ The Dashboard must never manufacture an insight, activity event, connection, or 
 - failed or partial runs needing attention;
 - source attention;
 - integration setup;
-- workflow plan and memory-change approvals;
+- Blueprint revision and memory-change approvals;
 - organization access requests.
 
 Summary cards link to the owning product surface. Individual rows link to the relevant workflow, source, integration, or organization request. Workflow run links should lead to the aggregate Runs page when the user asks to see the complete run history.

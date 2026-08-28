@@ -24,22 +24,6 @@ export async function invalidateWorkflowExecutionQueries(
   ]);
 }
 
-export async function invalidateWorkflowPlanQueries(
-  queryClient: QueryClient,
-  planId?: string,
-): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.workflowPlansRoot() }),
-    ...(planId
-      ? [
-          queryClient.invalidateQueries({
-            queryKey: queryKeys.workflowPlan(planId),
-          }),
-        ]
-      : []),
-  ]);
-}
-
 export async function invalidateSourceQueries(
   queryClient: QueryClient,
   sourceId?: string,

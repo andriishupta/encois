@@ -34,7 +34,7 @@ Configuration is environment-based:
   client sends a Google ID token for Cloud Run IAM and the Encois service token
   separately;
 - `CONTROL_PLANE_URL` — optional private Gateway API URL used by Coordinator
-  Activities to submit typed plans or start an approved Blueprint;
+  Activities to report onboarding status;
 - `CONTROL_PLANE_SERVICE_TOKEN` — application-level token for the private
   control-plane route;
 - `CONTROL_PLANE_AUDIENCE` — optional Cloud Run URL; when set, the client also
@@ -71,11 +71,8 @@ Configuration is environment-based:
 The current skeleton:
 
 - connect to the configured Temporal endpoint (local Temporal Server or Temporal Cloud) and poll named task queues;
-- initializes Coordinator and Workflow Creator ADK capabilities with the
-  explicit reasoning profile when Gemini is configured; routine summaries and
-  approved Blueprint Agent Definitions use the standard model, and the bootstrap
-  path can propose a validated `workflow-change-plan.v1` when Gemini is
-  available;
+- initializes the ADK capability used by approved Blueprint Agent Definitions
+  when Gemini is configured; routine summaries use the standard model;
 - keeps model calls and external I/O inside Activities;
 - use versioned Temporal payloads and the private Agent Gateway boundary; and
 - emit scoped, redacted runtime telemetry.
@@ -112,17 +109,10 @@ Registered workflows:
   uses deterministic source fixtures; hosted mode reads artifacts through the
   Agent Gateway and writes to the configured GCP adapters.
 
-The Coordinator and Workflow Creator prompts are present in the ADK bundle. The
-bootstrap Workflow calls a `CreateBootstrapPlan` Activity, which discards raw
-model output and returns only a canonical, deterministically validated
-`workflow-change-plan.v1`. The long-lived `CoordinatorWorkflow` now calls
-`CreateCoordinatorPlan` and `SubmitWorkflowChangePlan` after a reconciliation
-signal or timer. These Activities only propose and submit a typed plan; they do
-not approve it or persist it directly. After Gateway approval/application, the
-Coordinator receives a deduplicated `coordinator-event.v1`; only explicit
-change-level `start` intents become `workflowStarts`, which are started through
-the private Gateway Activity. Intermediate thoughts are not emitted to users or
-logs; only the validated result is retained.
+The Gateway owns Blueprint creation and Workflow start. The long-lived
+`CoordinatorWorkflow` only reconciles scoped signals and reports onboarding
+readiness through the private control-plane boundary. Intermediate thoughts are
+not emitted to users or logs.
 
 Tool Activities call the Agent Gateway over HTTP. The gateway currently
 exposes two in-memory, read-only fixtures: 10 Jira tasks with 8 completed,

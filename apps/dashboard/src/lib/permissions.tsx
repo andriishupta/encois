@@ -13,7 +13,8 @@ import { authSessionEventName, getAuthSession } from "@/lib/auth";
 
 const permissionDescriptions: Readonly<Record<PermissionKey, string>> = {
   "onboarding:manage": "Set up the initial workspace foundation and defaults.",
-  "workflows:read": "View workflow definitions, plans, and execution history.",
+  "workflows:read":
+    "View workflow definitions, Blueprints, and execution history.",
   "workflows:run": "Start an approved workflow within your authorized scope.",
   "workflows:manage": "Create, configure, approve, and manage workflows.",
   "integrations:read": "View organization integrations and their availability.",

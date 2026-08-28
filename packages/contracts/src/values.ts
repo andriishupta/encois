@@ -18,8 +18,6 @@ export const ContractVersion = {
   AgentMemoryResult: "agent-memory-result.v1",
   ToolManifest: "tool-manifest.v1",
   WorkflowUpdate: "workflow-update.v1",
-  WorkflowChangePlan: "workflow-change-plan.v1",
-  WorkflowBlueprintLifecycle: "workflow-blueprint-lifecycle.v1",
   CoordinatorEvent: "coordinator-event.v1",
   KnowledgeSource: "knowledge-source.v1",
   SourceRevision: "source-revision.v1",
@@ -225,8 +223,6 @@ export type WorkflowUpdateName =
   (typeof WorkflowUpdateName)[keyof typeof WorkflowUpdateName];
 
 export const CoordinatorEventType = {
-  WorkflowPlanApproved: "workflow-plan-approved",
-  WorkflowPlanApplied: "workflow-plan-applied",
   WorkflowCompleted: "workflow-completed",
   IntegrationConnected: "integration-connected",
   SourceReady: "source-ready",
@@ -256,17 +252,6 @@ export const RecommendationTarget = {
 } as const;
 export type RecommendationTarget =
   (typeof RecommendationTarget)[keyof typeof RecommendationTarget];
-
-export const WorkflowChangeKind = {
-  Create: "create",
-  Update: "update",
-  Deprecate: "deprecate",
-  Restore: "restore",
-  SetCurrent: "set_current",
-  Cancel: "cancel",
-} as const;
-export type WorkflowChangeKind =
-  (typeof WorkflowChangeKind)[keyof typeof WorkflowChangeKind];
 
 export const CoordinatorSignalName = {
   Event: "coordinator-event",

@@ -212,7 +212,7 @@ function TemplateCard({ template }: { template: WorkflowTemplateProjection }) {
               {template.template.output.type}
             </p>
             <p>Estimated duration: Not reported by Template</p>
-            <p>Risk: Review approval requirements in the plan preview</p>
+            <p>Risk: Review approval requirements in the Blueprint preview</p>
           </div>
         </details>
       </CardContent>

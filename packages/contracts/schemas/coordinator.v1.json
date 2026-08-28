@@ -44,14 +44,6 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         },
-        "pendingPlanIds": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "pendingWorkflowStarts": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/workflowStart" }
-        },
         "processedEventIds": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
@@ -78,18 +70,6 @@
         }
       }
     },
-    "workflowStart": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["blueprintId", "blueprintVersion", "key"],
-      "properties": {
-        "blueprintId": { "type": "string", "minLength": 1 },
-        "blueprintVersion": { "type": "string", "minLength": 1 },
-        "key": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "businessInput": { "type": "object" },
-        "scope": { "$ref": "#/$defs/scope" }
-      }
-    }
   },
   "properties": {
     "contractVersion": { "const": "coordinator.v1" },

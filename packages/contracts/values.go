@@ -7,33 +7,31 @@ import "strings"
 type ContractVersion string
 
 const (
-	ContractExecutionContext           ContractVersion = "execution-context.v1"
-	ContractWorkflowBlueprint          ContractVersion = "workflow-blueprint.v1"
-	ContractWorkflowResult             ContractVersion = "blueprint-workflow-result.v1"
-	ContractAgentResult                ContractVersion = "agent-result.v1"
-	ContractAgentInstructions          ContractVersion = "agent-instructions.v1"
-	ContractWorkflowSignal             ContractVersion = "workflow-signal.v1"
-	ContractToolRequest                ContractVersion = "tool-request.v1"
-	ContractToolResult                 ContractVersion = "tool-result.v1"
-	ContractArtifactWrite              ContractVersion = "artifact-write.v1"
-	ContractArtifactRead               ContractVersion = "artifact-read.v1"
-	ContractArtifactWriteResult        ContractVersion = "artifact-write-result.v1"
-	ContractGraphQuery                 ContractVersion = "graph-query.v1"
-	ContractGraphUpsert                ContractVersion = "graph-upsert.v1"
-	ContractGraphQueryResult           ContractVersion = "graph-query-result.v1"
-	ContractAgentMemory                ContractVersion = "agent-memory.v1"
-	ContractAgentMemoryResult          ContractVersion = "agent-memory-result.v1"
-	ContractToolManifest               ContractVersion = "tool-manifest.v1"
-	ContractWorkflowUpdate             ContractVersion = "workflow-update.v1"
-	ContractWorkflowChangePlan         ContractVersion = "workflow-change-plan.v1"
-	ContractWorkflowBlueprintLifecycle ContractVersion = "workflow-blueprint-lifecycle.v1"
-	ContractCoordinatorEvent           ContractVersion = "coordinator-event.v1"
-	ContractCoordinator                ContractVersion = "coordinator.v1"
-	ContractBootstrapProject           ContractVersion = "bootstrap-project.v1"
-	ContractKnowledgeSource            ContractVersion = "knowledge-source.v1"
-	ContractSourceRevision             ContractVersion = "source-revision.v1"
-	ContractSourceIngestion            ContractVersion = "source-ingestion.v1"
-	ContractSourceIngestionResult      ContractVersion = "source-ingestion-result.v1"
+	ContractExecutionContext      ContractVersion = "execution-context.v1"
+	ContractWorkflowBlueprint     ContractVersion = "workflow-blueprint.v1"
+	ContractWorkflowResult        ContractVersion = "blueprint-workflow-result.v1"
+	ContractAgentResult           ContractVersion = "agent-result.v1"
+	ContractAgentInstructions     ContractVersion = "agent-instructions.v1"
+	ContractWorkflowSignal        ContractVersion = "workflow-signal.v1"
+	ContractToolRequest           ContractVersion = "tool-request.v1"
+	ContractToolResult            ContractVersion = "tool-result.v1"
+	ContractArtifactWrite         ContractVersion = "artifact-write.v1"
+	ContractArtifactRead          ContractVersion = "artifact-read.v1"
+	ContractArtifactWriteResult   ContractVersion = "artifact-write-result.v1"
+	ContractGraphQuery            ContractVersion = "graph-query.v1"
+	ContractGraphUpsert           ContractVersion = "graph-upsert.v1"
+	ContractGraphQueryResult      ContractVersion = "graph-query-result.v1"
+	ContractAgentMemory           ContractVersion = "agent-memory.v1"
+	ContractAgentMemoryResult     ContractVersion = "agent-memory-result.v1"
+	ContractToolManifest          ContractVersion = "tool-manifest.v1"
+	ContractWorkflowUpdate        ContractVersion = "workflow-update.v1"
+	ContractCoordinatorEvent      ContractVersion = "coordinator-event.v1"
+	ContractCoordinator           ContractVersion = "coordinator.v1"
+	ContractBootstrapProject      ContractVersion = "bootstrap-project.v1"
+	ContractKnowledgeSource       ContractVersion = "knowledge-source.v1"
+	ContractSourceRevision        ContractVersion = "source-revision.v1"
+	ContractSourceIngestion       ContractVersion = "source-ingestion.v1"
+	ContractSourceIngestionResult ContractVersion = "source-ingestion-result.v1"
 )
 
 type TemporalWorkflowType string
@@ -57,7 +55,7 @@ const (
 )
 
 // DefaultAgentDefinition is the generic synthesis role used by the current
-// workflow templates and model-generated Blueprint plans.
+// workflow templates and Blueprint definitions.
 const DefaultAgentDefinition = "context.synthesizer@1"
 
 // RegisteredAgentDefinitions is the shared semantic allowlist for executable
@@ -187,8 +185,6 @@ const (
 type CoordinatorEventType string
 
 const (
-	EventWorkflowPlanApproved CoordinatorEventType = "workflow-plan-approved"
-	EventWorkflowPlanApplied  CoordinatorEventType = "workflow-plan-applied"
 	EventWorkflowCompleted    CoordinatorEventType = "workflow-completed"
 	EventIntegrationConnected CoordinatorEventType = "integration-connected"
 	EventSourceReady          CoordinatorEventType = "source-ready"
@@ -206,17 +202,6 @@ const (
 	SignalProviderChanged      CoordinatorSignalName = "provider-changed"
 	SignalApprovalResolved     CoordinatorSignalName = "approval-resolved"
 	SignalCoordinatorEvent     CoordinatorSignalName = "coordinator-event"
-)
-
-type WorkflowChangeKind string
-
-const (
-	ChangeCreate     WorkflowChangeKind = "create"
-	ChangeUpdate     WorkflowChangeKind = "update"
-	ChangeDeprecate  WorkflowChangeKind = "deprecate"
-	ChangeRestore    WorkflowChangeKind = "restore"
-	ChangeSetCurrent WorkflowChangeKind = "set_current"
-	ChangeCancel     WorkflowChangeKind = "cancel"
 )
 
 type OrganizationUnitType string

@@ -17,66 +17,62 @@ import (
 type SchemaName string
 
 const (
-	SchemaWorkflowBlueprint          SchemaName = "workflowBlueprint"
-	SchemaWorkflowResult             SchemaName = "workflowResult"
-	SchemaAgentResult                SchemaName = "agentResult"
-	SchemaAgentInstructions          SchemaName = "agentInstructions"
-	SchemaWorkflowSignal             SchemaName = "workflowSignal"
-	SchemaExecutionContext           SchemaName = "executionContext"
-	SchemaToolRequest                SchemaName = "toolRequest"
-	SchemaToolResult                 SchemaName = "toolResult"
-	SchemaArtifactWrite              SchemaName = "artifactWrite"
-	SchemaArtifactRead               SchemaName = "artifactRead"
-	SchemaArtifactWriteResult        SchemaName = "artifactWriteResult"
-	SchemaGraphQuery                 SchemaName = "graphQuery"
-	SchemaGraphUpsert                SchemaName = "graphUpsert"
-	SchemaGraphQueryResult           SchemaName = "graphQueryResult"
-	SchemaAgentMemory                SchemaName = "agentMemory"
-	SchemaAgentMemoryResult          SchemaName = "agentMemoryResult"
-	SchemaToolManifest               SchemaName = "toolManifest"
-	SchemaWorkflowUpdate             SchemaName = "workflowUpdate"
-	SchemaWorkflowChangePlan         SchemaName = "workflowChangePlan"
-	SchemaWorkflowBlueprintLifecycle SchemaName = "workflowBlueprintLifecycle"
-	SchemaCoordinatorEvent           SchemaName = "coordinatorEvent"
-	SchemaCoordinator                SchemaName = "coordinator"
-	SchemaBootstrapProject           SchemaName = "bootstrapProject"
-	SchemaKnowledgeSource            SchemaName = "knowledgeSource"
-	SchemaSourceRevision             SchemaName = "sourceRevision"
-	SchemaSourceIngestion            SchemaName = "sourceIngestion"
-	SchemaSourceIngestionResult      SchemaName = "sourceIngestionResult"
+	SchemaWorkflowBlueprint     SchemaName = "workflowBlueprint"
+	SchemaWorkflowResult        SchemaName = "workflowResult"
+	SchemaAgentResult           SchemaName = "agentResult"
+	SchemaAgentInstructions     SchemaName = "agentInstructions"
+	SchemaWorkflowSignal        SchemaName = "workflowSignal"
+	SchemaExecutionContext      SchemaName = "executionContext"
+	SchemaToolRequest           SchemaName = "toolRequest"
+	SchemaToolResult            SchemaName = "toolResult"
+	SchemaArtifactWrite         SchemaName = "artifactWrite"
+	SchemaArtifactRead          SchemaName = "artifactRead"
+	SchemaArtifactWriteResult   SchemaName = "artifactWriteResult"
+	SchemaGraphQuery            SchemaName = "graphQuery"
+	SchemaGraphUpsert           SchemaName = "graphUpsert"
+	SchemaGraphQueryResult      SchemaName = "graphQueryResult"
+	SchemaAgentMemory           SchemaName = "agentMemory"
+	SchemaAgentMemoryResult     SchemaName = "agentMemoryResult"
+	SchemaToolManifest          SchemaName = "toolManifest"
+	SchemaWorkflowUpdate        SchemaName = "workflowUpdate"
+	SchemaCoordinatorEvent      SchemaName = "coordinatorEvent"
+	SchemaCoordinator           SchemaName = "coordinator"
+	SchemaBootstrapProject      SchemaName = "bootstrapProject"
+	SchemaKnowledgeSource       SchemaName = "knowledgeSource"
+	SchemaSourceRevision        SchemaName = "sourceRevision"
+	SchemaSourceIngestion       SchemaName = "sourceIngestion"
+	SchemaSourceIngestionResult SchemaName = "sourceIngestionResult"
 )
 
 //go:embed schemas/*.json
 var schemaFiles embed.FS
 
 var schemaPaths = map[SchemaName]string{
-	SchemaWorkflowBlueprint:          "schemas/workflow-blueprint.v1.json",
-	SchemaWorkflowResult:             "schemas/blueprint-workflow-result.v1.json",
-	SchemaAgentResult:                "schemas/agent-result.v1.json",
-	SchemaAgentInstructions:          "schemas/agent-instructions.v1.json",
-	SchemaWorkflowSignal:             "schemas/workflow-signal.v1.json",
-	SchemaExecutionContext:           "schemas/execution-context.v1.json",
-	SchemaToolRequest:                "schemas/tool-request.v1.json",
-	SchemaToolResult:                 "schemas/tool-result.v1.json",
-	SchemaArtifactWrite:              "schemas/artifact-write.v1.json",
-	SchemaArtifactRead:               "schemas/artifact-read.v1.json",
-	SchemaArtifactWriteResult:        "schemas/artifact-write-result.v1.json",
-	SchemaGraphQuery:                 "schemas/graph-query.v1.json",
-	SchemaGraphUpsert:                "schemas/graph-upsert.v1.json",
-	SchemaGraphQueryResult:           "schemas/graph-query-result.v1.json",
-	SchemaAgentMemory:                "schemas/agent-memory.v1.json",
-	SchemaAgentMemoryResult:          "schemas/agent-memory-result.v1.json",
-	SchemaToolManifest:               "schemas/tool-manifest.v1.json",
-	SchemaWorkflowUpdate:             "schemas/workflow-update.v1.json",
-	SchemaWorkflowChangePlan:         "schemas/workflow-change-plan.v1.json",
-	SchemaWorkflowBlueprintLifecycle: "schemas/workflow-blueprint-lifecycle.v1.json",
-	SchemaCoordinatorEvent:           "schemas/coordinator-event.v1.json",
-	SchemaCoordinator:                "schemas/coordinator.v1.json",
-	SchemaBootstrapProject:           "schemas/bootstrap-project.v1.json",
-	SchemaKnowledgeSource:            "schemas/knowledge-source.v1.json",
-	SchemaSourceRevision:             "schemas/source-revision.v1.json",
-	SchemaSourceIngestion:            "schemas/source-ingestion.v1.json",
-	SchemaSourceIngestionResult:      "schemas/source-ingestion-result.v1.json",
+	SchemaWorkflowBlueprint:     "schemas/workflow-blueprint.v1.json",
+	SchemaWorkflowResult:        "schemas/blueprint-workflow-result.v1.json",
+	SchemaAgentResult:           "schemas/agent-result.v1.json",
+	SchemaAgentInstructions:     "schemas/agent-instructions.v1.json",
+	SchemaWorkflowSignal:        "schemas/workflow-signal.v1.json",
+	SchemaExecutionContext:      "schemas/execution-context.v1.json",
+	SchemaToolRequest:           "schemas/tool-request.v1.json",
+	SchemaToolResult:            "schemas/tool-result.v1.json",
+	SchemaArtifactWrite:         "schemas/artifact-write.v1.json",
+	SchemaArtifactRead:          "schemas/artifact-read.v1.json",
+	SchemaArtifactWriteResult:   "schemas/artifact-write-result.v1.json",
+	SchemaGraphQuery:            "schemas/graph-query.v1.json",
+	SchemaGraphUpsert:           "schemas/graph-upsert.v1.json",
+	SchemaGraphQueryResult:      "schemas/graph-query-result.v1.json",
+	SchemaAgentMemory:           "schemas/agent-memory.v1.json",
+	SchemaAgentMemoryResult:     "schemas/agent-memory-result.v1.json",
+	SchemaToolManifest:          "schemas/tool-manifest.v1.json",
+	SchemaWorkflowUpdate:        "schemas/workflow-update.v1.json",
+	SchemaCoordinatorEvent:      "schemas/coordinator-event.v1.json",
+	SchemaCoordinator:           "schemas/coordinator.v1.json",
+	SchemaBootstrapProject:      "schemas/bootstrap-project.v1.json",
+	SchemaKnowledgeSource:       "schemas/knowledge-source.v1.json",
+	SchemaSourceRevision:        "schemas/source-revision.v1.json",
+	SchemaSourceIngestion:       "schemas/source-ingestion.v1.json",
+	SchemaSourceIngestionResult: "schemas/source-ingestion-result.v1.json",
 }
 
 var resolvedSchemas sync.Map // map[SchemaName]*jsonschema.Resolved

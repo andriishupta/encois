@@ -63,7 +63,6 @@ export type WorkflowStartCommand = {
       onboardingComplete: boolean;
       connectedIntegrationIds?: readonly string[];
       activeWorkflowIds?: readonly string[];
-      pendingPlanIds?: readonly string[];
       processedEventIds?: readonly string[];
       lastEvent?: string;
       lastError?: string;

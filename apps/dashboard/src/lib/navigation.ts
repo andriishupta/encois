@@ -4,7 +4,6 @@ export type NavigationTarget =
   | "/workflows/runs"
   | "/workflows/templates"
   | "/workflows/blueprints"
-  | "/workflows/plans"
   | "/workflows/memory"
   | "/organization/memory"
   | "/organization/investigations"
@@ -26,7 +25,6 @@ const workflowNonRunPaths = new Set([
   "/workflows/new",
   "/workflows/templates",
   "/workflows/blueprints",
-  "/workflows/plans",
   "/workflows/memory",
 ]);
 
@@ -47,14 +45,10 @@ export function isNavigationItemActive(
       (workflowRunIdPath.test(pathname) &&
         !workflowNonRunPaths.has(pathname) &&
         !pathname.startsWith("/workflows/definitions/") &&
-        !pathname.startsWith("/workflows/plans/"))
+        !pathname.startsWith("/workflows/blueprints/"))
     );
   }
-  if (
-    target === "/workflows/blueprints" ||
-    target === "/workflows/plans" ||
-    target === "/workflows/templates"
-  )
+  if (target === "/workflows/blueprints" || target === "/workflows/templates")
     return pathname === target || pathname.startsWith(`${target}/`);
   if (
     target === "/workflows/memory" ||

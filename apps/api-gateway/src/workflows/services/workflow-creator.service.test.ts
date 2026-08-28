@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assertWorkflowProviderBindingsReady } from "./workflow-creator.service.js";
 
 describe("workflow provider bindings", () => {
-  it("allows a plan when all required slots are resolved", () => {
+  it("allows creation when all required slots are resolved", () => {
     expect(() =>
       assertWorkflowProviderBindingsReady([
         {
@@ -33,7 +33,7 @@ describe("workflow provider bindings", () => {
         },
       ]),
     ).toThrowError(
-      "Configure a matching Source in the selected scope for the required code capability before submitting this workflow plan.",
+      "Configure a matching Source in the selected scope for the required code capability before creating this workflow.",
     );
   });
 });

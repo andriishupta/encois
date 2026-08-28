@@ -35,7 +35,7 @@ func coordinatorActivityOptions() workflow.ActivityOptions {
 }
 
 // CoordinatorWorkflow is the logical per-organization/project control loop.
-// Provider/model I/O and plan application belong in Activities or the Gateway API.
+// Provider/model I/O and workflow creation belong in Activities or the Gateway API.
 func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) error {
 	state := input.State
 	if state.Status == "" {
@@ -67,7 +67,6 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	for {
 		shouldReconcile := initialReconcile
 		initialReconcile = false
-		pendingStarts := append([]WorkflowStartSpec(nil), state.PendingWorkflowStarts...)
 		if !shouldReconcile {
 			timerCtx, cancelTimer := workflow.WithCancel(ctx)
 			reconcileTimer := workflow.NewTimer(timerCtx, coordinatorReconcileInterval)
@@ -165,16 +164,8 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 				default:
 					state.Status = StatusReconciling
 				}
-				if event.PlanID != "" && (event.EventType == "workflow-plan-applied" || event.EventType == "workflow-plan-approved") {
-					state.PendingPlanIDs = removeValue(state.PendingPlanIDs, event.PlanID)
-				}
 				if event.WorkflowID != "" && event.EventType == "workflow-completed" {
 					state.ActiveWorkflowIDs = removeValue(state.ActiveWorkflowIDs, event.WorkflowID)
-				}
-				if event.EventType == "workflow-plan-applied" {
-					for _, start := range event.WorkflowStarts {
-						pendingStarts = appendWorkflowStartUnique(pendingStarts, start)
-					}
 				}
 				shouldReconcile = true
 			})
@@ -189,17 +180,6 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 		}
 		state.Version++
 		state.ReconciliationCount++
-
-		if len(pendingStarts) > 0 {
-			state.PendingWorkflowStarts = pendingStarts
-			if err := startApprovedWorkflows(ctx, input, &state, pendingStarts); err != nil {
-				state.Status = StatusSuspended
-				state.LastEvent = "approved-workflow-start-failed"
-				state.LastError = err.Error()
-				continue
-			}
-			state.PendingWorkflowStarts = nil
-		}
 
 		if shouldReconcile {
 			state.LastError = ""
@@ -239,107 +219,14 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	}
 }
 
-func startApprovedWorkflows(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState, starts []WorkflowStartSpec) error {
-	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
-
-	for index, spec := range starts {
-		if len(spec.Scope) == 0 {
-			return fmt.Errorf("approved workflow start %q is missing organization-unit scope", spec.Key)
-		}
-		actorID := input.ActorID
-		if actorID == "" {
-			actorID = input.CoordinatorID
-		}
-		request := ApprovedWorkflowStartInput{
-			RequestID:        fmt.Sprintf("coordinator-start:%s:%s:%s:%d", spec.BlueprintID, spec.BlueprintVersion, spec.Key, index),
-			CoordinatorID:    input.CoordinatorID,
-			OrganizationID:   input.OrganizationID,
-			ProjectID:        input.ProjectID,
-			ActorID:          actorID,
-			PolicyVersion:    input.PolicyVersion,
-			Scope:            spec.Scope,
-			BlueprintID:      spec.BlueprintID,
-			BlueprintVersion: spec.BlueprintVersion,
-			Key:              spec.Key,
-			BusinessInput:    spec.BusinessInput,
-			IdempotencyKey:   fmt.Sprintf("coordinator-start:%s:%s:%s", spec.BlueprintID, spec.BlueprintVersion, spec.Key),
-		}
-		var result ApprovedWorkflowStartResult
-		if err := workflow.ExecuteActivity(activityCtx, CoordinatorStartActivityName, request).Get(ctx, &result); err != nil {
-			return err
-		}
-		if result.WorkflowID == "" {
-			return fmt.Errorf("approved workflow start returned an empty workflow id")
-		}
-		state.ActiveWorkflowIDs = appendUnique(state.ActiveWorkflowIDs, result.WorkflowID)
-	}
-	state.Status = StatusReconciling
-	state.LastEvent = "approved-workflow-started"
-	return nil
-}
-
-func appendWorkflowStartUnique(values []WorkflowStartSpec, candidate WorkflowStartSpec) []WorkflowStartSpec {
-	for _, existing := range values {
-		if existing.BlueprintID == candidate.BlueprintID && existing.BlueprintVersion == candidate.BlueprintVersion && existing.Key == candidate.Key {
-			return values
-		}
-	}
-	return append(values, candidate)
-}
-
 func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState) error {
-	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
-
-	if len(input.SelectedWorkflowRefs) == 0 {
-		state.Status = StatusReady
-		state.LastEvent = "onboarding-ready"
-		if !state.OnboardingComplete {
-			if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "ready"}); err != nil {
-				return onboardingStatusReportError{err: fmt.Errorf("report onboarding ready status: %w", err)}
-			}
-			state.OnboardingComplete = true
-		}
-		return nil
-	}
-
-	var proposal CoordinatorPlanActivityResult
-	if err := workflow.ExecuteActivity(activityCtx, CoordinatorPlanActivityName, input).Get(ctx, &proposal); err != nil {
-		return err
-	}
-	if proposal.Status != "proposed" || proposal.Plan == nil {
-		state.Status = StatusWaiting
-		state.LastEvent = "onboarding-bootstrap-deferred"
-		if !state.OnboardingComplete {
-			status := proposal.Status
-			if status == "" {
-				status = "unknown"
-			}
-			if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{
-				Status:    "failed",
-				LastError: fmt.Sprintf("Coordinator bootstrap did not produce a plan (status: %s).", status),
-			}); err != nil {
-				return onboardingStatusReportError{err: fmt.Errorf("report onboarding failure status: %w", err)}
-			}
-		}
-		return nil
-	}
-
-	var submission PlanSubmissionResult
-	if err := workflow.ExecuteActivity(activityCtx, CoordinatorSubmitActivityName, *proposal.Plan).Get(ctx, &submission); err != nil {
-		return err
-	}
-	if submission.PlanID != "" {
-		state.PendingPlanIDs = appendUnique(state.PendingPlanIDs, submission.PlanID)
-	}
-	state.Status = StatusWaiting
-	state.LastEvent = "workflow-plan-submitted"
+	state.Status = StatusReady
+	state.LastEvent = "onboarding-ready"
 	if !state.OnboardingComplete {
 		if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "ready"}); err != nil {
 			return onboardingStatusReportError{err: fmt.Errorf("report onboarding ready status: %w", err)}
 		}
 		state.OnboardingComplete = true
-		state.Status = StatusReady
-		state.LastEvent = "onboarding-ready"
 	}
 	return nil
 }
@@ -356,22 +243,9 @@ func BootstrapProjectWorkflow(ctx workflow.Context, input BootstrapProjectInput)
 	if err := ValidateBootstrapProjectInput(input); err != nil {
 		return BootstrapProjectResult{}, err
 	}
-	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
-	var proposal BootstrapPlanActivityResult
-	if err := workflow.ExecuteActivity(activityCtx, "CreateBootstrapPlan", input).Get(ctx, &proposal); err != nil {
-		return BootstrapProjectResult{}, err
-	}
-	if proposal.Status != "proposed" || proposal.Plan == nil {
-		return BootstrapProjectResult{ContractVersion: string(contractschemas.ContractBootstrapProject), Ready: false}, nil
-	}
-	if err := NewWorkflowCreator(nil).ValidatePlan(*proposal.Plan); err != nil {
-		return BootstrapProjectResult{}, err
-	}
 	return BootstrapProjectResult{
 		ContractVersion: string(contractschemas.ContractBootstrapProject),
 		Ready:           true,
-		EvidenceRefs:    proposal.Plan.EvidenceRefs,
-		PlanID:          proposal.Plan.PlanID,
 	}, nil
 }
 

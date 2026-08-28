@@ -72,12 +72,6 @@ import toolResultSchema from "../schemas/tool-result.v1.json" with {
 import workflowBlueprintSchema from "../schemas/workflow-blueprint.v1.json" with {
   type: "json",
 };
-import workflowBlueprintLifecycleSchema from "../schemas/workflow-blueprint-lifecycle.v1.json" with {
-  type: "json",
-};
-import workflowChangePlanSchema from "../schemas/workflow-change-plan.v1.json" with {
-  type: "json",
-};
 import workflowSignalSchema from "../schemas/workflow-signal.v1.json" with {
   type: "json",
 };
@@ -104,8 +98,6 @@ export const CONTRACT_SCHEMA_FILES = {
   agentInstructions: "agent-instructions.v1.json",
   toolManifest: "tool-manifest.v1.json",
   workflowUpdate: "workflow-update.v1.json",
-  workflowChangePlan: "workflow-change-plan.v1.json",
-  workflowBlueprintLifecycle: "workflow-blueprint-lifecycle.v1.json",
   coordinatorEvent: "coordinator-event.v1.json",
   coordinator: "coordinator.v1.json",
   bootstrapProject: "bootstrap-project.v1.json",
@@ -142,8 +134,6 @@ const schemas: Record<ContractSchemaName, object> = {
   agentInstructions: agentInstructionsSchema,
   toolManifest: toolManifestSchema,
   workflowUpdate: workflowUpdateSchema,
-  workflowChangePlan: workflowChangePlanSchema,
-  workflowBlueprintLifecycle: workflowBlueprintLifecycleSchema,
   coordinatorEvent: coordinatorEventSchema,
   coordinator: coordinatorSchema,
   bootstrapProject: bootstrapProjectSchema,

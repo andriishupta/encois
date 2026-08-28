@@ -89,8 +89,8 @@ flowchart LR
 The Gateway API is the public north-south application boundary. Temporal Cloud is the durable execution and task-delivery boundary. The Go Agent Runtime is a deployable worker application that opens an outbound connection and polls Temporal task queues; Temporal Cloud does not execute Go code. The private Agent Gateway is the east-west policy and tool boundary. It is not exposed to the browser or public MCP clients. For the first vertical slice it may be an in-process Go module behind the same interface, but the target deployment is a separately deployable internal service.
 
 Gateway-owned Coordinator lifecycle events are written to a tenant-scoped
-transactional outbox in the same database transaction as plan approval or
-application. An always-on dispatcher loop inside the API Gateway claims events
+transactional outbox in the same database transaction as the onboarding state
+update. An always-on dispatcher loop inside the API Gateway claims events
 with a lease and retries delivery to the Coordinator Workflow through Temporal.
 Organization discovery is restricted to a database function that returns only
 organizations with dispatchable events; actual event reads and writes still
@@ -168,7 +168,8 @@ It owns:
 The Gateway API does not execute long model or provider calls in an HTTP request. It starts or signals a Temporal Workflow and returns a workflow/investigation identifier.
 
 The first Node.js blueprint exposes `POST /api/v1/workflows`,
-`POST /api/v1/workflows/plans/validate`, and
+`POST /api/v1/workflows/blueprints/preview`,
+`POST /api/v1/workflows/blueprints/from-intent`, and
 `GET /api/v1/workflows/:workflowId`. The API derives a tenant-prefixed workflow
 ID from the authenticated organization, workflow type, and request key, then
 uses the Temporal TypeScript Client to start or describe the execution. The API
@@ -212,8 +213,8 @@ credentials, integration IDs, provider payloads, or executable code.
 catalog entries after tenant context is established. Workflow Creator may use
 the selected template as input for a typed, deterministic conversion into the
 canonical `workflow-blueprint.v1` contract. The resulting tenant Blueprint is
-then validated, approved, versioned, and persisted through the existing plan
-boundary. Workflow Templates are a Gateway helper and are deliberately
+validated and persisted directly as an approved snapshot. Workflow Templates
+are a Gateway helper and are deliberately
 unknown to the Go Agent Runtime, which continues to execute only validated
 Blueprint snapshots.
 
@@ -379,15 +380,13 @@ authenticated Runtime-to-Gateway calls, read-only policy, worker health
 listener, and API → Temporal → Go → Agent Gateway synthetic smoke path are
 tested locally. The TypeScript API and the Go Runtime/Agent Gateway now consume
 the same embedded canonical JSON Schemas at their active boundaries. The
-Coordinator now calls a proposal Activity and a private control-plane submit
-Activity after reconciliation triggers. Gateway plan approval/application
-enqueue tenant-scoped `coordinator-event.v1` envelopes transactionally in the
+Coordinator now reports readiness after reconciliation triggers. The API
+enqueues tenant-scoped `coordinator-event.v1` envelopes transactionally in the
 control-plane outbox. The API includes an always-on bounded lease/retry
 dispatcher loop, a Temporal sink, and tenant-safe outbox organization
-discovery. An applied plan emits `workflowStarts`
-only for explicit change-level `start` intents; the Coordinator starts those
-immutable approved snapshots through a typed private Gateway Activity and keeps
-failed starts in Workflow state for retry.
+discovery. A direct Blueprint creation can optionally start a Workflow for
+explicit `start` intents. The Gateway starts the immutable approved snapshot
+through the public workflow execution boundary.
 Generated DTO generation, hosted Temporal/Cloud Run deployment, and real
 provider adapters also remain pending. These Runtime Activities do not access
 Postgres and cannot approve or bypass the registry.
@@ -417,8 +416,8 @@ specialists, routine synthesis, generic Blueprint Agent Definitions, the
 Coordinator, and the Workflow Creator all use `GEMINI_MODEL`, defaulting to
 `gemini-3.7-flash`. The Coordinator and Workflow Creator use the separate
 `GEMINI_REASONING_THINKING_LEVEL=high` setting for deeper generation on that
-same model, because they make cross-source plans and propose changes to the
-workflow catalog. Other configuration names are intentionally not supported;
+same model, because they make cross-source synthesis and produce validated
+workflow definitions. Other configuration names are intentionally not supported;
 before the first release,
 configuration changes may be breaking and must be updated everywhere together.
 Thinking output is not exposed as chain-of-thought in logs or the UI; only
@@ -508,10 +507,9 @@ requested, workflow completed, provider changed, and approval resolved. A
 short `BootstrapProjectWorkflow` performs the initial phase; the long-lived
 `CoordinatorWorkflow` remains the logical owner afterwards.
 
-Temporal does not create new Go code from a prompt. A Workflow Creator may
-produce a typed `WorkflowChangePlan`, but a deterministic validator and the
-Gateway API must approve it against the tool/agent catalog, organization
-scope, policy, and versioned Blueprint schemas. Temporal starts the
+Temporal does not create new Go code from a prompt. The Gateway resolves a
+Template or approved Blueprint, validates it against the tool/agent catalog,
+organization scope, policy, and versioned Blueprint schemas, then starts the
 pre-registered generic `encois.dynamic.v1` Workflow and can
 create/update/pause schedules through its Schedule API. A stored Blueprint is
 configuration interpreted by that generic Workflow; it is not executable code.
@@ -676,7 +674,7 @@ Use different contract formats for different boundaries instead of trying to sha
 | Browser/public Gateway API | OpenAPI | TypeScript API, React client, future MCP adapter | HTTP routes, auth errors, pagination, request/response DTOs |
 | Temporal Workflow inputs, Signals, results | JSON Schema | TypeScript Gateway API and Go Runtime | Small cross-language durable-execution payloads |
 | Workflow Blueprints | JSON Schema with MCP-shaped tool references | Coordinator, Creator, Gateway API, Go Runtime, UI builder | Company-specific executable configuration for the generic Workflow |
-| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads and an explicit current pointer | Gateway API, UI, future Coordinator application flow | Approved configuration materialized from `workflow-change-plan.v1` create/update/deprecate/restore/set_current; current state is organization-scoped and never queried directly by Go Runtime |
+| Blueprint registry snapshots | Tenant-scoped Postgres rows with JSON Blueprint payloads and an explicit current pointer | Gateway API, UI, Go Runtime execution | Approved configuration created directly from a Template or existing Blueprint; current state is organization-scoped and never queried directly by Go Runtime |
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
 | API Temporal command receipts | Gateway-owned Postgres schema | TypeScript Gateway API | Tenant-scoped Signal/Update idempotency and replay state; never sent to Go or Temporal |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |
@@ -902,7 +900,7 @@ correlationId, traceId, organizationId, actorId,
 workflowId, runId, agentRunId, activityId
 ```
 
-Trace spans cover trigger, planning, delegation, workflow wait, Activity execution, tool call, memory retrieval, graph write, evidence persistence, synthesis, and user-visible result.
+Trace spans cover trigger, coordination, delegation, workflow wait, Activity execution, tool call, memory retrieval, graph write, evidence persistence, synthesis, and user-visible result.
 
 Logs contain event names, status, duration, provider, model, retry count, and error class. They do not contain tokens, authorization headers, full prompts, chain-of-thought, or unrestricted provider payloads.
 

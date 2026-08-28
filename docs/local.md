@@ -53,15 +53,16 @@ The stack starts:
 
 `local-auth-seed` runs after migrations. It creates one deterministic local
 dataset for `Sun Inc`. It includes hierarchical units, users with
-different roles and scopes, organization Integrations, unit-scoped Sources with revisions and
-ingestion runs, webhook deliveries, and persisted workflow runs/events.
+different roles and scopes, six organization Integrations, sixteen unit-scoped Sources with
+revisions and ingestion runs, webhook deliveries, approved Blueprints, and thirty
+Temporal-backed workflow runs/events.
 It also ensures the Sun Inc onboarding row is explicitly `ready` for
 the pre-bootstrapped demo organization. That fixture is intentionally ready so
 the standard local dashboard can be used immediately; it is not a substitute
 for testing the incomplete onboarding lifecycle. It is idempotent and only
-creates or updates these local fixture records. The seeded workflow rows
-deliberately have no Temporal execution, so opening one can exercise the
-unavailable-runtime error path. The API-backed lifecycle and route gate are
+creates or updates these local fixture records. The seed requires the local
+Temporal server and creates real executions distributed across running,
+waiting-for-approval, paused, completed, and failed states. The API-backed lifecycle and route gate are
 defined in [`flows.md`](flows.md#onboarding-readiness-states) and
 [`contracts.md`](contracts.md#organization-onboarding-and-readiness).
 
@@ -151,8 +152,8 @@ Use this sequence when testing how the product components are connected:
 6. Follow the run in the Dashboard, Activity, workflow detail, and Temporal
    UI. The local run should traverse API Gateway -> Temporal -> Go Agent
    Runtime -> Agent Gateway -> deterministic tools -> API projections. The
-   seeded persisted workflow rows are deliberately not Temporal executions;
-   use a newly started run to test the successful execution path.
+   seed-created executions are also available for inspecting list, detail,
+   activity, pause, resume, and failure states.
 7. Inspect the resulting evidence, graph projection, and memory projection.
    Remember that local Graph and Memory state is process-local and resets when
    the corresponding Go service restarts. The local Memory adapter is useful
@@ -186,9 +187,10 @@ docker compose -f compose.watch.mock.yaml logs -f agent-gateway
 If a run fails with `403`, first compare the Blueprint tool name and declared
 scope with the Agent Gateway tool catalog and policy. A previous local failure
 was caused by a Blueprint referring to tools that were not in the configured
-local allowlist; Temporal and the worker were running correctly. If no
-execution exists in Temporal, the item is likely one of the seeded persisted
-workflow rows and exercises the unavailable-runtime path instead.
+local allowlist; Temporal and the worker were running correctly. If the seed
+cannot connect to Temporal, it fails instead of creating a DB-only workflow
+record, so the Dashboard never presents an execution that does not exist in
+Temporal.
 
 ## Watch mock mode
 
@@ -236,7 +238,7 @@ organization rather than changing the seeded fixture:
    intentionally deferred until after the initial source and integrations are
    available.
 6. Observe the local Temporal Coordinator. Its first reconciliation reports
-   `ready` without creating a workflow plan because onboarding starts with no
+   `ready` without creating a Blueprint because onboarding starts with no
    workflow selections. A configured workflow selection may report `failed`
    when bootstrap errors or is deferred. An administrator can explicitly retry
    a failed onboarding; a non-admin receives the administrator handoff.

@@ -166,16 +166,11 @@ assert.equal(
   validateContract("coordinatorEvent", {
     contractVersion: "coordinator-event.v1",
     eventId: "event-1",
-    eventType: "workflow-plan-approved",
+    eventType: "workflow-completed",
     coordinatorId: "coord-1",
     organizationId: "org-1",
     actorId: "user-1",
-    planId: "plan-1",
-    approved: true,
-    blueprintId: "blueprint-1",
-    blueprintVersion: "1.0.0",
-    workflowStarts: [{ blueprintId: "blueprint-1", blueprintVersion: "1.0.0", key: "project-checkout", businessInput: { projectKey: "checkout" } }],
-    scope: { ids: ["project-1"] },
+    workflowId: "workflow-1",
   }).valid,
   true,
 );
@@ -187,120 +182,6 @@ assert.equal(
     payload: { businessInput: { projectKey: "checkout" }, reason: "Project was added to Jira." },
   }).valid,
   true,
-);
-assert.equal(
-  validateContract("workflowChangePlan", {
-    contractVersion: "workflow-change-plan.v1",
-    planId: "plan-1",
-    coordinatorId: "coord-1",
-    organizationId: "org-1",
-    observedAt: "2026-08-20T16:00:00.000Z",
-    changes: [{
-      kind: "create",
-      blueprint,
-      start: { key: "project-checkout", businessInput: { projectKey: "checkout" } },
-      reason: "Create the approved project context workflow.",
-      requiresApproval: true,
-    }],
-  }).valid,
-  true,
-);
-assert.equal(
-  validateContract("workflowBlueprintLifecycle", {
-    contractVersion: "workflow-blueprint-lifecycle.v1",
-    action: "create_revision",
-    sourceVersion: "1.0.0",
-    version: "1.0.1",
-    reason: "Publish the reviewed workflow revision.",
-  }).valid,
-  true,
-);
-assert.equal(
-  validateContract("workflowBlueprintLifecycle", {
-    contractVersion: "workflow-blueprint-lifecycle.v1",
-    action: "mark_current",
-    sourceVersion: "1.0.0",
-    reason: "Make the reviewed revision the default for new workflows.",
-  }).valid,
-  true,
-);
-assert.equal(
-  validateContract("workflowBlueprintLifecycle", {
-    action: "deprecate",
-    reason: "Missing contract version.",
-  }).valid,
-  false,
-);
-assert.equal(
-  validateContract("workflowChangePlan", {
-    contractVersion: "workflow-change-plan.v1",
-    planId: "plan-with-metadata",
-    coordinatorId: "coord-1",
-    organizationId: "org-1",
-    observedAt: "2026-08-20T16:00:00.000Z",
-    metadata: {
-      planner: { name: "manual-workflow-planner", version: "1.0.0" },
-      sourceSchemaVersion: "workflow-template.v1",
-      promptVersion: "workflow-creation-input.v1",
-      promptHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    },
-    changes: [{
-      kind: "create",
-      blueprint,
-      reason: "Create the approved project context workflow.",
-      requiresApproval: true,
-    }],
-  }).valid,
-  true,
-);
-assert.equal(
-  validateContract("workflowChangePlan", {
-    contractVersion: "workflow-change-plan.v1",
-    planId: "plan-2",
-    coordinatorId: "coord-1",
-    organizationId: "org-1",
-    observedAt: "2026-08-20T16:00:00.000Z",
-    changes: [
-      {
-        kind: "update",
-        targetBlueprintId: "project-context",
-        targetBlueprintVersion: "1.0.0",
-        blueprint: { ...blueprint, version: "2.0.0" },
-        reason: "Publish a new project context revision.",
-        requiresApproval: true,
-      },
-      {
-        kind: "deprecate",
-        targetBlueprintId: "project-context",
-        targetBlueprintVersion: "0.9.0",
-        reason: "Retire the obsolete revision.",
-        requiresApproval: true,
-      },
-      {
-        kind: "cancel",
-        targetWorkflowId: "workflow:org-1:encois.dynamic.v1:project-1",
-        reason: "Cancel the superseded execution.",
-        requiresApproval: true,
-      },
-    ],
-  }).valid,
-  true,
-);
-assert.equal(
-  validateContract("workflowChangePlan", {
-    contractVersion: "workflow-change-plan.v1",
-    planId: "plan-invalid",
-    coordinatorId: "coord-1",
-    organizationId: "org-1",
-    observedAt: "2026-08-20T16:00:00.000Z",
-    changes: [{
-      kind: "deprecate",
-    targetWorkflowId: "workflow:org-1:encois.dynamic.v1:project-1",
-      reason: "Wrong target kind.",
-      requiresApproval: true,
-    }],
-  }).valid,
-  false,
 );
 assert.equal(
   validateContract("workflowBlueprint", {

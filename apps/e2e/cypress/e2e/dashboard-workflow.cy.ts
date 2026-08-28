@@ -51,46 +51,18 @@ describe("Dashboard workflow success flow", () => {
         );
       });
 
-    cy.get('[data-testid="workflow-preview-plan"]').click();
+    cy.get('[data-testid="workflow-preview-blueprint"]').click();
     cy.get('[data-testid="workflow-review-stage"]').should("be.visible");
-
-    // Apply the Blueprint without relying on an external coordinator dispatcher.
-    // The next explicit Run action still exercises the real Temporal execution.
-    cy.get('[data-testid="workflow-save-approved"]').check();
-    cy.get('[data-testid="workflow-create-and-approve"]').click();
-    cy.location("pathname", { timeout: 30_000 }).should(
-      "eq",
-      appRoute("workflows/plans"),
-    );
-    cy.contains('[data-testid="workflow-plan-title"]', workflowName, {
-      timeout: 30_000,
-    }).should("be.visible");
-    cy.contains('[data-testid="workflow-plan-title"]', workflowName)
-      .closest('[data-testid="workflow-plan-card"]')
-      .as("createdPlan");
-    cy.get("@createdPlan")
-      .find('[data-testid="workflow-plan-status"]')
-      .should("contain.text", "Ready to apply");
-    cy.get("@createdPlan").find('[data-testid="workflow-plan-apply"]').click();
-    cy.contains('[data-testid="workflow-plan-title"]', workflowName, {
+    cy.get('[data-testid="workflow-create-blueprint"]').click();
+    cy.get('[data-testid="workflow-blueprint-created"]', {
       timeout: 30_000,
     })
-      .closest('[data-testid="workflow-plan-card"]')
-      .find('[data-testid="workflow-plan-status"]')
-      .should("contain.text", "Applied");
-
-    cy.get('[data-testid="nav-workflows"]').click();
-    cy.location("pathname").should("eq", appRoute("workflows"));
-
-    cy.contains('[data-testid="workflow-definition-title"]', workflowName, {
-      timeout: 30_000,
-    })
-      .closest('[data-testid="workflow-definition-card"]')
-      .within(() => {
-        cy.get('[data-testid="workflow-definition-run"]')
-          .should("be.enabled")
-          .click();
-      });
+      .should("be.visible")
+      .parent()
+      .parent()
+      .find("button")
+      .contains("Open Workflow")
+      .click();
 
     cy.location("pathname", { timeout: 30_000 }).should(
       "match",

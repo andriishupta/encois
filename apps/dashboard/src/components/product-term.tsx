@@ -20,7 +20,6 @@ export type ProductTermKey =
   | "signal"
   | "template"
   | "run"
-  | "plan"
   | "graph"
   | "memory"
   | "activity"
@@ -118,12 +117,6 @@ const productTerms: Record<
     pluralLabel: "Runs",
     description:
       "One execution of a workflow with its own status, events, evidence, and audit trail.",
-  },
-  plan: {
-    label: "Change plan",
-    pluralLabel: "Change plans",
-    description:
-      "A reviewable proposal that describes a Blueprint change before it is approved and applied.",
   },
   graph: {
     label: "Organization memory graph",

@@ -40,7 +40,6 @@ export const workflowBlueprints = pgTable(
     blueprint: jsonb("blueprint").$type<Record<string, unknown>>().notNull(),
     status: workflowBlueprintStatus("status").notNull().default("draft"),
     isCurrent: boolean("is_current").notNull().default(false),
-    sourcePlanId: text("source_plan_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

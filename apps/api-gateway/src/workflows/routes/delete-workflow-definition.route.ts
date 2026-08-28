@@ -2,7 +2,7 @@ import type { Handler } from "hono";
 import type { GatewayEnv } from "../../middleware/aos.js";
 import { isWorkflowServiceError } from "../services/workflow.service.js";
 import { deleteWorkflowDefinitionForPrincipal } from "../services/workflow-creator.service.js";
-import { workflowPlanErrorStatus } from "../utils.js";
+import { workflowErrorStatus } from "../utils.js";
 
 export const deleteWorkflowDefinitionRoute: Handler<GatewayEnv> = async (
   context,
@@ -29,7 +29,7 @@ export const deleteWorkflowDefinitionRoute: Handler<GatewayEnv> = async (
     if (isWorkflowServiceError(error))
       return context.json(
         { error: { code: error.code, message: error.message } },
-        workflowPlanErrorStatus(error.code),
+        workflowErrorStatus(error.code),
       );
     throw error;
   }

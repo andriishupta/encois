@@ -12,7 +12,7 @@ type.
 Schema sources, and a small Go validator package. The TypeScript API validates
 the public Blueprint, Signal, and update payloads with Ajv-2020, then applies
 semantic authorization and workflow checks. Go services embed and validate the
-same schema files at the Blueprint, workflow change-plan, tool request, tool
+same schema files at the Blueprint, tool request, tool
 result, artifact reference, and workflow result boundaries. Generated DTOs remain optional
 follow-up work; validation does not require sharing TypeScript source with Go.
 
@@ -49,7 +49,7 @@ Graph queries into successful fixture responses.
 | Browser and public HTTP API | OpenAPI document | React client and TypeScript API validators/types |
 | Workflow start, Signals, Updates, Coordinator events, and results | Versioned JSON Schema | TypeScript Gateway API and Go Runtime |
 | Workflow Blueprint | Versioned JSON Schema | Coordinator, Creator, Gateway API, Go Runtime, UI builder |
-| Workflow change plans | Versioned JSON Schema | Workflow Creator, Go Runtime, Gateway API approval/application boundary |
+| Workflow creation | Versioned JSON Schema | Dashboard, Gateway API, and Go Runtime execution boundary |
 | Agent Gateway tool catalog and invocation | MCP-shaped JSON Schema plus Encois execution envelope | Go Runtime, Agent Gateway, integration adapters |
 | Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
 | Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
@@ -79,16 +79,11 @@ conflict. This database receipt is an API delivery safeguard, not a replacement
 for Temporal's Update ID or the Go Workflow's Signal deduplication.
 
 `coordinator-event.v1` is separate from a Blueprint step Signal. It carries
-tenant-scoped lifecycle notifications such as plan approval, plan application,
-provider changes, and workflow completion. The Coordinator receiver deduplicates
-event IDs and rejects events for another organization or Coordinator. Gateway
-plan approval/application now enqueue these small events transactionally in the
-tenant-scoped outbox. An applied plan includes `workflowStarts` only for changes
-with an explicit `start` intent. The Coordinator starts those immutable approved
-Blueprint snapshots through its private Gateway Activity; applying a registry
-revision without `start` does not start an execution. Pending starts remain in
-Coordinator state until the idempotent start Activity succeeds. Scheduler
-invocation and hosted delivery remain deployment work.
+tenant-scoped lifecycle notifications such as provider changes, source
+readiness, and workflow completion. The Coordinator receiver deduplicates event
+IDs and rejects events for another organization or Coordinator. Gateway
+notifications enqueue these small events transactionally in the tenant-scoped
+outbox. Scheduler invocation and hosted delivery remain deployment work.
 
 ### Organization onboarding and readiness
 
@@ -180,7 +175,6 @@ packages/contracts/
     agent-memory-result.v1.json
     tool-manifest.v1.json
     workflow-update.v1.json
-    workflow-change-plan.v1.json
     coordinator-event.v1.json
     knowledge-source.v1.json
     source-revision.v1.json
@@ -195,9 +189,7 @@ runtime validators in `src/validation.ts`. The Go package in `schema.go`
 embeds the same `schemas/*.json` files and uses `jsonschema-go` for runtime
 validation; Go DTOs remain local to each service. Generated Go/TypeScript
 types and schema-drift checks in CI are follow-up work; neither language
-becomes the schema owner. `workflow-change-plan.v1` is validated before a
-bootstrap proposal can leave the Go Runtime; raw model text never crosses that
-boundary.
+becomes the schema owner. Raw model text never crosses the Go Runtime boundary.
 
 The shared values also define organization-unit types, scope-rule modes,
 freshness states, workflow status reasons, artifact retention classes, and
@@ -414,84 +406,16 @@ invent a tool, or bypass the Agent Gateway. A specialist such as Jira or GitHub
 is therefore a registered capability or Agent Definition, not a platform-level
 Workflow type.
 
-## Coordinator and Workflow Creator
+## Coordinator and Blueprint creation
 
-The Coordinator is the only product-specific long-lived control loop. It
-discovers available Integration Packs, tool capabilities, data freshness, and
-organization needs. The Workflow Creator proposes a `WorkflowChangePlan` with
-Blueprint versions:
-
-```json
-{
-  "contractVersion": "workflow-change-plan.v1",
-  "planId": "plan_123",
-  "coordinatorId": "coord_acme_checkout",
-  "organizationId": "acme",
-  "observedAt": "2026-08-20T16:00:00.000Z",
-  "changes": [
-    {
-      "kind": "create",
-      "blueprint": {
-        "contractVersion": "workflow-blueprint.v1",
-        "blueprintId": "release-readiness",
-        "version": "2.1.0",
-        "name": "Company release readiness",
-        "workflowType": "encois.dynamic.v1",
-        "purpose": "Assess release readiness from approved company sources.",
-        "enabled": true,
-        "steps": [
-          {
-            "id": "jira",
-            "kind": "tool",
-            "tool": "jira.project_tasks"
-          }
-        ]
-      },
-      "reason": "The project has Jira and GitHub sources but no monitoring pack"
-    }
-  ]
-}
-```
-
-Gemini/ADK may propose the plan. Deterministic registry, permission, policy,
-and compatibility checks decide whether it can be persisted or started.
-
-For Coordinator-generated plans, the Runtime assigns a deterministic `planId`
-from the tenant-scoped reconciliation input before calling the model. The
-model must copy that value exactly; an omitted or changed ID is rejected before
-the plan reaches the Gateway. This keeps retries idempotent without accepting
-model-generated identity metadata.
-
-`workflow-change-plan.v1` is the single lifecycle contract. `create` carries a
-Blueprint, `update` carries a replacement plus its target, `deprecate`,
-`restore`, and `set_current` carry `targetBlueprintId` plus
-`targetBlueprintVersion`, and `cancel` carries `targetWorkflowId`; these target
-families cannot be mixed. The Gateway validates and persists the plan, applies
-Blueprint lifecycle changes, and supports Temporal cancellation only for
-cancel-only plans through its Temporal client. Current revision state is
-organization-scoped and database-constrained; restoring a revision does not
-silently make it current. Repeated cancellation is idempotent; persistence-backed
-and hosted cancellation verification remain deployment work. A future
-incompatible shape will receive a new contract version; there is no
-pre-production v2 compatibility layer.
-
-An executable `create` or `update` change may include an explicit start intent:
-
-```json
-{
-  "kind": "create",
-  "blueprint": { "blueprintId": "release-readiness", "version": "1.0.0" },
-  "start": {
-    "key": "release:checkout:2026-08-30",
-    "businessInput": { "releaseKey": "2026-08-30" }
-  }
-}
-```
-
-The intent is declarative and is validated against the nested Blueprint. It is
-not a direct Temporal command and cannot start a deprecation or cancellation.
-The Gateway emits it as `workflowStarts` only after the plan is applied; the
-Coordinator then performs the private, policy-checked start.
+The Coordinator is the product-specific long-lived control loop. It discovers
+available context and reports scoped onboarding readiness. The Gateway owns the
+simple creation flow:
+the user selects a Template or an existing approved Blueprint, chooses a name
+and scope, previews the resolved Blueprint, and creates that Blueprint directly.
+When requested, the Gateway starts the Workflow from the stored Blueprint
+snapshot in the same operation. Blueprint revisions can be added later as a
+separate versioned capability.
 
 ## Public and internal API boundaries
 
@@ -515,14 +439,8 @@ POST /api/v1/workflows/{workflowId}/signals
 POST /api/v1/workflows/{workflowId}/updates
 GET  /api/v1/integrations
 POST /api/v1/integrations/{integrationId}
-POST /api/v1/workflows/plans/validate
-GET  /api/v1/workflows/plans
-POST /api/v1/workflows/plans
-GET  /api/v1/workflows/plans/{planId}
-PATCH /api/v1/workflows/plans/{planId}
-POST /api/v1/workflows/plans/{planId}/approve
-POST /api/v1/workflows/plans/{planId}/apply
-DELETE /api/v1/workflows/plans/{planId}
+POST /api/v1/workflows/blueprints/preview
+POST /api/v1/workflows/blueprints/from-intent
 ```
 
 The Dashboard presents a Workflow definition as the existing organization-
@@ -530,9 +448,9 @@ scoped Blueprint registry rows grouped by stable `blueprintId`; it does not
 invent a second runtime entity or persist browser-only state. Deleting a
 Workflow soft-deletes all revisions in that group and preserves historical
 Runs. Blueprint deletion is narrower: it soft-deletes one non-current revision
-and refuses the current revision. Proposed Plans can be read and edited
-through the same validated `workflow-change-plan.v1` contract before approval;
-approved, applied, rejected, and expired Plans are read-only.
+and refuses the current revision. Workflow creation resolves a Template or an
+approved Blueprint, previews the result, and creates the approved Blueprint
+directly. A requested start then creates the Workflow from that stored snapshot.
 
 `GET /api/v1/auth/me` is the pre-membership access-resolution contract. It
 returns `active` with the local user and organization when an invite has been

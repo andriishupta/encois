@@ -75,8 +75,7 @@ The migration enables PostgreSQL RLS on tenant-scoped tables. The API must execu
 - `integrations`, `integration_bindings` — one organization integration bound to many organization units/projects.
 - `webhook_endpoints`, `webhook_deliveries` — verified endpoint configuration and idempotent receipt projection.
 - `workflow_definitions`, `workflow_runs`, `workflow_events` — approved workflow definitions plus safe Temporal execution projections.
-- `workflow_change_plans` — tenant-scoped typed workflow proposals and explicit approval state.
-- `workflow_blueprints` — tenant-scoped approved company-specific Blueprint snapshots materialized from create plans.
+- `workflow_blueprints` — tenant-scoped approved Blueprint snapshots used to create Workflows.
 - `idempotency_keys` — organization-scoped request deduplication.
 - `audit_events` — security-relevant user/system actions, separate from debug logs.
 

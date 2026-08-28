@@ -25,7 +25,7 @@ flowchart TB
     subgraph Public[Public application plane]
         Web[React SPA\napps/dashboard\nTanStack Router + Query\nCurrent: typed API queries and polling]
         API[Gateway API\napps/api-gateway\nHono + TypeScript\nAuth, scope, registry, workflow control]
-        CoordinatorRoutes[Private Coordinator control routes\nservice token + organization scope\nCurrent: plan submit + approved-start boundary]
+        CoordinatorRoutes[Private Coordinator control routes\nservice token + organization scope\nCurrent: onboarding status callback]
         Outbox[(Coordinator event outbox\nPostgres + RLS\nCurrent: transactional enqueue)]
         Dispatcher[Coordinator dispatcher\ninside API Gateway process\nCurrent: 1s polling + lease/retry + Temporal sink]
         Auth[Identity Platform\nGoogle-only browser sign-in\nGateway ID-token verification]
@@ -129,7 +129,7 @@ flowchart LR
         Worker[Temporal Go worker]
         Workflows[Workflow definitions\nCoordinator + source ingestion + generic Blueprint\nRelease readiness is an example]
         Activities[Activities\nprovider calls, synthesis, persistence references]
-        ADK[Google ADK agents\nplanner, specialists, synthesizer\nCurrent: Activity boundary\nCandidate: googleadk v0.2.0 spike]
+        ADK[Google ADK agents\nspecialists, synthesizer\nCurrent: Activity boundary\nCandidate: googleadk v0.2.0 spike]
         RuntimeClient[Private Agent Gateway client]
     end
 

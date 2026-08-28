@@ -28,7 +28,7 @@ Activity is the technical operations view. Use it when you need to inspect work 
 - **Run attention** — failed or partially completed runs.
 - **Source attention** — Sources that are degraded, failed, or need reauthorization.
 - **Integration setup** — integrations that need authorization or recovery.
-- **Workflow plans** — workflow changes waiting for approval or application.
+- **Blueprints** — approved workflow definitions selected when creating a Workflow.
 - **Memory changes** — proposed workflow memory additions, corrections, or deletions.
 - **Access requests** — organization-scope requests waiting for an administrator decision.
 
@@ -44,7 +44,7 @@ Workflows are repeatable investigations or processes that collect scoped context
 - **Templates** — reviewed starting points for creating a workflow.
 - **Blueprints** — approved, versioned workflow definitions. A Blueprint describes the steps a workflow can execute.
 
-Creating a workflow may involve selecting a Template or Blueprint, choosing a source, confirming the organization scope, and reviewing the generated plan. A plan is not applied until the required approval boundary is completed.
+Creating a workflow involves selecting a Template or existing Blueprint, configuring the workflow name and organization scope, previewing the resolved Blueprint, and creating it directly. The created Blueprint can optionally start a Workflow.
 
 ## Organization
 

@@ -46,22 +46,6 @@ export const queryKeys = {
       status,
       sort,
     ] as const,
-  workflowPlans: (query = "", status = "all", sort = "updated-desc") =>
-    ["workflow-plans", currentOrganizationId(), query, status, sort] as const,
-  workflowPlansRoot: () => ["workflow-plans", currentOrganizationId()] as const,
-  workflowPlan: (planId: string) =>
-    ["workflow-plan", currentOrganizationId(), planId] as const,
-  workflowPlanPages: (query = "", status = "all", sort = "updated-desc") =>
-    [
-      "workflow-plans",
-      currentOrganizationId(),
-      "__pages__",
-      query,
-      status,
-      sort,
-    ] as const,
-  workflowPlannerVersions: () =>
-    ["workflow-planner-versions", currentOrganizationId()] as const,
   workflow: (workflowId: string) =>
     ["workflow", currentOrganizationId(), workflowId] as const,
   workflowEvents: (workflowId: string) =>

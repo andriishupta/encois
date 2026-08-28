@@ -109,10 +109,6 @@ CREATE TYPE "public"."workflow_definition_status" AS ENUM('draft', 'approved', '
 
 --> statement-breakpoint
 
-CREATE TYPE "public"."workflow_plan_status" AS ENUM('proposed', 'approved', 'rejected', 'applied', 'expired');
-
---> statement-breakpoint
-
 CREATE TYPE "public"."workflow_run_status" AS ENUM('queued', 'running', 'waiting', 'partial', 'failed', 'completed', 'cancelled');
 
 --> statement-breakpoint
@@ -175,7 +171,6 @@ CREATE TABLE "workflow_blueprints" (
 	"name" text NOT NULL,
 	"blueprint" jsonb NOT NULL,
 	"status" "workflow_blueprint_status" DEFAULT 'draft' NOT NULL,
-	"source_plan_id" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"approved_at" timestamp with time zone,
@@ -471,27 +466,6 @@ CREATE TABLE "idempotency_keys" (
 
 --> statement-breakpoint
 
-CREATE TABLE "workflow_change_plans" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"plan_id" text NOT NULL,
-	"coordinator_id" text NOT NULL,
-	"project_id" text,
-	"plan_hash" text NOT NULL,
-	"plan" jsonb NOT NULL,
-	"status" "workflow_plan_status" DEFAULT 'proposed' NOT NULL,
-	"approval_required" boolean DEFAULT true NOT NULL,
-	"submitted_by_user_id" uuid,
-	"approved_by_user_id" uuid,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"approved_at" timestamp with time zone,
-	"applied_at" timestamp with time zone,
-	"deleted_at" timestamp with time zone
-);
-
---> statement-breakpoint
-
 CREATE TABLE "workflow_definitions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid,
@@ -690,18 +664,6 @@ CREATE UNIQUE INDEX "idempotency_keys_organization_key_idx" ON "idempotency_keys
 
 --> statement-breakpoint
 
-CREATE UNIQUE INDEX "workflow_change_plans_organization_plan_idx" ON "workflow_change_plans" USING btree ("organization_id","plan_id");
-
---> statement-breakpoint
-
-CREATE UNIQUE INDEX "workflow_change_plans_id_organization_idx" ON "workflow_change_plans" USING btree ("id","organization_id");
-
---> statement-breakpoint
-
-CREATE INDEX "workflow_change_plans_organization_deleted_idx" ON "workflow_change_plans" USING btree ("organization_id","deleted_at");
-
---> statement-breakpoint
-
 CREATE UNIQUE INDEX "workflow_definitions_key_version_idx" ON "workflow_definitions" USING btree ("organization_id","key","version");
 
 --> statement-breakpoint
@@ -882,18 +844,6 @@ ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_organization_id_
 
 --> statement-breakpoint
 
-ALTER TABLE "workflow_change_plans" ADD CONSTRAINT "workflow_change_plans_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
-
---> statement-breakpoint
-
-ALTER TABLE "workflow_change_plans" ADD CONSTRAINT "workflow_change_plans_submitted_by_user_id_users_id_fk" FOREIGN KEY ("submitted_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;
-
---> statement-breakpoint
-
-ALTER TABLE "workflow_change_plans" ADD CONSTRAINT "workflow_change_plans_approved_by_user_id_users_id_fk" FOREIGN KEY ("approved_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;
-
---> statement-breakpoint
-
 ALTER TABLE "workflow_definitions" ADD CONSTRAINT "workflow_definitions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
 
 --> statement-breakpoint
@@ -993,10 +943,6 @@ ALTER TABLE "idempotency_keys" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 
 ALTER TABLE "audit_events" ENABLE ROW LEVEL SECURITY;
-
---> statement-breakpoint
-
-ALTER TABLE "workflow_change_plans" ENABLE ROW LEVEL SECURITY;
 
 --> statement-breakpoint
 
@@ -1120,12 +1066,6 @@ CREATE POLICY idempotency_keys_tenant_isolation ON "idempotency_keys"
 --> statement-breakpoint
 
 CREATE POLICY audit_events_tenant_isolation ON "audit_events"
-  USING (organization_id = public.current_organization_id())
-  WITH CHECK (organization_id = public.current_organization_id());
-
---> statement-breakpoint
-
-CREATE POLICY workflow_change_plans_tenant_isolation ON "workflow_change_plans"
   USING (organization_id = public.current_organization_id())
   WITH CHECK (organization_id = public.current_organization_id());
 
@@ -1364,11 +1304,6 @@ CREATE POLICY integration_authorization_states_tenant_isolation ON "integration_
 
 --> statement-breakpoint
 
-ALTER TABLE "workflow_change_plans" ADD COLUMN IF NOT EXISTS "planner_name" text;
-ALTER TABLE "workflow_change_plans" ADD COLUMN IF NOT EXISTS "planner_version" text;
-ALTER TABLE "workflow_change_plans" ADD COLUMN IF NOT EXISTS "source_schema_version" text;
-ALTER TABLE "workflow_change_plans" ADD COLUMN IF NOT EXISTS "prompt_version" text;
-ALTER TABLE "workflow_change_plans" ADD COLUMN IF NOT EXISTS "prompt_hash" text;
 ALTER TABLE "workflow_runs" ADD COLUMN IF NOT EXISTS "retention_until" timestamptz;
 
 -- Existing terminal runs predate the retention column. Backfill them with the
@@ -1378,7 +1313,6 @@ SET "retention_until" = "created_at" + interval '30 days'
 WHERE "retention_until" IS NULL
   AND "status" IN ('completed', 'failed', 'partial', 'cancelled');
 
-COMMENT ON COLUMN "workflow_change_plans"."prompt_hash" IS 'Non-reversible hash of the user planner input; raw prompts are not persisted here.';
 COMMENT ON COLUMN "workflow_runs"."retention_until" IS 'Retention deadline for the run record and its workflow-event/evidence linkage.';
 
 --> statement-breakpoint
@@ -1636,50 +1570,6 @@ ALTER TABLE "coordinator_recommendations" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 
 CREATE POLICY coordinator_recommendations_tenant_isolation ON "coordinator_recommendations"
-  USING (organization_id = public.current_organization_id())
-  WITH CHECK (organization_id = public.current_organization_id());
-
---> statement-breakpoint
-
-CREATE TABLE "workflow_planner_versions" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"planner_name" text,
-	"planner_version" text,
-	"source_schema_version" text,
-	"prompt_version" text,
-	"prompt_hash" text,
-	"version_hash" text NOT NULL,
-	"first_plan_id" text NOT NULL,
-	"last_plan_id" text NOT NULL,
-	"usage_count" integer DEFAULT 1 NOT NULL,
-	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL
-);
-
---> statement-breakpoint
-
-ALTER TABLE "workflow_planner_versions" ADD CONSTRAINT "workflow_planner_versions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
-
---> statement-breakpoint
-
-CREATE UNIQUE INDEX "workflow_planner_versions_org_hash_idx" ON "workflow_planner_versions" USING btree ("organization_id","version_hash");
-
---> statement-breakpoint
-
-CREATE INDEX "workflow_planner_versions_org_last_seen_idx" ON "workflow_planner_versions" USING btree ("organization_id","last_seen_at");
-
---> statement-breakpoint
-
-CREATE UNIQUE INDEX "workflow_planner_versions_id_organization_idx" ON "workflow_planner_versions" USING btree ("id","organization_id");
-
---> statement-breakpoint
-
-ALTER TABLE "workflow_planner_versions" ENABLE ROW LEVEL SECURITY;
-
---> statement-breakpoint
-
-CREATE POLICY workflow_planner_versions_tenant_isolation ON "workflow_planner_versions"
   USING (organization_id = public.current_organization_id())
   WITH CHECK (organization_id = public.current_organization_id());
 

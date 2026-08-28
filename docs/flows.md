@@ -128,14 +128,10 @@ sequenceDiagram
     AgentGW-->>Runtime: evidence/data references
     Runtime->>Graph: persist normalized facts and provenance
     Runtime->>Memory: explicitly generate/retrieve scoped bootstrap memory
-    Runtime->>Gemini: propose typed WorkflowChangePlan
-    Gemini-->>Runtime: standard blueprint proposals
-    Runtime->>API: submit plan for deterministic validation
-    API->>API: persist, approve, and apply approved registry changes
-    API->>Outbox: enqueue coordinator-event.v1
-    Dispatcher->>Outbox: lease pending event
-    Dispatcher->>Temporal: deliver applied plan event
-    Temporal-->>Runtime: Coordinator starts only explicit workflowStarts
+    User->>API: select Template or approved Blueprint, name, and scope
+    API->>API: resolve and validate Blueprint preview
+    API->>API: persist approved Blueprint directly
+    API->>Temporal: optionally start Workflow from Blueprint
     Runtime->>API: report bootstrap completion and required context
     API->>API: validate readiness and transition onboarding to ready
     API-->>User: onboarding_ready + enabled workflow catalog
@@ -179,8 +175,8 @@ server.
 Temporal start request is accepted. It does not return `ready` optimistically.
 The Coordinator performs one immediate bootstrap reconciliation. With the
 initial empty workflow selection, it reports `ready` without creating a
-workflow plan; explicitly configured workflow selections still require a
-successful plan proposal/submission. Reset is an explicit action and does not
+Blueprint; explicitly configured workflow selections use the same direct flow.
+Reset is an explicit action and does not
 fabricate progress, runs, or readiness.
 
 The Coordinator is a long-lived logical Workflow. It waits on Temporal timers,
@@ -191,18 +187,11 @@ marks the old workflow for deprecation, and waits for approval when the change
 could alter behavior or external side effects. It does not silently delete the
 old workflow or copy provider instructions into policy.
 
-Current Runtime boundary: a reconciliation trigger invokes a Go Activity that
-proposes a validated `workflow-change-plan.v1`, followed by a separate Activity
-that submits it to the private Gateway control-plane route. Approval
-notification uses the separate `coordinator-event.v1` envelope, whose Runtime
-receiver now deduplicates and scope-checks events. Gateway approval/application
-transactionally enqueue the event in the outbox. Outbox delivery has a bounded
-lease/retry implementation and an always-on dispatcher loop inside the API
-Gateway. Applying an
-approved plan emits `workflowStarts` only for explicit change-level `start`
-intents; the Coordinator starts those approved snapshots through its private
-Gateway Activity and retains failed starts for retry. Scheduler invocation and
-hosted delivery remain deployment work.
+Current Runtime boundary: a reconciliation trigger invokes the Coordinator,
+which reports readiness through the private Gateway control-plane route.
+Blueprint creation and optional Workflow start are handled directly by the
+Gateway after deterministic authorization and provider checks. The Coordinator
+does not own Blueprint persistence or Workflow creation.
 
 The dashboard gate is deterministic and applies to every tenant route:
 
@@ -254,28 +243,16 @@ example, Jira and GitHub steps with no dependency run in parallel, and an email
 step depending on both runs afterwards.
 
 ```text
-POST /v1/workflows (Gateway API)
+POST /v1/workflows/blueprints/preview
   -> authenticate user and resolve organization-unit scope
-  -> send blueprint to private Agent Gateway for capability and permission validation
-  -> persist draft/version in the control plane
-  -> create or update the Temporal execution/schedule
-  -> return workflowId and permission/approval requirements
+  -> resolve a Template or approved Blueprint
+  -> validate provider capabilities and return the Blueprint preview
 
-Workflow Creator proposal preview:
-
-POST /v1/workflows/plans/validate
-  -> validate workflow-change-plan.v1
-  -> enforce tenant and required-scope ownership
-  -> return validated_not_applied
-  -> POST /v1/workflows/plans persists the proposal when Postgres is configured
-  -> GET /v1/workflows/plans/:planId loads one tenant-scoped proposal
-  -> PATCH /v1/workflows/plans/:planId edits only a proposed plan and revalidates it
-  -> POST /v1/workflows/plans/:planId/approve records explicit approval
-  -> POST /v1/workflows/plans/:planId/apply persists an approved Blueprint revision
-  -> API enqueues coordinator-event.v1 transactionally
-  -> Coordinator receives workflowStarts for changes that explicitly requested start
-  -> Coordinator starts the immutable approved snapshot through the private Gateway
-  -> update/deprecate changes without start only change the registry; cancel-only plans cancel targeted Temporal executions
+POST /v1/workflows/blueprints/from-intent
+  -> repeat the same server-side resolution and authorization
+  -> persist the approved Blueprint directly
+  -> optionally start the Workflow from that Blueprint snapshot
+  -> return the created Blueprint and optional Workflow projection
 
 Dashboard lifecycle separation:
   Workflow detail = grouped Blueprint definition by stable blueprintId
@@ -288,12 +265,9 @@ Temporal start:
   input        = validated blueprint + execution context
 ```
 
-Every persisted workflow plan also records a tenant-scoped planner history
-fingerprint. The record contains planner name/version, source-schema version,
-prompt version/hash, first and latest plan IDs, usage count, and observation
-timestamps. The raw prompt is never stored. Authorized workflow managers can
-read this history from the Review queue to compare which planning inputs were
-used over time without exposing implementation-only IDs in the creation form.
+Blueprint rows preserve the resolved version and source identity. Future
+Blueprint revisions can add an explicit revision history without introducing a
+separate intermediate record.
 
 The Agent Gateway exposes the corresponding private validation and
 fixture-level MCP-shaped catalog endpoints, but it intentionally does not
@@ -377,15 +351,15 @@ React SPA
   -> API/MCP Integration
 ```
 
-For a Workflow Creator plan, the control path is deliberately separate:
+For Workflow creation, the control path is deliberately direct:
 
 ```text
 User / Workflow Creator
   -> GET /api/v1/workflows/templates
   -> resolve a provider-neutral template and provider slots
-  -> validate/submit plan
-  -> human approval
-  -> apply immutable registry snapshot
+  -> preview the resolved Blueprint
+  -> persist the approved Blueprint snapshot
+  -> optionally start a Workflow from that snapshot
   -> coordinator-event.v1 via transactional outbox
   -> CoordinatorWorkflow
   -> private Gateway start Activity, only when change.start exists
@@ -733,8 +707,8 @@ Dashboard requests /investigations/recommendations
 
 Recommendation generation is deterministic and permission-aware. It must not
 invent counts outside the caller's scope or turn an unavailable dependency
-into a false "no action" state. Generated change plans and Coordinator-owned
-execution remain a separate contract boundary.
+into a false "no action" state. Blueprint creation and Coordinator onboarding
+remain a separate contract boundary.
 
 ## 11. Canvas and observability flow
 
@@ -784,7 +758,7 @@ The first vertical slice needs these API-level projections:
 - `GET /overview` — scoped health, active workflows, warnings, freshness.
 - `GET /workflows/:id` — workflow status, steps, evidence references, result, and errors.
 - `POST /workflows` — start a user-requested Blueprint execution.
-- `POST /workflows/:id/signals` — send an authorized approval or external-event Signal. Lifecycle cancellation uses an approved cancel-only workflow plan; a direct public cancel route remains future work.
+- `POST /workflows/:id/signals` — send an authorized approval or external-event Signal.
 - `POST /workflows/:id/updates` — apply an authorized, versioned update to the active Workflow context.
 - `POST /queries` — start a bounded question or return a fresh answer.
 - `GET /agents` — approved definitions and current activity projection.

@@ -34,15 +34,12 @@ import type {
   WaitlistSubmissionResponse,
   WebhookEndpointProjection,
   WebhookEndpointSecretResponse,
-  WorkflowBlueprintLifecycleRequest,
   WorkflowBlueprintProjection,
-  WorkflowChangePlan,
   WorkflowCreationIntent,
   WorkflowCreationPreview,
+  WorkflowCreationResult,
   WorkflowEventProjection,
   WorkflowExecutionProjection,
-  WorkflowPlannerVersionProjection,
-  WorkflowPlanRecord,
   WorkflowRecentActivityProjection,
   WorkflowSignalRequest,
   WorkflowStartRequest,
@@ -50,7 +47,6 @@ import type {
   WorkflowUpdateRequest,
 } from "@encois/contracts/browser";
 import {
-  ContractVersion,
   type IntegrationType,
   isJsonObject,
   isPermission,
@@ -109,9 +105,8 @@ import {
   isWorkflowActivity,
   isWorkflowBlueprintProjection,
   isWorkflowCreationPreview,
+  isWorkflowCreationResult,
   isWorkflowEvent,
-  isWorkflowPlannerVersion,
-  isWorkflowPlanRecord,
   isWorkflowProjection,
   isWorkflowTemplateProjection,
   type KnowledgeSourceDetail,
@@ -251,29 +246,6 @@ export function listWorkflowBlueprintsPage(
   );
 }
 
-export async function createBlueprintLifecyclePlan(
-  blueprintId: string,
-  input: Omit<WorkflowBlueprintLifecycleRequest, "contractVersion">,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>(
-    `/workflows/blueprints/${encodeURIComponent(blueprintId)}/lifecycle`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        contractVersion: ContractVersion.WorkflowBlueprintLifecycle,
-        ...input,
-      }),
-    },
-  );
-  if (!isWorkflowPlanRecord(value))
-    throw createApiError(
-      200,
-      "The service returned an invalid Blueprint lifecycle plan.",
-      "INVALID_RESPONSE",
-    );
-  return value;
-}
-
 export async function deleteWorkflowBlueprint(
   blueprintId: string,
   version: string,
@@ -308,7 +280,7 @@ export async function deleteWorkflowDefinition(
 export async function previewWorkflowCreation(
   input: WorkflowCreationIntent,
 ): Promise<WorkflowCreationPreview> {
-  const value = await request<unknown>("/workflows/plans/preview", {
+  const value = await request<unknown>("/workflows/blueprints/preview", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -323,125 +295,18 @@ export async function previewWorkflowCreation(
 
 export async function submitWorkflowCreation(
   input: WorkflowCreationIntent,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>("/workflows/plans/from-intent", {
+): Promise<WorkflowCreationResult> {
+  const value = await request<unknown>("/workflows/blueprints/from-intent", {
     method: "POST",
     body: JSON.stringify(input),
   });
-  if (!isWorkflowPlanRecord(value))
+  if (!isWorkflowCreationResult(value))
     throw createApiError(
       200,
-      "The service returned an invalid workflow plan.",
+      "The service returned an invalid workflow creation result.",
       "INVALID_RESPONSE",
     );
   return value;
-}
-
-export function listWorkflowPlans(
-  limit = DEFAULT_LIST_LIMIT,
-): Promise<readonly WorkflowPlanRecord[]> {
-  return listWorkflowPlansPage({ limit }).then((page) => page.items);
-}
-
-export function listWorkflowPlansPage(
-  input: ListQueryInput = {},
-): Promise<ListPage<WorkflowPlanRecord>> {
-  return requestList(
-    `/workflows/plans${listQuery(input)}`,
-    isWorkflowPlanRecord,
-    "workflow plan list",
-  );
-}
-
-export async function getWorkflowPlan(
-  planId: string,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>(
-    `/workflows/plans/${encodeURIComponent(planId)}`,
-  );
-  if (!isWorkflowPlanRecord(value))
-    throw createApiError(
-      200,
-      "The service returned an invalid workflow plan.",
-      "INVALID_RESPONSE",
-    );
-  return value;
-}
-
-export async function updateWorkflowPlan(
-  planId: string,
-  plan: WorkflowChangePlan,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>(
-    `/workflows/plans/${encodeURIComponent(planId)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(plan),
-    },
-  );
-  if (!isWorkflowPlanRecord(value))
-    throw createApiError(
-      200,
-      "The service returned an invalid updated workflow plan.",
-      "INVALID_RESPONSE",
-    );
-  return value;
-}
-
-export function listWorkflowPlannerVersions(
-  limit = DEFAULT_LIST_LIMIT,
-): Promise<readonly WorkflowPlannerVersionProjection[]> {
-  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
-  return request<unknown>(
-    `/workflows/planner-versions?limit=${boundedLimit}`,
-  ).then((value) =>
-    parseList(value, isWorkflowPlannerVersion, "workflow planner version list"),
-  );
-}
-
-export async function approveWorkflowPlan(
-  planId: string,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>(
-    `/workflows/plans/${encodeURIComponent(planId)}/approve`,
-    { method: "POST" },
-  );
-  if (!isWorkflowPlanRecord(value))
-    throw createApiError(
-      200,
-      "The service returned an invalid approved workflow plan.",
-      "INVALID_RESPONSE",
-    );
-  return value;
-}
-
-export async function applyWorkflowPlan(
-  planId: string,
-): Promise<WorkflowPlanRecord> {
-  const value = await request<unknown>(
-    `/workflows/plans/${encodeURIComponent(planId)}/apply`,
-    { method: "POST" },
-  );
-  if (!isWorkflowPlanRecord(value))
-    throw createApiError(
-      200,
-      "The service returned an invalid applied workflow plan.",
-      "INVALID_RESPONSE",
-    );
-  return value;
-}
-
-export async function deleteWorkflowPlan(planId: string): Promise<void> {
-  const value = await request<unknown>(
-    `/workflows/plans/${encodeURIComponent(planId)}`,
-    { method: "DELETE" },
-  );
-  if (!isJsonObject(value) || value.deleted !== true)
-    throw createApiError(
-      200,
-      "The service returned an invalid workflow plan deletion response.",
-      "INVALID_RESPONSE",
-    );
 }
 
 export async function getAuthStatus(): Promise<AuthStatusResponse> {

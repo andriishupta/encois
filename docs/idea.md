@@ -109,7 +109,7 @@ Encois starts as **Company Intelligence**, not company automation.
 
 **Today:** Observe → correlate → understand → explain → recommend.
 
-**Later:** Predict → plan → request approval → execute controlled actions.
+**Later:** Predict → request approval → execute controlled actions.
 
 The long-term progression is:
 

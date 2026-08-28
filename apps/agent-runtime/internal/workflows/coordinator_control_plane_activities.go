@@ -19,20 +19,6 @@ func NewCoordinatorControlPlaneActivities(client corecoordinator.Client) *Coordi
 	return &CoordinatorControlPlaneActivities{client: client}
 }
 
-func (a *CoordinatorControlPlaneActivities) SubmitWorkflowChangePlan(ctx context.Context, plan coordinator.WorkflowChangePlan) (corecoordinator.PlanSubmission, error) {
-	if a == nil || a.client == nil {
-		return corecoordinator.PlanSubmission{}, fmt.Errorf("Coordinator control-plane client is not configured")
-	}
-	return a.client.SubmitWorkflowChangePlan(ctx, plan)
-}
-
-func (a *CoordinatorControlPlaneActivities) StartApprovedWorkflow(ctx context.Context, request corecoordinator.StartWorkflowRequest) (corecoordinator.WorkflowReference, error) {
-	if a == nil || a.client == nil {
-		return corecoordinator.WorkflowReference{}, fmt.Errorf("Coordinator control-plane client is not configured")
-	}
-	return a.client.StartApprovedWorkflow(ctx, request)
-}
-
 func (a *CoordinatorControlPlaneActivities) UpdateOnboardingStatus(ctx context.Context, update coordinator.OnboardingStatusUpdate) error {
 	if a == nil || a.client == nil {
 		return fmt.Errorf("Coordinator control-plane client is not configured")

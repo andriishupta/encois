@@ -26,11 +26,8 @@ type Config struct {
 
 type Bundle struct {
 	Mode                   string
-	Coordinator            agent.Agent
-	WorkflowCreator        agent.Agent
 	AgentModel             model.LLM
 	StandardRunner         *runner.Runner
-	WorkflowCreatorRunner  *runner.Runner
 	ModelName              string
 	ReasoningModelName     string
 	ReasoningThinkingLevel genai.ThinkingLevel
@@ -84,36 +81,6 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Gemini model: %w", err)
 	}
-	deepThinkingConfig := &genai.GenerateContentConfig{
-		ThinkingConfig: &genai.ThinkingConfig{ThinkingLevel: thinkingLevel},
-	}
-
-	coordinator, err := llmagent.New(llmagent.Config{
-		Name:         "coordinator",
-		Description:  "Coordinates onboarding, context discovery, and company-specific Blueprint proposals.",
-		Model:        model,
-		Instruction:  BuildInstruction("coordinator", "workflow-change-plan.v1") + "\nCoordinate only approved capabilities for the current organization and project. Discover available context, delegate through validated tools or Agent Definitions, and preserve evidence references. Never invent permissions, tools, providers, or facts. Every changes item must include kind exactly equal to create, update, deprecate, restore, set_current, or cancel; never use an empty kind.",
-		OutputSchema: WorkflowChangePlanSchema(),
-		// The coordinator owns cross-source planning and must use the deeper
-		// reasoning profile configured for high-responsibility agents.
-		GenerateContentConfig: deepThinkingConfig,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create coordinator: %w", err)
-	}
-
-	workflowCreator, err := llmagent.New(llmagent.Config{
-		Name:                  "workflow_creator",
-		Description:           "Proposes versioned workflow blueprints from the approved catalog.",
-		Model:                 model,
-		Instruction:           BuildInstruction("workflow_creator", "workflow-change-plan.v1") + "\nPropose only typed changes to the generic user-created Blueprint using approved tools, Agent Definitions, and authorized scopes. Never approve a plan, invent Go code, or make authorization decisions. Every changes item must include kind exactly equal to create, update, deprecate, restore, set_current, or cancel; never use an empty kind.",
-		OutputSchema:          WorkflowChangePlanSchema(),
-		GenerateContentConfig: deepThinkingConfig,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create workflow creator: %w", err)
-	}
-
 	standardAgent, err := llmagent.New(llmagent.Config{
 		Name:         "routine_summarizer",
 		Description:  "Summarizes approved evidence for routine specialist work.",
@@ -128,15 +95,8 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create standard ADK runner: %w", err)
 	}
-	workflowCreatorRunner, err := runner.NewInMemory("encois-agent-runtime-workflow-creator", workflowCreator)
-	if err != nil {
-		return nil, fmt.Errorf("create workflow creator runner: %w", err)
-	}
-	bundle.Coordinator = coordinator
-	bundle.WorkflowCreator = workflowCreator
 	bundle.AgentModel = model
 	bundle.StandardRunner = standardRunner
-	bundle.WorkflowCreatorRunner = workflowCreatorRunner
 	bundle.Enabled = true
 	return bundle, nil
 }
@@ -196,32 +156,6 @@ func (b *Bundle) Summarize(ctx context.Context, sessionID, prompt string) (strin
 	content := genai.NewContentFromText(prompt, genai.RoleUser)
 	var parts []string
 	for event, err := range b.StandardRunner.Run(ctx, "system", sessionID, content, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
-		if err != nil {
-			return "", err
-		}
-		if event == nil || event.Content == nil {
-			continue
-		}
-		for _, part := range event.Content.Parts {
-			if part != nil && part.Text != "" {
-				parts = append(parts, part.Text)
-			}
-		}
-	}
-	return strings.TrimSpace(strings.Join(parts, "\n")), nil
-}
-
-func (b *Bundle) CreateWorkflowPlan(ctx context.Context, sessionID, prompt string) (string, error) {
-	if b != nil && b.Mode == ModeMock {
-		return localmock.WorkflowChangePlanJSON(prompt)
-	}
-	if b == nil || b.WorkflowCreatorRunner == nil {
-		return "", fmt.Errorf("workflow creator runner is not configured")
-	}
-
-	content := genai.NewContentFromText(prompt, genai.RoleUser)
-	var parts []string
-	for event, err := range b.WorkflowCreatorRunner.Run(ctx, "system", sessionID, content, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
 		if err != nil {
 			return "", err
 		}

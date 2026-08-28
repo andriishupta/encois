@@ -37,7 +37,6 @@ const tenantTables = [
   "workflow_events",
   "idempotency_keys",
   "audit_events",
-  "workflow_change_plans",
   "workflow_blueprints",
   "coordinator_event_outbox",
   "workflow_command_receipts",
@@ -53,7 +52,6 @@ const tenantTables = [
   "memory_change_requests",
   "organization_access_requests",
   "coordinator_recommendations",
-  "workflow_planner_versions",
   "organization_onboarding",
 ] as const;
 

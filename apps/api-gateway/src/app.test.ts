@@ -360,52 +360,6 @@ describe("API Gateway", () => {
     });
   });
 
-  it("mounts the Blueprint lifecycle proposal boundary and rejects unversioned requests", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["root"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-
-    const invalid = await app.request(
-      "/api/v1/workflows/blueprints/release-readiness/lifecycle",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          action: "deprecate",
-          reason: "Retire the old revision.",
-        }),
-        headers: { "content-type": "application/json" },
-      },
-    );
-    expect(invalid.status).toBe(400);
-
-    const unavailable = await app.request(
-      "/api/v1/workflows/blueprints/release-readiness/lifecycle",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          contractVersion: "workflow-blueprint-lifecycle.v1",
-          action: "deprecate",
-          sourceVersion: "1.0.0",
-          reason: "Retire the old revision.",
-        }),
-        headers: { "content-type": "application/json" },
-      },
-    );
-    expect(unavailable.status).toBe(503);
-    await expect(unavailable.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-  });
-
   it("resolves workflow creation intents behind the product-level boundary", async () => {
     const app = createApp({
       authenticate: async () => ({
@@ -420,7 +374,7 @@ describe("API Gateway", () => {
       config: testConfig,
     });
 
-    const invalid = await app.request("/api/v1/workflows/plans/preview", {
+    const invalid = await app.request("/api/v1/workflows/blueprints/preview", {
       method: "POST",
       body: JSON.stringify({ mode: "template", name: "Missing source" }),
       headers: { "content-type": "application/json" },
@@ -430,7 +384,7 @@ describe("API Gateway", () => {
       error: { code: "WORKFLOW_TEMPLATE_REQUIRED" },
     });
 
-    const manual = await app.request("/api/v1/workflows/plans/preview", {
+    const manual = await app.request("/api/v1/workflows/blueprints/preview", {
       method: "POST",
       body: JSON.stringify({
         mode: "manual",
@@ -445,7 +399,7 @@ describe("API Gateway", () => {
     });
 
     const unsupportedProvider = await app.request(
-      "/api/v1/workflows/plans/preview",
+      "/api/v1/workflows/blueprints/preview",
       {
         method: "POST",
         body: JSON.stringify({
@@ -462,7 +416,7 @@ describe("API Gateway", () => {
     });
 
     const missingProvider = await app.request(
-      "/api/v1/workflows/plans/preview",
+      "/api/v1/workflows/blueprints/preview",
       {
         method: "POST",
         body: JSON.stringify({
@@ -1156,355 +1110,6 @@ describe("API Gateway", () => {
     );
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-  });
-
-  it("validates a workflow change plan without applying it", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["team-engineering"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const response = await app.request("/api/v1/workflows/plans/validate", {
-      body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v1",
-        planId: "plan-release-readiness-1",
-        coordinatorId: "coordinator-org-1",
-        organizationId: "org-1",
-        observedAt: "2026-08-20T16:00:00.000Z",
-        changes: [
-          {
-            kind: "create",
-            blueprint: {
-              contractVersion: "workflow-blueprint.v1",
-              blueprintId: "release-readiness",
-              version: "1.0.0",
-              name: "Release readiness",
-              workflowType: "encois.dynamic.v1",
-              purpose: "Check release readiness.",
-              enabled: true,
-              requiredScopes: ["team-engineering"],
-              steps: [
-                {
-                  id: "transform",
-                  kind: "transform",
-                  input: { status: "ready" },
-                },
-              ],
-            },
-            reason: "Create the approved release readiness workflow.",
-            requiresApproval: true,
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: {
-        planId: "plan-release-readiness-1",
-        status: "validated_not_applied",
-        applyStatus: "deferred_database_and_approval",
-        approvalRequired: true,
-      },
-    });
-  });
-
-  it("validates lifecycle workflow-change-plan.v1 targets without applying them", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["team-engineering"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const response = await app.request("/api/v1/workflows/plans/validate", {
-      body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v1",
-        planId: "plan-release-lifecycle-1",
-        coordinatorId: "coordinator-org-1",
-        organizationId: "org-1",
-        observedAt: "2026-08-20T16:00:00.000Z",
-        changes: [
-          {
-            kind: "update",
-            targetBlueprintId: "release-readiness",
-            targetBlueprintVersion: "1.0.0",
-            blueprint: {
-              contractVersion: "workflow-blueprint.v1",
-              blueprintId: "release-readiness",
-              version: "2.0.0",
-              name: "Release readiness v2",
-              workflowType: "encois.dynamic.v1",
-              purpose: "Check release readiness.",
-              enabled: true,
-              steps: [
-                {
-                  id: "transform",
-                  kind: "transform",
-                  input: { status: "ready" },
-                },
-              ],
-            },
-            reason: "Publish a new revision.",
-            requiresApproval: true,
-          },
-          {
-            kind: "deprecate",
-            targetBlueprintId: "release-readiness",
-            targetBlueprintVersion: "0.9.0",
-            reason: "Retire the obsolete revision.",
-            requiresApproval: true,
-          },
-          {
-            kind: "cancel",
-            targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
-            reason: "Cancel the superseded execution.",
-            requiresApproval: true,
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      data: {
-        planId: "plan-release-lifecycle-1",
-        status: "validated_not_applied",
-        changeCount: 3,
-      },
-    });
-  });
-
-  it("rejects lifecycle plans that mix Blueprint and Temporal targets", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["team-engineering"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const response = await app.request("/api/v1/workflows/plans/validate", {
-      body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v1",
-        planId: "plan-invalid-lifecycle-1",
-        coordinatorId: "coordinator-org-1",
-        organizationId: "org-1",
-        observedAt: "2026-08-20T16:00:00.000Z",
-        changes: [
-          {
-            kind: "deprecate",
-            targetBlueprintId: "release-readiness",
-            targetBlueprintVersion: "1.0.0",
-            targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
-            reason: "Ambiguous target.",
-            requiresApproval: true,
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "INVALID_REQUEST" },
-    });
-  });
-
-  it("rejects workflow change plans outside the caller organization", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["team-engineering"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const response = await app.request("/api/v1/workflows/plans/validate", {
-      body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v1",
-        planId: "plan-cross-tenant",
-        coordinatorId: "coordinator-org-2",
-        organizationId: "org-2",
-        observedAt: "2026-08-20T16:00:00.000Z",
-        changes: [
-          {
-            kind: "cancel",
-            targetWorkflowId: "workflow:org-2:encois.dynamic.v1:release-1",
-            reason: "Retire the workflow.",
-            requiresApproval: true,
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "FORBIDDEN" },
-    });
-  });
-
-  it("rejects workflow plans targeted at a sibling organization unit", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-cxs",
-          organizationId: "org-1",
-          scope: ["unit-customer-success"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const response = await app.request("/api/v1/workflows/plans/validate", {
-      body: JSON.stringify({
-        contractVersion: "workflow-change-plan.v1",
-        planId: "plan-sibling-scope",
-        coordinatorId: "coordinator-org-1",
-        organizationId: "org-1",
-        observedAt: "2026-08-20T16:00:00.000Z",
-        scope: { ids: ["unit-engineering"] },
-        changes: [
-          {
-            kind: "create",
-            start: { key: "sibling-scope-workflow" },
-            blueprint: {
-              contractVersion: "workflow-blueprint.v1",
-              blueprintId: "sibling-scope-blueprint",
-              version: "1.0.0",
-              name: "Sibling scope workflow",
-              workflowType: "encois.dynamic.v1",
-              purpose: "Verify sibling scope isolation.",
-              enabled: true,
-              steps: [{ id: "transform", kind: "transform", input: {} }],
-            },
-            reason: "Must remain inside the caller scope.",
-            requiresApproval: false,
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "SCOPE_DENIED" },
-    });
-  });
-
-  it("does not accept a plan or approval when the database is unavailable", async () => {
-    const app = createApp({
-      authenticate: async () => ({
-        principal: {
-          actorId: "user-1",
-          organizationId: "org-1",
-          scope: ["team-engineering"],
-          permissions: ["workflows:manage"],
-        },
-        status: "authenticated" as const,
-      }),
-      config: testConfig,
-    });
-    const plan = {
-      contractVersion: "workflow-change-plan.v1",
-      planId: "plan-database-unavailable",
-      coordinatorId: "coordinator-org-1",
-      organizationId: "org-1",
-      observedAt: "2026-08-20T16:00:00.000Z",
-      changes: [
-        {
-          kind: "cancel",
-          targetWorkflowId: "workflow:org-1:encois.dynamic.v1:release-1",
-          reason: "Retire the obsolete workflow.",
-          requiresApproval: true,
-        },
-      ],
-    };
-
-    const submit = await app.request("/api/v1/workflows/plans", {
-      body: JSON.stringify(plan),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-    expect(submit.status).toBe(503);
-    await expect(submit.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-
-    const list = await app.request("/api/v1/workflows/plans");
-    expect(list.status).toBe(503);
-    await expect(list.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-
-    const plannerVersions = await app.request(
-      "/api/v1/workflows/planner-versions",
-    );
-    expect(plannerVersions.status).toBe(503);
-    await expect(plannerVersions.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-
-    const invalidPlannerVersionLimit = await app.request(
-      "/api/v1/workflows/planner-versions?limit=0",
-    );
-    expect(invalidPlannerVersionLimit.status).toBe(400);
-    await expect(invalidPlannerVersionLimit.json()).resolves.toMatchObject({
-      error: { code: "INVALID_REQUEST" },
-    });
-
-    const approve = await app.request(
-      "/api/v1/workflows/plans/plan-database-unavailable/approve",
-      {
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      },
-    );
-    expect(approve.status).toBe(503);
-    await expect(approve.json()).resolves.toMatchObject({
-      error: { code: "DATABASE_UNAVAILABLE" },
-    });
-
-    const apply = await app.request(
-      "/api/v1/workflows/plans/plan-database-unavailable/apply",
-      {
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      },
-    );
-    expect(apply.status).toBe(503);
-    await expect(apply.json()).resolves.toMatchObject({
       error: { code: "DATABASE_UNAVAILABLE" },
     });
   });

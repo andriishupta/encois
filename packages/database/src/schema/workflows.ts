@@ -1,8 +1,6 @@
 import {
-  boolean,
   foreignKey,
   index,
-  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -34,106 +32,6 @@ export const workflowRunStatus = pgEnum("workflow_run_status", [
   "cancelled",
 ]);
 export type WorkflowRunStatus = (typeof workflowRunStatus.enumValues)[number];
-
-export const workflowPlanStatus = pgEnum("workflow_plan_status", [
-  "proposed",
-  "approved",
-  "rejected",
-  "applied",
-  "expired",
-]);
-export type WorkflowPlanStatus = (typeof workflowPlanStatus.enumValues)[number];
-
-export const workflowChangePlans = pgTable(
-  "workflow_change_plans",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    planId: text("plan_id").notNull(),
-    coordinatorId: text("coordinator_id").notNull(),
-    projectId: text("project_id"),
-    planHash: text("plan_hash").notNull(),
-    plan: jsonb("plan").$type<Record<string, unknown>>().notNull(),
-    plannerName: text("planner_name"),
-    plannerVersion: text("planner_version"),
-    sourceSchemaVersion: text("source_schema_version"),
-    promptVersion: text("prompt_version"),
-    promptHash: text("prompt_hash"),
-    status: workflowPlanStatus("status").notNull().default("proposed"),
-    approvalRequired: boolean("approval_required").notNull().default(true),
-    submittedByUserId: uuid("submitted_by_user_id").references(() => users.id, {
-      onDelete: "restrict",
-    }),
-    approvedByUserId: uuid("approved_by_user_id").references(() => users.id, {
-      onDelete: "restrict",
-    }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    approvedAt: timestamp("approved_at", { withTimezone: true }),
-    appliedAt: timestamp("applied_at", { withTimezone: true }),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex("workflow_change_plans_organization_plan_idx").on(
-      table.organizationId,
-      table.planId,
-    ),
-    uniqueIndex("workflow_change_plans_id_organization_idx").on(
-      table.id,
-      table.organizationId,
-    ),
-    index("workflow_change_plans_organization_deleted_idx").on(
-      table.organizationId,
-      table.deletedAt,
-    ),
-  ],
-);
-
-/** Distinct planner/schema/prompt fingerprints observed on persisted plans. Raw prompts are never stored here. */
-export const workflowPlannerVersions = pgTable(
-  "workflow_planner_versions",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    plannerName: text("planner_name"),
-    plannerVersion: text("planner_version"),
-    sourceSchemaVersion: text("source_schema_version"),
-    promptVersion: text("prompt_version"),
-    promptHash: text("prompt_hash"),
-    versionHash: text("version_hash").notNull(),
-    firstPlanId: text("first_plan_id").notNull(),
-    lastPlanId: text("last_plan_id").notNull(),
-    usageCount: integer("usage_count").notNull().default(1),
-    firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("workflow_planner_versions_org_hash_idx").on(
-      table.organizationId,
-      table.versionHash,
-    ),
-    index("workflow_planner_versions_org_last_seen_idx").on(
-      table.organizationId,
-      table.lastSeenAt,
-    ),
-    uniqueIndex("workflow_planner_versions_id_organization_idx").on(
-      table.id,
-      table.organizationId,
-    ),
-  ],
-);
 
 export const workflowDefinitions = pgTable(
   "workflow_definitions",

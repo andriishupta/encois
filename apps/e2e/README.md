@@ -11,7 +11,7 @@ The first flow covers:
 2. Dashboard rendering;
 3. creation of a `Jira Project Tasks` workflow;
 4. selecting the `Customer Success` unit scope;
-5. plan approval and application;
+5. previewing and creating the Blueprint;
 6. starting the workflow from the Dashboard;
 7. waiting for `Completed` and `Output available`.
 

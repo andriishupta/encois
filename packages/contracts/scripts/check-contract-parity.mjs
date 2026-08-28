@@ -57,7 +57,6 @@ for (const name of [
   "AgentMemoryStatus",
   "ToolSideEffects",
   "CoordinatorEventType",
-  "WorkflowChangeKind",
   "OrganizationUnitType",
   "ScopeRuleMode",
   "FreshnessStatus",

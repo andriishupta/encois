@@ -32,7 +32,6 @@ import {
   TemporalWorkflowType,
   type ToolResultStatus,
   type ToolSideEffects,
-  type WorkflowChangeKind,
   type WorkflowExecutionStatus,
   type WorkflowResultStatus,
   type WorkflowSignalName,
@@ -101,7 +100,6 @@ export {
   TemporalWorkflowType,
   ToolResultStatus,
   ToolSideEffects,
-  WorkflowChangeKind,
   WorkflowExecutionStatus,
   WorkflowResultStatus,
   WorkflowSignalName,
@@ -432,28 +430,12 @@ export type WorkflowBlueprintProjection = {
   workflowType: typeof TemporalWorkflowType.Dynamic;
   status: WorkflowBlueprintStatus;
   isCurrent: boolean;
-  sourcePlanId?: string;
   steps: readonly WorkflowStep[];
   requiredScopes?: readonly string[];
   requiresApproval?: boolean;
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;
-};
-
-/** A product-level request for a governed Blueprint registry change. */
-export type WorkflowBlueprintLifecycleRequest = {
-  contractVersion: typeof ContractVersion.WorkflowBlueprintLifecycle;
-  action:
-    | "create_revision"
-    | "duplicate"
-    | "deprecate"
-    | "restore"
-    | "mark_current";
-  sourceVersion?: string;
-  version?: string;
-  name?: string;
-  reason: string;
 };
 
 export type WorkflowCreationIntent = {
@@ -471,7 +453,6 @@ export type WorkflowCreationIntent = {
 
 export type WorkflowCreationPreview = {
   intent: WorkflowCreationIntent;
-  plan: WorkflowChangePlan;
   blueprint: WorkflowBlueprint;
   source: {
     kind: "template" | "blueprint" | "manual";
@@ -484,6 +465,11 @@ export type WorkflowCreationPreview = {
   approvalRequired: boolean;
 };
 
+export type WorkflowCreationResult = {
+  blueprint: WorkflowBlueprintProjection;
+  workflow?: WorkflowExecutionProjection;
+};
+
 export type WorkflowProviderBindingProjection = {
   slotKey: string;
   required: boolean;
@@ -491,48 +477,6 @@ export type WorkflowProviderBindingProjection = {
   provider?: string;
   integrationName?: string;
   capabilities: readonly string[];
-};
-
-export type WorkflowPlanRecord = {
-  planId: string;
-  organizationId: string;
-  coordinatorId: string;
-  projectId?: string;
-  status: "proposed" | "approved" | "rejected" | "applied" | "expired";
-  approvalRequired: boolean;
-  plan: WorkflowChangePlan;
-  submittedByUserId?: string;
-  approvedByUserId?: string;
-  createdAt: string;
-  updatedAt: string;
-  approvedAt?: string;
-  appliedAt?: string;
-};
-
-export type WorkflowPlannerVersionProjection = {
-  id: string;
-  organizationId: string;
-  plannerName?: string;
-  plannerVersion?: string;
-  sourceSchemaVersion?: string;
-  promptVersion?: string;
-  promptHash?: string;
-  versionHash: string;
-  firstPlanId: string;
-  lastPlanId: string;
-  usageCount: number;
-  firstSeenAt: string;
-  lastSeenAt: string;
-};
-
-export type WorkflowPlanMetadata = {
-  planner: {
-    name: string;
-    version: string;
-  };
-  sourceSchemaVersion?: string;
-  promptVersion?: string;
-  promptHash?: string;
 };
 
 export type WorkflowExecutionProjection = {
@@ -871,7 +815,6 @@ export type CoordinatorEvent = {
   coordinatorId: string;
   organizationId: string;
   actorId?: string;
-  planId?: string;
   approved?: boolean;
   blueprintId?: string;
   blueprintVersion?: string;
@@ -881,21 +824,6 @@ export type CoordinatorEvent = {
   scope?: Partial<ExecutionScope>;
   reason?: string;
   evidenceRefs?: readonly string[];
-  workflowStarts?: readonly {
-    blueprintId: string;
-    blueprintVersion: string;
-    key: string;
-    businessInput?: JsonObject;
-    scope?: Partial<ExecutionScope>;
-  }[];
-};
-
-export type CoordinatorWorkflowStart = {
-  blueprintId: string;
-  blueprintVersion: string;
-  key: string;
-  businessInput?: JsonObject;
-  scope?: Partial<ExecutionScope>;
 };
 
 export type CoordinatorState = {
@@ -904,8 +832,6 @@ export type CoordinatorState = {
   onboardingComplete: boolean;
   connectedIntegrationIds?: readonly string[];
   activeWorkflowIds?: readonly string[];
-  pendingPlanIds?: readonly string[];
-  pendingWorkflowStarts?: readonly CoordinatorWorkflowStart[];
   processedEventIds?: readonly string[];
   processedSignalIds?: readonly string[];
   memoryVersion?: string;
@@ -949,29 +875,6 @@ export type WorkflowUpdateRequest = {
     businessInput: JsonObject;
     reason?: string;
   };
-};
-
-export type WorkflowChangePlan = {
-  contractVersion: typeof ContractVersion.WorkflowChangePlan;
-  planId: string;
-  coordinatorId: string;
-  organizationId: string;
-  projectId?: string;
-  scope?: ExecutionScope;
-  observedAt: string;
-  metadata?: WorkflowPlanMetadata;
-  evidenceRefs?: readonly string[];
-  changes: readonly {
-    kind: WorkflowChangeKind;
-    targetBlueprintId?: string;
-    targetBlueprintVersion?: string;
-    targetWorkflowId?: string;
-    blueprint?: WorkflowBlueprint;
-    start?: WorkflowStartIntent;
-    reason: string;
-    evidenceRefs?: readonly string[];
-    requiresApproval: boolean;
-  }[];
 };
 
 export type ToolRequest = ExecutionEnvelope & {

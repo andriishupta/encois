@@ -84,8 +84,13 @@ services:
       IDENTITY_PLATFORM_PROJECT_ID: demo-encois
       LOCAL_AUTH_EMAIL: owner@local.test
       LOCAL_AUTH_PASSWORD: local-password-1234
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-encois}
+      TEMPORAL_TASK_QUEUE: encois-agent-runtime
     depends_on:
       firebase-auth:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully

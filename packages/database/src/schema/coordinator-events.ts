@@ -21,7 +21,7 @@ export type CoordinatorEventOutboxStatus =
 /**
  * Durable delivery queue for lifecycle events sent to a Coordinator
  * Workflow. The payload is the small coordinator-event.v1 envelope, never a
- * raw provider response or the complete Workflow Change Plan.
+ * raw provider response or an unbounded provider payload.
  */
 export const coordinatorEventOutbox = pgTable(
   "coordinator_event_outbox",

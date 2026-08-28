@@ -59,14 +59,12 @@ receipt table, tenant policy, unique command key, restricted runtime grants,
 and a concurrent duplicate-insert race. It creates temporary verification rows
 and removes them; it does not validate concurrent HTTP/API delivery.
 
-The `workflow_change_plans` table stores typed Coordinator proposals and
-approval state. The `workflow_blueprints` table stores approved
-company-specific Blueprint snapshots materialized from create plans. Both are
-tenant-scoped with RLS and intentionally separate from Temporal history; the
-Gateway passes a validated snapshot into a generic Temporal Workflow.
+The `workflow_blueprints` table stores approved, company-specific Blueprint
+snapshots. It is tenant-scoped with RLS and intentionally separate from
+Temporal history; the Gateway passes a validated snapshot into a generic
+Temporal Workflow.
 
-The `coordinator_event_outbox` table is written in the same transaction as
-plan approval/application. It stores only small `coordinator-event.v1`
+The `coordinator_event_outbox` table stores only small `coordinator-event.v1`
 envelopes and an idempotent event ID. The Gateway API contains the bounded
 claim/retry and Temporal-sink boundary; a scheduler or Cloud Run job must invoke
 it in a deployed environment and mark events delivered. The Go Runtime never

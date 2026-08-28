@@ -46,7 +46,7 @@ A client connection used by an application to communicate with Temporal Cloud.
 
 - The Gateway API uses a client to start, signal, query, describe, and cancel
   Workflows. Cancellation is currently reached through an approved cancel-only
-  `workflow-change-plan.v1`; a direct public cancel route remains future work.
+  `workflow-signal.v1`; a direct public cancel route remains future work.
 - The Go Agent Runtime uses a client to create a Worker and may use it for child Workflows or Signals.
 
 ### Temporal Namespace
@@ -188,39 +188,25 @@ One execution of an Agent Definition. An Agent Run is represented by Workflow/Ru
 
 ### Coordinator Agent
 
-An agent responsible for planning or delegating a bounded investigation to approved specialist capabilities.
+An agent responsible for coordinating or delegating a bounded investigation to approved specialist capabilities.
 
 The coordinator cannot invent capabilities, widen organization scope, or bypass tool policy.
 
 ### Coordinator Workflow
 
 The long-lived Temporal Workflow that owns one organization coordination loop.
-It coordinates onboarding, bootstrap, workflow proposals,
+It coordinates onboarding, bootstrap, and workflow readiness,
 reconciliation, and waits for Signals or schedules. It is logically persistent
 but uses Continue-As-New to keep each concrete Run History bounded.
 
 ### Coordinator Event
 
 A versioned `coordinator-event.v1` lifecycle envelope delivered to a
-Coordinator Workflow. It represents events such as workflow-plan approval or
-application, provider changes, source readiness, or workflow completion. It is
+Coordinator Workflow. It represents events such as provider changes, source
+readiness, or workflow completion. It is
 separate from a `workflow-signal.v1`, which belongs to a step inside one
 generic Blueprint Workflow. Event IDs are deduplicated by the Coordinator, and
 organization/Coordinator identity is checked before state changes.
-
-An applied plan may also contain `workflowStarts`, derived only from explicit
-change-level `start` intents. The Coordinator starts those approved Blueprint
-snapshots through the private Gateway and keeps failed starts pending for
-retry. A registry update without `start` does not launch an execution.
-
-### Workflow Plan Submission
-
-The Runtime-to-Gateway operation that sends a validated Workflow Change Plan to
-the control plane. Submission is not approval and does not start a Workflow;
-the Gateway owns database storage, human approval, and Blueprint registry
-application. A change may explicitly request execution with a `start` intent;
-after approval and application, that intent becomes a `workflowStarts` event
-for the Coordinator.
 
 ### Onboarding
 
@@ -473,7 +459,7 @@ a candidate, not the current Encois runtime implementation.
 
 ### Gemini
 
-The model used for planning, evidence synthesis, classification, and structured explanations. Gemini output is untrusted input and must be schema-validated; it never makes authorization decisions.
+The model used for evidence synthesis, classification, and structured explanations. Gemini output is untrusted input and must be schema-validated; it never makes authorization decisions.
 
 ### Agent Engine Session
 

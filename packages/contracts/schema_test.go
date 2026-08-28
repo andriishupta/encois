@@ -128,10 +128,9 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			name:   "coordinator event",
 			schema: SchemaCoordinatorEvent,
 			value: map[string]any{
-				"contractVersion": "coordinator-event.v1", "eventId": "event-1", "eventType": "workflow-plan-approved",
-				"coordinatorId": "coord-1", "organizationId": "org-1", "actorId": "user-1", "planId": "plan-1", "approved": true,
+				"contractVersion": "coordinator-event.v1", "eventId": "event-1", "eventType": "workflow-completed",
+				"coordinatorId": "coord-1", "organizationId": "org-1", "actorId": "user-1", "approved": true,
 				"blueprintId": "blueprint-1", "blueprintVersion": "1.0.0", "scope": map[string]any{"ids": []string{"project-1"}},
-				"workflowStarts": []any{map[string]any{"blueprintId": "blueprint-1", "blueprintVersion": "1.0.0", "key": "release-aug-30", "businessInput": map[string]any{"releaseKey": "aug-30"}}},
 			},
 		},
 		{
@@ -140,47 +139,6 @@ func TestCanonicalSchemasValidateRepresentativeWireValues(t *testing.T) {
 			value: map[string]any{
 				"contractVersion": "workflow-update.v1", "updateName": "blueprint-context", "updateId": "update-1",
 				"payload": map[string]any{"businessInput": map[string]any{"releaseKey": "aug-30"}},
-			},
-		},
-		{
-			name:   "workflow change plan",
-			schema: SchemaWorkflowChangePlan,
-			value: map[string]any{
-				"contractVersion": "workflow-change-plan.v1", "planId": "plan-1", "coordinatorId": "coord-1",
-				"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
-				"changes": []any{map[string]any{
-					"kind": "create", "blueprint": map[string]any{
-						"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "1.0.0",
-						"name": "Release readiness", "workflowType": "encois.dynamic.v1", "purpose": "Check release readiness", "enabled": true,
-						"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}}, "allowedTools": []string{"jira.project_tasks"},
-					}, "start": map[string]any{"key": "release-aug-30", "businessInput": map[string]any{"releaseKey": "aug-30"}}, "reason": "Create the approved release readiness workflow.", "requiresApproval": true,
-				}},
-			},
-		},
-		{
-			name:   "workflow change plan lifecycle targets",
-			schema: SchemaWorkflowChangePlan,
-			value: map[string]any{
-				"contractVersion": "workflow-change-plan.v1", "planId": "plan-2", "coordinatorId": "coord-1",
-				"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
-				"changes": []any{
-					map[string]any{
-						"kind": "update", "targetBlueprintId": "release-readiness", "targetBlueprintVersion": "1.0.0",
-						"blueprint": map[string]any{
-							"contractVersion": "workflow-blueprint.v1", "blueprintId": "release-readiness", "version": "2.0.0",
-							"name": "Release readiness", "workflowType": "encois.dynamic.v1", "purpose": "Check release readiness", "enabled": true,
-							"steps": []any{map[string]any{"id": "jira", "kind": "tool", "tool": "jira.project_tasks"}}, "allowedTools": []string{"jira.project_tasks"},
-						}, "reason": "Publish a new revision.", "requiresApproval": true,
-					},
-					map[string]any{
-						"kind": "deprecate", "targetBlueprintId": "release-readiness", "targetBlueprintVersion": "0.9.0",
-						"reason": "Retire an obsolete revision.", "requiresApproval": true,
-					},
-					map[string]any{
-						"kind": "cancel", "targetWorkflowId": "workflow:org-1:encois.dynamic.v1:release-1",
-						"reason": "Cancel the superseded execution.", "requiresApproval": true,
-					},
-				},
 			},
 		},
 	}
@@ -213,15 +171,4 @@ func TestCanonicalSchemaRejectsInvalidToolStepAndScope(t *testing.T) {
 		t.Fatal("expected a tool request without scope.ids to be rejected")
 	}
 
-	invalidLifecyclePlan := map[string]any{
-		"contractVersion": "workflow-change-plan.v1", "planId": "plan-invalid", "coordinatorId": "coord-1",
-		"organizationId": "org-1", "observedAt": "2026-08-20T16:00:00.000Z",
-		"changes": []any{map[string]any{
-			"kind": "deprecate", "targetWorkflowId": "workflow:org-1:encois.dynamic.v1:release-1",
-			"reason": "Wrong target kind.", "requiresApproval": true,
-		}},
-	}
-	if err := Validate(SchemaWorkflowChangePlan, invalidLifecyclePlan); err == nil {
-		t.Fatal("expected deprecate change without Blueprint target to be rejected")
-	}
 }

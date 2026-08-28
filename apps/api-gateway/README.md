@@ -37,12 +37,12 @@ creates the local user, membership, and organization-unit scope. There is no
 email/password signup or self-service organization creation.
 
 The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
-`password` provider, and uses `scripts/seed-local.ts` to create two isolated fixture
-organizations (`Organization Test` and `Organization Avengers`), active users,
-five onboarding invite users, scoped organization units, integrations,
-Sources/revisions, ingestion runs, and webhooks. It does not create
-workflow executions or fake workflow timelines; those come from the local
-Temporal server. The seed is idempotent and local-only.
+`password` provider, and uses `scripts/seed-local.ts` to create the `Sun Inc`
+demo workspace, active users, onboarding invite users, scoped organization
+units, six integrations, sixteen Sources/revisions, ingestion runs, webhooks,
+approved Blueprints, and thirty real Temporal-backed workflow executions. The
+seed is idempotent and local-only, and fails if the configured Temporal server
+is unavailable.
 
 The production API image uses the `production` Docker target and contains only
 the Gateway server. Local Compose selects the separate `local-seed` target so
@@ -104,16 +104,11 @@ Current blueprint routes:
 - `GET /api/v1/workflows/activity` — list recent tenant-visible workflow events for the dashboard feed.
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
-- `POST /api/v1/workflows/plans/validate` — validate a typed `workflow-change-plan.v1` lifecycle proposal without applying it.
-- `POST /api/v1/workflows/plans` — persist an idempotent v1 proposal as `proposed` when Postgres is configured.
-- `GET /api/v1/workflows/plans` — list persisted proposals visible to the caller's organization and execution scope.
-- `POST /api/v1/workflows/plans/:planId/approve` — approve a persisted proposal; application is still a separate step.
-- `POST /api/v1/workflows/plans/:planId/apply` — apply an approved v1 `create`, Blueprint `update`/`deprecate`/`restore`/`set_current`, or cancel-only proposal and enqueue its Coordinator event; only an explicit `start` intent launches the approved Blueprint snapshot.
+- `POST /api/v1/workflows/blueprints/preview` — resolve a Template or approved Blueprint and return the Blueprint preview.
+- `POST /api/v1/workflows/blueprints/from-intent` — create the approved Blueprint directly and optionally start its Workflow.
 - `POST /api/v1/workflows/:workflowId/cancel` — request cancellation for an active, tenant-visible Run when the caller has `workflows:run`; the Gateway records an audit event and delegates cancellation to the configured workflow client.
 - `POST /api/v1/workflows/:workflowId/rerun` — create a new server-keyed Run from the persisted Blueprint revision, business input, and scope of a terminal parent Run; the parent relationship is retained for history and audit.
-- `POST /api/v1/internal/coordinator/plans/validate` — private Runtime/Coordinator plan preview; requires `X-Encois-Service-Token` and `X-Organization-ID`.
-- `POST /api/v1/internal/coordinator/plans` — private Runtime/Coordinator plan submission; the human approval boundary remains in the Gateway.
-- `POST /api/v1/internal/coordinator/workflows` — private start path for an approved tenant Blueprint reference; it reuses the generic workflow service and does not expose the database.
+- `POST /api/v1/internal/coordinator/onboarding-status` — private Runtime/Coordinator readiness callback; requires `X-Encois-Service-Token` and `X-Organization-ID`.
 - `GET /api/v1/workflows/:workflowId` — read a tenant-authorized workflow projection.
 - `GET /api/v1/workflows/:workflowId/events` — read tenant- and hierarchy-authorized activity, evidence, and lifecycle events.
 - `POST /api/v1/workflows/:workflowId/signals` — send an authorized approval Signal.
@@ -132,8 +127,8 @@ Sources, revisions, or ingestion runs.
 During preview, the Gateway resolves each Template provider slot against an
 active organization Integration, a matching unit-scoped Source, and the
 caller's organization scope. The preview returns resolved and missing slots so
-the UI can explain the gap; required gaps block plan submission and
-application, while optional gaps are returned as warnings.
+the UI can explain the gap; required gaps block Blueprint creation, while
+optional gaps are returned as warnings.
 Integration IDs remain server-side and are not accepted from the browser as
 workflow-creation input.
 

@@ -21,10 +21,9 @@ import type {
   WebhookEndpointSecretResponse,
   WorkflowBlueprintProjection,
   WorkflowCreationPreview,
+  WorkflowCreationResult,
   WorkflowEventProjection,
   WorkflowExecutionProjection,
-  WorkflowPlannerVersionProjection,
-  WorkflowPlanRecord,
   WorkflowRecentActivityProjection,
   WorkflowTemplateProjection,
 } from "@encois/contracts/browser";
@@ -235,47 +234,13 @@ export function isWorkflowBlueprintProjection(
   );
 }
 
-export function isWorkflowPlanRecord(
+export function isWorkflowCreationResult(
   value: unknown,
-): value is WorkflowPlanRecord {
+): value is WorkflowCreationResult {
   return (
     isJsonObject(value) &&
-    typeof value.planId === "string" &&
-    typeof value.organizationId === "string" &&
-    typeof value.coordinatorId === "string" &&
-    typeof value.status === "string" &&
-    ["proposed", "approved", "rejected", "applied", "expired"].includes(
-      value.status,
-    ) &&
-    typeof value.approvalRequired === "boolean" &&
-    isJsonObject(value.plan) &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
-}
-
-export function isWorkflowPlannerVersion(
-  value: unknown,
-): value is WorkflowPlannerVersionProjection {
-  return (
-    isJsonObject(value) &&
-    typeof value.id === "string" &&
-    typeof value.organizationId === "string" &&
-    (value.plannerName === undefined ||
-      typeof value.plannerName === "string") &&
-    (value.plannerVersion === undefined ||
-      typeof value.plannerVersion === "string") &&
-    (value.sourceSchemaVersion === undefined ||
-      typeof value.sourceSchemaVersion === "string") &&
-    (value.promptVersion === undefined ||
-      typeof value.promptVersion === "string") &&
-    (value.promptHash === undefined || typeof value.promptHash === "string") &&
-    typeof value.versionHash === "string" &&
-    typeof value.firstPlanId === "string" &&
-    typeof value.lastPlanId === "string" &&
-    typeof value.usageCount === "number" &&
-    typeof value.firstSeenAt === "string" &&
-    typeof value.lastSeenAt === "string"
+    isWorkflowBlueprintProjection(value.blueprint) &&
+    (value.workflow === undefined || isWorkflowProjection(value.workflow))
   );
 }
 
@@ -286,7 +251,6 @@ export function isWorkflowCreationPreview(
   return (
     isJsonObject(value) &&
     isJsonObject(value.intent) &&
-    isJsonObject(value.plan) &&
     isJsonObject(blueprint) &&
     typeof blueprint.version === "string" &&
     typeof blueprint.purpose === "string" &&

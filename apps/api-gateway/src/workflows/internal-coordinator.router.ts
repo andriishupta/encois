@@ -12,8 +12,6 @@ import {
   updateOrganizationOnboardingFromCoordinator,
 } from "../organization/services/organization.service.js";
 import { createWorkflowRoute } from "./routes/create-workflow.route.js";
-import { submitWorkflowPlanRoute } from "./routes/submit-workflow-plan.route.js";
-import { validateWorkflowPlanRoute } from "./routes/validate-workflow-plan.route.js";
 import type { WorkflowClient } from "./temporal-client.js";
 
 /**
@@ -117,8 +115,6 @@ export function createInternalCoordinatorRouter(
     }
   });
 
-  router.post("/plans", submitWorkflowPlanRoute());
-  router.post("/plans/validate", validateWorkflowPlanRoute(options));
   router.post(
     "/workflows",
     createWorkflowRoute(options, { requireApprovedBlueprintReference: true }),
