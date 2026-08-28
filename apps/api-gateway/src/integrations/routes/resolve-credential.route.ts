@@ -67,12 +67,12 @@ export const resolveIntegrationCredentialRoute: Handler<GatewayEnv> = async (
         error: {
           code,
           message:
-            code === "PERSISTENCE_UNAVAILABLE"
-              ? "Database access is not configured."
+            code === "DATABASE_UNAVAILABLE"
+              ? "Database is unavailable."
               : "Provider credential resolution failed.",
         },
       },
-      code === "PERSISTENCE_UNAVAILABLE" ? 503 : 502,
+      code === "DATABASE_UNAVAILABLE" ? 503 : 502,
     );
   }
 };

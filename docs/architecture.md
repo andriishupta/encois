@@ -90,13 +90,14 @@ The Gateway API is the public north-south application boundary. Temporal Cloud i
 
 Gateway-owned Coordinator lifecycle events are written to a tenant-scoped
 transactional outbox in the same database transaction as plan approval or
-application. A bounded one-shot dispatcher (`coordinator-dispatcher`) claims
-events with a lease and retries delivery to the Coordinator Workflow through
-Temporal. It is a process/job entrypoint, not a public route; production
-deployment should invoke it per organization through a Cloud Run Job and
-Scheduler. Webhooks are an incremental trigger only; the Coordinator also
-uses Temporal timers or deployment-managed Schedules for reconciliation. The Go
-Runtime never reads this outbox or the control-plane database.
+application. An always-on dispatcher loop inside the API Gateway claims events
+with a lease and retries delivery to the Coordinator Workflow through Temporal.
+Organization discovery is restricted to a database function that returns only
+organizations with dispatchable events; actual event reads and writes still
+use the normal organization RLS context. Webhooks are an incremental trigger
+only; the Coordinator also uses Temporal timers or deployment-managed Schedules
+for reconciliation. The Go Runtime never reads this outbox or the control-plane
+database.
 
 Organization is the hard multi-tenant boundary. Inside it, `organization_units`
 form a parent/child tree and may represent departments, teams, projects,
@@ -109,7 +110,7 @@ effective scope = direct membership descendants
                 - explicit restriction descendants
 ```
 
-The current persistence slice stores direct membership roots and the shared
+The current database slice stores direct membership roots and the shared
 contract/domain helper computes descendant inheritance. The Gateway owns the
 organization projection, child-unit mutations, direct membership permission
 mutations, role/scope checks, and audit events; the Dashboard consumes those
@@ -381,9 +382,9 @@ the same embedded canonical JSON Schemas at their active boundaries. The
 Coordinator now calls a proposal Activity and a private control-plane submit
 Activity after reconciliation triggers. Gateway plan approval/application
 enqueue tenant-scoped `coordinator-event.v1` envelopes transactionally in the
-control-plane outbox. The API includes a bounded lease/retry dispatcher,
-Temporal sink, and a one-shot dispatcher entrypoint, but Cloud Run
-Job/Scheduler wiring remain pending. An applied plan emits `workflowStarts`
+control-plane outbox. The API includes an always-on bounded lease/retry
+dispatcher loop, a Temporal sink, and tenant-safe outbox organization
+discovery. An applied plan emits `workflowStarts`
 only for explicit change-level `start` intents; the Coordinator starts those
 immutable approved snapshots through a typed private Gateway Activity and keeps
 failed starts in Workflow state for retry.
@@ -427,10 +428,10 @@ agent boundary.
 ### 4.5 Organization onboarding and Coordinator
 
 Onboarding is a required product state, not an optional setup wizard. A new
-organization is not ready for the intelligence dashboard until it
-has enough connected sources or uploaded documents to build an initial context.
-Before that point the UI shows onboarding progress, missing integrations, and
-data requirements rather than empty or misleading intelligence panels.
+organization may enter the intelligence dashboard without a Source, but its
+context is empty until connected Sources or uploaded documents are ingested.
+Before that point the UI shows truthful empty states and data requirements
+rather than misleading intelligence panels.
 
 Each organization scope has one logical long-lived Coordinator. The
 Coordinator is represented by a Temporal Workflow instance and an approved
@@ -679,7 +680,7 @@ Use different contract formats for different boundaries instead of trying to sha
 | Agent Gateway requests/results | JSON Schema over authenticated internal HTTP/JSON for MVP | Go Runtime and private Agent Gateway | Tool invocation, execution context, policy decision, data references |
 | API Temporal command receipts | Gateway-owned Postgres schema | TypeScript Gateway API | Tenant-scoped Signal/Update idempotency and replay state; never sent to Go or Temporal |
 | Integration manifests and evidence events | JSON Schema | pack registry, adapters, graph/memory pipeline | Versioned plugin and normalized-data contracts |
-| Database schema | SQL migration source owned by its service | TypeScript control plane or data service | Persistence implementation; never a shared DTO |
+| Database schema | SQL migration source owned by its service | TypeScript control plane or data service | Database implementation; never a shared DTO |
 
 The source of truth is the schema, not generated code. TypeScript types and
 Ajv validation live in `packages/contracts`; the Go side embeds the same schema
@@ -853,7 +854,7 @@ until the access store and blocking-function latency budget are operational.
 
 There is no separate management UI in this phase. `apps/api-gateway/scripts`
 owns operator-only bootstrap, invite, revoke, and waitlist-listing commands.
-`packages/persistence` owns only the schema and migrations; it does not import
+`packages/database` owns only the schema and migrations; it does not import
 Identity Platform SDKs.
 
 The email is only the invite/admission key. The durable local identity is the

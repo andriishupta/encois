@@ -1,4 +1,4 @@
-import { createDatabase, organizationInvites } from "@encois/persistence";
+import { createDatabase, organizationInvites } from "@encois/database";
 import { and, eq } from "drizzle-orm";
 import { databaseUrl, parseOptions, required } from "./cli.js";
 

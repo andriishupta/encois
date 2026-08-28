@@ -20,18 +20,18 @@ import {
   SourceRevisionStatus,
 } from "@encois/contracts";
 import {
+  type DatabaseTransaction,
   integrationBindings,
   integrations,
   knowledgeSources,
   membershipScopes,
   organizationMemberships,
   organizationUnits,
-  type PersistenceTransaction,
   type SourceScope,
   sourceIngestionRuns,
   sourceRevisions,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import {
   type ApplicationError,
@@ -63,7 +63,7 @@ import {
   type WorkflowExecutionProjection,
 } from "../../workflows/types.js";
 
-type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
+type QueryDatabase = NonNullable<typeof database> | DatabaseTransaction;
 
 export type SourceServiceError = ApplicationError;
 
@@ -631,8 +631,8 @@ export async function createKnowledgeSource(
 ): Promise<KnowledgeSource> {
   if (!database)
     throw sourceServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   if (!request.name || request.name.trim().length > 120)
     throw sourceServiceError(
@@ -797,8 +797,8 @@ export async function listKnowledgeSources(
 ): Promise<readonly KnowledgeSource[]> {
   if (!database)
     throw sourceServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   return withOrganizationContext(
     database,
@@ -967,8 +967,8 @@ export async function getKnowledgeSource(
 ): Promise<SourceSummary | null> {
   if (!database)
     throw sourceServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   return withOrganizationContext(
     database,
@@ -1135,8 +1135,8 @@ export async function createSourceRevision(
 ): Promise<SourceRevision | null> {
   if (!database)
     throw sourceServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   if (!request.revision || request.revision.length > 128)
     throw sourceServiceError(
@@ -1470,8 +1470,8 @@ export async function startSourceIngestion(
 ): Promise<SourceIngestionLaunch> {
   if (!database)
     throw sourceServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   if (!options.system) {
     const userId = localUserId(principal);

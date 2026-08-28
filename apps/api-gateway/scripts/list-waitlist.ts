@@ -1,4 +1,4 @@
-import { createDatabase, waitlistRequests } from "@encois/persistence";
+import { createDatabase, waitlistRequests } from "@encois/database";
 import { desc } from "drizzle-orm";
 import { databaseUrl } from "./cli.js";
 

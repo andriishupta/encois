@@ -12,7 +12,7 @@ import {
   auditEvents,
   memoryChangeRequests,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq } from "drizzle-orm";
 import { hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
@@ -110,8 +110,8 @@ function recordFromRow(
 async function requireMemoryManager(principal: AosPrincipal): Promise<string> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   const userId = localUserId(principal);
   if (!userId)
@@ -152,8 +152,8 @@ export async function listMemoryChanges(
 ): Promise<readonly MemoryChangeRecord[]> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   await requireMemoryManager(principal);
   const rows = await withOrganizationContext(
@@ -178,8 +178,8 @@ export async function createMemoryChange(
 ): Promise<MemoryChangeRecord> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   const userId = await requireMemoryManager(principal);
   const scope = scopeFor(principal, input.scope);
@@ -283,7 +283,7 @@ export async function createMemoryChange(
         .returning();
       if (!created)
         throw new GraphServiceError(
-          "PERSISTENCE_FAILED",
+          "DATABASE_FAILED",
           "The memory change request could not be persisted.",
         );
       await db.insert(auditEvents).values({
@@ -307,8 +307,8 @@ async function getMemoryChange(
 ): Promise<typeof memoryChangeRequests.$inferSelect> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   const row = await withOrganizationContext(
     database,
@@ -342,8 +342,8 @@ async function setDecision(
 ): Promise<MemoryChangeRecord> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   const userId = await requireMemoryManager(principal);
   const row = await getMemoryChange(principal, id);
@@ -421,8 +421,8 @@ export async function applyMemoryChange(
 ): Promise<MemoryChangeRecord> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   const userId = await requireMemoryManager(principal);
   if (!options.client)

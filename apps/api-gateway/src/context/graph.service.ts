@@ -5,7 +5,7 @@ import {
   type GraphQueryRequest,
   Permission,
 } from "@encois/contracts";
-import { withOrganizationContext } from "@encois/persistence";
+import { withOrganizationContext } from "@encois/database";
 import { hasPermission } from "../auth/authorization.js";
 import { database } from "../database.js";
 import type { AosPrincipal } from "../middleware/aos.js";
@@ -64,8 +64,8 @@ export async function queryGraphForPrincipal(
 ): Promise<GraphInspectionProjection> {
   if (!database)
     throw new GraphServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
     );
   if (!options.client)
     throw new GraphServiceError(

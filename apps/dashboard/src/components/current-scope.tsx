@@ -16,7 +16,7 @@ export type CurrentScopeValue = {
 
 export type ScopeIndicatorProps = {
   /** The short label shown before the scoped value, for example Read or Visible. */
-  label: string;
+  label?: string;
   /** The scope value. Pills display its final path segment. */
   name: string;
   /** The complete scope path shown in the tooltip. Defaults to name. */
@@ -55,7 +55,6 @@ export function useCurrentScope(): CurrentScopeValue {
 }
 
 export function ScopeText({
-  label,
   name,
   path = name,
   className,
@@ -70,14 +69,11 @@ export function ScopeText({
               className,
             )}
           >
-            <span>{label}:</span>
             <span>{name}</span>
           </span>
         }
       />
-      <TooltipContent align="start">
-        {label} scope: {path}
-      </TooltipContent>
+      <TooltipContent align="start">Scope: {path}</TooltipContent>
     </Tooltip>
   );
 }
@@ -116,12 +112,7 @@ export function ScopePill({
 export function CurrentScopeText({ className }: { className?: string }) {
   const scope = useCurrentScope();
   return (
-    <ScopeText
-      label="S"
-      name={scope.path}
-      path={scope.path}
-      className={className}
-    />
+    <ScopeText name={scope.path} path={scope.path} className={className} />
   );
 }
 

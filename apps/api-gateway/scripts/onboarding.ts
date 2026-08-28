@@ -5,7 +5,7 @@ import {
   organizations,
   organizationUnits,
   roles,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";

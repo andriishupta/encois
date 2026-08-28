@@ -6,11 +6,11 @@ import {
   type SavedInvestigationCreateRequest,
 } from "@encois/contracts";
 import {
-  type PersistenceDatabase,
-  type PersistenceTransaction,
+  type Database,
+  type DatabaseTransaction,
   savedInvestigations,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq } from "drizzle-orm";
 import {
   type ApplicationError,
@@ -34,7 +34,7 @@ export function isInvestigationServiceError(
   return isApplicationError(value);
 }
 
-type QueryDatabase = PersistenceDatabase | PersistenceTransaction;
+type QueryDatabase = Database | DatabaseTransaction;
 
 const savedInvestigationReadPermissions = [
   Permission.WorkflowsRead,
@@ -102,10 +102,7 @@ export async function listSavedInvestigations(
   principal: AosPrincipal,
 ): Promise<readonly SavedInvestigation[]> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(
     database,
@@ -175,10 +172,7 @@ export async function createSavedInvestigation(
   request: SavedInvestigationCreateRequest,
 ): Promise<SavedInvestigation> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   if (!request.name.trim() || request.name.trim().length > 120)
     throw error(
@@ -244,10 +238,7 @@ export async function deleteSavedInvestigation(
   investigationId: string,
 ): Promise<boolean> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(
     database,

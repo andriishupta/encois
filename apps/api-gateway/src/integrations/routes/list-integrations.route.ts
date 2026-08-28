@@ -38,12 +38,12 @@ export const listIntegrationsRoute: Handler<GatewayEnv> = async (context) => {
     });
     return context.json({ data: page.items, pagination: page.pagination });
   } catch (error) {
-    if (error instanceof Error && error.message === "PERSISTENCE_UNAVAILABLE") {
+    if (error instanceof Error && error.message === "DATABASE_UNAVAILABLE") {
       return context.json(
         {
           error: {
-            code: "PERSISTENCE_UNAVAILABLE",
-            message: "Database access is not configured.",
+            code: "DATABASE_UNAVAILABLE",
+            message: "Database is unavailable.",
           },
         },
         503,

@@ -258,7 +258,7 @@ describe("API Gateway", () => {
     });
   });
 
-  it("does not fabricate recommendations when persistence is unavailable", async () => {
+  it("does not fabricate recommendations when database is unavailable", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: {
@@ -277,7 +277,7 @@ describe("API Gateway", () => {
     );
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -329,7 +329,7 @@ describe("API Gateway", () => {
     );
     expect(unavailable.status).toBe(503);
     await expect(unavailable.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -356,7 +356,7 @@ describe("API Gateway", () => {
     );
     expect(unavailable.status).toBe(503);
     await expect(unavailable.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -402,7 +402,7 @@ describe("API Gateway", () => {
     );
     expect(unavailable.status).toBe(503);
     await expect(unavailable.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -545,7 +545,7 @@ describe("API Gateway", () => {
     });
   });
 
-  it("fails waitlist submission closed when persistence is unavailable", async () => {
+  it("fails waitlist submission closed when database is unavailable", async () => {
     const app = createApp({ config: testConfig });
     const response = await app.request("/api/v1/public/waitlist", {
       method: "POST",
@@ -558,11 +558,11 @@ describe("API Gateway", () => {
     });
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
-  it("validates waitlist qualification before checking persistence", async () => {
+  it("validates waitlist qualification before checking database", async () => {
     const app = createApp({ config: testConfig });
     const response = await app.request("/api/v1/public/waitlist", {
       method: "POST",
@@ -578,7 +578,7 @@ describe("API Gateway", () => {
     });
   });
 
-  it("fails closed when persistence is not configured", async () => {
+  it("fails closed when database is not configured", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: {
@@ -596,7 +596,7 @@ describe("API Gateway", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -626,7 +626,7 @@ describe("API Gateway", () => {
     const organization = await app.request("/api/v1/organization");
     expect(organization.status).toBe(503);
     await expect(organization.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     for (const path of [
@@ -638,7 +638,7 @@ describe("API Gateway", () => {
       const response = await app.request(path);
       expect(response.status).toBe(503);
       await expect(response.json()).resolves.toMatchObject({
-        error: { code: "PERSISTENCE_UNAVAILABLE" },
+        error: { code: "DATABASE_UNAVAILABLE" },
       });
     }
 
@@ -668,7 +668,7 @@ describe("API Gateway", () => {
     );
     expect(onboardingStart.status).toBe(503);
     await expect(onboardingStart.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const invalidPermission = await app.request(
@@ -734,7 +734,7 @@ describe("API Gateway", () => {
     const list = await app.request("/api/v1/sources");
     expect(list.status).toBe(503);
     await expect(list.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const form = new FormData();
@@ -1074,7 +1074,7 @@ describe("API Gateway", () => {
     });
     expect(unavailableHealth.status).toBe(503);
     await expect(unavailableHealth.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const scheduledHealthPath = "/api/v1/internal/integrations/health-check";
@@ -1093,7 +1093,7 @@ describe("API Gateway", () => {
     });
     expect(unavailableScheduledHealth.status).toBe(503);
     await expect(unavailableScheduledHealth.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -1156,7 +1156,7 @@ describe("API Gateway", () => {
     );
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -1214,7 +1214,7 @@ describe("API Gateway", () => {
       data: {
         planId: "plan-release-readiness-1",
         status: "validated_not_applied",
-        applyStatus: "deferred_persistence_and_approval",
+        applyStatus: "deferred_database_and_approval",
         approvalRequired: true,
       },
     });
@@ -1423,7 +1423,7 @@ describe("API Gateway", () => {
     });
   });
 
-  it("does not accept plan persistence or approval when the database is unavailable", async () => {
+  it("does not accept a plan or approval when the database is unavailable", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: {
@@ -1438,7 +1438,7 @@ describe("API Gateway", () => {
     });
     const plan = {
       contractVersion: "workflow-change-plan.v1",
-      planId: "plan-persistence-unavailable",
+      planId: "plan-database-unavailable",
       coordinatorId: "coordinator-org-1",
       organizationId: "org-1",
       observedAt: "2026-08-20T16:00:00.000Z",
@@ -1459,13 +1459,13 @@ describe("API Gateway", () => {
     });
     expect(submit.status).toBe(503);
     await expect(submit.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const list = await app.request("/api/v1/workflows/plans");
     expect(list.status).toBe(503);
     await expect(list.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const plannerVersions = await app.request(
@@ -1473,7 +1473,7 @@ describe("API Gateway", () => {
     );
     expect(plannerVersions.status).toBe(503);
     await expect(plannerVersions.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const invalidPlannerVersionLimit = await app.request(
@@ -1485,7 +1485,7 @@ describe("API Gateway", () => {
     });
 
     const approve = await app.request(
-      "/api/v1/workflows/plans/plan-persistence-unavailable/approve",
+      "/api/v1/workflows/plans/plan-database-unavailable/approve",
       {
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -1493,11 +1493,11 @@ describe("API Gateway", () => {
     );
     expect(approve.status).toBe(503);
     await expect(approve.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
 
     const apply = await app.request(
-      "/api/v1/workflows/plans/plan-persistence-unavailable/apply",
+      "/api/v1/workflows/plans/plan-database-unavailable/apply",
       {
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -1505,7 +1505,7 @@ describe("API Gateway", () => {
     );
     expect(apply.status).toBe(503);
     await expect(apply.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
@@ -1528,11 +1528,11 @@ describe("API Gateway", () => {
     );
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "PERSISTENCE_UNAVAILABLE" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 
-  it("fails closed when a workflow references a stored Blueprint without persistence", async () => {
+  it("fails closed when a workflow references a stored Blueprint without database", async () => {
     const app = createApp({
       authenticate: async () => ({
         principal: {

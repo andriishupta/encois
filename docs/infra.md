@@ -232,13 +232,14 @@ The commands are intentionally manual and reviewable. Nothing runs automatically
 - Worker and gateway containers bind the Cloud Run `PORT`; the runtime's HTTP listener is health-only and the lack of a public route does not turn a Cloud Run service into a free-form VM.
 - Timeouts, retries, budgets, provider rate limits, and workflow concurrency remain application/runtime policy, not load-balancer policy.
 
-Coordinator outbox delivery is a separate one-shot process in the API image:
-`dist/coordinator-dispatcher.js`. It requires
-`COORDINATOR_DISPATCH_ORGANIZATION_ID` and is intended to run as a Cloud Run
-Job invoked by Cloud Scheduler, one tenant per invocation. The Terraform
-scaffold does not create the Job or scheduler because their cadence, tenant
-inventory, and deployment IAM are environment-specific; the job must use the
-API/runtime service identity and only the required invocation permissions.
+Coordinator outbox delivery runs as an always-on background loop inside the API
+Gateway process. It polls the transactional outbox every second, uses a lease
+to claim events, signals Temporal, and logs/retries database or Temporal
+availability errors without taking down the HTTP server. The loop does not
+require an organization ID; a narrowly scoped database function discovers only
+organizations with dispatchable events. A separate job/scheduler is not
+needed for the local MVP; a managed deployment may later choose one if the
+platform does not guarantee background CPU for an HTTP service.
 
 Integration health probes use the protected
 `POST /api/v1/internal/integrations/health-check` dispatcher. It accepts an
@@ -262,7 +263,7 @@ refresh policy transition to `needs_reauth`; no raw token reaches the browser,
 API response, or log.
 
 Workflow retention cleanup is a separate protected Cloud Run Job using the
-`retention:<tag>` persistence image and `cloud-sql-retention-url`. Terraform
+`retention:<tag>` database image and `cloud-sql-retention-url`. Terraform
 creates one Cloud Scheduler target per UUID in `retention_organization_ids`.
 Each execution sets `RETENTION_ORGANIZATION_ID`, applies the PostgreSQL RLS
 tenant context, removes only terminal Runs whose `retention_until` has elapsed

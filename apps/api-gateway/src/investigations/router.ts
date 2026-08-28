@@ -25,7 +25,7 @@ import {
 
 function statusFor(code: string): 400 | 403 | 404 | 409 | 503 {
   if (code === "FORBIDDEN" || code === "IDENTITY_NOT_RESOLVED") return 403;
-  if (code === "PERSISTENCE_UNAVAILABLE") return 503;
+  if (code === "DATABASE_UNAVAILABLE") return 503;
   if (
     code === "INVESTIGATION_NOT_FOUND" ||
     code === "NOTIFICATION_NOT_FOUND" ||

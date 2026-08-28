@@ -1,4 +1,4 @@
-# Encois persistence
+# Encois Database
 
 This package owns the Gateway API's PostgreSQL schema, Drizzle migrations, runtime database client, and organization transaction context. The Go Agent Runtime and private Agent Gateway must not connect to this database.
 
@@ -15,7 +15,7 @@ boundary instead of connecting to the control-plane database.
 The runtime role receives `SELECT`, `INSERT`, and `UPDATE` on application tables. It has no general `DELETE`, `TRUNCATE`, schema, role-management, or table-management privileges. The Gateway has a tenant-scoped permission-removal exception for `membership_scopes`; authorization is enforced before the delete and RLS remains the database defense in depth. `withOrganizationContext` sets `app.organization_id` with `SET LOCAL` inside a transaction so RLS policies can provide defense in depth.
 
 The `api_gateway_retention` capability role is separate from the runtime role.
-`pnpm --filter @encois/persistence retention:cleanup` requires
+`pnpm --filter @encois/database retention:cleanup` requires
 `RETENTION_ORGANIZATION_ID`, sets that tenant in PostgreSQL RLS context, deletes
 only terminal workflow Runs after `retention_until`, removes dependent command
 receipts/events first, and records a redacted audit event. It does not delete
@@ -24,13 +24,13 @@ Temporal history or Cloud Storage objects.
 ## Commands
 
 ```bash
-DATABASE_MIGRATION_URL=... pnpm --filter @encois/persistence db:migrate
-DATABASE_MIGRATION_URL=... pnpm --filter @encois/persistence db:verify
-pnpm --filter @encois/persistence db:generate -- add-logical-change
-pnpm --filter @encois/persistence typecheck
+DATABASE_MIGRATION_URL=... pnpm --filter @encois/database db:migrate
+DATABASE_MIGRATION_URL=... pnpm --filter @encois/database db:verify
+pnpm --filter @encois/database db:generate -- add-logical-change
+pnpm --filter @encois/database typecheck
 ```
 
-Persistence integration tests use two connections and must never point at a
+Database integration tests use two connections and must never point at a
 production database. `DATABASE_TEST_URL` must use the non-bypass-RLS runtime
 role; `DATABASE_TEST_ADMIN_URL` is used only to inspect the schema and remove
 the test fixture. For the local Compose database:
@@ -38,7 +38,7 @@ the test fixture. For the local Compose database:
 ```bash
 DATABASE_TEST_URL=postgresql://api_gateway_runtime:api_gateway@localhost:5432/encois \
 DATABASE_TEST_ADMIN_URL=postgresql://postgres:postgres@localhost:5432/encois \
-pnpm --filter @encois/persistence test:integration
+pnpm --filter @encois/database test:integration
 ```
 
 The suite verifies applied migration history, RLS/policy coverage, transaction

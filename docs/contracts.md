@@ -54,7 +54,7 @@ Graph queries into successful fixture responses.
 | Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
 | Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
 | Integration manifests and evidence events | Versioned JSON Schema | registry, adapters, graph/memory pipeline |
-| Control-plane persistence | SQL migrations owned by Gateway API | Gateway API only |
+| Control-plane database | SQL migrations owned by Gateway API | Gateway API only |
 | Temporal command receipts | Gateway-owned tenant-scoped SQL table | TypeScript Gateway API only; never sent to Go or Temporal |
 
 OpenAPI describes the public application API. JSON Schema describes the
@@ -538,7 +538,7 @@ approved, applied, rejected, and expired Plans are read-only.
 returns `active` with the local user and organization when an invite has been
 accepted, or `pending` when the verified Identity Platform identity has no
 active Encois membership. Invalid tokens remain `401`; provider or persistence
-configuration failures remain `503`. `POST /api/v1/public/waitlist` is the
+database configuration failures remain `503`. `POST /api/v1/public/waitlist` is the
 unauthenticated contact form for pending/unknown visitors. It requires a
 plausible work email, company name, and at least one company website or company
 LinkedIn URL. It stores only that bounded contact context and never creates an

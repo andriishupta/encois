@@ -4,16 +4,16 @@ import {
   permissionIncludes,
 } from "@encois/contracts";
 import {
+  type Database,
+  type DatabaseTransaction,
   organizationMemberships,
-  type PersistenceDatabase,
-  type PersistenceTransaction,
   rolePermissions,
   roles,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq } from "drizzle-orm";
 import type { AosPrincipal } from "../middleware/aos.js";
 
-type QueryDatabase = PersistenceDatabase | PersistenceTransaction;
+type QueryDatabase = Database | DatabaseTransaction;
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

@@ -10,12 +10,12 @@ This document describes how the current repository can move from local developme
 | --- | --- | --- | --- |
 | `apps/dashboard` | React/Vite SPA | Static frontend container | Public Cloud Run service behind `/dashboard/*` |
 | `apps/api-gateway` | TypeScript/Hono API | Node.js container | Public Cloud Run service behind `/api/*` |
-| `packages/persistence` | Drizzle/PostgreSQL schema and migrations | No standalone service; migration command | Cloud SQL PostgreSQL |
+| `packages/database` | Drizzle/PostgreSQL schema and migrations | No standalone service; migration command | Cloud SQL PostgreSQL |
 | `apps/agent-runtime` | Go/Temporal/ADK worker scaffold | Go worker container | Private Cloud Run service, hosted smoke pending |
 | `apps/agent-gateway` | Go private tool/policy broker scaffold | Go service container | Internal Cloud Run service, hosted smoke pending |
 | `infra/` | Terraform GCP blueprint | Infrastructure plan/apply | GCP project and shared services |
 
-The repository CI now validates the Node services, Go workers, persistence layer, Terraform, Compose configuration, and all container builds. Hosted rollout remains manual until Temporal, secrets, image promotion, and GitHub/GCP identity are configured.
+The repository CI now validates the Node services, Go workers, database layer, Terraform, Compose configuration, and all container builds. Hosted rollout remains manual until Temporal, secrets, image promotion, and GitHub/GCP identity are configured.
 
 ## Release version source
 
@@ -28,7 +28,7 @@ CI tags images as `encois/<service>:<package-version>`. Local Compose uses the s
 Use a hybrid model:
 
 1. **Local bootstrap:** an authorized operator creates the GCP project/billing setup, Terraform state bucket, deployer identity, and first demo environment.
-2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service. It then runs the persistence integration suite through a non-superuser runtime role with RLS enabled, plus the API command-receipt harness with separate admin fixture setup and runtime API connections. It does not require GCP credentials or provider APIs.
+2. **GitHub Actions CI:** `.github/workflows/ci.yml` runs deterministic TypeScript and Go checks without cloud mutation, runs the local multi-process Temporal smoke with a pinned Temporal CLI and short-lived worker processes, and applies the SQL migrations to an ephemeral PostgreSQL service. It then runs the database integration suite through a non-superuser runtime role with RLS enabled, plus the API command-receipt harness with separate admin fixture setup and runtime API connections. It does not require GCP credentials or provider APIs.
 3. **Manual image publishing:** `.github/workflows/publish-production-images.yml` builds the dashboard, API, Agent Gateway, Agent Runtime, and migration-job images, injects only public Firebase browser configuration into the dashboard build, and pushes an operator-selected immutable tag to Artifact Registry.
 4. **Manual production delivery:** `.github/workflows/deploy-production.yml` runs only from `workflow_dispatch`, verifies that the selected images exist and are not tagged `latest`, uses GitHub Environment approval and Workload Identity Federation, applies a reviewed Terraform plan, and smoke-tests the public edge.
 5. **Runtime migrations:** Terraform creates a dedicated Cloud Run migration Job with its own service account and Secret Manager reference. `.github/workflows/migrate-production.yml` executes that already deployed immutable job only after a protected Environment approval; migrations are not hidden inside Terraform or the API startup.
@@ -83,11 +83,11 @@ preserved.
 
 For manual Biome fixes, use `pnpm biome:write` for formatting and safe fixes.
 
-The `persistence` CI job starts an ephemeral PostgreSQL service, applies the
+The `database` CI job starts an ephemeral PostgreSQL service, applies the
 privileged Drizzle migrations, creates the restricted `api_gateway_runtime`
 role, and checks the command-receipt table, tenant RLS policy, uniqueness
 index, restricted grants, and a concurrent duplicate insert race. The
-`persistence` integration suite then verifies migration history, RLS coverage,
+`database` integration suite then verifies migration history, RLS coverage,
 `SET LOCAL` organization context reset, cross-tenant read/write isolation,
 composite organization foreign keys, tenant-scoped uniqueness, and database
 check constraints through the runtime role. Finally, the API HTTP harness uses
@@ -201,7 +201,7 @@ Cloud SQL schema migrations are a separate release step:
 
 ```bash
 DATABASE_MIGRATION_URL="$DATABASE_MIGRATION_URL" \
-  pnpm --filter @encois/persistence db:migrate
+  pnpm --filter @encois/database db:migrate
 ```
 
 The migration connection is operator/CI-only. The API uses `DATABASE_RUNTIME_URL` and the restricted runtime role described in [`docs/GCP.md`](GCP.md). Never put either value in Terraform variables, image layers, logs, or GitHub repository files.

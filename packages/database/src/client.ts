@@ -3,9 +3,9 @@ import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema/index.js";
 
-export type PersistenceDatabase = PostgresJsDatabase<typeof schema>;
-export type PersistenceTransaction = Parameters<
-  Parameters<PersistenceDatabase["transaction"]>[0]
+export type Database = PostgresJsDatabase<typeof schema>;
+export type DatabaseTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
 >[0];
 
 export type DatabaseClientOptions = {
@@ -15,7 +15,7 @@ export type DatabaseClientOptions = {
 
 export function createDatabase(options: DatabaseClientOptions = {}): {
   client: postgres.Sql;
-  db: PersistenceDatabase;
+  db: Database;
 } {
   const url =
     options.url ?? process.env.DATABASE_RUNTIME_URL ?? process.env.DATABASE_URL;
@@ -38,9 +38,9 @@ export function createDatabase(options: DatabaseClientOptions = {}): {
 }
 
 export async function withOrganizationContext<T>(
-  db: PersistenceDatabase,
+  db: Database,
   organizationId: string,
-  callback: (transaction: PersistenceTransaction) => Promise<T>,
+  callback: (transaction: DatabaseTransaction) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (transaction) => {
     await transaction.execute(

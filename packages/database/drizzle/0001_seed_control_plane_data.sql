@@ -78,7 +78,8 @@ INSERT INTO "workflow_templates" (
 VALUES
   ('github-project-activity', 'engineering', 'GitHub Project Activity', 'Collect pull requests, checks, and commits for a project scope, then summarize the observed delivery context.', ARRAY['github', 'project', 'pull-request', 'checks', 'commits'], ARRAY['code.read'], '1.0.0', 'active'),
   ('github-repository-activity', 'engineering', 'GitHub Repository Activity', 'Collect pull requests, checks, and commits for a repository scope, then summarize the observed delivery context.', ARRAY['github', 'repository', 'pull-request', 'checks', 'commits'], ARRAY['code.read'], '1.0.0', 'active'),
-  ('jira-project-tasks', 'planning', 'Jira Project Tasks', 'Read task status for a Jira project scope and summarize completed, remaining, and blocked work.', ARRAY['jira', 'project', 'tasks', 'issues', 'planning'], ARRAY['issues.read'], '1.0.0', 'active');
+  ('jira-project-tasks', 'planning', 'Jira Project Tasks', 'Read task status for a Jira project scope and summarize completed, remaining, and blocked work.', ARRAY['jira', 'project', 'tasks', 'issues', 'planning'], ARRAY['issues.read'], '1.0.0', 'active'),
+  ('source-fact-summary', 'knowledge', 'Source Fact Summary', 'Summarize facts extracted from uploaded and ingested Sources in the selected organization scope.', ARRAY['sources', 'documents', 'pdf', 'facts', 'summary'], ARRAY[]::text[], '1.0.0', 'active');
 
 --> statement-breakpoint
 
@@ -97,6 +98,9 @@ JOIN (
     $$::jsonb),
     ('jira-project-tasks', $$
       {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.dynamic.v1","purpose":"Read task status for a Jira project scope and summarize completed, remaining, and blocked work.","inputs":{"scope":{"type":"execution-scope","description":"Organization-unit scope for the Jira project review.","required":true}},"providerSlots":[{"key":"jira-project","capabilities":["issues.read"],"preferredProviders":["jira"],"required":true}],"steps":[{"id":"collect-project-tasks","kind":"tool","tool":"jira.project_tasks","providerSlot":"jira-project"},{"id":"summarize-project-tasks","kind":"agent","agentDefinition":"context.synthesizer@1","dependsOn":["collect-project-tasks"]}],"output":{"type":"jira-project-task-report","description":"Evidence-linked Jira task status with freshness and unresolved gaps."}}
+    $$::jsonb),
+    ('source-fact-summary', $$
+      {"schemaVersion":"workflow-template.v1","version":"1.0.0","workflowType":"encois.dynamic.v1","purpose":"Summarize facts extracted from uploaded and ingested Sources in the selected organization scope.","inputs":{"scope":{"type":"execution-scope","description":"Organization-unit scope containing the uploaded or ingested Sources.","required":true}},"providerSlots":[],"steps":[{"id":"summarize-source-facts","kind":"agent","agentDefinition":"context.synthesizer@1","input":{"graphQuery":"source.facts","graphParams":{"nodeType":"source_fact","limit":100},"instruction":"Summarize the most important observed facts from all available Sources. Preserve evidence and provenance, distinguish observed facts from inferences, and report missing or conflicting evidence."}}],"output":{"type":"source-fact-summary","description":"An evidence-linked summary of facts extracted from available Sources."}}
     $$::jsonb)
 ) AS templates(key, template) ON templates.key = workflows.key
 WHERE workflows.organization_id IS NULL;

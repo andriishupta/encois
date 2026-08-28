@@ -217,7 +217,7 @@ retry. A registry update without `start` does not launch an execution.
 
 The Runtime-to-Gateway operation that sends a validated Workflow Change Plan to
 the control plane. Submission is not approval and does not start a Workflow;
-the Gateway owns persistence, human approval, and Blueprint registry
+the Gateway owns database storage, human approval, and Blueprint registry
 application. A change may explicitly request execution with a `start` intent;
 after approval and application, that intent becomes a `workflowStarts` event
 for the Coordinator.

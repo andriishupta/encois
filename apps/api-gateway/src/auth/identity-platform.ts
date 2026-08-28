@@ -5,16 +5,16 @@ import {
   resolveEffectiveScope,
 } from "@encois/contracts";
 import {
+  type DatabaseTransaction,
   membershipScopes,
   organizationInvites,
   organizationMemberships,
   organizationUnits,
-  type PersistenceTransaction,
   rolePermissions,
   roles,
   users,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { type DecodedIdToken, getAuth } from "firebase-admin/auth";
@@ -186,7 +186,7 @@ export function canonicalOrganizationUnitIds(
 }
 
 async function resolveOrganizationScope(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   membershipId: string,
 ): Promise<readonly string[]> {
@@ -229,7 +229,7 @@ async function resolveOrganizationScope(
 }
 
 async function resolveRolePermissions(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   roleId: string,
 ): Promise<readonly PermissionKey[]> {
   const permissions = await db
@@ -242,7 +242,7 @@ async function resolveRolePermissions(
 /**
  * Authenticates the private Runtime -> Gateway control-plane boundary. In a
  * database-backed environment the configured service user must have an active
- * organization membership, and its scopes are loaded from persistence. The
+ * organization membership, and its scopes are loaded from the database. The
  * The header scope fallback exists only when the caller explicitly enables the
  * database-free local/test scaffold.
  */

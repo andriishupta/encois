@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type CoordinatorEvent, Permission } from "@encois/contracts";
-import { createDatabase } from "@encois/persistence";
+import { createDatabase } from "@encois/database";
 import type { AosPrincipal } from "../src/middleware/aos.js";
 import type { WorkflowClient } from "../src/workflows/temporal-client.js";
 import type {

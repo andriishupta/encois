@@ -146,7 +146,7 @@ function parseOnboardingUpdate(
 }
 
 function statusForError(code: string): 400 | 403 | 404 | 409 | 503 {
-  if (code === "PERSISTENCE_UNAVAILABLE") return 503;
+  if (code === "DATABASE_UNAVAILABLE") return 503;
   if (code === "ORGANIZATION_ONBOARDING_NOT_FOUND") return 503;
   if (code === "FORBIDDEN") return 403;
   if (code === "ONBOARDING_START_FAILED") return 503;
@@ -218,7 +218,7 @@ export function createOrganizationRouter(
       return context.json(
         {
           error: {
-            code: "PERSISTENCE_UNAVAILABLE",
+            code: "DATABASE_UNAVAILABLE",
             message: "Coordinator onboarding is not configured.",
           },
         },

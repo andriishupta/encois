@@ -10,10 +10,7 @@ import {
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 function errorStatus(code: string): 400 | 403 | 409 | 413 | 422 | 500 | 503 {
-  if (
-    code === "ARTIFACT_STORE_UNAVAILABLE" ||
-    code === "PERSISTENCE_UNAVAILABLE"
-  )
+  if (code === "ARTIFACT_STORE_UNAVAILABLE" || code === "DATABASE_UNAVAILABLE")
     return 503;
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "INVALID_UPLOAD_SIZE") return 413;

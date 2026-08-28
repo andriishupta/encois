@@ -68,12 +68,12 @@ export const createIntegrationRoute: Handler<GatewayEnv> = async (context) => {
       "IDENTITY_NOT_RESOLVED",
     ].includes(code)
       ? 403
-      : code === "PERSISTENCE_UNAVAILABLE"
+      : code === "DATABASE_UNAVAILABLE"
         ? 503
         : 422;
     const message =
-      code === "PERSISTENCE_UNAVAILABLE"
-        ? "Database access is not configured."
+      code === "DATABASE_UNAVAILABLE"
+        ? "Database is unavailable."
         : "The integration could not be registered.";
     return context.json({ error: { code, message } }, status);
   }

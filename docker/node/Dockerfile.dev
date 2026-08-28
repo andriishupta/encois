@@ -14,7 +14,7 @@ ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 COPY apps/api-gateway/package.json apps/api-gateway/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/persistence/package.json packages/persistence/package.json
+COPY packages/database/package.json packages/database/package.json
 RUN pnpm install --frozen-lockfile
 
 EXPOSE 5173 8787

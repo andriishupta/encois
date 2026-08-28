@@ -216,9 +216,9 @@ importers:
       '@encois/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@encois/persistence':
+      '@encois/database':
         specifier: workspace:*
-        version: link:../../packages/persistence
+        version: link:../../packages/database
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.3)
@@ -355,7 +355,7 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
-  packages/persistence:
+  packages/database:
     dependencies:
       drizzle-orm:
         specifier: ^0.44.5

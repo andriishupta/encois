@@ -18,7 +18,7 @@ resource "google_cloud_run_v2_job" "retention" {
         name    = "retention-cleanup"
         image   = var.retention_image
         command = ["pnpm"]
-        args    = ["--filter", "@encois/persistence", "retention:cleanup"]
+        args    = ["--filter", "@encois/database", "retention:cleanup"]
 
         env {
           name = "DATABASE_RETENTION_URL"

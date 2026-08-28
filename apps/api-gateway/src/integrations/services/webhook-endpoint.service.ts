@@ -7,10 +7,10 @@ import {
 } from "@encois/contracts";
 import {
   auditEvents,
-  type PersistenceTransaction,
+  type DatabaseTransaction,
   webhookEndpoints,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq } from "drizzle-orm";
 import {
   type ApplicationError,
@@ -26,7 +26,7 @@ import type { AosPrincipal } from "../../middleware/aos.js";
 import type { WebhookSecretWriter } from "../../security/secret-manager.js";
 import { accessibleIntegrations } from "./integrations.service.js";
 
-type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
+type QueryDatabase = NonNullable<typeof database> | DatabaseTransaction;
 
 export type WebhookEndpointServiceOptions = {
   secretWriter?: WebhookSecretWriter;
@@ -173,7 +173,7 @@ export async function getWebhookEndpointForPrincipal(
   integrationId: string,
   options: WebhookEndpointServiceOptions,
 ): Promise<WebhookEndpointProjection | null> {
-  if (!database) throw serviceError("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw serviceError("DATABASE_UNAVAILABLE");
   return withOrganizationContext(
     database,
     principal.organizationId,
@@ -200,7 +200,7 @@ export async function provisionWebhookEndpoint(
   requestedEndpointKey: string | undefined,
   options: WebhookEndpointServiceOptions,
 ): Promise<WebhookEndpointSecretResponse> {
-  if (!database) throw serviceError("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw serviceError("DATABASE_UNAVAILABLE");
   if (!options.secretWriter)
     throw serviceError("WEBHOOK_SECRET_WRITER_UNAVAILABLE");
   const userId = localUserId(principal);
@@ -324,7 +324,7 @@ export async function rotateWebhookEndpointSecret(
   integrationId: string,
   options: WebhookEndpointServiceOptions,
 ): Promise<WebhookEndpointSecretResponse> {
-  if (!database) throw serviceError("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw serviceError("DATABASE_UNAVAILABLE");
   if (!options.secretWriter)
     throw serviceError("WEBHOOK_SECRET_WRITER_UNAVAILABLE");
   const userId = localUserId(principal);
@@ -397,7 +397,7 @@ export async function setWebhookEndpointStatus(
   status: "active" | "disabled",
   options: WebhookEndpointServiceOptions,
 ): Promise<WebhookEndpointProjection | null> {
-  if (!database) throw serviceError("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw serviceError("DATABASE_UNAVAILABLE");
   const userId = localUserId(principal);
   if (!userId) throw serviceError("IDENTITY_NOT_RESOLVED");
   return withOrganizationContext(

@@ -1,5 +1,6 @@
 import {
   createDatabase,
+  type DatabaseTransaction,
   integrationBindings,
   integrationCatalog,
   integrations,
@@ -10,7 +11,6 @@ import {
   organizationOnboarding,
   organizations,
   organizationUnits,
-  type PersistenceTransaction,
   roles,
   sourceIngestionRuns,
   sourceRevisions,
@@ -20,7 +20,7 @@ import {
   workflowDefinitions,
   workflowEvents,
   workflowRuns,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth, type UserRecord } from "firebase-admin/auth";
@@ -315,7 +315,7 @@ async function ensureAuthUser(
 }
 
 async function ensureOrganization(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   fixture: OrganizationFixture,
 ): Promise<FixtureOrganization> {
   const [existing] = await tx
@@ -393,7 +393,7 @@ async function ensureOrganization(
 }
 
 async function ensureControlPlaneServiceUser(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organizationId: string,
   rootUnitId: string,
   organizationName: string,
@@ -458,7 +458,7 @@ async function ensureControlPlaneServiceUser(
 }
 
 async function ensureUnit(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organizationId: string,
   parentId: string | null,
   type: "organization" | "department" | "project" | "team",
@@ -499,7 +499,7 @@ async function ensureUnit(
 }
 
 async function systemRole(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   key: string,
 ): Promise<{ id: string; key: string }> {
   const [role] = await tx
@@ -515,7 +515,7 @@ async function systemRole(
 }
 
 async function resolvePersistentUser(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   identity: UserRecord,
 ): Promise<FixtureUser | undefined> {
   const email = identity.email?.trim().toLowerCase();
@@ -558,7 +558,7 @@ async function resolvePersistentUser(
 }
 
 async function ensureActiveFixtureUser(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   identity: UserRecord,
   spec: Pick<ActiveUserFixture, "roleKey" | "unitSlug" | "access">,
@@ -668,7 +668,7 @@ async function ensureActiveFixtureUser(
 }
 
 async function ensurePendingInvite(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   spec: OnboardingFixture,
 ): Promise<void> {
@@ -715,7 +715,7 @@ async function ensurePendingInvite(
 }
 
 async function ensureIntegration(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   displayName: string,
   provider: string,
@@ -1158,7 +1158,7 @@ const integrationCatalogFixtures = [
   },
 ] as const;
 
-async function ensureIntegrationCatalog(tx: PersistenceTransaction) {
+async function ensureIntegrationCatalog(tx: DatabaseTransaction) {
   for (const entry of integrationCatalogFixtures) {
     await tx
       .insert(integrationCatalog)
@@ -1180,7 +1180,7 @@ async function ensureIntegrationCatalog(tx: PersistenceTransaction) {
 }
 
 async function ensureKnowledgeSource(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   sourceKey: string,
   name: string,
@@ -1300,7 +1300,7 @@ async function ensureKnowledgeSource(
 }
 
 async function ensureSourceIngestion(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   source: FixtureSource,
   status: "queued" | "running" | "completed" | "failed",
@@ -1351,7 +1351,7 @@ async function ensureSourceIngestion(
 }
 
 async function ensureWorkflowFixtures(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   usersByKey: ReadonlyMap<string, FixtureUser>,
 ): Promise<void> {
@@ -1506,7 +1506,7 @@ async function ensureWorkflowFixtures(
 }
 
 async function ensureWebhookFixture(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organization: FixtureOrganization,
   provider: string,
   endpointKey: string,

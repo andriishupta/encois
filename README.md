@@ -29,7 +29,7 @@ apps/dashboard React SPA
 apps/api-gateway Hono API and webhook ingress
 apps/agent-runtime Go Temporal workers and Google ADK agents
 apps/agent-gateway Private Go policy and tool broker
-packages/*     domain, contracts, agents, integrations, persistence, observability, config
+packages/*     domain, contracts, agents, integrations, database, observability, config
 infra/         Google Cloud deployment configuration
 docs/          product, architecture, security, and flow documentation
 ```

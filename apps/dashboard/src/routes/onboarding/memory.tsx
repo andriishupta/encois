@@ -48,11 +48,7 @@ function MemorySetupPage() {
     setError(null);
   }
 
-  async function handleContinue() {
-    if (!file && !existingSource) {
-      setError("Upload one PDF to continue. This step cannot be skipped.");
-      return;
-    }
+  async function handleSubmit() {
     setUploading(true);
     setError(null);
     try {
@@ -75,8 +71,7 @@ function MemorySetupPage() {
   }
 
   const sourceLabel = file?.name ?? existingSource?.name;
-  const canContinue =
-    Boolean(file || existingSource) && !uploading && !sources.isLoading;
+  const canSubmit = !uploading && !sources.isLoading;
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,8 +80,8 @@ function MemorySetupPage() {
           Give your <ProductTerm term="coordinator" /> some memory
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Upload one organization graph document. The workspace stores it as a
-          scoped source and starts the common ingestion workflow.
+          Upload one organization graph document, or skip for now and add a
+          source later from the workspace.
         </p>
       </div>
 
@@ -97,6 +92,7 @@ function MemorySetupPage() {
             PDF upload is available now. The file becomes a scoped source{" "}
             <ProductTerm term="revision" /> and starts the common{" "}
             <ProductTerm term="ingestion" /> <ProductTerm term="workflow" />.
+            You can also skip this step and add a source later.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -156,17 +152,21 @@ function MemorySetupPage() {
         <p className="text-sm text-muted-foreground">
           {sourceLabel
             ? `Selected: ${sourceLabel}`
-            : "Select a PDF source to continue."}
+            : "No document selected. You can skip for now."}
         </p>
         <Button
           type="button"
-          disabled={!canContinue}
-          onClick={() => void handleContinue()}
+          disabled={!canSubmit}
+          onClick={() => void handleSubmit()}
         >
           {uploading ? (
             <LoaderCircle className="animate-spin" data-icon="inline-start" />
           ) : null}
-          {uploading ? "Starting setup…" : "Start setup"}
+          {uploading
+            ? "Starting setup…"
+            : sourceLabel
+              ? "Start setup"
+              : "Skip for now"}
           <ArrowRight data-icon="inline-end" />
         </Button>
       </div>

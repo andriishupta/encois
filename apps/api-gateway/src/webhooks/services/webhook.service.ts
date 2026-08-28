@@ -7,7 +7,7 @@ import {
   webhookDeliveries,
   webhookEndpoints,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, ne } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
@@ -130,8 +130,8 @@ async function getEndpoint(
 ): Promise<typeof webhookEndpoints.$inferSelect | undefined> {
   if (!database)
     throw new WebhookServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Webhook persistence is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
       503,
     );
   return withOrganizationContext(database, organizationId, async (db) => {
@@ -162,8 +162,8 @@ async function claimDelivery(
 ): Promise<DeliveryClaim> {
   if (!database)
     throw new WebhookServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Webhook persistence is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
       503,
     );
   try {
@@ -253,8 +253,8 @@ async function setDeliveryPayload(
 ): Promise<void> {
   if (!database)
     throw new WebhookServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Webhook persistence is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
       503,
     );
   await withOrganizationContext(database, organizationId, async (db) => {
@@ -327,8 +327,8 @@ async function matchingSources(
 ): Promise<readonly SourceMatch[]> {
   if (!database)
     throw new WebhookServiceError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Webhook persistence is not configured.",
+      "DATABASE_UNAVAILABLE",
+      "Database is unavailable.",
       503,
     );
   return withOrganizationContext(database, organizationId, async (db) => {

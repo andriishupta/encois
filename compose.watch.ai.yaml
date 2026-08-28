@@ -55,10 +55,10 @@ services:
       - encois-watch-ai-firebase-data:/firebase/data
 
   migrations:
-    image: encois-watch-ai/persistence-migrations:${ENCOIS_VERSION:-1.0.0}
+    image: encois-watch-ai/database-migrations:${ENCOIS_VERSION:-1.0.0}
     build:
       context: .
-      dockerfile: packages/persistence/Dockerfile
+      dockerfile: packages/database/Dockerfile
       args:
         ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     environment:
@@ -172,7 +172,7 @@ services:
       - /workspace/node_modules
       - /workspace/apps/api-gateway/node_modules
       - /workspace/packages/contracts/node_modules
-      - /workspace/packages/persistence/node_modules
+      - /workspace/packages/database/node_modules
 
   agent-runtime:
     image: encois-watch-ai/agent-runtime:${ENCOIS_VERSION:-1.0.0}

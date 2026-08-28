@@ -1,5 +1,5 @@
 {
-  "name": "@encois/persistence",
+  "name": "@encois/database",
   "private": true,
   "version": "1.0.0",
   "type": "module",

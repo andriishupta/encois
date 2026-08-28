@@ -72,18 +72,14 @@ export const reportIntegrationHealthRoute: Handler<GatewayEnv> = async (
         ? error.message
         : "INTEGRATION_HEALTH_UPDATE_FAILED";
     const status =
-      code === "PERSISTENCE_UNAVAILABLE"
-        ? 503
-        : code === "FORBIDDEN"
-          ? 403
-          : 502;
+      code === "DATABASE_UNAVAILABLE" ? 503 : code === "FORBIDDEN" ? 403 : 502;
     return context.json(
       {
         error: {
           code,
           message:
-            code === "PERSISTENCE_UNAVAILABLE"
-              ? "Database access is not configured."
+            code === "DATABASE_UNAVAILABLE"
+              ? "Database is unavailable."
               : "The integration health state could not be updated.",
         },
       },

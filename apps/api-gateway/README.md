@@ -167,15 +167,14 @@ service boundary. In a database-backed deployment they also require
 scopes. Cloud Run platform identity can be added alongside this application
 token at the deployment boundary.
 
-`dist/coordinator-dispatcher.js` is an optional one-shot process for delivering
-the tenant-scoped Coordinator outbox to Temporal. Run it locally with
-`COORDINATOR_DISPATCH_ORGANIZATION_ID=org-test pnpm dispatch:coordinator`, or
-use the same API image as a Cloud Run Job invoked by Cloud Scheduler. The
-dispatcher is not an HTTP route: the scheduler must provide one organization
-per invocation and use a service identity with only the required job/runtime
-permissions.
+The API server starts an always-on Coordinator outbox dispatcher alongside the
+HTTP listener. It polls every second, discovers organizations with pending
+events, and delivers them to Temporal with bounded lease/retry behavior. A
+database or Temporal outage is logged and retried without stopping the API.
+`pnpm dispatch:coordinator` remains available as a one-shot operator command
+that drains one bounded batch across all organizations.
 
-Identity Platform verification is available through `src/auth/identity-platform.ts`. It uses Firebase Admin SDK + Application Default Credentials, so Cloud Run can use its service identity without a checked-in key. The resolver that maps an external subject to an organization membership is intentionally injected and must use the persistence package.
+Identity Platform verification is available through `src/auth/identity-platform.ts`. It uses Firebase Admin SDK + Application Default Credentials, so Cloud Run can use its service identity without a checked-in key. The resolver that maps an external subject to an organization membership is intentionally injected and must use the database package.
 
 Operator lifecycle scripts use `DATABASE_MIGRATION_URL`:
 
@@ -189,7 +188,7 @@ pnpm --filter @encois/api-gateway auth:revoke-invite -- --invite-id <invite-id>
 They are private operator tooling and intentionally do not create provider
 accounts. The first invited user accepts access by completing Google login.
 
-Cloud SQL access is owned by `@encois/persistence`. Use `DATABASE_RUNTIME_URL` for the API and `DATABASE_MIGRATION_URL` only for migrations; never point the API at the Cloud SQL admin connection.
+Cloud SQL access is owned by `@encois/database`. Use `DATABASE_RUNTIME_URL` for the API and `DATABASE_MIGRATION_URL` only for migrations; never point the API at the Cloud SQL admin connection.
 
 ## Layout
 

@@ -1,9 +1,9 @@
 import { type CoordinatorEvent, validateContract } from "@encois/contracts";
 import {
   coordinatorEventOutbox,
-  type PersistenceTransaction,
+  type DatabaseTransaction,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { WorkflowClient } from "../temporal-client.js";
@@ -11,7 +11,6 @@ import type { WorkflowClient } from "../temporal-client.js";
 export type CoordinatorEventSink = (event: CoordinatorEvent) => Promise<void>;
 
 export type CoordinatorOutboxDispatchOptions = {
-  organizationId: string;
   sink: CoordinatorEventSink;
   limit?: number;
   leaseMs?: number;
@@ -20,7 +19,7 @@ export type CoordinatorOutboxDispatchOptions = {
 };
 
 export type CoordinatorOutboxDispatchResult = {
-  status: "dispatched" | "persistence-unavailable";
+  status: "dispatched" | "database-unavailable";
   claimed: number;
   delivered: number;
   failed: number;
@@ -52,7 +51,7 @@ function retryDelayMs(attempts: number): number {
 }
 
 async function claimEvent(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   tenantId: string,
   eventId: string,
   now: Date,
@@ -86,7 +85,7 @@ async function claimEvent(
 }
 
 async function markDelivered(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   tenantId: string,
   eventId: string,
   now: Date,
@@ -109,7 +108,7 @@ async function markDelivered(
 }
 
 async function markFailed(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   tenantId: string,
   eventId: string,
   attempts: number,
@@ -137,28 +136,23 @@ async function markFailed(
     );
 }
 
-/**
- * Delivers a bounded batch for one tenant. The database claim is short and
- * finishes before the external Temporal call; the lease protects against two
- * dispatchers delivering the same event concurrently and allows recovery
- * after a dispatcher crash.
- */
-export async function dispatchCoordinatorOutbox(
+async function dispatchCoordinatorOutboxForOrganization(
   options: CoordinatorOutboxDispatchOptions,
+  tenantId: string,
+  now: Date,
+  limit: number,
+  leaseMs: number,
+  maxAttempts: number,
 ): Promise<CoordinatorOutboxDispatchResult> {
-  if (!database)
+  if (!database) {
     return {
-      status: "persistence-unavailable",
+      status: "database-unavailable",
       claimed: 0,
       delivered: 0,
       failed: 0,
     };
+  }
 
-  const tenantId = options.organizationId;
-  const now = options.now ?? new Date();
-  const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
-  const leaseMs = Math.max(1_000, options.leaseMs ?? defaultLeaseMs);
-  const maxAttempts = Math.max(1, options.maxAttempts ?? defaultMaxAttempts);
   const candidates = await withOrganizationContext(
     database,
     tenantId,
@@ -249,5 +243,99 @@ export async function dispatchCoordinatorOutbox(
     claimed: claimedCount,
     delivered: deliveredCount,
     failed: failedCount,
+  };
+}
+
+async function listDispatchableOrganizationIds(
+  now: Date,
+  maxAttempts: number,
+): Promise<readonly string[]> {
+  if (!database) return [];
+
+  const rows = await database.execute<{ organizationId: string }>(sql`
+    SELECT organization_id AS "organizationId"
+    FROM public.list_dispatchable_coordinator_outbox_organizations(
+      ${now},
+      ${maxAttempts}
+    )
+  `);
+  return rows.map((row) => row.organizationId);
+}
+
+/**
+ * Delivers bounded batches for every organization with a dispatchable event.
+ * Organization discovery is restricted to a database function; actual event
+ * reads and writes still run under the normal tenant RLS context.
+ */
+export async function dispatchCoordinatorOutbox(
+  options: CoordinatorOutboxDispatchOptions,
+): Promise<CoordinatorOutboxDispatchResult> {
+  if (!database)
+    return {
+      status: "database-unavailable",
+      claimed: 0,
+      delivered: 0,
+      failed: 0,
+    };
+
+  const now = options.now ?? new Date();
+  const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
+  const leaseMs = Math.max(1_000, options.leaseMs ?? defaultLeaseMs);
+  const maxAttempts = Math.max(1, options.maxAttempts ?? defaultMaxAttempts);
+
+  let organizationIds: readonly string[];
+  try {
+    organizationIds = await listDispatchableOrganizationIds(now, maxAttempts);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "coordinator_outbox.discovery_failed",
+        error: boundedError(error),
+      }),
+    );
+    return {
+      status: "database-unavailable",
+      claimed: 0,
+      delivered: 0,
+      failed: 0,
+    };
+  }
+
+  let claimed = 0;
+  let delivered = 0;
+  let failed = 0;
+  let databaseUnavailable = false;
+
+  for (const organizationId of organizationIds) {
+    try {
+      const result = await dispatchCoordinatorOutboxForOrganization(
+        options,
+        organizationId,
+        now,
+        limit,
+        leaseMs,
+        maxAttempts,
+      );
+      claimed += result.claimed;
+      delivered += result.delivered;
+      failed += result.failed;
+      databaseUnavailable ||= result.status === "database-unavailable";
+    } catch (error) {
+      databaseUnavailable = true;
+      console.error(
+        JSON.stringify({
+          event: "coordinator_outbox.organization_dispatch_failed",
+          organizationId,
+          error: boundedError(error),
+        }),
+      );
+    }
+  }
+
+  return {
+    status: databaseUnavailable ? "database-unavailable" : "dispatched",
+    claimed,
+    delivered,
+    failed,
   };
 }

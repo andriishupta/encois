@@ -84,7 +84,7 @@ export function createAuthorizationCallbackRoute(
           ? 400
           : codeValue === "FORBIDDEN"
             ? 403
-            : codeValue === "PERSISTENCE_UNAVAILABLE" ||
+            : codeValue === "DATABASE_UNAVAILABLE" ||
                 codeValue === "INTEGRATION_AUTHORIZATION_UNAVAILABLE"
               ? 503
               : 502;

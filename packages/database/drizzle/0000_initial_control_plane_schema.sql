@@ -670,10 +670,6 @@ CREATE UNIQUE INDEX "knowledge_sources_id_organization_idx" ON "knowledge_source
 
 --> statement-breakpoint
 
-CREATE UNIQUE INDEX "knowledge_sources_name_organization_idx" ON "knowledge_sources" USING btree ("organization_id","name");
-
---> statement-breakpoint
-
 CREATE UNIQUE INDEX "source_ingestion_runs_id_organization_idx" ON "source_ingestion_runs" USING btree ("id","organization_id");
 
 --> statement-breakpoint
@@ -1792,3 +1788,36 @@ SELECT "roles"."id", 'memory:manage'
 FROM "roles"
 WHERE "roles"."organization_id" IS NULL AND "roles"."key" = 'organization_admin'
 ON CONFLICT ("role_id", "permission") DO NOTHING;
+
+--> statement-breakpoint
+
+-- The embedded API dispatcher must discover pending tenants without disabling
+-- tenant RLS for its normal event reads and writes. This function exposes only
+-- organization IDs that currently have a dispatchable outbox event.
+CREATE OR REPLACE FUNCTION public.list_dispatchable_coordinator_outbox_organizations(
+  p_now timestamptz,
+  p_max_attempts integer
+)
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT DISTINCT organization_id
+  FROM public.coordinator_event_outbox
+  WHERE attempts < p_max_attempts
+    AND (
+      (
+        status IN ('pending', 'failed')
+        AND available_at <= p_now
+      )
+      OR (
+        status = 'delivering'
+        AND lease_until <= p_now
+      )
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.list_dispatchable_coordinator_outbox_organizations(timestamptz, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.list_dispatchable_coordinator_outbox_organizations(timestamptz, integer) TO api_gateway;

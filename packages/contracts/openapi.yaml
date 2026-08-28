@@ -138,7 +138,7 @@ paths:
               schema: { $ref: '#/components/schemas/WebhookEndpointResponse' }
         '403': { description: Caller cannot read this integration }
         '404': { description: Webhook endpoint or integration is not visible in the caller's scope }
-        '503': { description: Persistence is not configured }
+        '503': { description: Database is unavailable }
     post:
       operationId: provisionIntegrationWebhookEndpoint
       summary: Provision or repair the signed webhook endpoint for an integration
@@ -164,7 +164,7 @@ paths:
         '403': { description: Caller cannot manage this integration }
         '404': { description: Integration is not visible in the caller's scope }
         '409': { description: Endpoint already exists or integration is not active }
-        '503': { description: Persistence or Secret Manager is not configured }
+        '503': { description: Database or Secret Manager is unavailable }
   /api/v1/integrations/{integrationId}/webhook/rotate:
     post:
       operationId: rotateIntegrationWebhookSecret
@@ -186,7 +186,7 @@ paths:
         '403': { description: Caller cannot manage this integration }
         '404': { description: Endpoint or integration is not visible in the caller's scope }
         '409': { description: Endpoint is disabled }
-        '503': { description: Persistence or Secret Manager is not configured }
+        '503': { description: Database or Secret Manager is unavailable }
   /api/v1/integrations/{integrationId}/webhook/enable:
     post:
       operationId: enableIntegrationWebhookEndpoint
@@ -282,7 +282,7 @@ paths:
         '502':
           description: Provider token exchange or Secret Manager provisioning failed
         '503':
-          description: Authorization adapter or persistence is not configured
+          description: Authorization adapter or database is unavailable
   /api/v1/webhooks/{organizationId}/{endpointKey}:
     post:
       operationId: receiveWebhookEvent
@@ -328,7 +328,7 @@ paths:
         '404': { description: Endpoint not found }
         '413': { description: Payload exceeds the 1 MiB ingress limit }
         '415': { description: Unsupported content type }
-        '503': { description: Persistence, Secret Manager, Cloud Storage, or workflow runtime is unavailable }
+        '503': { description: Database, Secret Manager, Cloud Storage, or workflow runtime is unavailable }
   /api/v1/internal/integrations/{integrationId}/authorization:
     post:
       operationId: updateIntegrationAuthorization
@@ -387,7 +387,7 @@ paths:
         '404':
           description: No active, scoped integration satisfies the provider capability
         '503':
-          description: Persistence is not configured
+          description: Database is unavailable
   /api/v1/internal/integrations/health:
     post:
       operationId: reportIntegrationHealth
@@ -419,7 +419,7 @@ paths:
         '502':
           description: Health update could not be persisted
         '503':
-          description: Persistence is not configured
+          description: Database is unavailable
   /api/v1/internal/integrations/health-check:
     post:
       operationId: runIntegrationHealthCheck
@@ -447,7 +447,7 @@ paths:
         '401':
           description: Internal service authentication failed
         '503':
-          description: Persistence or Agent Gateway is not configured
+          description: Database or Agent Gateway is unavailable
   /api/v1/organization:
     get:
       operationId: getOrganization
@@ -495,7 +495,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrganizationOnboardingResponse'
         '403': { description: onboarding:manage is required }
-        '503': { description: Coordinator or persistence is unavailable }
+        '503': { description: Coordinator or database is unavailable }
   /api/v1/organization/units:
     get:
       operationId: listOrganizationUnits
@@ -2897,7 +2897,7 @@ components:
             changeCount: { type: integer }
             approvalRequired: { type: boolean }
             status: { const: validated_not_applied }
-            applyStatus: { const: deferred_persistence_and_approval }
+            applyStatus: { const: deferred_database_and_approval }
     WorkflowPlanResponse:
       type: object
       required: [data]

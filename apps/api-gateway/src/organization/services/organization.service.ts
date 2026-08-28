@@ -29,13 +29,13 @@ import {
 import {
   auditEvents,
   coordinatorEventOutbox,
+  type DatabaseTransaction,
   membershipScopes,
   organizationAccessRequests,
   organizationMemberships,
   organizationOnboarding,
   organizations,
   organizationUnits,
-  type PersistenceTransaction,
   roles,
   users,
   withOrganizationContext,
@@ -45,7 +45,7 @@ import {
   workflowRuns,
   workflowTemplates,
   workflowTemplateVersions,
-} from "@encois/persistence";
+} from "@encois/database";
 import {
   and,
   asc,
@@ -125,7 +125,7 @@ async function withTimeout<T>(
 }
 
 export type OrganizationServiceErrorCode =
-  | "PERSISTENCE_UNAVAILABLE"
+  | "DATABASE_UNAVAILABLE"
   | "FORBIDDEN"
   | "ORGANIZATION_NOT_FOUND"
   | "ORGANIZATION_UNIT_NOT_FOUND"
@@ -281,7 +281,7 @@ function canAssignAccess(
 }
 
 async function loadContext(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   principal: AosPrincipal,
 ): Promise<OrganizationContext> {
   const userId = localUserId(principal);
@@ -555,14 +555,11 @@ async function withContext<T>(
   principal: AosPrincipal,
   callback: (
     context: OrganizationContext,
-    db: PersistenceTransaction,
+    db: DatabaseTransaction,
   ) => Promise<T>,
 ): Promise<T> {
   if (!database)
-    throw organizationError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw organizationError("DATABASE_UNAVAILABLE", "Database is unavailable.");
   return withOrganizationContext(
     database,
     principal.organizationId,
@@ -686,7 +683,7 @@ function normalizedSelectedWorkflows(
 }
 
 async function validateWorkflowCatalogSelections(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   selectedWorkflows: readonly string[],
 ): Promise<void> {
@@ -1398,7 +1395,7 @@ export async function createOrganizationAccessRequestForPrincipal(
 async function getOrganizationAccessRequest(
   principal: AosPrincipal,
   context: OrganizationContext,
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   requestId: string,
 ): Promise<typeof organizationAccessRequests.$inferSelect> {
   requireUuid(requestId, "requestId");

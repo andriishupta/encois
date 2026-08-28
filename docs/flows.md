@@ -91,9 +91,9 @@ later hardening step.
 
 ## 2.1 Mandatory organization onboarding and Coordinator bootstrap
 
-Every new organization starts with a Coordinator, but it does not
-become dashboard-ready until onboarding produces enough context for useful
-read-only intelligence.
+Every new organization starts with a Coordinator. Onboarding may finish
+without a Source, so the dashboard can open with an empty context; useful
+read-only intelligence becomes available after Sources are added and ingested.
 
 ```mermaid
 sequenceDiagram
@@ -168,9 +168,10 @@ the Coordinator, listing active Templates and approved Blueprints, and
 registering/uploading/ingesting onboarding Sources. Internal Coordinator
 callbacks are service-authenticated and are not browser routes. All other
 tenant routes remain behind the readiness gate while the existing permissions
-still apply after the gate opens. The initial onboarding browser flow uploads
-one organization context document and does not select workflow catalog
-references. Workflow selection is a later explicit product action; the API
+still apply after the gate opens. The initial onboarding browser flow can
+upload one organization context document or skip the upload; it does not
+select workflow catalog references. Workflow selection is a later explicit
+product action; the API
 resolves Blueprint revisions, Workflow IDs, Run IDs, and Temporal IDs on the
 server.
 
@@ -196,7 +197,8 @@ that submits it to the private Gateway control-plane route. Approval
 notification uses the separate `coordinator-event.v1` envelope, whose Runtime
 receiver now deduplicates and scope-checks events. Gateway approval/application
 transactionally enqueue the event in the outbox. Outbox delivery has a bounded
-lease/retry implementation and a one-shot dispatcher entrypoint. Applying an
+lease/retry implementation and an always-on dispatcher loop inside the API
+Gateway. Applying an
 approved plan emits `workflowStarts` only for explicit change-level `start`
 intents; the Coordinator starts those approved snapshots through its private
 Gateway Activity and retains failed starts for retry. Scheduler invocation and

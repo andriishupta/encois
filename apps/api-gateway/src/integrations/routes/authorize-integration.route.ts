@@ -79,7 +79,7 @@ export function createAuthorizeIntegrationRoute(
           ? error.message
           : "INTEGRATION_AUTHORIZATION_FAILED";
       const status =
-        code === "PERSISTENCE_UNAVAILABLE"
+        code === "DATABASE_UNAVAILABLE"
           ? 503
           : code === "FORBIDDEN"
             ? 403
@@ -91,8 +91,8 @@ export function createAuthorizeIntegrationRoute(
           error: {
             code,
             message:
-              code === "PERSISTENCE_UNAVAILABLE"
-                ? "Database access is not configured."
+              code === "DATABASE_UNAVAILABLE"
+                ? "Database is unavailable."
                 : code === "INVALID_CREDENTIAL_REFERENCE"
                   ? "credentialRef must be a Secret Manager reference in hosted environments; local references are limited to development and test adapters."
                   : "The integration authorization state could not be updated.",

@@ -80,7 +80,7 @@ services:
       - /workspace/node_modules
       - /workspace/apps/api-gateway/node_modules
       - /workspace/packages/contracts/node_modules
-      - /workspace/packages/persistence/node_modules
+      - /workspace/packages/database/node_modules
     ports:
       - "8787:8787"
 

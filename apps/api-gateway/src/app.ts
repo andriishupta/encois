@@ -1,7 +1,7 @@
 import {
   organizationOnboarding,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";

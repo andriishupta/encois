@@ -70,7 +70,7 @@ function LoginPage() {
       await signInWithGoogle();
       await completeSignIn();
     } catch (cause) {
-      if (isApiError(cause) && cause.code === "PERSISTENCE_UNAVAILABLE") {
+      if (isApiError(cause) && cause.code === "DATABASE_UNAVAILABLE") {
         setError("Access provisioning is not available yet.");
       } else if (isApiError(cause) && cause.status === 401) {
         setError("This Google account is not enabled for the workspace yet.");

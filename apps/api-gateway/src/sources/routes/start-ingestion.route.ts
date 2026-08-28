@@ -73,7 +73,7 @@ export function startSourceIngestionRoute(
     } catch (error) {
       if (isSourceServiceError(error)) {
         const status =
-          error.code === "PERSISTENCE_UNAVAILABLE"
+          error.code === "DATABASE_UNAVAILABLE"
             ? 503
             : error.code === "FORBIDDEN" || error.code === "SCOPE_DENIED"
               ? 403

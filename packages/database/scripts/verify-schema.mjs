@@ -150,7 +150,7 @@ try {
     await sql`DELETE FROM organizations WHERE id = ${organizationId}`;
   }
 
-  console.log("persistence schema and command receipt race verification ok");
+  console.log("database schema and command receipt race verification ok");
 } finally {
   await sql.end({ timeout: 5 });
 }

@@ -5,7 +5,7 @@ declare -a FILES_TO_STAGE=()
 
 while IFS= read -r -d '' file; do
   case "$file" in
-    apps/api-gateway/*|apps/dashboard/*|apps/e2e/*|packages/contracts/*|packages/persistence/*)
+    apps/api-gateway/*|apps/dashboard/*|apps/e2e/*|packages/contracts/*|packages/database/*)
       case "$file" in
         *.ts|*.tsx|*.mts|*.cts) FILES_TO_STAGE+=("$file") ;;
       esac

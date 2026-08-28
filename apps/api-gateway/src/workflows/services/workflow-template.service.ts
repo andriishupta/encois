@@ -3,7 +3,7 @@ import {
   withOrganizationContext,
   workflowTemplates,
   workflowTemplateVersions,
-} from "@encois/persistence";
+} from "@encois/database";
 import {
   and,
   asc,
@@ -48,12 +48,12 @@ export type WorkflowTemplateProjection = {
 };
 
 export type WorkflowTemplateServiceError =
-  ApplicationError<"PERSISTENCE_UNAVAILABLE">;
+  ApplicationError<"DATABASE_UNAVAILABLE">;
 
 export function isWorkflowTemplateServiceError(
   error: unknown,
 ): error is WorkflowTemplateServiceError {
-  return isApplicationError(error) && error.code === "PERSISTENCE_UNAVAILABLE";
+  return isApplicationError(error) && error.code === "DATABASE_UNAVAILABLE";
 }
 
 export function parseWorkflowTemplateQuery(input: WorkflowTemplateQuery): {
@@ -121,8 +121,8 @@ export async function listWorkflowTemplatesPageForPrincipal(
 ): Promise<ListPage<WorkflowTemplateProjection>> {
   if (!database)
     throw applicationError(
-      "PERSISTENCE_UNAVAILABLE",
-      "Workflow template persistence is unavailable.",
+      "DATABASE_UNAVAILABLE",
+      "Workflow template database is unavailable.",
     );
 
   const query = parseWorkflowTemplateQuery(input);

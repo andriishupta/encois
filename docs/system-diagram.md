@@ -27,7 +27,7 @@ flowchart TB
         API[Gateway API\napps/api-gateway\nHono + TypeScript\nAuth, scope, registry, workflow control]
         CoordinatorRoutes[Private Coordinator control routes\nservice token + organization scope\nCurrent: plan submit + approved-start boundary]
         Outbox[(Coordinator event outbox\nPostgres + RLS\nCurrent: transactional enqueue)]
-        Dispatcher[Coordinator dispatcher\none-shot API image entrypoint\nCurrent: lease/retry + Temporal sink]
+        Dispatcher[Coordinator dispatcher\ninside API Gateway process\nCurrent: 1s polling + lease/retry + Temporal sink]
         Auth[Identity Platform\nGoogle-only browser sign-in\nGateway ID-token verification]
         SQL[(Cloud SQL PostgreSQL\nDrizzle + RLS\nUsers, memberships, sources, revisions, ingestion runs)]
     end
@@ -117,7 +117,7 @@ flowchart LR
         Middleware[Request ID, auth, validation, rate limits]
         Control[Control-plane services\norganizations, permissions, registry, workflows]
         TemporalClient[Temporal TypeScript client]
-        Persistence[Drizzle repositories]
+        Database[Drizzle repositories]
     end
 
     subgraph TemporalService[Temporal Cloud]
@@ -152,7 +152,7 @@ flowchart LR
     RuntimeClient -. private control plane .-> RuntimeControl
     RuntimeControl --> Middleware
     Routes --> Middleware --> Control
-    Control --> Persistence --> SQL
+    Control --> Database --> SQL
     Control --> TemporalClient --> TaskQueue
     TaskQueue --> Worker
     History --> TemporalClient
@@ -171,7 +171,7 @@ flowchart LR
     classDef target fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
     classDef external fill:#e5e7eb,stroke:#6b7280,color:#1f2937
 
-    class Dashboard,Routes,RuntimeControl,Middleware,Control,TemporalClient,Persistence,Worker,Workflows,Activities,ADK live
+    class Dashboard,Routes,RuntimeControl,Middleware,Control,TemporalClient,Database,Worker,Workflows,Activities,ADK live
     class GatewayHTTP,GatewayAuth,GatewayPolicy,ToolRegistry,ProviderAdapters scaffold
     class Evidence,CompanyGraph,AgentMemory scaffold
     class SQL,Google,Provider external

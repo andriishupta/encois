@@ -177,6 +177,77 @@ The canonical current/future behavior and security invariants are in
 [`memory.md`](memory.md). No provider migration or database rewrite is implied
 by this direction.
 
+### Future: periodic source and memory summarization
+
+Source ingestion currently projects extracted facts into the Organization
+Memory Graph and distills source content into Workflow Memory. Graph reads are
+bounded, so a growing collection of daily documents will eventually need a
+scheduled, scope-aware summarization pass. That pass should summarize related
+or older facts into versioned memory entries while preserving original fact
+provenance, source revisions, observation windows, and evidence references.
+
+The summarization must be incremental and idempotent: run after a fact-count or
+time threshold, avoid repeatedly summarizing unchanged material, and never
+replace source facts before retention and deletion rules exist. Derived memory
+summaries must remain clearly separate from observed graph facts and raw source
+content.
+
+### Future: connected Organization Memory Graph
+
+The Organization Memory Graph should become a connected, evidence-backed model
+of the organization rather than a collection of unrelated source facts. The
+Graph is the right place for durable cross-source relationships; Workflow
+Memory remains the short-lived, workflow-scoped context used during execution.
+
+The current source ingestion path creates `source_fact` nodes with empty edge
+lists. Multiple PDFs, Jira records, and GitHub records therefore remain
+separate even when they describe the same project or system. Spanner does not
+infer relationships automatically: every edge must be produced by an Encois
+ingestion or linking step.
+
+The target model should use a small set of canonical node types and explicit
+relationships:
+
+```text
+Source Revision ──CONTAINS──> Source Fact
+Source Fact ──MENTIONS──> Canonical Entity
+Jira Issue ──BELONGS_TO──> Project
+GitHub Pull Request ──CHANGES──> Repository
+Project ──RELATES_TO──> Dashboard or Team
+Canonical Entity ──SAME_AS──> Canonical Entity
+```
+
+Every node and edge must retain `provenance_json` with the source, revision,
+artifact reference, observation time, transformation version, and visibility
+scope. `properties_json` should contain only the normalized attributes of that
+node or edge, such as a Jira key, repository name, status, or fact text. Raw
+documents remain in object storage and must not be duplicated into Graph
+properties.
+
+The linking pipeline should be incremental and idempotent:
+
+1. Ingest each Source Revision and create stable source/fact IDs.
+2. Extract typed entities and relations from the source using deterministic
+   provider fields first: Jira keys, GitHub URLs, repository IDs, project IDs,
+   and exact names within the authorized scope.
+3. Upsert canonical entities using stable organization-scoped identity keys.
+4. Create edges with a relationship type, transformation version, provenance,
+   and optional confidence.
+5. Use model-assisted entity resolution only for ambiguous cross-source links.
+   Store the proposed match and evidence, then apply deterministic thresholds
+   or an approval step; never let a model silently authorize or widen scope.
+6. Deduplicate edges with a stable key such as organization, source node,
+   relationship, target node, and transformation version.
+
+For the MVP, implement only the reliable foundation: `Source Revision →
+Source Fact` edges and canonical entities for provider records with stable IDs.
+Add cross-provider links such as Jira-to-GitHub or document-to-dashboard after
+the entity and relationship schemas are stable. Queries should return the
+connected nodes, edges, evidence references, freshness, and scope-filtered
+provenance together, with bounded result limits. Summaries may compress older
+facts later, but must preserve links to the original facts and source
+revisions.
+
 ### Customer-owned memory option
 
 Some customers may require company memory and raw artifacts to remain in their

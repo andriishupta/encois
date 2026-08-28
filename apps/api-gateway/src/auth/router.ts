@@ -64,7 +64,7 @@ export function createAuthRouter(
         {
           data: null,
           error: {
-            code: "PERSISTENCE_UNAVAILABLE",
+            code: "DATABASE_UNAVAILABLE",
             message: "Access provisioning is not configured.",
             requestId: context.get("requestId"),
             traceId: context.get("traceId"),

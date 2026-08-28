@@ -175,10 +175,42 @@ func graphResponse(request domain.GraphQueryRequest, nodes []domain.GraphNode, e
 	}
 	if len(nodes) > 0 || len(edges) > 0 {
 		now := time.Now().UTC().Format(time.RFC3339)
-		response.EvidenceRefs = []string{"graph://organizations/" + request.OrganizationID + "/queries/" + request.Query}
+		response.EvidenceRefs = graphEvidenceReferences(request, nodes, edges)
 		response.Freshness = []contracts.SourceFreshness{{Source: "graph", ObservedAt: now, IngestedAt: now, Status: contracts.FreshnessFresh}}
 	}
 	return response
+}
+
+func graphEvidenceReferences(request domain.GraphQueryRequest, nodes []domain.GraphNode, edges []domain.GraphEdge) []string {
+	refs := make([]string, 0, 1+len(nodes)+len(edges))
+	seen := make(map[string]struct{}, cap(refs))
+	add := func(reference string) {
+		if reference == "" {
+			return
+		}
+		if _, ok := seen[reference]; ok {
+			return
+		}
+		seen[reference] = struct{}{}
+		refs = append(refs, reference)
+	}
+	add("graph://organizations/" + request.OrganizationID + "/queries/" + request.Query)
+	addProvenance := func(provenance *contracts.DataProvenance) {
+		if provenance == nil {
+			return
+		}
+		add(provenance.ArtifactRef)
+		if provenance.SourceID != "" && provenance.SourceRevisionID != "" {
+			add("source:" + provenance.SourceID + ":" + provenance.SourceRevisionID)
+		}
+	}
+	for _, node := range nodes {
+		addProvenance(node.Provenance)
+	}
+	for _, edge := range edges {
+		addProvenance(edge.Provenance)
+	}
+	return refs
 }
 
 func graphNodeMatchesQuery(node domain.GraphNode, request domain.GraphQueryRequest) bool {

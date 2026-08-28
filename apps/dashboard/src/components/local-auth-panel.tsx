@@ -27,10 +27,7 @@ export default function LocalAuthPanel({
         setError(
           "Local sign-in reached the API, but the authentication response is invalid. Restart the API Gateway and try again.",
         );
-      } else if (
-        isApiError(cause) &&
-        cause.code === "PERSISTENCE_UNAVAILABLE"
-      ) {
+      } else if (isApiError(cause) && cause.code === "DATABASE_UNAVAILABLE") {
         setError(
           "Local sign-in is unavailable while workspace access is offline.",
         );

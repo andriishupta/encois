@@ -10,7 +10,7 @@ TS_PATHS=(
   "apps/dashboard"
   "apps/e2e"
   "packages/contracts"
-  "packages/persistence"
+  "packages/database"
 )
 
 TS_PACKAGES=(
@@ -18,7 +18,7 @@ TS_PACKAGES=(
   "@encois/dashboard"
   "@encois/e2e"
   "@encois/contracts"
-  "@encois/persistence"
+  "@encois/database"
 )
 
 GO_PATHS=(

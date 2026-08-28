@@ -15,7 +15,7 @@ const unprocessableWorkflowErrors = new Set([
   "BLUEPRINT_INVALID",
 ]);
 const unavailableWorkflowErrors = new Set([
-  "PERSISTENCE_UNAVAILABLE",
+  "DATABASE_UNAVAILABLE",
   "BLUEPRINT_REGISTRY_UNAVAILABLE",
 ]);
 
@@ -61,7 +61,7 @@ export function workflowPlanErrorStatus(
   code: string,
   fallback: 409 | 422 = 409,
 ): WorkflowPlanHttpStatus {
-  if (code === "PERSISTENCE_UNAVAILABLE") return 503;
+  if (code === "DATABASE_UNAVAILABLE") return 503;
   if (
     code === "WORKFLOW_PLAN_NOT_FOUND" ||
     code === "WORKFLOW_BLUEPRINT_NOT_FOUND" ||
@@ -118,7 +118,7 @@ export function workflowStartResponseStatus(
 
 export function authorizationErrorStatus(code: string): 401 | 403 | 503 {
   if (
-    code === "PERSISTENCE_UNAVAILABLE" ||
+    code === "DATABASE_UNAVAILABLE" ||
     code === "BLUEPRINT_REGISTRY_UNAVAILABLE" ||
     code === "CAPABILITY_NOT_CONFIGURED"
   )

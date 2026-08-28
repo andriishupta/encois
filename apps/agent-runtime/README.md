@@ -150,7 +150,7 @@ the `tool-manifest.v1` catalog schema is also shared. The generic
 `blueprint-context` Update is now registered and exercised locally; broader
 Update types, hosted migration/concurrency verification, and the visibility
 integration remain deferred boundaries. Signal/Update command receipts are
-implemented in the Gateway persistence boundary.
+implemented in the Gateway database boundary.
 
 Agent-specific Memory Bank access has a separate typed boundary in
 `internal/memory`. It supports scoped `retrieve` and evidence-linked

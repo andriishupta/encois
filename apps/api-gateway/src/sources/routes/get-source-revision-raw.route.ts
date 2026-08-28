@@ -69,7 +69,7 @@ export function getSourceRevisionRawRoute(
       if (isSourceServiceError(error))
         return context.json(
           { error: { code: error.code, message: error.message } },
-          error.code === "PERSISTENCE_UNAVAILABLE" ||
+          error.code === "DATABASE_UNAVAILABLE" ||
             error.code === "ARTIFACT_STORE_UNAVAILABLE"
             ? 503
             : error.code === "FORBIDDEN"

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "predev": "pnpm --filter @encois/contracts exec tsc -p tsconfig.json && pnpm --filter @encois/persistence exec tsc -p tsconfig.json",
+    "predev": "pnpm --filter @encois/contracts exec tsc -p tsconfig.json && pnpm --filter @encois/database exec tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
     "build:scripts": "tsc -p tsconfig.scripts.json --noEmit false",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@encois/contracts": "workspace:*",
-    "@encois/persistence": "workspace:*",
+    "@encois/database": "workspace:*",
     "@hono/node-server": "^2.1.1",
     "@temporalio/client": "^1.22.0",
     "drizzle-orm": "^0.44.7",

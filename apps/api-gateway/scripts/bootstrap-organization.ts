@@ -5,7 +5,7 @@ import {
   organizations,
   organizationUnits,
   roles,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { normalizeEmail } from "../src/auth/identity-platform.js";
 import { databaseUrl, parseOptions, required, slugify } from "./cli.js";

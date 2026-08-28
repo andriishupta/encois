@@ -11,7 +11,7 @@ import {
 
 function serviceStatus(code: string): 400 | 403 | 404 | 409 | 503 | 422 {
   if (
-    code === "PERSISTENCE_UNAVAILABLE" ||
+    code === "DATABASE_UNAVAILABLE" ||
     code.includes("SECRET_STORE") ||
     code.includes("SECRET_WRITER")
   )
@@ -39,8 +39,8 @@ function errorResponse(
       error: {
         code,
         message:
-          code === "PERSISTENCE_UNAVAILABLE"
-            ? "Database access is not configured."
+          code === "DATABASE_UNAVAILABLE"
+            ? "Database is unavailable."
             : "The webhook endpoint operation could not be completed.",
         requestId: context.get("requestId"),
         traceId: context.get("traceId"),

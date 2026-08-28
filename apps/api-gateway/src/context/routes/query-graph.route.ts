@@ -88,7 +88,7 @@ function statusFor(code: string): 400 | 403 | 502 | 503 {
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "GRAPH_GATEWAY_ERROR" || code === "GRAPH_TIMEOUT") return 502;
   if (
-    code === "PERSISTENCE_UNAVAILABLE" ||
+    code === "DATABASE_UNAVAILABLE" ||
     code === "GRAPH_UNAVAILABLE" ||
     code === "CAPABILITY_NOT_CONFIGURED"
   )

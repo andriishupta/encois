@@ -49,7 +49,7 @@ schema are also shared and checked at their respective Go boundaries.
 The lifecycle-aware `workflow-change-plan.v1` schema is embedded and
 fixture-validated. The Gateway validates and submits this single contract,
 applies create/update/deprecate/restore/set_current changes, and supports cancel-only Temporal
-plans through its Temporal client. Persistence-backed application and hosted
+plans through its Temporal client. Database-backed application and hosted
 verification remain pending. The bootstrap
 Workflow can return a validated plan proposal. The Runtime also contains a
 narrow `corecoordinator.Client`, a service-token HTTP adapter, and registered
@@ -59,8 +59,8 @@ a signal or timer. The separate `coordinator-event.v1` envelope and Runtime
 receiver provide the generic lifecycle shape and deduplicate scoped events.
 Gateway plan approval/application now enqueue tenant-scoped events in a
 transactional outbox. The API has a bounded lease/retry dispatcher, a Temporal
-sink, and a one-shot `coordinator-dispatcher` process that can run from the API
-image. Applied plans with an explicit `start` intent now emit `workflowStarts`
+sink, and an always-on dispatcher loop running alongside the HTTP server in the
+API image. Applied plans with an explicit `start` intent now emit `workflowStarts`
 and the Coordinator starts those immutable snapshots through the private
 Gateway Activity. Cloud Run Job/Cloud Scheduler wiring, persisted manifests,
 and a hosted Temporal/Cloud Run smoke path remain deferred implementation work.
@@ -135,7 +135,7 @@ registry database.
 
 The plan-validation endpoint is a non-mutating preview for
 `workflow-change-plan.v1`. It checks tenant identity and required
-scopes and returns `validated_not_applied`; persistence, approval, and
+scopes and returns `validated_not_applied`; database storage, approval, and
 application remain separate control-plane operations. When Postgres is
 configured, the submit route stores a proposal idempotently as `proposed`, and
 the approval route transitions it to `approved` with an audit event. The

@@ -15,13 +15,6 @@
       "when": 1787400060000,
       "tag": "0001_seed_control_plane_data",
       "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1787750400000,
-      "tag": "0002_allow_duplicate_uploaded_source_names",
-      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,17 @@
 import {
+  type DatabaseTransaction,
   membershipScopes,
   organizationMemberships,
-  type PersistenceTransaction,
   roles,
   users,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, isNull } from "drizzle-orm";
 
 export const localControlPlaneServiceUserId =
   "00000000-0000-4000-8000-000000000010";
 
 export async function ensureLocalControlPlaneMembership(
-  tx: PersistenceTransaction,
+  tx: DatabaseTransaction,
   organizationId: string,
   rootUnitId: string,
 ): Promise<void> {

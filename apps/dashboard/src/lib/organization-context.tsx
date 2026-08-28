@@ -11,6 +11,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -61,6 +62,42 @@ type OrganizationContextValue = {
 const OrganizationContext = createContext<OrganizationContextValue | null>(
   null,
 );
+
+const currentUnitStorageKeyPrefix = "encois:v1:organization-unit:";
+
+function currentUnitStorageKey(organizationId: string): string {
+  return `${currentUnitStorageKeyPrefix}${organizationId}`;
+}
+
+function readStoredUnitId(organizationId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = window.localStorage.getItem(
+      currentUnitStorageKey(organizationId),
+    );
+    return value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredUnitId(organizationId: string, unitId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(currentUnitStorageKey(organizationId), unitId);
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function clearStoredUnitId(organizationId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(currentUnitStorageKey(organizationId));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
 
 function toUnit(
   unit: OrganizationProjection["units"][number],
@@ -120,28 +157,58 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [permissions, setPermissions] = useState<UnitPermission[]>([]);
   const [currentUnitId, setCurrentUnitId] = useState("organization");
+  const lastObservedUnitId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!query.data) return;
-    setUnits(query.data.units.map(toUnit));
+    const nextUnits = query.data.units.map(toUnit);
+    setUnits(nextUnits);
     setMembers(query.data.members.map(toMember));
     setPermissions(query.data.permissions.map(toPermission));
+
+    const organizationId = query.data.organization.id;
+    const storedUnitId = readStoredUnitId(organizationId);
+    const storedUnit = storedUnitId
+      ? nextUnits.find((unit) => unit.id === storedUnitId && unit.canView)
+      : undefined;
+    const fallbackUnit = nextUnits.find((unit) => unit.canView);
+    const nextUnitId = storedUnit?.id ?? fallbackUnit?.id ?? "";
+
+    if (storedUnitId && storedUnitId !== nextUnitId) {
+      clearStoredUnitId(organizationId);
+    }
+    setCurrentUnitId((current) =>
+      current === nextUnitId ? current : nextUnitId,
+    );
   }, [query.data]);
 
   useEffect(() => {
-    if (!query.data || units.some((unit) => unit.id === currentUnitId)) return;
-    setCurrentUnitId(
-      units.find((unit) => unit.id === currentUnitId && unit.canView)?.id ??
-        units.find((unit) => unit.canView)?.id ??
-        "",
-    );
-  }, [currentUnitId, query.data, units]);
+    if (
+      !currentUnitId ||
+      !units.some((unit) => unit.id === currentUnitId && unit.canView)
+    )
+      return;
+    if (lastObservedUnitId.current === null) {
+      lastObservedUnitId.current = currentUnitId;
+      return;
+    }
+    if (lastObservedUnitId.current === currentUnitId) return;
+    lastObservedUnitId.current = currentUnitId;
+
+    // Some queries encode the unit in their key; others are organization-wide
+    // but still depend on the selected scope in their rendered result. Refresh
+    // the complete cache so a unit switch cannot leave a mixed view behind.
+    void queryClient.invalidateQueries();
+  }, [currentUnitId, queryClient, units]);
 
   useEffect(() => {
-    const currentUnit = units.find((unit) => unit.id === currentUnitId);
-    if (currentUnit?.canView) return;
-    setCurrentUnitId(units.find((unit) => unit.canView)?.id ?? "");
-  }, [currentUnitId, units]);
+    const organizationId = query.data?.organization.id;
+    const currentUnit = query.data?.units.find(
+      (unit) => unit.id === currentUnitId && unit.canView,
+    );
+    if (!organizationId || !currentUnit?.canView) return;
+    writeStoredUnitId(organizationId, currentUnit.id);
+  }, [currentUnitId, query.data]);
 
   const value = useMemo<OrganizationContextValue>(() => {
     const refresh = () =>

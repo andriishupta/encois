@@ -2,7 +2,7 @@ import {
   validateWaitlistRequest,
   type WaitlistRequest,
 } from "@encois/contracts";
-import { waitlistRequests } from "@encois/persistence";
+import { waitlistRequests } from "@encois/database";
 import type { Context, Handler } from "hono";
 import { database } from "../database.js";
 import type { GatewayEnv } from "../middleware/aos.js";
@@ -59,7 +59,7 @@ export const submitWaitlistRoute: Handler<GatewayEnv> = async (context) => {
     return context.json(
       {
         error: {
-          code: "PERSISTENCE_UNAVAILABLE",
+          code: "DATABASE_UNAVAILABLE",
           message: "Waitlist submissions are not configured.",
           requestId: context.get("requestId"),
           traceId: context.get("traceId"),

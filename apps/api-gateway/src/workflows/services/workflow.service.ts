@@ -17,9 +17,9 @@ import {
 } from "@encois/contracts";
 import {
   auditEvents,
+  type DatabaseTransaction,
   idempotencyKeys,
   organizationMemberships,
-  type PersistenceTransaction,
   rolePermissions,
   withOrganizationContext,
   workflowBlueprints,
@@ -27,7 +27,7 @@ import {
   workflowDefinitions,
   workflowEvents,
   workflowRuns,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   hasPermission,
@@ -225,7 +225,7 @@ function workflowCommandHash(
 }
 
 async function claimWorkflowCommand(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   workflowRunId: string,
   workflowId: string,
@@ -299,7 +299,7 @@ async function claimWorkflowCommand(
 }
 
 async function markWorkflowCommandFailed(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   workflowId: string,
   commandType: WorkflowCommandType,
@@ -324,7 +324,7 @@ async function markWorkflowCommandFailed(
 }
 
 async function markWorkflowCommandAccepted(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   workflowId: string,
   commandType: WorkflowCommandType,
@@ -348,7 +348,7 @@ function requestHash(request: WorkflowStartRequest): string {
 }
 
 async function resolveStoredBlueprint(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   request: WorkflowStartRequest,
 ): Promise<WorkflowStartRequest> {
@@ -437,7 +437,7 @@ export async function startWorkflow(
     if (request.blueprintId && !request.blueprint) {
       throw workflowServiceError(
         "BLUEPRINT_REGISTRY_UNAVAILABLE",
-        "A stored Blueprint requires configured persistence.",
+        "A stored Blueprint requires a configured database.",
       );
     }
     try {
@@ -1327,7 +1327,7 @@ export async function rerunWorkflow(
 ): Promise<WorkflowExecutionProjection> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Run again requires persisted workflow history.",
     );
   const userId = localUserId(principal);
@@ -1774,11 +1774,11 @@ export type WorkflowPlanValidationResult = {
   changeCount: number;
   approvalRequired: boolean;
   status: "validated_not_applied";
-  applyStatus: "deferred_persistence_and_approval";
+  applyStatus: "deferred_database_and_approval";
 };
 
 /**
- * Validate a model- or user-proposed plan without applying it. Persistence,
+ * Validate a model- or user-proposed plan without applying it. Database storage,
  * human approval, and Blueprint revision application are deliberately separate
  * steps so a proposal can never mutate the registry by accident.
  */
@@ -1973,6 +1973,6 @@ export async function validateWorkflowChangePlan(
     changeCount: plan.changes.length,
     approvalRequired: plan.changes.some((change) => change.requiresApproval),
     status: "validated_not_applied",
-    applyStatus: "deferred_persistence_and_approval",
+    applyStatus: "deferred_database_and_approval",
   };
 }

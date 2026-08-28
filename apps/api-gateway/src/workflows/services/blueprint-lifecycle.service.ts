@@ -7,10 +7,7 @@ import {
   type WorkflowBlueprintLifecycleRequest,
   type WorkflowChangePlan,
 } from "@encois/contracts";
-import {
-  withOrganizationContext,
-  workflowBlueprints,
-} from "@encois/persistence";
+import { withOrganizationContext, workflowBlueprints } from "@encois/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
@@ -202,7 +199,7 @@ export async function createBlueprintLifecyclePlan(
 ): Promise<WorkflowPlanRecord> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Blueprint registry access is not configured.",
     );
   if (!/^[a-z0-9][a-z0-9._:-]{0,159}$/iu.test(blueprintId.trim()))

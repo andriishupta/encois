@@ -1,4 +1,4 @@
-import { createDatabase } from "@encois/persistence";
+import { createDatabase } from "@encois/database";
 
 const runtimeUrl = process.env.DATABASE_RUNTIME_URL ?? process.env.DATABASE_URL;
 const runtime = runtimeUrl ? createDatabase({ url: runtimeUrl }) : undefined;

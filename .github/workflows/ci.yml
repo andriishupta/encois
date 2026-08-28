@@ -52,8 +52,8 @@ jobs:
             package: '@encois/dashboard'
           - name: Contracts
             package: '@encois/contracts'
-          - name: Persistence
-            package: '@encois/persistence'
+          - name: Database
+            package: '@encois/database'
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +72,7 @@ jobs:
       - name: Build shared workspace packages
         run: |
           pnpm --filter @encois/contracts build
-          pnpm --filter @encois/persistence build
+          pnpm --filter @encois/database build
 
       - name: Lint and type review
         run: pnpm --filter "${{ matrix.package }}" lint
@@ -176,7 +176,7 @@ jobs:
       - name: Apply PostgreSQL migrations
         env:
           DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
-        run: pnpm --filter @encois/persistence db:migrate
+        run: pnpm --filter @encois/database db:migrate
 
       - name: Create restricted PostgreSQL runtime role
         env:
@@ -186,18 +186,18 @@ jobs:
       - name: Verify RLS and command receipt schema
         env:
           DATABASE_MIGRATION_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
-        run: pnpm --filter @encois/persistence db:verify
+        run: pnpm --filter @encois/database db:verify
 
-      - name: Run persistence integration tests with runtime RLS
+      - name: Run database integration tests with runtime RLS
         env:
           DATABASE_TEST_URL: postgresql://api_gateway_runtime:api_gateway@127.0.0.1:5432/encois
           DATABASE_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
-        run: pnpm --filter @encois/persistence test:integration
+        run: pnpm --filter @encois/database test:integration
 
       - name: Build shared runtime packages
         run: |
           pnpm --filter @encois/contracts build
-          pnpm --filter @encois/persistence build
+          pnpm --filter @encois/database build
 
       - name: Verify concurrent API command delivery
         env:
@@ -297,8 +297,8 @@ jobs:
             file: apps/agent-runtime/Dockerfile
           - name: agent-gateway
             file: apps/agent-gateway/Dockerfile
-          - name: persistence-migrations
-            file: packages/persistence/Dockerfile
+          - name: database-migrations
+            file: packages/database/Dockerfile
           - name: firebase-auth
             file: docker/firebase/Dockerfile
     steps:

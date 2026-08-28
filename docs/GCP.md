@@ -1,7 +1,7 @@
 # Encois Google Cloud baseline
 
 **Status:** initial implementation decision  
-**Scope:** Gateway API control plane and its first persistence/authentication boundary
+**Scope:** Gateway API control plane and its first database/authentication boundary
 
 Encois uses a Google Cloud-native control plane. The first implementation does not self-host Supabase and does not use a second cloud database provider.
 
@@ -54,7 +54,7 @@ required security boundary.
 
 ## Cloud SQL and Drizzle
 
-`packages/persistence` owns the PostgreSQL schema and migrations. The API runtime and migration runner use different connections:
+`packages/database` owns the PostgreSQL schema and migrations. The API runtime and migration runner use different connections:
 
 - `DATABASE_MIGRATION_URL` — privileged, operator/CI-only connection for DDL and migrations;
 - `DATABASE_RUNTIME_URL` — runtime connection for `api_gateway_runtime`.
@@ -71,7 +71,7 @@ The migration enables PostgreSQL RLS on tenant-scoped tables. The API must execu
 - `organizations` — tenant root.
 - `organization_units` — organization, department, team, project, service, and future custom hierarchy nodes.
 - `roles`, `role_permissions` — system/custom role definitions and permissions.
-- `organization_memberships`, `membership_scopes` — user membership and direct hierarchy roots. The Gateway expands descendants; explicit grant/restriction persistence remains a planned follow-up table, not a client-side rule.
+- `organization_memberships`, `membership_scopes` — user membership and direct hierarchy roots. The Gateway expands descendants; explicit grant/restriction database records remain a planned follow-up table, not a client-side rule.
 - `integrations`, `integration_bindings` — one organization integration bound to many organization units/projects.
 - `webhook_endpoints`, `webhook_deliveries` — verified endpoint configuration and idempotent receipt projection.
 - `workflow_definitions`, `workflow_runs`, `workflow_events` — approved workflow definitions plus safe Temporal execution projections.

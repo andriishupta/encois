@@ -55,8 +55,7 @@ export function runIntegrationHealthCheckRoute(
           ? error.message
           : "INTEGRATION_HEALTH_CHECK_FAILED";
       const status =
-        code === "PERSISTENCE_UNAVAILABLE" ||
-        code === "AGENT_GATEWAY_UNAVAILABLE"
+        code === "DATABASE_UNAVAILABLE" || code === "AGENT_GATEWAY_UNAVAILABLE"
           ? 503
           : code === "FORBIDDEN"
             ? 403

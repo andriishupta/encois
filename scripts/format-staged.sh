@@ -10,7 +10,7 @@ declare -a GO_FILES=()
 
 while IFS= read -r -d '' file; do
   case "$file" in
-    apps/api-gateway/*|apps/dashboard/*|apps/e2e/*|packages/contracts/*|packages/persistence/*)
+    apps/api-gateway/*|apps/dashboard/*|apps/e2e/*|packages/contracts/*|packages/database/*)
       case "$file" in
         *.ts|*.tsx|*.mts|*.cts) TS_FILES+=("$file") ;;
       esac

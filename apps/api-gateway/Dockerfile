@@ -6,11 +6,11 @@ ENV CI=true
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api-gateway/package.json apps/api-gateway/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/persistence/package.json packages/persistence/package.json
+COPY packages/database/package.json packages/database/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/api-gateway apps/api-gateway
 COPY packages/contracts packages/contracts
-COPY packages/persistence packages/persistence
+COPY packages/database packages/database
 RUN pnpm --filter @encois/api-gateway... build
 RUN cp -R apps/api-gateway/dist /server-dist
 RUN pnpm --filter @encois/api-gateway build:scripts

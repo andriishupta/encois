@@ -45,8 +45,8 @@ export const listWorkflowTemplatesRoute: Handler<GatewayEnv> = async (
       return context.json(
         {
           error: {
-            code: "PERSISTENCE_UNAVAILABLE",
-            message: "Database access is not configured.",
+            code: "DATABASE_UNAVAILABLE",
+            message: "Database is unavailable.",
           },
         },
         503,

@@ -43,7 +43,7 @@ export function createStartAuthorizationRoute(
           : "INTEGRATION_AUTHORIZATION_FAILED";
       const status =
         code === "INTEGRATION_AUTHORIZATION_UNAVAILABLE" ||
-        code === "PERSISTENCE_UNAVAILABLE"
+        code === "DATABASE_UNAVAILABLE"
           ? 503
           : code === "INVALID_AUTHORIZATION_URL"
             ? 502
@@ -55,8 +55,8 @@ export function createStartAuthorizationRoute(
             message:
               code === "INTEGRATION_AUTHORIZATION_UNAVAILABLE"
                 ? "Provider authorization is not configured for this deployment."
-                : code === "PERSISTENCE_UNAVAILABLE"
-                  ? "Database access is not configured."
+                : code === "DATABASE_UNAVAILABLE"
+                  ? "Database is unavailable."
                   : "The provider authorization flow could not be started.",
           },
         },

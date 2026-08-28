@@ -65,7 +65,7 @@ function parseRequest(value: unknown): KnowledgeSourceCreateRequest | null {
 function statusForSourceError(
   code: string,
 ): 400 | 403 | 404 | 409 | 422 | 500 | 503 {
-  if (code === "PERSISTENCE_UNAVAILABLE") return 503;
+  if (code === "DATABASE_UNAVAILABLE") return 503;
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "SOURCE_CREATE_FAILED") return 500;
   if (code.endsWith("_NOT_FOUND")) return 404;

@@ -91,7 +91,7 @@ export const createSourceRevisionRoute: Handler<GatewayEnv> = async (
   } catch (error) {
     if (isSourceServiceError(error)) {
       const status =
-        error.code === "PERSISTENCE_UNAVAILABLE"
+        error.code === "DATABASE_UNAVAILABLE"
           ? 503
           : error.code === "FORBIDDEN"
             ? 403

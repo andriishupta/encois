@@ -7,9 +7,9 @@ import type {
   TemporalWorkflowType,
   WorkflowBlueprint,
 } from "@encois/contracts";
-import type { WorkflowRunStatus as PersistenceWorkflowRunStatus } from "@encois/persistence";
+import type { WorkflowRunStatus as DatabaseWorkflowRunStatus } from "@encois/database";
 
-export type WorkflowRunStatus = PersistenceWorkflowRunStatus;
+export type WorkflowRunStatus = DatabaseWorkflowRunStatus;
 
 export type WorkflowStartCommand = {
   workflowType: TemporalWorkflowType;

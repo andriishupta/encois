@@ -10,6 +10,7 @@ import {
 } from "@encois/contracts";
 import {
   auditEvents,
+  type DatabaseTransaction,
   integrationAuthorizationStates,
   integrationBindings,
   integrationCatalog,
@@ -17,9 +18,8 @@ import {
   membershipScopes,
   organizationMemberships,
   organizationUnits,
-  type PersistenceTransaction,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import {
   hasPermission,
@@ -91,7 +91,7 @@ export type IntegrationCredentialResolution = {
   credentialRef: string;
 };
 
-type QueryDatabase = NonNullable<typeof database> | PersistenceTransaction;
+type QueryDatabase = NonNullable<typeof database> | DatabaseTransaction;
 
 function localUserId(principal: AosPrincipal): string | null {
   const candidate = principal.userId ?? principal.actorId;
@@ -125,7 +125,7 @@ export async function resolveIntegrationCredentialForService(
   principal: AosPrincipal,
   request: IntegrationCredentialResolutionRequest,
 ): Promise<IntegrationCredentialResolution | null> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   const provider = request.provider.trim().toLowerCase();
   const capabilities = [
     ...new Set(
@@ -245,7 +245,7 @@ export async function runIntegrationHealthChecksForService(
   integrationId: string | undefined,
   options: IntegrationHealthCheckServiceOptions,
 ): Promise<IntegrationHealthCheckResult> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   if (!options.agentGatewayUrl || !options.agentGatewayServiceToken)
     throw new Error("AGENT_GATEWAY_UNAVAILABLE");
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -344,7 +344,7 @@ export async function reportIntegrationHealthForService(
   principal: AosPrincipal,
   update: IntegrationHealthUpdate,
 ): Promise<IntegrationSummary | null> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   const lastError = update.lastError?.trim() || null;
 
   return withOrganizationContext(
@@ -455,7 +455,7 @@ export async function listIntegrationsForPrincipal(
   principal: AosPrincipal,
   options: { scopeUnitId?: string } = {},
 ): Promise<readonly IntegrationSummary[]> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
 
   const userId = localUserId(principal);
   if (!userId) return [];
@@ -536,7 +536,7 @@ export async function listIntegrationCatalogPageForPrincipal(
     query: ListQuery;
   },
 ): Promise<ListPage<IntegrationCatalogSummary>> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
 
   return withOrganizationContext(
     database,
@@ -629,7 +629,7 @@ export async function updateIntegrationForPrincipal(
   integrationId: string,
   update: IntegrationUpdate,
 ): Promise<IntegrationSummary | null> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
 
   const userId = localUserId(principal);
   if (!userId) return null;
@@ -764,7 +764,7 @@ export async function authorizeIntegrationForService(
     update.credentialRef,
     options,
   );
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   const status = update.status ?? IntegrationStatus.Authorized;
   const lastError = update.lastError?.trim() || null;
 
@@ -880,7 +880,7 @@ export async function startIntegrationAuthorizationForPrincipal(
   integrationId: string,
   adapter: IntegrationAuthorizationAdapter | undefined,
 ): Promise<IntegrationAuthorizationStart | null> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   if (!adapter) throw new Error("INTEGRATION_AUTHORIZATION_UNAVAILABLE");
 
   const userId = localUserId(principal);
@@ -981,7 +981,7 @@ export async function completeIntegrationAuthorization(
 ): Promise<IntegrationSummary | null> {
   if (!adapter?.complete || !adapter.inspectState)
     throw new Error("INTEGRATION_AUTHORIZATION_UNAVAILABLE");
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
 
   let inspected: Awaited<
     ReturnType<NonNullable<IntegrationAuthorizationAdapter["inspectState"]>>
@@ -1127,7 +1127,7 @@ export async function createIntegrationForPrincipal(
   principal: AosPrincipal,
   request: IntegrationCreate,
 ): Promise<IntegrationSummary> {
-  if (!database) throw new Error("PERSISTENCE_UNAVAILABLE");
+  if (!database) throw new Error("DATABASE_UNAVAILABLE");
   const userId = localUserId(principal);
   if (!userId) throw new Error("IDENTITY_NOT_RESOLVED");
   const displayName = request.displayName.trim();

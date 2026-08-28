@@ -79,7 +79,7 @@ function statusFor(code: string): 400 | 403 | 404 | 502 | 503 | 409 {
     return 409;
   if (code === "MEMORY_RUNTIME_ERROR" || code === "MEMORY_TIMEOUT") return 502;
   if (
-    code === "PERSISTENCE_UNAVAILABLE" ||
+    code === "DATABASE_UNAVAILABLE" ||
     code === "MEMORY_UNAVAILABLE" ||
     code === "CAPABILITY_NOT_CONFIGURED"
   )

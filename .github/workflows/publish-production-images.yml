@@ -101,14 +101,14 @@ jobs:
 
           docker build \
             --build-arg ENCOIS_VERSION="$VERSION" \
-            --file packages/persistence/Dockerfile \
+            --file packages/database/Dockerfile \
             --tag "${image_root}/migrations:${IMAGE_TAG}" \
             .
           docker push "${image_root}/migrations:${IMAGE_TAG}"
 
           docker build \
             --build-arg ENCOIS_VERSION="$VERSION" \
-            --file packages/persistence/Dockerfile \
+            --file packages/database/Dockerfile \
             --tag "${image_root}/retention:${IMAGE_TAG}" \
             .
           docker push "${image_root}/retention:${IMAGE_TAG}"

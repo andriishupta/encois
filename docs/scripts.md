@@ -44,7 +44,7 @@ CI invokes them directly.
   not standalone commands.
 - `packages/contracts/scripts/` — permission generation and contract parity
   checks used by the package build/test lifecycle.
-- `packages/persistence/scripts/` — migration generation, schema verification,
+- `packages/database/scripts/` — migration generation, schema verification,
   and the protected retention cleanup used by the Cloud Run Job.
 - `apps/agent-gateway/` and `apps/agent-runtime/` — Go modules with no separate
   script directory; root Go commands cover both modules.

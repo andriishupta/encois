@@ -14,7 +14,7 @@ import {
   auditEvents,
   coordinatorRecommendations,
   withOrganizationContext,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq } from "drizzle-orm";
 import {
   type ApplicationError,
@@ -111,10 +111,7 @@ async function generateCandidates(
   options: WorkflowServiceOptions,
 ): Promise<readonly RecommendationCandidate[]> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const capabilities = await withOrganizationContext(
     database,
     principal.organizationId,
@@ -292,10 +289,7 @@ export async function listRecommendations(
   options: WorkflowServiceOptions,
 ): Promise<readonly RecommendationProjection[]> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const userId = localUserId(principal);
   const candidates = await generateCandidates(principal, options);
   const currentScope = scope(principal);
@@ -418,10 +412,7 @@ export async function updateRecommendation(
   action: "accept" | "dismiss",
 ): Promise<RecommendationProjection | null> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const userId = localUserId(principal);
   if (!/^[0-9a-f-]{36}$/i.test(recommendationId)) return null;
   return withOrganizationContext(

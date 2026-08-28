@@ -8,17 +8,17 @@ import {
   WorkflowExecutionStatus,
 } from "@encois/contracts";
 import {
+  type DatabaseTransaction,
   integrationBindings,
   integrations,
   knowledgeSources,
   notificationPreferences,
   notifications,
-  type PersistenceTransaction,
   sourceIngestionRuns,
   sourceRevisions,
   withOrganizationContext,
   workflowRuns,
-} from "@encois/persistence";
+} from "@encois/database";
 import {
   and,
   count,
@@ -108,7 +108,7 @@ function toNotification(
   };
 }
 async function canReadNotifications(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   principal: AosPrincipal,
 ): Promise<boolean> {
   return hasAnyPermission(db, principal, [
@@ -119,7 +119,7 @@ async function canReadNotifications(
 }
 
 async function syncOperationalNotifications(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   principal: AosPrincipal,
   ownerUserId: string,
   preferences: NotificationPreferences,
@@ -340,10 +340,7 @@ export async function getNotificationPreferences(
   principal: AosPrincipal,
 ): Promise<NotificationPreferences> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(
     database,
@@ -377,10 +374,7 @@ export async function updateNotificationPreferences(
   input: NotificationPreferences,
 ): Promise<NotificationPreferences> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   if (unsupportedNotificationDeliveryRequested(input))
     throw error(
       "NOTIFICATION_CHANNEL_UNAVAILABLE",
@@ -438,10 +432,7 @@ export async function listNotificationsPage(
   query: ListQuery,
 ): Promise<ListPage<NotificationProjection>> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(
     database,
@@ -518,10 +509,7 @@ export async function markNotificationRead(
   notificationId: string,
 ): Promise<boolean> {
   if (!database)
-    throw error(
-      "PERSISTENCE_UNAVAILABLE",
-      "Database access is not configured.",
-    );
+    throw error("DATABASE_UNAVAILABLE", "Database is unavailable.");
   const ownerUserId = userId(principal);
   return withOrganizationContext(
     database,

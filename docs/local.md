@@ -393,6 +393,6 @@ workflow demonstration should be run manually after the stack starts.
   through Compose logs. Cloud Trace is configured only for the hosted path.
 
 The remaining test-oriented follow-up is tracked in
-[`docs/next-steps.md`](next-steps.md). It covers persistence unit tests,
+[`docs/next-steps.md`](next-steps.md). It covers database unit tests,
 hosted dependency smoke checks, and pre-production validation without making
 those items prerequisites for the local mock path.

@@ -17,7 +17,7 @@ import {
   withOrganizationContext,
   workflowEvents,
   workflowRuns,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, eq, sql } from "drizzle-orm";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";

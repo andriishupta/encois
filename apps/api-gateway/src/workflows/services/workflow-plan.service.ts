@@ -9,14 +9,14 @@ import {
 import {
   auditEvents,
   coordinatorEventOutbox,
-  type PersistenceTransaction,
+  type DatabaseTransaction,
   type WorkflowPlanStatus,
   withOrganizationContext,
   workflowBlueprints,
   workflowChangePlans,
   workflowDefinitions,
   workflowPlannerVersions,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { hasPermission } from "../../auth/authorization.js";
 import { database } from "../../database.js";
@@ -91,7 +91,7 @@ function plannerVersionHash(metadata: ReturnType<typeof planMetadata>): string {
 }
 
 async function recordPlannerVersion(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   organizationId: string,
   planId: string,
   plan: WorkflowChangePlanInput,
@@ -171,10 +171,10 @@ function recordFromRow(
   };
 }
 
-function persistenceUnavailable(): never {
+function databaseUnavailable(): never {
   throw workflowServiceError(
-    "PERSISTENCE_UNAVAILABLE",
-    "Workflow plan persistence is not configured.",
+    "DATABASE_UNAVAILABLE",
+    "Workflow plan database is not configured.",
   );
 }
 
@@ -224,7 +224,7 @@ export function createPlanCoordinatorEvent(
 }
 
 async function enqueueCoordinatorEvent(
-  db: PersistenceTransaction,
+  db: DatabaseTransaction,
   event: CoordinatorEvent,
 ): Promise<void> {
   await db
@@ -243,7 +243,7 @@ export async function submitWorkflowPlan(
   principal: AosPrincipal,
   plan: WorkflowChangePlanInput,
 ): Promise<WorkflowPlanRecord> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
 
   const validation = await validateWorkflowChangePlan(principal, plan);
   const userId = localUserId(principal);
@@ -301,7 +301,7 @@ export async function submitWorkflowPlan(
         .returning();
       if (!created)
         throw workflowServiceError(
-          "PLAN_PERSISTENCE_FAILED",
+          "PLAN_DATABASE_FAILED",
           "The workflow plan could not be persisted.",
         );
 
@@ -331,7 +331,7 @@ export async function submitWorkflowPlan(
 }
 
 async function requirePlanManager(principal: AosPrincipal): Promise<string> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   const userId = localUserId(principal);
   if (!userId)
     throw workflowServiceError(
@@ -355,7 +355,7 @@ export async function getWorkflowPlan(
   principal: AosPrincipal,
   planId: string,
 ): Promise<WorkflowPlanRecord | null> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   await requirePlanManager(principal);
   const row = await withOrganizationContext(
     database,
@@ -386,7 +386,7 @@ export async function updateWorkflowPlan(
   planId: string,
   plan: WorkflowChangePlanInput,
 ): Promise<WorkflowPlanRecord> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   const userId = await requirePlanManager(principal);
   if (plan.planId !== planId)
     throw workflowServiceError(
@@ -470,7 +470,7 @@ export async function deleteWorkflowPlan(
   principal: AosPrincipal,
   planId: string,
 ): Promise<void> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   const userId = await requirePlanManager(principal);
 
   await withOrganizationContext(
@@ -562,7 +562,7 @@ export async function listWorkflowPlansPage(
   principal: AosPrincipal,
   query: ListQuery,
 ): Promise<ListPage<WorkflowPlanRecord>> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   await requirePlanManager(principal);
   const rows = await withOrganizationContext(
     database,
@@ -630,7 +630,7 @@ export async function listWorkflowPlannerVersions(
   principal: AosPrincipal,
   limit = 100,
 ): Promise<readonly WorkflowPlannerVersionProjection[]> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   await requirePlanManager(principal);
   return withOrganizationContext(
     database,
@@ -653,7 +653,7 @@ export async function approveWorkflowPlan(
   principal: AosPrincipal,
   planId: string,
 ): Promise<WorkflowPlanRecord> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   const userId = await requirePlanManager(principal);
 
   const row = await withOrganizationContext(
@@ -753,7 +753,7 @@ export async function applyWorkflowPlan(
   planId: string,
   options: WorkflowPlanApplicationOptions,
 ): Promise<WorkflowPlanRecord> {
-  if (!database) return persistenceUnavailable();
+  if (!database) return databaseUnavailable();
   const userId = await requirePlanManager(principal);
 
   const row = await withOrganizationContext(

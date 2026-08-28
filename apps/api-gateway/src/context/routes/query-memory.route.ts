@@ -56,7 +56,7 @@ function statusFor(code: string): 400 | 403 | 502 | 503 {
   if (code === "FORBIDDEN" || code === "SCOPE_DENIED") return 403;
   if (code === "MEMORY_RUNTIME_ERROR" || code === "MEMORY_TIMEOUT") return 502;
   if (
-    code === "PERSISTENCE_UNAVAILABLE" ||
+    code === "DATABASE_UNAVAILABLE" ||
     code === "MEMORY_UNAVAILABLE" ||
     code === "CAPABILITY_NOT_CONFIGURED"
   )

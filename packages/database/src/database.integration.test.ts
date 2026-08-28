@@ -6,13 +6,13 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDatabase,
+  type Database,
+  type DatabaseTransaction,
   integrationBindings,
   integrations,
   knowledgeSources,
   organizations,
   organizationUnits,
-  type PersistenceDatabase,
-  type PersistenceTransaction,
   withOrganizationContext,
   workflowBlueprints,
   workflowDefinitions,
@@ -72,17 +72,15 @@ let database: ReturnType<typeof createDatabase> | undefined;
 let adminClient: ReturnType<typeof postgres> | undefined;
 let fixture: Fixture;
 
-function requireDatabase(): { db: PersistenceDatabase } {
+function requireDatabase(): { db: Database } {
   if (!database)
-    throw new Error("Persistence integration database is not initialized.");
+    throw new Error("Database integration database is not initialized.");
   return database;
 }
 
 function requireAdmin(): ReturnType<typeof postgres> {
   if (!adminClient)
-    throw new Error(
-      "Persistence integration admin database is not initialized.",
-    );
+    throw new Error("Database integration admin database is not initialized.");
   return adminClient;
 }
 
@@ -103,7 +101,7 @@ async function expectPostgresError(
 
 function inOrganization<T>(
   organizationId: string,
-  callback: (transaction: PersistenceTransaction) => Promise<T>,
+  callback: (transaction: DatabaseTransaction) => Promise<T>,
 ): Promise<T> {
   return withOrganizationContext(
     requireDatabase().db,
@@ -112,11 +110,11 @@ function inOrganization<T>(
   );
 }
 
-integrationTest("PostgreSQL persistence boundaries", () => {
+integrationTest("PostgreSQL database boundaries", () => {
   beforeAll(async () => {
     if (!runtimeUrl || !adminUrl) {
       throw new Error(
-        "DATABASE_TEST_URL and DATABASE_TEST_ADMIN_URL are required for persistence integration tests.",
+        "DATABASE_TEST_URL and DATABASE_TEST_ADMIN_URL are required for database integration tests.",
       );
     }
     database = createDatabase({ url: runtimeUrl, maxConnections: 3 });
@@ -164,15 +162,15 @@ integrationTest("PostgreSQL persistence boundaries", () => {
     await inOrganization(organizationA, (tx) =>
       tx.insert(organizations).values({
         id: organizationA,
-        slug: `persistence-test-${organizationA}`,
-        name: "Persistence Test A",
+        slug: `database-test-${organizationA}`,
+        name: "Database Test A",
       }),
     );
     await inOrganization(organizationB, (tx) =>
       tx.insert(organizations).values({
         id: organizationB,
-        slug: `persistence-test-${organizationB}`,
-        name: "Persistence Test B",
+        slug: `database-test-${organizationB}`,
+        name: "Database Test B",
       }),
     );
 
@@ -304,7 +302,7 @@ integrationTest("PostgreSQL persistence boundaries", () => {
       tx.insert(workflowDefinitions).values({
         id: definitionA,
         organizationId: fixture.organizationA,
-        key: `persistence-test-a-${definitionA}`,
+        key: `database-test-a-${definitionA}`,
         version: "1.0.0",
         status: "approved",
       }),
@@ -313,7 +311,7 @@ integrationTest("PostgreSQL persistence boundaries", () => {
       tx.insert(workflowDefinitions).values({
         id: definitionB,
         organizationId: fixture.organizationB,
-        key: `persistence-test-b-${definitionB}`,
+        key: `database-test-b-${definitionB}`,
         version: "1.0.0",
         status: "approved",
       }),

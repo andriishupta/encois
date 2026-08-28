@@ -25,7 +25,7 @@ import {
   organizationUnits,
   withOrganizationContext,
   workflowBlueprints,
-} from "@encois/persistence";
+} from "@encois/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   hasPermission,
@@ -273,7 +273,7 @@ async function resolveProviderBindings(
 ): Promise<readonly WorkflowProviderBindingProjection[]> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Integration capability registry access is not configured.",
     );
   const resolved = await withOrganizationContext(
@@ -582,7 +582,7 @@ async function resolveBlueprint(
     );
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Blueprint registry access is not configured.",
     );
   const row = await withOrganizationContext(
@@ -708,7 +708,7 @@ export async function listWorkflowBlueprintsPageForPrincipal(
 ): Promise<ListPage<WorkflowBlueprintProjection>> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Blueprint registry access is not configured.",
     );
   const rows = await withOrganizationContext(
@@ -787,7 +787,7 @@ export async function deleteWorkflowDefinitionForPrincipal(
 ): Promise<void> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Blueprint registry access is not configured.",
     );
   const userId = localUserId(principal);
@@ -870,7 +870,7 @@ export async function deleteWorkflowBlueprintRevisionForPrincipal(
 ): Promise<void> {
   if (!database)
     throw workflowServiceError(
-      "PERSISTENCE_UNAVAILABLE",
+      "DATABASE_UNAVAILABLE",
       "Blueprint registry access is not configured.",
     );
   const userId = localUserId(principal);
