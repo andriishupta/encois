@@ -1,7 +1,13 @@
 import type { WorkflowPlanRecord } from "@encois/contracts/browser";
 import { Permission } from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router";
 import { ClipboardCheck, Search } from "lucide-react";
 import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
@@ -38,10 +44,15 @@ export const Route = createFileRoute("/_app/workflows/plans")({
     if (!hasPermission(getAuthSession(), Permission.WorkflowsManage))
       throw redirect({ to: "/forbidden" });
   },
-  component: WorkflowPlansPage,
+  component: WorkflowPlansRoute,
 });
 
 type PlanFilter = WorkflowPlanRecord["status"] | "all";
+
+function WorkflowPlansRoute() {
+  const { pathname } = useLocation();
+  return pathname === "/workflows/plans" ? <WorkflowPlansPage /> : <Outlet />;
+}
 
 function WorkflowPlansPage() {
   const { units } = useOrganization();
@@ -76,20 +87,20 @@ function WorkflowPlansPage() {
   return (
     <div data-testid="workflow-plans-page" className="flex flex-col gap-4">
       <PageHeader
-        title="Change Plans"
+        title="Plans"
         description="Review persisted workflow change proposals, approve them, and apply approved changes to Workflows."
       />
       <ListToolbar>
         <ListSearch
           value={query}
           onChange={setQuery}
-          placeholder="Search Change Plans by workflow name or purpose…"
-          label="Search Change Plans"
+          placeholder="Search Plans by workflow name or purpose…"
+          label="Search Plans"
         />
         <ListFilter
           value={status}
           onChange={setStatus}
-          label="Filter Change Plans by status"
+          label="Filter Plans by status"
           options={[
             { value: "all", label: "All statuses" },
             { value: "proposed", label: "Awaiting approval" },
@@ -102,7 +113,7 @@ function WorkflowPlansPage() {
         <ListSort
           value={sort}
           onChange={(value) => setSort(value as typeof sort)}
-          label="Sort Change Plans"
+          label="Sort Plans"
           options={[
             { value: "updated-desc", label: "Recently updated" },
             { value: "updated-asc", label: "Oldest updated" },
@@ -120,11 +131,11 @@ function WorkflowPlansPage() {
         onViewChange={setView}
       />
       {plans.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading Change Plans…</p>
+        <p className="text-sm text-muted-foreground">Loading Plans…</p>
       ) : null}
       {plans.isError ? (
         <InlineError
-          title="Change Plans unavailable"
+          title="Plans unavailable"
           message={plans.error.message}
           onRetry={() => plans.refetch()}
           retrying={plans.isFetching}
@@ -146,7 +157,7 @@ function WorkflowPlansPage() {
           <CardContent className="pt-6">
             <EmptyPanel
               icon={Search}
-              title="No Change Plans match"
+              title="No Plans match"
               description="Change the search or status filter."
             />
           </CardContent>
@@ -157,7 +168,7 @@ function WorkflowPlansPage() {
           <CardContent className="pt-6">
             <EmptyPanel
               icon={ClipboardCheck}
-              title="No Change Plans"
+              title="No Plans"
               description="Submitted workflow proposals will appear here until they are applied as Blueprints."
             />
           </CardContent>
@@ -202,7 +213,7 @@ function WorkflowPlanCard({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <CardTitle data-testid="workflow-plan-title">
-                {blueprint?.name ?? "Change Plan proposal"}
+                {blueprint?.name ?? "Plan proposal"}
               </CardTitle>
               <CardDescription>
                 {change?.kind ?? "change"} · {status} ·{" "}

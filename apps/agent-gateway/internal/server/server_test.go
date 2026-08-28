@@ -557,6 +557,25 @@ func TestRouterAcceptsAnInjectedArtifactStore(t *testing.T) {
 	}
 }
 
+func TestArtifactReadPreservesStoredContentType(t *testing.T) {
+	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{
+		ArtifactStore: &recordingArtifactStore{},
+	})
+	body := `{"contractVersion":"artifact-read.v1","requestId":"artifact-read-req","workflowId":"workflow:org-test:project:one","organizationId":"org-test","actorId":"actor-test","policyVersion":"policy-test","capability":"test-capability","scope":{"ids":["team-test"]},"artifactRef":"gs://test-bucket/evidence/project.pdf"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/artifacts/read", bytes.NewBufferString(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test-token")
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != "text/plain" {
+		t.Fatalf("expected stored artifact content type, got %q", got)
+	}
+}
+
 func TestGraphQueryUsesInjectedGraphStore(t *testing.T) {
 	store := &recordingGraphStore{}
 	router := NewRouterWithOptions(policy.NewAllowAllPolicy("policy-test"), slog.Default(), "test-token", RouterOptions{

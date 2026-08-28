@@ -32,7 +32,7 @@ import {
   sourceRevisions,
   withOrganizationContext,
 } from "@encois/persistence";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import {
   type ApplicationError,
   applicationError,
@@ -793,6 +793,7 @@ export async function createKnowledgeSource(
 export async function listKnowledgeSources(
   principal: AosPrincipal,
   options: { scopeUnitId?: string } = {},
+  serviceOptions?: SourceServiceOptions,
 ): Promise<readonly KnowledgeSource[]> {
   if (!database)
     throw sourceServiceError(
@@ -861,20 +862,56 @@ export async function listKnowledgeSources(
         return visibleToPrincipal && visibleInSelectedScope;
       });
       if (visibleRows.length === 0) return [];
+
+      if (serviceOptions) {
+        const runs = await db
+          .select()
+          .from(sourceIngestionRuns)
+          .where(
+            and(
+              eq(sourceIngestionRuns.organizationId, principal.organizationId),
+              inArray(
+                sourceIngestionRuns.sourceId,
+                visibleRows.map((row) => row.id),
+              ),
+              or(
+                eq(sourceIngestionRuns.status, "queued"),
+                eq(sourceIngestionRuns.status, "running"),
+              ),
+            ),
+          );
+        for (const run of runs)
+          await reconcileSourceIngestion(db, principal, run, serviceOptions);
+      }
+
+      const freshRows = serviceOptions
+        ? await db
+            .select()
+            .from(knowledgeSources)
+            .where(
+              and(
+                eq(knowledgeSources.organizationId, principal.organizationId),
+                inArray(
+                  knowledgeSources.id,
+                  visibleRows.map((row) => row.id),
+                ),
+              ),
+            )
+        : visibleRows;
       const revisions = await db
         .select()
         .from(sourceRevisions)
         .where(
           inArray(
             sourceRevisions.sourceId,
-            visibleRows.map((row) => row.id),
+            freshRows.map((row) => row.id),
           ),
         )
         .orderBy(asc(sourceRevisions.createdAt));
       const latestBySource = new Map<string, (typeof revisions)[number]>();
       for (const revision of revisions)
         latestBySource.set(revision.sourceId, revision);
-      return visibleRows.map((row) =>
+      return freshRows.map((row) =>
         toKnowledgeSource(
           row,
           toSourceFreshness(row, latestBySource.get(row.id)),
@@ -887,10 +924,15 @@ export async function listKnowledgeSources(
 export async function listKnowledgeSourcesPage(
   principal: AosPrincipal,
   options: { scopeUnitId?: string; query: ListQuery },
+  serviceOptions?: SourceServiceOptions,
 ): Promise<ListPage<KnowledgeSource>> {
-  const sources = await listKnowledgeSources(principal, {
-    scopeUnitId: options.scopeUnitId,
-  });
+  const sources = await listKnowledgeSources(
+    principal,
+    {
+      scopeUnitId: options.scopeUnitId,
+    },
+    serviceOptions,
+  );
   return filterListPage(sources, options.query, {
     matches: (source, query) =>
       [source.name, source.provider, source.kind, source.contentType].some(

@@ -228,7 +228,7 @@ services:
       args:
         ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
     working_dir: /workspace
-    command: ["pnpm", "--filter", "@encois/dashboard", "exec", "vite", "--host", "0.0.0.0"]
+    command: ["pnpm", "--filter", "@encois/dashboard", "dev", "--host", "0.0.0.0"]
     environment:
       VITE_API_BASE_URL: http://localhost:8787/api/v1
       VITE_FIREBASE_API_KEY: local

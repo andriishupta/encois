@@ -5,12 +5,24 @@ import {
 } from "@encois/contracts/browser";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { CircleAlert, Network, ShieldCheck } from "lucide-react";
+import {
+  CircleAlert,
+  MessageCircle,
+  Network,
+  Send,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+  AvailabilityBadge,
+  AvailabilityCard,
+} from "@/components/availability-state";
 import { ContextGraphCanvas } from "@/components/context-graph-canvas";
 import { EmptyPanel } from "@/components/empty-panel";
 import { PageHeader } from "@/components/page-header";
 import { Pill } from "@/components/pill";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -110,6 +122,48 @@ function ContextGraphPage() {
           </Pill>
         }
       />
+      <AvailabilityCard>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <CardTitle>Ask Pel AI About Memory</CardTitle>
+                <CardDescription>
+                  Ask about facts and relationships in your organization memory.
+                </CardDescription>
+              </div>
+            </div>
+            <AvailabilityBadge />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-background/70 px-3">
+              <MessageCircle
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                disabled
+                placeholder="Ask AI about organization memory…"
+                aria-label="Ask AI about organization memory"
+                className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <Button type="button" disabled>
+              <Send data-icon="inline-start" />
+              Ask
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Questions will use the selected organization scope when this becomes
+            available.
+          </p>
+        </CardContent>
+      </AvailabilityCard>
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

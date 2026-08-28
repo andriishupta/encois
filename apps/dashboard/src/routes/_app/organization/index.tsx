@@ -30,8 +30,7 @@ export const Route = createFileRoute("/_app/organization/")({
 });
 
 function OrganizationPage() {
-  const { units, currentUnitId, setCurrentUnitId, isLoading, error } =
-    useOrganization();
+  const { units, currentUnitId, isLoading, error } = useOrganization();
 
   const selectedUnit = getOrganizationUnit(units, currentUnitId)?.canView
     ? getOrganizationUnit(units, currentUnitId)
@@ -52,7 +51,10 @@ function OrganizationPage() {
         actions={
           canManageAnyUnit ? (
             <Button asChild>
-              <Link to="/organization/units/new">
+              <Link
+                to="/organization/units/new"
+                search={{ parentId: undefined }}
+              >
                 <Plus data-icon="inline-start" />
                 Add unit
               </Link>
@@ -100,15 +102,19 @@ function OrganizationPage() {
                     value={humanizeUnitType(selectedUnit.type)}
                   />
                   <DetailRow
-                    label="Manager"
-                    value={selectedUnit.manager ?? "Restricted"}
+                    label="Direct members"
+                    value={
+                      selectedUnit.directMemberCount === undefined
+                        ? "Restricted"
+                        : String(selectedUnit.directMemberCount)
+                    }
                   />
                   <DetailRow
-                    label="Members"
+                    label="Inherited members"
                     value={
-                      selectedUnit.memberCount === undefined
+                      selectedUnit.inheritedMemberCount === undefined
                         ? "Restricted"
-                        : String(selectedUnit.memberCount)
+                        : String(selectedUnit.inheritedMemberCount)
                     }
                   />
                 </div>
@@ -154,11 +160,7 @@ function OrganizationPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <OrganizationCanvas
-            units={units}
-            selectedUnitId={currentUnitId}
-            onSelectUnit={setCurrentUnitId}
-          />
+          <OrganizationCanvas units={units} selectedUnitId={currentUnitId} />
         </CardContent>
       </Card>
     </div>

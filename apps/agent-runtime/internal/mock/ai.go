@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
 )
 
 const fixedObservedAt = "2026-01-01T00:00:00Z"
@@ -75,7 +77,7 @@ func WorkflowChangePlanJSON(prompt string) (string, error) {
 			{
 				"id":              "mock-summary",
 				"kind":            "agent",
-				"agentDefinition": "context.summarizer.v1",
+				"agentDefinition": contractschemas.DefaultAgentDefinition,
 				"dependsOn":       []string{"mock-approval"},
 			},
 		},

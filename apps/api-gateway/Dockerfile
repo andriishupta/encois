@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS build
+FROM node:24.19-bookworm-slim AS build
 
 WORKDIR /workspace
 RUN corepack enable
@@ -18,7 +18,7 @@ RUN cp -R apps/api-gateway/dist/scripts /local-seed-scripts
 RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out
 RUN rm -rf /out/dist && cp -R /server-dist /out/dist
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24.19-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production

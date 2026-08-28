@@ -27,8 +27,6 @@ export const Route = createFileRoute("/onboarding")({
 const steps = [
   { label: "Workspace", to: "/onboarding/workspace" },
   { label: "Organization memory", to: "/onboarding/memory" },
-  { label: "Coordinator", to: "/onboarding/coordination" },
-  { label: "Workflows", to: "/onboarding/workflows" },
 ] as const;
 
 function OnboardingLayout() {

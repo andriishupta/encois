@@ -341,17 +341,8 @@ func knownCapability(name string) bool {
 	return ok
 }
 
-var registeredAgentDefinitions = map[string]struct{}{
-	"context.summarizer.v1":               {},
-	"context.summarizer@1":                {},
-	"context.synthesizer@1":               {},
-	"context.synthesizer.v1":              {},
-	"release-investigation.synthesizer@1": {},
-}
-
 func knownAgentDefinition(name string) bool {
-	_, ok := registeredAgentDefinitions[strings.TrimSpace(name)]
-	return ok
+	return contracts.IsRegisteredAgentDefinition(name)
 }
 
 func capabilityRequiresApproval(tool string) bool {

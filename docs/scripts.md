@@ -9,16 +9,19 @@ run with `pnpm --filter`.
 
 | Area | Commands |
 | --- | --- |
-| Local development | `dev`, `dev:api-gateway` |
+| Local development | `dev`, `dev:api-gateway` (the dev servers compile required workspace packages through lifecycle hooks, without rewriting generated sources) |
 | Compose | `dev:watch:mock`, `dev:watch:mock:down`, `dev:watch:ai`, `dev:watch:ai:down`, `dev:watch:ai:rebuild`, `dev:watch:prod`, `dev:watch:prod:down`, `dev:local:prod`, `dev:local:prod:down` |
 | Workspace quality | `build`, `lint`, `typecheck`, `test`, `biome:check`, `biome:format`, `biome:write` |
 | Formatting and hooks | `format:staged`, `checks:staged`, `stage:formatted`, `go:format`, `go:check`, `hooks:install` |
-| Operator/release | `onboarding`, `version:check` |
+| Operator/release | `local:onboarding`, `auth:bootstrap-organization`, `version:check` |
 
-The `onboarding` command is the single onboarding entry point. It requires
-explicit `DATABASE_MIGRATION_URL`, `FIREBASE_AUTH_EMULATOR_HOST`, `--email`,
-and `--password` values; local defaults are intentionally not hidden in a
-second wrapper.
+The `local:onboarding` command is the local Firebase Auth Emulator entry point.
+After deleting workspace `dist` directories, start the API once so its
+`predev` hook compiles the required packages. It requires explicit
+`DATABASE_MIGRATION_URL`, `FIREBASE_AUTH_EMULATOR_HOST`, `--email`, and
+`--password` values; local defaults are intentionally not hidden in a second
+wrapper. `auth:bootstrap-organization` is the separate operator command for
+creating an organization and invite without creating an emulator user.
 
 ## Adding a script
 

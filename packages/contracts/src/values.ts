@@ -51,6 +51,22 @@ export const WorkflowStepKind = {
 export type WorkflowStepKind =
   (typeof WorkflowStepKind)[keyof typeof WorkflowStepKind];
 
+export const DefaultAgentDefinition = "context.synthesizer@1" as const;
+export const RegisteredAgentDefinitions = [
+  "context.summarizer.v1",
+  "context.summarizer@1",
+  DefaultAgentDefinition,
+  "context.synthesizer.v1",
+  "release-investigation.synthesizer@1",
+] as const;
+export type AgentDefinition = (typeof RegisteredAgentDefinitions)[number];
+
+export function isRegisteredAgentDefinition(
+  value: string,
+): value is AgentDefinition {
+  return (RegisteredAgentDefinitions as readonly string[]).includes(value);
+}
+
 export const CoordinatorScopeType = {
   Organization: "organization",
   Project: "project",

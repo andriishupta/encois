@@ -84,14 +84,15 @@ func TestCoordinatorWorkflowSubmitsAPlanAfterReconciliationSignal(t *testing.T) 
 	}, 2*time.Second)
 
 	env.ExecuteWorkflow(CoordinatorWorkflow, CoordinatorStartInput{
-		ContractVersion: CoordinatorContractVersion,
-		CoordinatorID:   "coord-1",
-		OrganizationID:  "org-1",
-		Scope:           WorkflowPlanScope{IDs: []string{"unit-1"}},
-		ProjectID:       "project-1",
-		ScopeType:       ScopeProject,
-		PolicyVersion:   "policy-read-only-fixture-v1",
-		State:           CoordinatorState{Status: StatusReady},
+		ContractVersion:      CoordinatorContractVersion,
+		CoordinatorID:        "coord-1",
+		OrganizationID:       "org-1",
+		Scope:                WorkflowPlanScope{IDs: []string{"unit-1"}},
+		ProjectID:            "project-1",
+		ScopeType:            ScopeProject,
+		PolicyVersion:        "policy-read-only-fixture-v1",
+		SelectedWorkflowRefs: []string{"release-readiness"},
+		State:                CoordinatorState{Status: StatusReady},
 	})
 
 	if !submitted {
@@ -138,8 +139,8 @@ func TestCoordinatorWorkflowPerformsInitialOnboardingReconciliation(t *testing.T
 		State:           CoordinatorState{Status: StatusOnboarding},
 	})
 
-	if planCalls != 1 {
-		t.Fatalf("expected initial reconciliation to run immediately, got %d plan calls", planCalls)
+	if planCalls != 0 {
+		t.Fatalf("expected onboarding without selected workflows to skip plan creation, got %d plan calls", planCalls)
 	}
 	if statusUpdates != 1 {
 		t.Fatalf("expected initial reconciliation to report readiness once, got %d updates", statusUpdates)
@@ -162,13 +163,14 @@ func TestCoordinatorWorkflowFailsOnboardingWhenBootstrapIsDeferred(t *testing.T)
 	env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, time.Second)
 
 	env.ExecuteWorkflow(CoordinatorWorkflow, CoordinatorStartInput{
-		ContractVersion: CoordinatorContractVersion,
-		CoordinatorID:   "coord-1",
-		OrganizationID:  "org-1",
-		Scope:           WorkflowPlanScope{IDs: []string{"unit-1"}},
-		ScopeType:       ScopeProject,
-		PolicyVersion:   "policy-read-only-fixture-v1",
-		State:           CoordinatorState{Status: StatusOnboarding},
+		ContractVersion:      CoordinatorContractVersion,
+		CoordinatorID:        "coord-1",
+		OrganizationID:       "org-1",
+		Scope:                WorkflowPlanScope{IDs: []string{"unit-1"}},
+		ScopeType:            ScopeProject,
+		PolicyVersion:        "policy-read-only-fixture-v1",
+		SelectedWorkflowRefs: []string{"release-readiness"},
+		State:                CoordinatorState{Status: StatusOnboarding},
 	})
 
 	if update.Status != "failed" || update.LastError == "" {
@@ -214,13 +216,14 @@ func TestCoordinatorWorkflowDeduplicatesCoordinatorEvents(t *testing.T) {
 	env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, 2*time.Second)
 
 	env.ExecuteWorkflow(CoordinatorWorkflow, CoordinatorStartInput{
-		ContractVersion: CoordinatorContractVersion,
-		CoordinatorID:   "coord-1",
-		OrganizationID:  "org-1",
-		Scope:           WorkflowPlanScope{IDs: []string{"unit-1"}},
-		ScopeType:       ScopeProject,
-		PolicyVersion:   "policy-read-only-fixture-v1",
-		State:           CoordinatorState{Status: StatusReady},
+		ContractVersion:      CoordinatorContractVersion,
+		CoordinatorID:        "coord-1",
+		OrganizationID:       "org-1",
+		Scope:                WorkflowPlanScope{IDs: []string{"unit-1"}},
+		ScopeType:            ScopeProject,
+		PolicyVersion:        "policy-read-only-fixture-v1",
+		SelectedWorkflowRefs: []string{"release-readiness"},
+		State:                CoordinatorState{Status: StatusReady},
 	})
 
 	if plannedCalls != 1 {

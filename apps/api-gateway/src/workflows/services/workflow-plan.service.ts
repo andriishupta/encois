@@ -376,10 +376,8 @@ export async function getWorkflowPlan(
     },
   );
   if (!row) return null;
-  await validateWorkflowChangePlan(
-    principal,
-    row.plan as unknown as WorkflowChangePlanInput,
-  );
+  const plan = row.plan as unknown as WorkflowChangePlanInput;
+  if (!planScopeVisible(plan, principal)) return null;
   return recordFromRow(row);
 }
 

@@ -22,6 +22,7 @@ function MemberDetailPage() {
         void navigate({
           to: "/management/members/$memberId",
           params: { memberId: nextMemberId },
+          search: { q: undefined, status: "all", sort: "email-asc" },
         })
       }
     />

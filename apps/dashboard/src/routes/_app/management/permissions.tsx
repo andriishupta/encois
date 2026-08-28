@@ -38,7 +38,10 @@ export const Route = createFileRoute("/_app/management/permissions")({
   beforeLoad: () => {
     if (!hasPermission(getAuthSession(), Permission.OrganizationManage))
       throw redirect({ to: "/forbidden" });
-    throw redirect({ to: "/management/members" });
+    throw redirect({
+      to: "/management/members",
+      search: { q: undefined, status: "all", sort: "email-asc" },
+    });
   },
   component: LegacyPermissionsRedirect,
 });
@@ -105,7 +108,10 @@ export function OrganizationPermissionsPage({
           description="Member permissions are unavailable until organization members load."
           actions={
             <Button type="button" variant="outline" asChild>
-              <Link to="/management/members">
+              <Link
+                to="/management/members"
+                search={{ q: undefined, status: "all", sort: "email-asc" }}
+              >
                 <ChevronRight className="rotate-180" data-icon="inline-start" />
                 Members
               </Link>
@@ -201,7 +207,10 @@ export function OrganizationPermissionsPage({
         description="Member profile and organization-unit permission scopes."
         actions={
           <Button type="button" variant="outline" asChild>
-            <Link to="/management/members">
+            <Link
+              to="/management/members"
+              search={{ q: undefined, status: "all", sort: "email-asc" }}
+            >
               <ChevronRight className="rotate-180" data-icon="inline-start" />
               Members
             </Link>

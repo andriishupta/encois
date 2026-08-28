@@ -178,7 +178,7 @@ func workflowBlueprintSchema() *genai.Schema {
 						"id":               {Type: genai.TypeString},
 						"kind":             {Type: genai.TypeString, Enum: []string{"tool", "agent", "transform", "condition", "wait", "approval"}},
 						"tool":             {Type: genai.TypeString},
-						"agentDefinition":  {Type: genai.TypeString},
+						"agentDefinition":  {Type: genai.TypeString, Enum: []string{contracts.DefaultAgentDefinition}},
 						"dependsOn":        {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
 						"input":            {Type: genai.TypeObject},
 						"requiresApproval": {Type: genai.TypeBoolean},

@@ -41,7 +41,7 @@ function WorkflowDefinitionPage() {
   const canManage = useCan(Permission.WorkflowsManage);
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
-    queryFn: listWorkflowBlueprints,
+    queryFn: () => listWorkflowBlueprints(),
   });
   const revisions = (blueprints.data ?? [])
     .filter(

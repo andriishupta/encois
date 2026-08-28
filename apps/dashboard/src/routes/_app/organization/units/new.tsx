@@ -56,7 +56,7 @@ function AddOrganizationUnitPage() {
     [units],
   );
   const [name, setName] = useState("");
-  const [type, setType] = useState<OrganizationUnitType>("team");
+  const [type, setType] = useState<OrganizationUnitType>(unitTypes[0]);
   const [selectedParentId, setSelectedParentId] = useState(
     parentId ?? currentUnitId ?? "organization",
   );

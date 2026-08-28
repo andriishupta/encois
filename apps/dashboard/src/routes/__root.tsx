@@ -93,8 +93,8 @@ function getPageTitle(pathname: string, productName: string) {
     return "Join the waitlist";
   if (pathname === "/workflows") return "Workflows";
   if (pathname === "/workflows/runs") return "Workflow runs";
-  if (pathname === "/workflows/plans") return "Change Plans";
-  if (pathname.startsWith("/workflows/plans/")) return "Change Plan";
+  if (pathname === "/workflows/plans") return "Plans";
+  if (pathname.startsWith("/workflows/plans/")) return "Plan";
   if (pathname === "/workflows/new") return "New workflow";
   if (pathname === "/workflows/templates") return "Workflow templates";
   if (pathname === "/workflows/blueprints") return "Workflow Blueprints";

@@ -450,8 +450,15 @@ func (s *Server) readArtifact(c *gin.Context) {
 		errorResponse(c, http.StatusBadGateway, "artifact_read_failed", err.Error(), true)
 		return
 	}
+	contentType := strings.TrimSpace(result.ContentType)
+	if contentType == "" {
+		contentType = http.DetectContentType(result.Bytes)
+	}
 	c.Header("X-Artifact-Ref", result.ArtifactRef)
-	c.Data(http.StatusOK, result.ContentType, result.Bytes)
+	// The router has a JSON response middleware for ordinary endpoints. An
+	// artifact is raw data, so its actual type must win before c.Data writes it.
+	c.Header("Content-Type", contentType)
+	c.Data(http.StatusOK, contentType, result.Bytes)
 }
 
 func (s *Server) artifactStoreStatus() string {

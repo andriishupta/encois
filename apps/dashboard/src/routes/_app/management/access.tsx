@@ -146,7 +146,10 @@ function AccessSettingsPage() {
         actions={
           can(Permission.OrganizationManage) ? (
             <Button type="button" variant="outline" asChild>
-              <Link to="/management/members">
+              <Link
+                to="/management/members"
+                search={{ q: undefined, status: "all", sort: "email-asc" }}
+              >
                 <ShieldCheck data-icon="inline-start" />
                 Manage members
               </Link>

@@ -74,7 +74,8 @@ function toUnit(
     canView: unit.canView,
     canManage: unit.canManage,
     manager: unit.manager,
-    memberCount: unit.memberCount,
+    directMemberCount: unit.directMemberCount,
+    inheritedMemberCount: unit.inheritedMemberCount,
   };
 }
 

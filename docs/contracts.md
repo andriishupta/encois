@@ -103,6 +103,10 @@ an explicit repair flow owns that correction.
 persists the selected coordination mode and workflow catalog references. The
 Gateway accepts only active Template keys or current approved organization
 Blueprints and rejects unknown selections before changing state.
+The initial onboarding browser flow does not call this endpoint with workflow
+selections; it uploads one organization context document and starts onboarding
+with an empty workflow selection. This update endpoint remains available for
+explicit post-onboarding or administrative workflow configuration.
 `POST /api/v1/organization/onboarding/start` starts the stable organization
 Coordinator Workflow through the existing Gateway WorkflowClient, persists the
 Coordinator run projection, and enqueues a `reconcile-requested`
@@ -136,8 +140,10 @@ organization onboarding readiness. See the complete route matrix in
 The browser never supplies a Coordinator, Blueprint revision, Workflow, Run,
 or Temporal runtime ID. The selected coordination mode and catalog references
 are included in the Coordinator start contract and persisted run business
-input. The persisted Coordinator run is a control-plane record, not a user
-Run: ordinary workflow list/detail, event, and control routes exclude it,
+input when explicitly configured. The initial onboarding start uses the
+persisted defaults and an empty workflow selection. The persisted Coordinator
+run is a control-plane record, not a user Run: ordinary workflow list/detail,
+event, and control routes exclude it,
 while onboarding and future admin surfaces address it through their own
 permission boundary.
 

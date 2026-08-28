@@ -2,6 +2,7 @@
   "name": "encois",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "pnpm --filter @encois/dashboard dev",
     "dev:api-gateway": "pnpm --filter @encois/api-gateway dev",
@@ -21,7 +22,7 @@
     "dev:watch:prod:down": "node scripts/compose-with-version.mjs compose.watch.prod.yaml --env-file .env.local.prod down",
     "dev:local:prod": "node scripts/compose-with-version.mjs compose.local.prod.yaml --env-file .env.local.prod up -d --build",
     "dev:local:prod:down": "node scripts/compose-with-version.mjs compose.local.prod.yaml --env-file .env.local.prod down",
-    "onboarding": "pnpm --filter @encois/api-gateway run auth:onboarding",
+    "local:onboarding": "pnpm --filter @encois/api-gateway run local:onboarding",
     "checks:staged": "bash scripts/checks-staged.sh",
     "format:staged": "bash scripts/format-staged.sh",
     "stage:formatted": "bash scripts/stage-formatted.sh",
@@ -30,9 +31,8 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "version:check": "node scripts/check-version.mjs"
   },
-  "license": "UNLICENSED",
   "engines": {
-    "node": ">=22.0.0 <25"
+    "node": ">=24.19.0 <25"
   },
   "devEngines": {
     "packageManager": {

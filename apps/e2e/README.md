@@ -24,6 +24,7 @@ pnpm run dev:watch:mock
 Then use the Cypress runner visually:
 
 ```bash
+pnpm --filter @encois/e2e exec cypress install
 pnpm --filter @encois/e2e e2e:open
 ```
 

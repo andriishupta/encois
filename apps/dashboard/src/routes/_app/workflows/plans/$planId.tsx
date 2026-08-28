@@ -10,7 +10,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { ArrowLeft, Check, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, CircleDashed, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { OrganizationUnitSelect } from "@/components/organization-unit-select";
@@ -128,13 +128,13 @@ function WorkflowPlanDetailPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title={blueprint?.name ?? "Change Plan"}
-        description="Review this persisted Change Plan and manage its approval boundary."
+        title={blueprint?.name ?? "Plan"}
+        description="Review this persisted Plan and manage its approval boundary."
         actions={
           <Button variant="outline" asChild>
             <Link to="/workflows/plans">
               <ArrowLeft data-icon="inline-start" />
-              Back to Change Plans
+              Back to Plans
             </Link>
           </Button>
         }
@@ -155,6 +155,7 @@ function WorkflowPlanDetailPage() {
         <Card>
           <CardContent className="pt-6">
             <EmptyPanel
+              icon={CircleDashed}
               title="Plan not found"
               description="This Plan is not available in the current organization or scope."
             />
@@ -280,8 +281,7 @@ function WorkflowPlanDetailPage() {
                   variant="destructive"
                   disabled={remove.isPending}
                   onClick={() => {
-                    if (window.confirm("Delete this Change Plan?"))
-                      remove.mutate();
+                    if (window.confirm("Delete this Plan?")) remove.mutate();
                   }}
                 >
                   <Trash2 data-icon="inline-start" />
@@ -307,7 +307,7 @@ function WorkflowPlanDetailPage() {
           <details className="text-sm text-muted-foreground">
             <summary className="cursor-pointer">Technical details</summary>
             <div className="mt-2 flex flex-col gap-1 font-mono text-xs">
-              <span>Change Plan {plan.planId}</span>
+              <span>Plan {plan.planId}</span>
               <span>Coordinator {plan.coordinatorId}</span>
               <span>Created {formatDate(plan.createdAt)}</span>
             </div>

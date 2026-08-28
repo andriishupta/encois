@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Bell, Check, CircleAlert, Mail, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -68,7 +68,7 @@ export const Route = createFileRoute("/_app/settings/notifications")({
 });
 
 function NotificationsSettingsPage() {
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const { q, status } = Route.useSearch();
   const canManage = hasPermission(getAuthSession(), Permission.SettingsManage);
@@ -132,18 +132,17 @@ function NotificationsSettingsPage() {
     void navigate({
       replace: true,
       resetScroll: false,
-      search: (current) => ({ ...current, q: value || undefined }),
+      search: { q: value || undefined, status },
     });
   }
   function updateStatus(value: string) {
     void navigate({
       replace: true,
       resetScroll: false,
-      search: (current) => ({
-        ...current,
-        status:
-          value === "all" ? undefined : (value as NotificationStatusFilter),
-      }),
+      search: {
+        q,
+        status: value === "all" ? "all" : (value as NotificationStatusFilter),
+      },
     });
   }
   const toggle = (key: keyof typeof draft) =>

@@ -34,11 +34,7 @@ const queryOptions: readonly {
   },
 ];
 
-export function InvestigationForm({
-  detailPath,
-}: {
-  detailPath: "/organization/investigations/$investigationId";
-}) {
+export function InvestigationForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { units } = useOrganization();
@@ -83,7 +79,7 @@ export function InvestigationForm({
         queryKey: queryKeys.savedInvestigationPages(),
       });
       await navigate({
-        to: detailPath,
+        to: "/organization/investigations/$investigationId",
         params: { investigationId: investigation.id },
         search: { q: undefined },
       });

@@ -111,15 +111,15 @@ sequenceDiagram
 
     User->>API: create organization and root unit
     API->>API: create scope, onboarding state, idempotency key
-    User->>API: PATCH /organization/onboarding
-    API-->>User: onboarding state + coordinatorId
+    User->>API: upload one organization context document
+    API-->>User: scoped Source + ingestion run
     User->>API: POST /organization/onboarding/start
     API->>Temporal: start CoordinatorWorkflow (tenant-scoped, idempotent)
     API->>Outbox: enqueue reconcile-requested event
     API-->>User: onboarding initializing + coordinatorId
     Runtime-->>Temporal: poll CoordinatorWorkflow
 
-    User->>API: connect Jira/GitHub or upload documents
+    User->>API: connect Jira/GitHub after onboarding
     API->>Temporal: signal source-ready / integration-connected
     Temporal-->>Runtime: run BootstrapProjectWorkflow
     Runtime->>AgentGW: request approved read tools
@@ -168,16 +168,19 @@ the Coordinator, listing active Templates and approved Blueprints, and
 registering/uploading/ingesting onboarding Sources. Internal Coordinator
 callbacks are service-authenticated and are not browser routes. All other
 tenant routes remain behind the readiness gate while the existing permissions
-still apply after the gate opens. The browser selects catalog references and
-business input; the API resolves Blueprint revisions, Workflow IDs, Run IDs,
-and Temporal IDs on the server.
+still apply after the gate opens. The initial onboarding browser flow uploads
+one organization context document and does not select workflow catalog
+references. Workflow selection is a later explicit product action; the API
+resolves Blueprint revisions, Workflow IDs, Run IDs, and Temporal IDs on the
+server.
 
 `POST /organization/onboarding/start` returns `initializing` only after the
 Temporal start request is accepted. It does not return `ready` optimistically.
-The Coordinator performs one immediate bootstrap reconciliation, reports
-`ready` only after the required context validation succeeds, and reports
-`failed` for an error or deferred completion. Reset is an explicit action and
-does not fabricate progress, runs, or readiness.
+The Coordinator performs one immediate bootstrap reconciliation. With the
+initial empty workflow selection, it reports `ready` without creating a
+workflow plan; explicitly configured workflow selections still require a
+successful plan proposal/submission. Reset is an explicit action and does not
+fabricate progress, runs, or readiness.
 
 The Coordinator is a long-lived logical Workflow. It waits on Temporal timers,
 Signals, and workflow events; it does not hold a Worker process in memory. A

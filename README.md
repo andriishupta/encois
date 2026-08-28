@@ -54,7 +54,7 @@ Architecture references:
 
 ## Prerequisites
 
-- Node.js current LTS compatible with pnpm 11.
+- Node.js 24.19.0 (the project’s pinned LTS runtime) and pnpm 11.
 - pnpm 11. The repository declares the expected package-manager family in `package.json`.
 - Google Cloud access is only required for the later deployed path; the full local Compose stack uses explicit mock modes for the data plane.
 
@@ -107,7 +107,7 @@ the matching Firebase Auth Emulator account together:
 ```bash
 DATABASE_MIGRATION_URL=postgresql://postgres:postgres@127.0.0.1:5432/encois \
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-pnpm run onboarding -- \
+pnpm run local:onboarding -- \
   --organization "OB Onboarding Demo" \
   --email "ob+1@local.test" \
   --password "local-onboarding-1"

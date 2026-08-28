@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "pnpm --filter @encois/contracts exec tsc -p tsconfig.json",
     "build": "tsc -b && vite build",
     "lint": "biome check ./src ./vite.config.ts",
     "typecheck": "tsc --noEmit",

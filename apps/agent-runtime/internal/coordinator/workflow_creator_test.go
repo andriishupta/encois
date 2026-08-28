@@ -12,7 +12,7 @@ func TestWorkflowCreatorRejectsUnregisteredWorkflowType(t *testing.T) {
 		Changes: []WorkflowChange{{
 			Kind:   ChangeCreate,
 			Reason: "Test the workflow type boundary.",
-			Start: &WorkflowStartIntent{Key: "release-aug-30"},
+			Start:  &WorkflowStartIntent{Key: "release-aug-30"},
 			Blueprint: &WorkflowBlueprint{
 				BlueprintID:  "unknown",
 				Version:      "1.0.0",
@@ -35,16 +35,48 @@ func TestWorkflowCreatorAcceptsRegisteredWorkflowType(t *testing.T) {
 		Changes: []WorkflowChange{{
 			Kind:   ChangeCreate,
 			Reason: "Create a registered workflow.",
-			Start: &WorkflowStartIntent{Key: "release-aug-30"},
+			Start:  &WorkflowStartIntent{Key: "release-aug-30"},
 			Blueprint: &WorkflowBlueprint{
 				BlueprintID:  "release-risk",
 				Version:      "1.0.0",
 				WorkflowType: DynamicWorkflowType,
+				Steps: []WorkflowStep{{
+					ID:              "summarize",
+					Kind:            "agent",
+					AgentDefinition: "context.synthesizer@1",
+				}},
 			},
 		}},
 	})
 	if err != nil {
 		t.Fatalf("expected registered workflow type to be accepted: %v", err)
+	}
+}
+
+func TestWorkflowCreatorRejectsUnregisteredAgentDefinition(t *testing.T) {
+	creator := NewWorkflowCreator([]string{DynamicWorkflowType})
+	err := creator.ValidatePlan(WorkflowChangePlan{
+		ContractVersion: WorkflowChangePlanVersion,
+		PlanID:          "plan-invalid-agent",
+		CoordinatorID:   "coord-1",
+		OrganizationID:  "org-1",
+		Changes: []WorkflowChange{{
+			Kind:   ChangeCreate,
+			Reason: "Reject an agent definition that is not in the registry.",
+			Blueprint: &WorkflowBlueprint{
+				BlueprintID:  "jira-project-tasks",
+				Version:      "1.0.0",
+				WorkflowType: DynamicWorkflowType,
+				Steps: []WorkflowStep{{
+					ID:              "summarize",
+					Kind:            "agent",
+					AgentDefinition: "jira-project-tasks@",
+				}},
+			},
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected unregistered agent definition to be rejected")
 	}
 }
 

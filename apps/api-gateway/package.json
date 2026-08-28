@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "predev": "pnpm --filter @encois/contracts exec tsc -p tsconfig.json && pnpm --filter @encois/persistence exec tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
     "build:scripts": "tsc -p tsconfig.scripts.json --noEmit false",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
@@ -16,7 +17,7 @@
     "dispatch:coordinator": "node dist/coordinator-dispatcher.js",
     "dispatch:integration-health": "node dist/integration-health-dispatcher.js",
     "auth:bootstrap-organization": "tsx scripts/bootstrap-organization.ts",
-    "auth:onboarding": "tsx scripts/onboarding.ts",
+    "local:onboarding": "tsx scripts/onboarding.ts",
     "auth:invite-user": "tsx scripts/invite-user.ts",
     "auth:list-waitlist": "tsx scripts/list-waitlist.ts",
     "auth:revoke-invite": "tsx scripts/revoke-invite.ts",

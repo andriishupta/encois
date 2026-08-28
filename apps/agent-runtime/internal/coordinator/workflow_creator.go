@@ -1,6 +1,10 @@
 package coordinator
 
-import "fmt"
+import (
+	"fmt"
+
+	contractschemas "github.com/andriishupta/encois/packages/contracts"
+)
 
 // WorkflowCreator is the deterministic boundary around model-generated plans.
 // The actual persistence and Temporal Schedule API calls belong to the Gateway API.
@@ -106,6 +110,11 @@ func (c WorkflowCreator) validateBlueprintChange(index int, blueprint *WorkflowB
 	}
 	if _, ok := c.allowedWorkflowTypes[blueprint.WorkflowType]; !ok {
 		return fmt.Errorf("workflow type %q is not registered", blueprint.WorkflowType)
+	}
+	for _, step := range blueprint.Steps {
+		if step.Kind == contractschemas.StepKindAgent && !contractschemas.IsRegisteredAgentDefinition(step.AgentDefinition) {
+			return fmt.Errorf("change %d step %q uses unregistered agent definition %q", index, step.ID, step.AgentDefinition)
+		}
 	}
 	return nil
 }

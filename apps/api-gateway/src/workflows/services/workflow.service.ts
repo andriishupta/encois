@@ -8,10 +8,12 @@ import type {
 import {
   ContractVersion,
   isJsonObject,
+  isRegisteredAgentDefinition,
   Permission,
   parseWorkflowBlueprint,
   TemporalWorkflowType,
   WorkflowExecutionStatus,
+  WorkflowStepKind,
 } from "@encois/contracts";
 import {
   auditEvents,
@@ -1839,9 +1841,25 @@ export async function validateWorkflowChangePlan(
         : [],
     ),
   );
-  const missingScope = [...requiredScopes].find(
-    (scope) => !principal.scope.includes(scope),
-  );
+
+  for (const [index, change] of plan.changes.entries()) {
+    for (const step of change.blueprint?.steps ?? []) {
+      if (
+        step.kind === WorkflowStepKind.Agent &&
+        (!step.agentDefinition ||
+          !isRegisteredAgentDefinition(step.agentDefinition))
+      ) {
+        throw workflowServiceError(
+          "WORKFLOW_PLAN_INVALID",
+          `Change ${index} step ${step.id} uses an unregistered agent definition.`,
+        );
+      }
+    }
+  }
+
+  const missingScope = principal.scope.includes("*")
+    ? undefined
+    : [...requiredScopes].find((scope) => !principal.scope.includes(scope));
   if (missingScope) {
     throw workflowServiceError(
       "SCOPE_DENIED",

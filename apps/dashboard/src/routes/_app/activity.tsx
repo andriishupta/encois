@@ -26,7 +26,6 @@ import {
   type Clock3,
   GitBranch,
   PlugZap,
-  RefreshCw,
   UserRound,
   Waypoints,
 } from "lucide-react";
@@ -34,7 +33,7 @@ import { useState } from "react";
 import { EmptyPanel } from "@/components/empty-panel";
 import { InlineError } from "@/components/inline-error";
 import { PageHeader } from "@/components/page-header";
-import { DescriptionPill } from "@/components/pill";
+import { DescriptionPill, StatusPill } from "@/components/pill";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -108,17 +107,17 @@ function ActivityPage() {
   const canManageMemory = can(Permission.MemoryManage);
   const workflows = useQuery({
     queryKey: queryKeys.workflows(),
-    queryFn: listWorkflows,
+    queryFn: () => listWorkflows(),
     enabled: canViewWorkflows,
   });
   const sources = useQuery({
     queryKey: queryKeys.sources(),
-    queryFn: listKnowledgeSources,
+    queryFn: () => listKnowledgeSources(),
     enabled: canViewSources,
   });
   const integrations = useQuery({
     queryKey: queryKeys.integrations(),
-    queryFn: listIntegrations,
+    queryFn: () => listIntegrations(),
     enabled: canViewIntegrations,
   });
   const plans = useQuery({
@@ -139,12 +138,12 @@ function ActivityPage() {
   const canViewOrganization = can(Permission.OrganizationRead);
   const accessRequests = useQuery({
     queryKey: queryKeys.organizationAccessRequests(),
-    queryFn: listOrganizationAccessRequests,
+    queryFn: () => listOrganizationAccessRequests(),
     enabled: canViewOrganization,
   });
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
-    queryFn: listWorkflowBlueprints,
+    queryFn: () => listWorkflowBlueprints(),
     enabled: canManageWorkflows,
   });
   const [planActionError, setPlanActionError] = useState<string | null>(null);
@@ -350,10 +349,10 @@ function ActivityPage() {
             icon={ClipboardCheck}
             label="Approvals & changes"
             value={decisionAttention}
-            detail="Runs, Change Plans, memory, and access"
+            detail="Runs, Plans, memory, and access"
             to="/workflows/runs"
             secondaryLinks={[
-              { label: "Change Plans", to: "/workflows/plans" },
+              { label: "Plans", to: "/workflows/plans" },
               { label: "Workflows", to: "/workflows" },
               { label: "Access", to: "/management/access" },
             ]}
@@ -424,6 +423,7 @@ function ActivityPage() {
           <ReviewSection
             title="Integration setup"
             to="/organization/integrations"
+            empty="No Integrations need setup."
           >
             {pendingIntegrations.map((integration) => (
               <IntegrationReviewRow
@@ -467,13 +467,13 @@ function ActivityPage() {
             ))}
           </ReviewSection>
           <ReviewSection
-            title="Change Plans"
+            title="Plans"
             to="/workflows/plans"
-            empty="No Change Plan is waiting for approval or apply."
+            empty="No Plan is waiting for approval or apply."
           >
             {planActionError ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Could not update the Change Plan: {planActionError}
+                Could not update the Plan: {planActionError}
               </p>
             ) : null}
             {pendingPlans.map((plan) => (
@@ -787,6 +787,7 @@ function WorkflowReviewRow({
 }
 
 function SourceReviewRow({ source }: { source: KnowledgeSource }) {
+  const isFailed = source.status === KnowledgeSourceStatus.Failed;
   return (
     <Link
       to="/organization/sources/$sourceId"
@@ -807,9 +808,14 @@ function SourceReviewRow({ source }: { source: KnowledgeSource }) {
           {source.provider ?? source.kind} · {source.status.replace("_", " ")}
         </span>
       </span>
-      <RefreshCw
-        className="size-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
+      <StatusPill
+        status={source.status}
+        label={isFailed ? "Failed" : source.status.replace("_", " ")}
+        className={
+          isFailed
+            ? "shrink-0 border-destructive/40 bg-destructive/5 text-destructive"
+            : "shrink-0"
+        }
       />
     </Link>
   );
@@ -868,8 +874,7 @@ function WorkflowPlanReviewRow({
   onApply: (planId: string) => void;
 }) {
   const change = plan.plan.changes[0];
-  const label =
-    change?.blueprint?.name ?? change?.reason ?? "Change Plan proposal";
+  const label = change?.blueprint?.name ?? change?.reason ?? "Plan proposal";
   const detail = `${change?.kind ?? "change"} · ${plan.status === "proposed" ? "awaiting approval" : "ready to apply"} · ${formatDate(plan.updatedAt)}`;
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start">

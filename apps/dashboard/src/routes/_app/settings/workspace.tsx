@@ -2,7 +2,13 @@ import type { OrganizationOnboardingProjection } from "@encois/contracts/browser
 import { CoordinationMode, Permission } from "@encois/contracts/browser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { CircleAlert, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Radio,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/pill";
@@ -24,6 +30,7 @@ import { updateOrganizationOnboarding } from "@/lib/api";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { useOrganization } from "@/lib/organization-context";
 import { usePermissions } from "@/lib/permissions";
+import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/settings/workspace")({

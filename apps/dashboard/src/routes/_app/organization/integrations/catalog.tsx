@@ -6,12 +6,7 @@ import {
   Permission,
 } from "@encois/contracts/browser";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  redirect,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Bot, Github, PlugZap, Plus, Search, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { unavailableCardClassName } from "@/components/availability-state";
@@ -66,7 +61,7 @@ export const Route = createFileRoute("/_app/organization/integrations/catalog")(
 const pageSize = 10;
 
 function IntegrationCatalogPage() {
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const { q, type: catalogType } = Route.useSearch();
   const { currentUnitId, units, members } = useOrganization();
   const actor = members.find(
@@ -128,7 +123,7 @@ function IntegrationCatalogPage() {
     void navigate({
       replace: true,
       resetScroll: false,
-      search: (current) => ({ ...current, q: value || undefined }),
+      search: { q: value || undefined, type: catalogType },
     });
   }
 
@@ -136,10 +131,7 @@ function IntegrationCatalogPage() {
     void navigate({
       replace: true,
       resetScroll: false,
-      search: (current) => ({
-        ...current,
-        type: nextType === "all" ? undefined : nextType,
-      }),
+      search: { q, type: nextType },
     });
   }
 
@@ -151,7 +143,10 @@ function IntegrationCatalogPage() {
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/organization/integrations/new">
+              <Link
+                to="/organization/integrations/new"
+                search={{ provider: undefined, type: undefined }}
+              >
                 <Plus data-icon="inline-start" />
                 Add integration
               </Link>

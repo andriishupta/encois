@@ -18,7 +18,7 @@ export function createSourcesRouter(
   options: SourceServiceOptions & { artifactStore?: SourceArtifactStore },
 ): Hono<GatewayEnv> {
   const router = new Hono<GatewayEnv>();
-  router.get("/", listKnowledgeSourcesRoute);
+  router.get("/", listKnowledgeSourcesRoute(options));
   router.post("/", createKnowledgeSourceRoute);
   router.post("/uploads", uploadPdfKnowledgeSourceRoute(options.artifactStore));
   router.get("/:sourceId", getKnowledgeSourceRoute(options));

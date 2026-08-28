@@ -598,8 +598,11 @@ export function isOrganizationUnitProjection(
     typeof value.canManage === "boolean" &&
     (value.canView
       ? typeof value.manager === "string" &&
-        typeof value.memberCount === "number"
-      : value.manager === undefined && value.memberCount === undefined)
+        typeof value.directMemberCount === "number" &&
+        typeof value.inheritedMemberCount === "number"
+      : value.manager === undefined &&
+        value.directMemberCount === undefined &&
+        value.inheritedMemberCount === undefined)
   );
 }
 

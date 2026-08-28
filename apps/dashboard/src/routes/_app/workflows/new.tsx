@@ -136,7 +136,7 @@ function NewWorkflowPage() {
   });
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
-    queryFn: listWorkflowBlueprints,
+    queryFn: () => listWorkflowBlueprints(),
     enabled: mode === "blueprint",
   });
 
@@ -905,7 +905,7 @@ function ReviewStage({
           >
             <CheckCircle2 className="mt-0.5 size-5 text-emerald-600" />
             <div>
-              <p className="font-medium">Change Plan applied</p>
+              <p className="font-medium">Plan applied</p>
               <p className="mt-1 text-muted-foreground">
                 The immutable Blueprint is now available to the Coordinator.{" "}
                 {runAfterApply

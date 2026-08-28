@@ -99,7 +99,7 @@ export class AppErrorBoundary extends Component<
       <AppErrorPage
         error={this.state.error}
         traceId={this.state.traceId}
-        componentStack={this.state.errorInfo?.componentStack}
+        componentStack={this.state.errorInfo?.componentStack ?? undefined}
         onRetry={this.retry}
       />
     );

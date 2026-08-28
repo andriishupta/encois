@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
 allowBuilds:
-  '@firebase/util': false
-  cypress: true
+  "@firebase/util": false
+  cypress: false
   esbuild: true
   protobufjs: false

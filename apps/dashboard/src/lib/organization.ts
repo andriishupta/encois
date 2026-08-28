@@ -16,7 +16,8 @@ export type OrganizationUnit = {
   canView: boolean;
   canManage: boolean;
   manager?: string;
-  memberCount?: number;
+  directMemberCount?: number;
+  inheritedMemberCount?: number;
 };
 
 export type OrganizationMember = {

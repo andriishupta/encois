@@ -107,7 +107,10 @@ function SourcesPage() {
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/organization/sources/new">
+              <Link
+                to="/organization/sources/new"
+                search={{ sourceType: undefined }}
+              >
                 <Plus data-icon="inline-start" />
                 Add source
               </Link>
@@ -189,7 +192,10 @@ function SourcesPage() {
               action={
                 canManage ? (
                   <Button asChild>
-                    <Link to="/organization/sources/new">
+                    <Link
+                      to="/organization/sources/new"
+                      search={{ sourceType: undefined }}
+                    >
                       <Plus data-icon="inline-start" />
                       Add source
                     </Link>
@@ -219,6 +225,7 @@ function SourceCard({
   units: ReturnType<typeof useOrganization>["units"];
 }) {
   const Icon = source.kind === "uploaded_document" ? FileText : Waypoints;
+  const isFailed = source.status === KnowledgeSourceStatus.Failed;
   const statusLabel =
     source.status === KnowledgeSourceStatus.Ingesting
       ? "Ingesting"
@@ -252,10 +259,29 @@ function SourceCard({
           </div>
           <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
             <StatusPill
-              status={source.currentRevisionId ? "ready" : "not ready"}
-              label={source.currentRevisionId ? "Ready" : "Not ready"}
+              status={
+                isFailed
+                  ? "failed"
+                  : source.currentRevisionId
+                    ? "ready"
+                    : "not ready"
+              }
+              label={
+                isFailed
+                  ? "Failed"
+                  : source.currentRevisionId
+                    ? "Ready"
+                    : "Not ready"
+              }
+              className={
+                isFailed
+                  ? "border-destructive/40 bg-destructive/5 text-destructive"
+                  : undefined
+              }
             />
-            <StatusPill status={source.status} label={statusLabel} />
+            {!isFailed ? (
+              <StatusPill status={source.status} label={statusLabel} />
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-3 pr-14 text-xs text-muted-foreground">

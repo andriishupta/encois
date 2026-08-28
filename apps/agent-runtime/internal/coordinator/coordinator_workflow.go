@@ -290,6 +290,18 @@ func appendWorkflowStartUnique(values []WorkflowStartSpec, candidate WorkflowSta
 func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState) error {
 	activityCtx := workflow.WithActivityOptions(ctx, coordinatorActivityOptions())
 
+	if len(input.SelectedWorkflowRefs) == 0 {
+		state.Status = StatusReady
+		state.LastEvent = "onboarding-ready"
+		if !state.OnboardingComplete {
+			if err := reportOnboardingStatus(ctx, input, OnboardingStatusUpdate{Status: "ready"}); err != nil {
+				return onboardingStatusReportError{err: fmt.Errorf("report onboarding ready status: %w", err)}
+			}
+			state.OnboardingComplete = true
+		}
+		return nil
+	}
+
 	var proposal CoordinatorPlanActivityResult
 	if err := workflow.ExecuteActivity(activityCtx, CoordinatorPlanActivityName, input).Get(ctx, &proposal); err != nil {
 		return err

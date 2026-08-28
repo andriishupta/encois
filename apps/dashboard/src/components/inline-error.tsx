@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 type InlineErrorProps = {
   title?: string;
   message: string;
-  onRetry?: () => void | Promise<void>;
+  onRetry?: () => unknown;
   retrying?: boolean;
 };
 

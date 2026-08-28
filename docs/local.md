@@ -230,13 +230,16 @@ organization rather than changing the seeded fixture:
    `ORGANIZATION_ONBOARDING_REQUIRED` (`409`). Onboarding settings, Source
    upload/ingestion, and Template/Blueprint catalog reads remain available
    according to permission.
-5. Complete the required onboarding upload and catalog selection. The final
-   action calls `POST /api/v1/organization/onboarding/start`; the state must
-   become `initializing`, never optimistic `ready`.
+5. Complete the required onboarding upload. The final action calls
+   `POST /api/v1/organization/onboarding/start`; the state must become
+   `initializing`, never optimistic `ready`. Workflow catalog selection is
+   intentionally deferred until after the initial source and integrations are
+   available.
 6. Observe the local Temporal Coordinator. Its first reconciliation reports
-   `ready` only after required context validation, or `failed` when bootstrap
-   errors or is deferred. An administrator can explicitly retry a failed
-   onboarding; a non-admin receives the administrator handoff.
+   `ready` without creating a workflow plan because onboarding starts with no
+   workflow selections. A configured workflow selection may report `failed`
+   when bootstrap errors or is deferred. An administrator can explicitly retry
+   a failed onboarding; a non-admin receives the administrator handoff.
 
 For Watch AI or Watch mock, the root command below creates the pending invite
 and the matching Firebase Auth Emulator user in one operation. It requires a
@@ -245,7 +248,7 @@ password of at least six characters and refuses to run without the emulator:
 ```bash
 DATABASE_MIGRATION_URL=postgresql://postgres:postgres@127.0.0.1:5432/encois \
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-pnpm run onboarding -- \
+pnpm run local:onboarding -- \
   --organization "OB Onboarding Demo" \
   --email "ob+1@local.test" \
   --password "local-onboarding-1"

@@ -34,7 +34,6 @@ import { cn } from "@/lib/utils";
 type OrganizationNodeData = {
   unit: OrganizationUnit;
   selected: boolean;
-  onSelect: (unitId: string) => void;
 };
 
 type OrganizationNode = Node<OrganizationNodeData, "organization">;
@@ -116,12 +115,7 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
   const isRestricted = !data.unit.canView;
 
   return (
-    <button
-      type="button"
-      disabled={isRestricted}
-      aria-label={
-        isRestricted ? `${data.unit.name}, access restricted` : data.unit.name
-      }
+    <div
       title={
         isRestricted
           ? "Access restricted"
@@ -130,14 +124,11 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
             : "Read-only organization unit"
       }
       className={cn(
-        "w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border",
+        "w-52 rounded-xl border bg-background p-3 text-left shadow-sm transition-colors",
+        isRestricted && "opacity-50",
         data.selected && "border-primary ring-2 ring-primary/20",
         data.unit.canManage && "border-primary/40",
       )}
-      onClick={(event) => {
-        event.stopPropagation();
-        if (data.unit.canView) data.onSelect(data.unit.id);
-      }}
     >
       <Handle
         type="target"
@@ -170,8 +161,8 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
         ) : (
           <>
             <Users className="size-3.5" aria-hidden="true" />
-            {data.unit.memberCount ?? "—"} members ·{" "}
-            {data.unit.manager ?? "Not assigned"}
+            {data.unit.directMemberCount ?? "—"} direct ·{" "}
+            {data.unit.inheritedMemberCount ?? "—"} inherited
           </>
         )}
       </span>
@@ -180,7 +171,7 @@ function OrganizationUnitNode({ data }: NodeProps<OrganizationNode>) {
         position={Position.Bottom}
         className="!h-0 !w-0 !border-0 !bg-transparent"
       />
-    </button>
+    </div>
   );
 }
 
@@ -189,11 +180,9 @@ const nodeTypes = { organization: OrganizationUnitNode };
 export function OrganizationCanvas({
   units,
   selectedUnitId,
-  onSelectUnit,
 }: {
   units: readonly OrganizationUnit[];
   selectedUnitId: string;
-  onSelectUnit: (unitId: string) => void;
 }) {
   const nodes = useMemo<OrganizationNode[]>(() => {
     const positions = getNodePositions(units);
@@ -207,10 +196,9 @@ export function OrganizationCanvas({
       data: {
         unit,
         selected: unit.id === selectedUnitId,
-        onSelect: onSelectUnit,
       },
     }));
-  }, [onSelectUnit, selectedUnitId, units]);
+  }, [selectedUnitId, units]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -237,7 +225,6 @@ export function OrganizationCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodeClick={(_, node) => onSelectUnit(node.id)}
         fitView
         fitViewOptions={{ padding: 0.24 }}
         nodesDraggable

@@ -4,12 +4,7 @@ import {
   Permission,
 } from "@encois/contracts/browser";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  redirect,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Github, PlugZap, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { CurrentScopePill, CurrentScopeText } from "@/components/current-scope";
@@ -58,7 +53,7 @@ export const Route = createFileRoute("/_app/organization/integrations/")({
 const pageSize = 10;
 
 function IntegrationsPage() {
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const { q } = Route.useSearch();
   const { units, currentUnitId, members } = useOrganization();
   const selectedScopeUnitId = units.some((unit) => unit.id === currentUnitId)
@@ -121,7 +116,7 @@ function IntegrationsPage() {
     void navigate({
       replace: true,
       resetScroll: false,
-      search: (current) => ({ ...current, q: value || undefined }),
+      search: { q: value || undefined },
     });
   }
 
@@ -138,7 +133,10 @@ function IntegrationsPage() {
         actions={
           canManage ? (
             <Button asChild>
-              <Link to="/organization/integrations/new">
+              <Link
+                to="/organization/integrations/new"
+                search={{ provider: undefined, type: undefined }}
+              >
                 <Plus data-icon="inline-start" />
                 Add integration
               </Link>

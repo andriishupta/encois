@@ -1,5 +1,7 @@
 package contracts
 
+import "strings"
+
 // ContractVersion identifies a versioned wire boundary shared by the
 // TypeScript API and Go services.
 type ContractVersion string
@@ -53,6 +55,26 @@ const (
 	StepKindWait      WorkflowStepKind = "wait"
 	StepKindApproval  WorkflowStepKind = "approval"
 )
+
+// DefaultAgentDefinition is the generic synthesis role used by the current
+// workflow templates and model-generated Blueprint plans.
+const DefaultAgentDefinition = "context.synthesizer@1"
+
+// RegisteredAgentDefinitions is the shared semantic allowlist for executable
+// Blueprint agent steps. It is intentionally separate from provider tools and
+// workflow/template keys.
+var RegisteredAgentDefinitions = map[string]struct{}{
+	"context.summarizer.v1":               {},
+	"context.summarizer@1":                {},
+	DefaultAgentDefinition:                {},
+	"context.synthesizer.v1":              {},
+	"release-investigation.synthesizer@1": {},
+}
+
+func IsRegisteredAgentDefinition(value string) bool {
+	_, ok := RegisteredAgentDefinitions[strings.TrimSpace(value)]
+	return ok
+}
 
 type WorkflowSignalName string
 

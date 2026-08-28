@@ -55,7 +55,10 @@ function AddWorkflowMemoryPage() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.memoryChanges(),
       });
-      await navigate({ to: "/workflows/memory" });
+      await navigate({
+        to: "/workflows/memory",
+        search: { memoryId: undefined },
+      });
     },
   });
 
@@ -90,7 +93,7 @@ function AddWorkflowMemoryPage() {
         description="Create an evidence-linked memory proposal for one authorized organization scope. It will remain subject to review and approval."
         actions={
           <Button variant="outline" asChild>
-            <Link to="/workflows/memory">
+            <Link to="/workflows/memory" search={{ memoryId: undefined }}>
               <ArrowLeft data-icon="inline-start" />
               Back to memory
             </Link>
@@ -182,7 +185,9 @@ function AddWorkflowMemoryPage() {
             ) : null}
             <div className="flex justify-end gap-2 border-t pt-5">
               <Button type="button" variant="ghost" asChild>
-                <Link to="/workflows/memory">Cancel</Link>
+                <Link to="/workflows/memory" search={{ memoryId: undefined }}>
+                  Cancel
+                </Link>
               </Button>
               <Button
                 type="submit"

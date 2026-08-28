@@ -1,17 +1,7 @@
 import { KnowledgeSourceKind } from "@encois/contracts/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  Check,
-  FileText,
-  Github,
-  LoaderCircle,
-  MessageSquare,
-  PlugZap,
-  Upload,
-  Workflow,
-} from "lucide-react";
+import { ArrowRight, FileText, LoaderCircle, Upload } from "lucide-react";
 import { type ChangeEvent, useState } from "react";
 import { InlineError } from "@/components/inline-error";
 import { ProductTerm } from "@/components/product-term";
@@ -26,6 +16,7 @@ import {
 import {
   isApiError,
   listKnowledgeSources,
+  startOrganizationOnboarding,
   startSourceIngestion,
   uploadKnowledgeSourcePdf,
 } from "@/lib/api";
@@ -36,44 +27,12 @@ export const Route = createFileRoute("/onboarding/memory")({
   component: MemorySetupPage,
 });
 
-const integrationSources: {
-  id: string;
-  label: string;
-  description: string;
-  icon: typeof Github;
-}[] = [
-  {
-    id: "slack",
-    label: "Slack",
-    description: "Team updates and decisions",
-    icon: MessageSquare,
-  },
-  {
-    id: "github",
-    label: "GitHub",
-    description: "Repositories and delivery activity",
-    icon: Github,
-  },
-  {
-    id: "jira",
-    label: "Jira",
-    description: "Projects, issues, and releases",
-    icon: Workflow,
-  },
-  {
-    id: "linear",
-    label: "Linear",
-    description: "Issues and project cycles",
-    icon: PlugZap,
-  },
-];
-
 function MemorySetupPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sources = useQuery({
     queryKey: queryKeys.sources(),
-    queryFn: listKnowledgeSources,
+    queryFn: () => listKnowledgeSources(),
   });
   const [file, setFile] = useState<File | undefined>();
   const [uploading, setUploading] = useState(false);
@@ -91,9 +50,7 @@ function MemorySetupPage() {
 
   async function handleContinue() {
     if (!file && !existingSource) {
-      setError(
-        "Upload at least one PDF to continue. This step cannot be skipped.",
-      );
+      setError("Upload one PDF to continue. This step cannot be skipped.");
       return;
     }
     setUploading(true);
@@ -106,7 +63,8 @@ function MemorySetupPage() {
           queryKey: queryKeys.sourcesRoot(),
         });
       }
-      await navigate({ to: "/onboarding/coordination" });
+      await startOrganizationOnboarding();
+      await navigate({ to: "/" });
     } catch (cause) {
       setError(
         isApiError(cause) ? cause.message : "The source could not be uploaded.",
@@ -127,48 +85,10 @@ function MemorySetupPage() {
           Give your <ProductTerm term="coordinator" /> some memory
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Upload at least one organization graph document. The workspace stores
-          it as a scoped source and starts the common ingestion workflow.
+          Upload one organization graph document. The workspace stores it as a
+          scoped source and starts the common ingestion workflow.
         </p>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Source types</CardTitle>
-          <CardDescription>
-            Provider connectors use the same{" "}
-            <ProductTerm term="knowledgeSource" /> boundary and can be connected
-            after the first source is uploaded.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          {integrationSources.map((source) => {
-            const Icon = source.icon;
-            return (
-              <div
-                key={source.id}
-                className="flex items-start gap-3 rounded-lg border p-4 opacity-60"
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">
-                    {source.label}
-                  </span>
-                  <span className="mt-1 block text-xs text-muted-foreground">
-                    {source.description} · Connect after setup
-                  </span>
-                </span>
-                <Check
-                  className="mt-1 size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -246,7 +166,7 @@ function MemorySetupPage() {
           {uploading ? (
             <LoaderCircle className="animate-spin" data-icon="inline-start" />
           ) : null}
-          {uploading ? "Uploading source…" : "Continue"}
+          {uploading ? "Starting setup…" : "Start setup"}
           <ArrowRight data-icon="inline-end" />
         </Button>
       </div>

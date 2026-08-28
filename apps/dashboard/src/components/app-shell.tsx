@@ -101,7 +101,7 @@ const workflowManagementNavigation: readonly NavigationItem[] = [
     permission: Permission.WorkflowsRead,
   },
   {
-    label: "Change Plans",
+    label: "Plans",
     to: "/workflows/plans",
     icon: ClipboardCheck,
     permission: Permission.WorkflowsManage,
@@ -459,6 +459,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button variant="ghost" size="icon" asChild>
               <Link
                 to="/settings/notifications"
+                search={{ q: undefined, status: "all" }}
                 aria-label={notificationLabel}
                 className="relative"
               >
@@ -683,15 +684,12 @@ function getBreadcrumbItems(
   if (pathname === "/workflows/blueprints")
     return [{ label: "Workflows", to: "/workflows" }, { label: "Blueprints" }];
   if (pathname === "/workflows/plans")
-    return [
-      { label: "Workflows", to: "/workflows" },
-      { label: "Change Plans" },
-    ];
+    return [{ label: "Workflows", to: "/workflows" }, { label: "Plans" }];
   if (pathname.startsWith("/workflows/plans/"))
     return [
       { label: "Workflows", to: "/workflows" },
-      { label: "Change Plans", to: "/workflows/plans" },
-      { label: "Change Plan" },
+      { label: "Plans", to: "/workflows/plans" },
+      { label: "Plan" },
     ];
   if (pathname.startsWith("/workflows/definitions/"))
     return [

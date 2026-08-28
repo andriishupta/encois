@@ -4,6 +4,7 @@ export type NavigationTarget =
   | "/workflows/runs"
   | "/workflows/templates"
   | "/workflows/blueprints"
+  | "/workflows/plans"
   | "/workflows/memory"
   | "/organization/memory"
   | "/organization/investigations"

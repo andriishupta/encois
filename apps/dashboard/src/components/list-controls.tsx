@@ -48,14 +48,14 @@ export function ListSearch({
   );
 }
 
-export function ListFilter({
+export function ListFilter<T extends string>({
   value,
   onChange,
   options,
   label,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  value: T;
+  onChange: (value: T) => void;
   options: readonly SelectOption[];
   label: string;
 }) {
@@ -69,14 +69,14 @@ export function ListFilter({
   );
 }
 
-export function ListSort({
+export function ListSort<T extends string>({
   value,
   onChange,
   options,
   label,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  value: T;
+  onChange: (value: T) => void;
   options: readonly SelectOption[];
   label: string;
 }) {
@@ -91,15 +91,15 @@ export function ListSort({
   );
 }
 
-function ListSelectControl({
+function ListSelectControl<T extends string>({
   value,
   onChange,
   options,
   label,
   icon: Icon,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  value: T;
+  onChange: (value: T) => void;
   options: readonly SelectOption[];
   label: string;
   icon?: typeof ArrowUpDown;
@@ -115,7 +115,7 @@ function ListSelectControl({
       <span className="sr-only">{label}</span>
       <Select
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value as T)}
         options={options}
         aria-label={label}
       />

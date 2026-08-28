@@ -30,6 +30,81 @@ func (deferredMemoryStore) Execute(_ context.Context, request memory.Request) (m
 	}, nil
 }
 
+type capturingMemoryStore struct {
+	request memory.Request
+}
+
+func (s *capturingMemoryStore) Execute(_ context.Context, request memory.Request) (memory.Result, error) {
+	s.request = request
+	return memory.Result{
+		ContractVersion: string(contracts.ContractAgentMemoryResult),
+		RequestID:       request.RequestID,
+		Status:          string(contracts.MemoryStatusCompleted),
+		Memories: []memory.Record{{
+			ID:              "memory-1",
+			AgentDefinition: request.MemoryScope.AgentDefinition,
+			Summary:         request.Distillation.Summary,
+			EvidenceRefs:    request.Distillation.EvidenceRefs,
+			ObservedAt:      request.Distillation.ObservedAt,
+		}},
+	}, nil
+}
+
+type fixedSourceReader struct {
+	raw RawSource
+}
+
+func (r fixedSourceReader) Read(context.Context, SourceIngestionWorkflowInput) (RawSource, error) {
+	return r.raw, nil
+}
+
+func TestSourceTextExtractorDoesNotTreatPdfBytesAsText(t *testing.T) {
+	_, err := NewSourceTextExtractor().Extract([]byte("%PDF-1.4\nnot a complete PDF"), "application/json")
+	if err == nil || !strings.Contains(err.Error(), "invalid or encrypted PDF") {
+		t.Fatalf("expected PDF bytes to use the PDF parser despite incorrect metadata, got %v", err)
+	}
+}
+
+func TestSourceTextExtractorNormalizesPdfMediaTypeParameters(t *testing.T) {
+	if got := normalizeMediaType("Application/PDF; charset=binary"); got != "application/pdf" {
+		t.Fatalf("expected normalized PDF media type, got %q", got)
+	}
+}
+
+func TestSourceIngestionDistillsExtractedContentInsteadOfGraphFacts(t *testing.T) {
+	store := &capturingMemoryStore{}
+	activity := &SourceIngestionActivities{
+		reader:    fixedSourceReader{raw: RawSource{Bytes: []byte("First source paragraph.\nSecond source paragraph."), ContentType: "text/plain", SourceID: "source-1", ObservedAt: "2026-08-27T10:00:00Z"}},
+		memory:    store,
+		mode:      "mock",
+		extractor: NewSourceTextExtractor(),
+	}
+	input := SourceIngestionWorkflowInput{
+		ContractVersion:  string(contracts.ContractSourceIngestion),
+		RequestID:        "request-content-distill",
+		WorkflowID:       "workflow:org-1:source:revision",
+		RunID:            "run-content-distill",
+		OrganizationID:   "org-1",
+		ActorID:          "actor-1",
+		PolicyVersion:    "policy-1",
+		Capability:       "test-capability",
+		Scope:            map[string]any{"ids": []string{"project-1"}},
+		SourceID:         "source-1",
+		SourceRevisionID: "revision-1",
+		SourceKind:       contracts.SourceKindUploadedDocument,
+		ObservedAt:       "2026-08-27T10:00:00Z",
+		Trigger:          contracts.IngestionTriggerManual,
+		ReadScope:        map[string]any{"ids": []string{"project-1"}},
+		VisibilityScope:  map[string]any{"ids": []string{"project-1"}},
+	}
+	if _, err := activity.ProcessSourceRevision(context.Background(), input); err != nil {
+		t.Fatal(err)
+	}
+	if store.request.Distillation == nil || store.request.Distillation.Summary != "First source paragraph.\nSecond source paragraph." {
+		t.Fatalf("expected extracted content to be distilled unchanged apart from redaction, got %+v", store.request.Distillation)
+	}
+}
+
 func TestSourceIngestionContractAndMockPipelineResult(t *testing.T) {
 	input := SourceIngestionWorkflowInput{
 		ContractVersion:  string(contracts.ContractSourceIngestion),

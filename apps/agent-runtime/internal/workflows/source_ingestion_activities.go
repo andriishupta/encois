@@ -192,7 +192,10 @@ func (a *SourceIngestionActivities) ProcessSourceRevision(ctx context.Context, i
 		evidenceRefs = append(evidenceRefs, input.ArtifactRef)
 	}
 	evidenceRefs = append(evidenceRefs, "source:"+input.SourceID+":"+input.SourceRevisionID)
-	summary := strings.Join(facts, " ")
+	// Distillation receives the extracted document content, not the lossy list
+	// of graph facts. SanitizeRequest applies the same redaction boundary before
+	// the content is sent to Memory Bank.
+	summary := text
 	memoryRequest := memory.Request{
 		ContractVersion: string(contractschemas.ContractAgentMemory), RequestID: input.RequestID + ":memory", WorkflowID: input.WorkflowID,
 		TraceID: input.TraceID, RunID: input.RunID, OrganizationID: input.OrganizationID, ActorID: input.ActorID, Scope: memory.Scope{IDs: scopeIDs(input.VisibilityScope)}, Capability: input.Capability,

@@ -90,7 +90,7 @@ function WorkflowsPage() {
   });
   const runs = useQuery({
     queryKey: queryKeys.workflows(),
-    queryFn: listWorkflows,
+    queryFn: () => listWorkflows(),
   });
   const blueprintItems =
     workflows.data?.pages.flatMap((page) => page.items) ?? [];
@@ -377,7 +377,7 @@ function WorkflowDefinitionActions({
     mutationFn: async () => {
       const latestRuns = await queryClient.fetchQuery({
         queryKey: queryKeys.workflows(),
-        queryFn: listWorkflows,
+        queryFn: () => listWorkflows(),
         staleTime: 0,
       });
       const latestActiveRun = selectActiveRuns(latestRuns).get(

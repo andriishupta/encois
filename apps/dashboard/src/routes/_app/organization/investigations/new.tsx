@@ -36,7 +36,7 @@ function NewInvestigationPage() {
           </Button>
         }
       />
-      <InvestigationForm detailPath="/organization/investigations/$investigationId" />
+      <InvestigationForm />
     </div>
   );
 }

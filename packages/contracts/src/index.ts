@@ -65,6 +65,7 @@ export {
 
 export {
   AccessLevel,
+  type AgentDefinition,
   AgentMemoryOperation,
   AgentMemoryStatus,
   AgentResultStatus,
@@ -76,11 +77,13 @@ export {
   CoordinatorScopeType,
   CoordinatorSignalName,
   CoordinatorStatus,
+  DefaultAgentDefinition,
   FreshnessStatus,
   GraphQueryStatus,
   IntegrationCatalogStatus,
   IntegrationStatus,
   IntegrationType,
+  isRegisteredAgentDefinition,
   KnowledgeSourceKind,
   KnowledgeSourceStatus,
   MemoryRedactionStatus,
@@ -90,6 +93,7 @@ export {
   OrganizationUnitType,
   RecommendationStatus,
   RecommendationTarget,
+  RegisteredAgentDefinitions,
   ScopeRuleMode,
   SourceIngestionStatus,
   SourceIngestionTrigger,
@@ -669,8 +673,10 @@ export type OrganizationUnitProjection = {
   canManage: boolean;
   /** Scoped details are omitted when canView is false. */
   manager?: string;
-  /** Scoped details are omitted when canView is false. */
-  memberCount?: number;
+  /** Members directly scoped to this unit. */
+  directMemberCount?: number;
+  /** Members inherited from an ancestor unit through scope propagation. */
+  inheritedMemberCount?: number;
 };
 
 export type OrganizationMemberProjection = {

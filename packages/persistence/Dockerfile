@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:24.19-bookworm-slim
 
 ARG ENCOIS_VERSION=1.0.0
 LABEL org.opencontainers.image.title="Encois Persistence Migrations" \

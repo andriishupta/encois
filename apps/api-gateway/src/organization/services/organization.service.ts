@@ -435,9 +435,24 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
     const canView =
       context.isAdministrator || context.actorScopeIds.has(unit.id);
     const canManage = canManageUnit(context, unit.id);
-    const scopedMembers = canView
+    const directMembers = canView
       ? context.members.filter((member) =>
-          effectiveByMember.get(member.membershipId)?.has(unit.id),
+          context.scopes.some(
+            (scope) =>
+              scope.membershipId === member.membershipId &&
+              scope.unitId === unit.id,
+          ),
+        )
+      : [];
+    const inheritedMembers = canView
+      ? context.members.filter(
+          (member) =>
+            effectiveByMember.get(member.membershipId)?.has(unit.id) === true &&
+            !context.scopes.some(
+              (scope) =>
+                scope.membershipId === member.membershipId &&
+                scope.unitId === unit.id,
+            ),
         )
       : [];
     const manager = canView
@@ -466,8 +481,12 @@ function projectContext(context: OrganizationContext): OrganizationProjection {
       ...(canView
         ? {
             manager: manager ? displayName(manager) : "Not assigned",
-            memberCount: new Set(scopedMembers.map((member) => member.userId))
-              .size,
+            directMemberCount: new Set(
+              directMembers.map((member) => member.userId),
+            ).size,
+            inheritedMemberCount: new Set(
+              inheritedMembers.map((member) => member.userId),
+            ).size,
           }
         : {}),
     };
@@ -1680,7 +1699,8 @@ export async function createOrganizationUnitForPrincipal(
       canView: true,
       canManage: true,
       manager: "Not assigned",
-      memberCount: 0,
+      directMemberCount: 0,
+      inheritedMemberCount: 0,
     };
   });
 }

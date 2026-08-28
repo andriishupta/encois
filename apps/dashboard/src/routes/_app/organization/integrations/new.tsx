@@ -122,7 +122,7 @@ function NewIntegrationPage() {
         description="Register an organization-level provider connection. Unit-specific projects, repositories, and channels are added later as Sources."
         actions={
           <Button variant="outline" asChild>
-            <Link to="/organization/integrations">
+            <Link to="/organization/integrations" search={{ q: undefined }}>
               <ArrowLeft data-icon="inline-start" />
               Back to integrations
             </Link>
@@ -234,7 +234,12 @@ function NewIntegrationPage() {
               ) : null}
               <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:justify-between">
                 <Button variant="ghost" asChild>
-                  <Link to="/organization/integrations">Cancel</Link>
+                  <Link
+                    to="/organization/integrations"
+                    search={{ q: undefined }}
+                  >
+                    Cancel
+                  </Link>
                 </Button>
                 <Button
                   type="submit"

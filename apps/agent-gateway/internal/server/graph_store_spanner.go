@@ -34,30 +34,30 @@ func (s *spannerGraphStore) Upsert(ctx context.Context, mutation domain.GraphMut
 	}
 	mutations := make([]*spanner.Mutation, 0, len(mutation.Nodes)+len(mutation.Edges))
 	for _, node := range mutation.Nodes {
-		properties, err := json.Marshal(node.Properties)
+		properties, err := graphJSONValue(node.Properties, "graph node properties")
 		if err != nil {
-			return fmt.Errorf("encode graph node properties: %w", err)
+			return err
 		}
-		provenance, err := json.Marshal(node.Provenance)
+		provenance, err := graphJSONValue(node.Provenance, "graph node provenance")
 		if err != nil {
-			return fmt.Errorf("encode graph node provenance: %w", err)
+			return err
 		}
 		mutations = append(mutations, spanner.InsertOrUpdate("encois_graph_nodes",
 			[]string{"organization_id", "id", "type", "properties_json", "provenance_json"},
-			[]any{mutation.OrganizationID, node.ID, node.Type, string(properties), string(provenance)}))
+			[]any{mutation.OrganizationID, node.ID, node.Type, properties, provenance}))
 	}
 	for _, edge := range mutation.Edges {
-		properties, err := json.Marshal(edge.Properties)
+		properties, err := graphJSONValue(edge.Properties, "graph edge properties")
 		if err != nil {
-			return fmt.Errorf("encode graph edge properties: %w", err)
+			return err
 		}
-		provenance, err := json.Marshal(edge.Provenance)
+		provenance, err := graphJSONValue(edge.Provenance, "graph edge provenance")
 		if err != nil {
-			return fmt.Errorf("encode graph edge provenance: %w", err)
+			return err
 		}
 		mutations = append(mutations, spanner.InsertOrUpdate("encois_graph_edges",
 			[]string{"organization_id", "id", "source_id", "target_id", "relationship", "properties_json", "provenance_json"},
-			[]any{mutation.OrganizationID, edge.ID, edge.SourceID, edge.TargetID, edge.Relationship, string(properties), string(provenance)}))
+			[]any{mutation.OrganizationID, edge.ID, edge.SourceID, edge.TargetID, edge.Relationship, properties, provenance}))
 	}
 	if len(mutations) == 0 {
 		return nil
@@ -169,12 +169,13 @@ func (s *spannerGraphStore) readGraphEdges(ctx context.Context, statement spanne
 }
 
 func graphNodeFromRow(row *spanner.Row) (domain.GraphNode, error) {
-	var id, typ, propertiesJSON, provenanceJSON string
+	var id, typ string
+	var propertiesJSON, provenanceJSON spanner.NullJSON
 	if err := row.Columns(&id, &typ, &propertiesJSON, &provenanceJSON); err != nil {
 		return domain.GraphNode{}, err
 	}
 	var properties map[string]any
-	if err := json.Unmarshal([]byte(propertiesJSON), &properties); err != nil {
+	if err := decodeGraphJSON(propertiesJSON, &properties); err != nil {
 		return domain.GraphNode{}, err
 	}
 	provenance, err := graphProvenance(provenanceJSON)
@@ -185,12 +186,13 @@ func graphNodeFromRow(row *spanner.Row) (domain.GraphNode, error) {
 }
 
 func graphEdgeFromRow(row *spanner.Row) (domain.GraphEdge, error) {
-	var id, sourceID, targetID, relationship, propertiesJSON, provenanceJSON string
+	var id, sourceID, targetID, relationship string
+	var propertiesJSON, provenanceJSON spanner.NullJSON
 	if err := row.Columns(&id, &sourceID, &targetID, &relationship, &propertiesJSON, &provenanceJSON); err != nil {
 		return domain.GraphEdge{}, err
 	}
 	var properties map[string]any
-	if err := json.Unmarshal([]byte(propertiesJSON), &properties); err != nil {
+	if err := decodeGraphJSON(propertiesJSON, &properties); err != nil {
 		return domain.GraphEdge{}, err
 	}
 	provenance, err := graphProvenance(provenanceJSON)
@@ -200,12 +202,30 @@ func graphEdgeFromRow(row *spanner.Row) (domain.GraphEdge, error) {
 	return domain.GraphEdge{ID: id, SourceID: sourceID, TargetID: targetID, Relationship: relationship, Properties: properties, Provenance: provenance}, nil
 }
 
-func graphProvenance(value string) (*contracts.DataProvenance, error) {
-	if value == "null" || value == "" {
+func graphJSONValue(value any, label string) (spanner.NullJSON, error) {
+	if _, err := json.Marshal(value); err != nil {
+		return spanner.NullJSON{}, fmt.Errorf("encode %s: %w", label, err)
+	}
+	return spanner.NullJSON{Value: value, Valid: true}, nil
+}
+
+func decodeGraphJSON(value spanner.NullJSON, target any) error {
+	if !value.Valid {
+		return nil
+	}
+	encoded, err := json.Marshal(value.Value)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(encoded, target)
+}
+
+func graphProvenance(value spanner.NullJSON) (*contracts.DataProvenance, error) {
+	if !value.Valid || value.Value == nil {
 		return nil, nil
 	}
 	provenance := &contracts.DataProvenance{}
-	if err := json.Unmarshal([]byte(value), provenance); err != nil {
+	if err := decodeGraphJSON(value, provenance); err != nil {
 		return nil, err
 	}
 	return provenance, nil

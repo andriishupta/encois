@@ -59,7 +59,7 @@ function BlueprintRevisionPage() {
   const navigate = useNavigate();
   const blueprints = useQuery({
     queryKey: queryKeys.workflowBlueprints(),
-    queryFn: listWorkflowBlueprints,
+    queryFn: () => listWorkflowBlueprints(),
   });
   const queryClient = useQueryClient();
   const canManage = useCan(Permission.WorkflowsManage);
@@ -74,7 +74,7 @@ function BlueprintRevisionPage() {
     ) => createBlueprintLifecyclePlan(blueprintId, input),
     onSuccess: (plan) => {
       setLifecyclePlanId(plan.planId);
-      setLifecycleSuccess(`Change Plan ${plan.planId} is awaiting approval.`);
+      setLifecycleSuccess(`Plan ${plan.planId} is awaiting approval.`);
       setReason("");
       void queryClient.invalidateQueries({
         queryKey: queryKeys.workflowBlueprintsRoot(),
@@ -545,7 +545,7 @@ function BlueprintRevisionPage() {
                           to="/workflows/plans/$planId"
                           params={{ planId: lifecyclePlanId }}
                         >
-                          Open Change Plan
+                          Open Plan
                         </Link>
                       ) : null}
                     </p>

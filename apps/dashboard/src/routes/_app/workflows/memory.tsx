@@ -235,7 +235,10 @@ function MemoryPage() {
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild>
-                <Link to="/workflows/memory/add">
+                <Link
+                  to="/workflows/memory/add"
+                  search={{ memoryId: undefined }}
+                >
                   <FilePlus2 data-icon="inline-start" />
                   Add Workflow memory
                 </Link>

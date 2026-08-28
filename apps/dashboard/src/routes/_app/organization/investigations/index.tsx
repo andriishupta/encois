@@ -31,7 +31,7 @@ import { formatUnitPath } from "@/lib/organization";
 import { useOrganization } from "@/lib/organization-context";
 import { queryKeys } from "@/lib/query-keys";
 
-export const Route = createFileRoute("/_app/management/investigations")({
+export const Route = createFileRoute("/_app/organization/investigations/")({
   validateSearch: (search: Record<string, unknown>) => ({
     q: typeof search.q === "string" ? search.q : undefined,
   }),
@@ -45,47 +45,15 @@ export const Route = createFileRoute("/_app/management/investigations")({
       !hasPermission(session, Permission.MemoryRead)
     )
       throw redirect({ to: "/forbidden" });
-    throw redirect({
-      to: "/organization/investigations",
-      search: { q: undefined },
-    });
   },
-  component: LegacyInvestigationsPage,
+  component: OrganizationInvestigationsPage,
 });
 
 const pageSize = 10;
 
-function LegacyInvestigationsPage() {
+function OrganizationInvestigationsPage() {
   const navigate = Route.useNavigate();
   const { q } = Route.useSearch();
-  return (
-    <InvestigationsPage
-      q={q}
-      onSearch={(value) =>
-        void navigate({
-          replace: true,
-          resetScroll: false,
-          search: { q: value || undefined },
-        })
-      }
-      detailPath="/management/investigations/$investigationId"
-    />
-  );
-}
-
-export function InvestigationsPage({
-  q,
-  onSearch,
-  detailPath,
-  newPath,
-}: {
-  q?: string;
-  onSearch: (value: string) => void;
-  detailPath:
-    | "/management/investigations/$investigationId"
-    | "/organization/investigations/$investigationId";
-  newPath?: "/organization/investigations/new";
-}) {
   const { units } = useOrganization();
   const [view, setView] = useState<ListViewMode>("grid");
   const investigations = useInfiniteQuery({
@@ -105,26 +73,34 @@ export function InvestigationsPage({
   });
   const items = investigations.data?.pages.flatMap((page) => page.items) ?? [];
   const total = investigations.data?.pages[0]?.pagination.total ?? 0;
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Investigations"
         description="Create and review repeatable, scope-bound investigations against organization context."
         actions={
-          newPath ? (
-            <Button asChild>
-              <Link to={newPath} search={{ q: undefined }}>
-                <Plus data-icon="inline-start" />
-                New Investigation
-              </Link>
-            </Button>
-          ) : null
+          <Button asChild>
+            <Link
+              to="/organization/investigations/new"
+              search={{ q: undefined }}
+            >
+              <Plus data-icon="inline-start" />
+              New Investigation
+            </Link>
+          </Button>
         }
       />
       <ListToolbar>
         <ListSearch
           value={q ?? ""}
-          onChange={onSearch}
+          onChange={(value) =>
+            void navigate({
+              replace: true,
+              resetScroll: false,
+              search: { q: value || undefined },
+            })
+          }
           placeholder="Search investigations by name or query…"
           label="Search investigations"
         />
@@ -153,11 +129,7 @@ export function InvestigationsPage({
           view={view}
           getKey={(item) => item.id}
           renderItem={(item) => (
-            <InvestigationCard
-              investigation={item}
-              units={units}
-              detailPath={detailPath}
-            />
+            <InvestigationCard investigation={item} units={units} />
           )}
         />
       ) : null}
@@ -190,20 +162,17 @@ export function InvestigationsPage({
 function InvestigationCard({
   investigation,
   units,
-  detailPath,
 }: {
   investigation: SavedInvestigation;
   units: ReturnType<typeof useOrganization>["units"];
-  detailPath:
-    | "/management/investigations/$investigationId"
-    | "/organization/investigations/$investigationId";
 }) {
   const contextLabel = investigation.scope.ids
     .map((id) => formatUnitPath(units, id) || id)
     .join(", ");
+
   return (
     <Link
-      to={detailPath}
+      to="/organization/investigations/$investigationId"
       params={{ investigationId: investigation.id }}
       search={{ q: undefined }}
       className="group block"
