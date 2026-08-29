@@ -1261,7 +1261,10 @@ describe("API Gateway", () => {
         method: "POST",
       },
     );
-    expect(signal.status).toBe(200);
+    expect(signal.status).toBe(409);
+    await expect(signal.json()).resolves.toMatchObject({
+      error: { code: "WORKFLOW_NOT_SIGNALABLE" },
+    });
 
     const pause = await app.request(
       `/api/v1/workflows/${firstBody.data.workflowId}/signals`,
