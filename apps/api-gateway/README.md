@@ -40,7 +40,8 @@ The local Compose flow sets `FIREBASE_AUTH_EMULATOR_HOST`, allows the emulator's
 `password` provider, and uses `scripts/seed-local.ts` to create the `Sun Inc`
 demo workspace, active users, onboarding invite users, scoped organization
 units, six integrations, sixteen Sources/revisions, ingestion runs, webhooks,
-approved Blueprints, and thirty real Temporal-backed workflow executions. The
+approved Blueprints, one real long-lived Coordinator, and thirty real
+Temporal-backed workflow executions. The
 seed is idempotent and local-only, and fails if the configured Temporal server
 is unavailable.
 
@@ -105,7 +106,7 @@ Current blueprint routes:
 - `POST /api/v1/workflows` — generic Blueprint start/reuse endpoint.
 - `GET /api/v1/workflows/templates` — return up to 10 published, tenant-visible provider-neutral workflow templates; supports `q`, `category`, and `limit`.
 - `POST /api/v1/workflows/blueprints/preview` — resolve a Template or approved Blueprint and return the Blueprint preview.
-- `POST /api/v1/workflows/blueprints/from-intent` — create the approved Blueprint directly and optionally start its Workflow.
+- `POST /api/v1/workflows/blueprints/from-intent` — create the approved Blueprint directly and optionally queue its Workflow start through the Coordinator outbox.
 - `POST /api/v1/workflows/:workflowId/cancel` — request cancellation for an active, tenant-visible Run when the caller has `workflows:run`; the Gateway records an audit event and delegates cancellation to the configured workflow client.
 - `POST /api/v1/workflows/:workflowId/rerun` — create a new server-keyed Run from the persisted Blueprint revision, business input, and scope of a terminal parent Run; the parent relationship is retained for history and audit.
 - `POST /api/v1/internal/coordinator/onboarding-status` — private Runtime/Coordinator readiness callback; requires `X-Encois-Service-Token` and `X-Organization-ID`.
@@ -166,6 +167,8 @@ The API server starts an always-on Coordinator outbox dispatcher alongside the
 HTTP listener. It polls every second, discovers organizations with pending
 events, and delivers them to Temporal with bounded lease/retry behavior. A
 database or Temporal outage is logged and retried without stopping the API.
+Workflow start requests, integration readiness, completed Source ingestions,
+and completed Workflows use this outbox rather than direct Coordinator Signals.
 `pnpm dispatch:coordinator` remains available as a one-shot operator command
 that drains one bounded batch across all organizations.
 

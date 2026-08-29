@@ -223,6 +223,7 @@ export type WorkflowUpdateName =
   (typeof WorkflowUpdateName)[keyof typeof WorkflowUpdateName];
 
 export const CoordinatorEventType = {
+  WorkflowStartRequested: "workflow-start-requested",
   WorkflowCompleted: "workflow-completed",
   IntegrationConnected: "integration-connected",
   SourceReady: "source-ready",

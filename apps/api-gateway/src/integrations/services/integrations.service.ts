@@ -1,4 +1,5 @@
 import {
+  CoordinatorEventType,
   type IntegrationCatalogProjection,
   type IntegrationCreateRequest,
   type IntegrationProjection,
@@ -37,6 +38,10 @@ import {
   organizationScopeCovers,
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
+import {
+  coordinatorEventId,
+  enqueueCoordinatorEvent,
+} from "../../workflows/services/coordinator-event.service.js";
 import type {
   IntegrationAuthorizationAdapter,
   IntegrationAuthorizationAdapterResult,
@@ -92,6 +97,45 @@ export type IntegrationCredentialResolution = {
 };
 
 type QueryDatabase = NonNullable<typeof database> | DatabaseTransaction;
+
+async function enqueueIntegrationLifecycleEvent(
+  db: DatabaseTransaction,
+  principal: AosPrincipal,
+  integration: { id: string; provider: string },
+  previousStatus: IntegrationStatus,
+  nextStatus: IntegrationStatus,
+  scopeIds: readonly string[],
+  occurredAt: Date,
+): Promise<void> {
+  const eventType =
+    nextStatus === IntegrationStatus.Active &&
+    previousStatus !== IntegrationStatus.Active
+      ? CoordinatorEventType.IntegrationConnected
+      : previousStatus === IntegrationStatus.Active &&
+          nextStatus !== IntegrationStatus.Active
+        ? CoordinatorEventType.ProviderChanged
+        : null;
+  if (!eventType) return;
+  await enqueueCoordinatorEvent(db, {
+    organizationId: principal.organizationId,
+    eventId: coordinatorEventId(
+      "integration",
+      integration.id,
+      nextStatus,
+      occurredAt.toISOString(),
+    ),
+    eventType,
+    actorId: principal.actorId,
+    key: integration.id,
+    businessInput: {
+      provider: integration.provider,
+      previousStatus,
+      status: nextStatus,
+    },
+    ...(scopeIds.length > 0 ? { scope: { ids: [...new Set(scopeIds)] } } : {}),
+    reason: `Integration ${integration.provider} changed from ${previousStatus} to ${nextStatus}.`,
+  });
+}
 
 function localUserId(principal: AosPrincipal): string | null {
   const candidate = principal.userId ?? principal.actorId;
@@ -364,6 +408,7 @@ export async function reportIntegrationHealthForService(
           id: integrations.id,
           displayName: integrations.displayName,
           provider: integrations.provider,
+          status: integrations.status,
         })
         .from(integrations)
         .where(
@@ -422,6 +467,15 @@ export async function reportIntegrationHealthForService(
           ...(lastError ? { errorReported: true } : {}),
         },
       });
+      await enqueueIntegrationLifecycleEvent(
+        db,
+        principal,
+        existing,
+        existing.status,
+        row.status,
+        bindings.map((binding) => binding.organizationUnitId),
+        checkedAt,
+      );
 
       return {
         id: row.id,
@@ -689,6 +743,15 @@ export async function updateIntegrationForPrincipal(
           scope: { ids: accessible.map((item) => item.organizationUnitId) },
           metadata: { changedFields: Object.keys(update), status: row.status },
         });
+        await enqueueIntegrationLifecycleEvent(
+          db,
+          principal,
+          row,
+          accessible[0]?.status ?? row.status,
+          row.status,
+          accessible.map((item) => item.organizationUnitId),
+          row.updatedAt,
+        );
       }
 
       return row
@@ -836,6 +899,15 @@ export async function authorizeIntegrationForService(
           ...(lastError ? { errorReported: true } : {}),
         },
       });
+      await enqueueIntegrationLifecycleEvent(
+        db,
+        principal,
+        row,
+        existing.status,
+        row.status,
+        bindings.map((binding) => binding.organizationUnitId),
+        checkedAt,
+      );
 
       return {
         id: row.id,

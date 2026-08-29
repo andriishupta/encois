@@ -384,9 +384,10 @@ Coordinator now reports readiness after reconciliation triggers. The API
 enqueues tenant-scoped `coordinator-event.v1` envelopes transactionally in the
 control-plane outbox. The API includes an always-on bounded lease/retry
 dispatcher loop, a Temporal sink, and tenant-safe outbox organization
-discovery. A direct Blueprint creation can optionally start a Workflow for
-explicit `start` intents. The Gateway starts the immutable approved snapshot
-through the public workflow execution boundary.
+discovery. An explicit Blueprint `start` intent transactionally creates a
+queued Workflow projection and a `workflow-start-requested` outbox event. The
+Coordinator consumes that event and calls the private Gateway execution
+boundary to start the immutable approved snapshot in Temporal.
 Generated DTO generation, hosted Temporal/Cloud Run deployment, and real
 provider adapters also remain pending. These Runtime Activities do not access
 Postgres and cannot approve or bypass the registry.
@@ -660,7 +661,9 @@ layer own identity, authorization, and organization scope. The internal Agent
 Gateway may expose MCP-shaped JSON over authenticated HTTP first and add a
 full MCP JSON-RPC adapter later if external clients need it.
 
-The first UI may call the Gateway API directly to start a Blueprint execution.
+The first UI asks the Gateway API to queue a Blueprint execution. The
+Coordinator outbox and private Runtime-to-Gateway Activity perform the durable
+Temporal start.
 MCP can later expose the same application capabilities to a conversational
 client, for example `start_workflow` or `get_workflow_status`; it is not
 required to be the UI's primary transport.

@@ -1,4 +1,8 @@
-import { ContractVersion, type WorkflowBlueprint } from "@encois/contracts";
+import {
+  ContractVersion,
+  TemporalWorkflowType,
+  type WorkflowBlueprint,
+} from "@encois/contracts";
 import {
   createDatabase,
   type DatabaseTransaction,
@@ -33,6 +37,7 @@ import {
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth, type UserRecord } from "firebase-admin/auth";
+import { buildCoordinatorWorkflowId } from "../src/workflows/types.js";
 
 const projectId =
   process.env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || "demo-encois";
@@ -371,7 +376,7 @@ function demoBlueprint(fixture: WorkflowFixture): WorkflowBlueprint {
               kind: "wait" as const,
               input: {
                 duration:
-                  fixture.status === "failed" ? "not-a-duration" : "24h",
+                  fixture.status === "failed" ? "not-a-duration" : "8760h",
               },
             },
           ];
@@ -1614,14 +1619,20 @@ async function seedTemporalWorkflowFixtures(
       });
     }
 
-    if (fixture.status === "paused")
+    const currentDescription = await handle.describe();
+    const shouldPause =
+      fixture.status === "paused" &&
+      currentDescription.status.name === "RUNNING";
+    if (shouldPause)
       await handle.signal("workflow-control", {
         signalId: `seed-local:pause:${fixture.key}`,
         action: "workflow-pause",
         reason: "Local demo workspace fixture.",
       });
 
-    const description = await handle.describe();
+    const description = shouldPause
+      ? await handle.describe()
+      : currentDescription;
     const now = new Date();
     const [existingRun] = await database.db
       .select({ id: workflowRuns.id })
@@ -1727,6 +1738,53 @@ async function seedTemporalWorkflowFixtures(
       }
     });
   }
+}
+
+async function seedTemporalCoordinator(
+  temporal: Client,
+  organization: FixtureOrganization,
+  usersByKey: ReadonlyMap<string, FixtureUser>,
+): Promise<void> {
+  const actor = usersByKey.get("owner");
+  if (!actor) throw new Error("Local Coordinator actor is missing.");
+  const coordinatorId = `organization:${organization.id}`;
+  const workflowId = buildCoordinatorWorkflowId(organization.id, coordinatorId);
+  const handle = temporal.workflow.getHandle(workflowId);
+  try {
+    const existing = await handle.describe();
+    if (existing.status.name === "RUNNING") return;
+  } catch (error) {
+    if (!(error instanceof WorkflowNotFoundError)) throw error;
+  }
+  await temporal.workflow.start(TemporalWorkflowType.Coordinator, {
+    args: [
+      {
+        contractVersion: ContractVersion.Coordinator,
+        coordinatorId,
+        organizationId: organization.id,
+        scopeType: "organization",
+        scope: { ids: [...organization.units.values()].map((unit) => unit.id) },
+        actorId: actor.id,
+        policyVersion: temporalPolicyVersion,
+        coordinationMode: "start-coordinator",
+        selectedWorkflowRefs: [],
+        state: {
+          status: "READY",
+          version: 1,
+          onboardingComplete: true,
+          reconciliationCount: 1,
+        },
+      },
+    ],
+    taskQueue: temporalTaskQueue,
+    workflowId,
+    memo: {
+      encoisWorkflowType: TemporalWorkflowType.Coordinator,
+      encoisTrigger: "local-demo-seed",
+    },
+    workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+    workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
+  });
 }
 
 async function ensureWebhookFixture(
@@ -2153,6 +2211,11 @@ async function seedFixtures(): Promise<unknown> {
     });
     if (!seeded.seedOrganization)
       throw new Error("Local organization fixture was not created.");
+    await seedTemporalCoordinator(
+      temporal.client,
+      seeded.seedOrganization,
+      seeded.seedUsersByKey,
+    );
     await seedTemporalWorkflowFixtures(
       temporal.client,
       seeded.seedOrganization,
@@ -2162,7 +2225,7 @@ async function seedFixtures(): Promise<unknown> {
       organizations: seeded.organizations,
       activeUsers: seeded.activeUsers,
       onboardingUsers: seeded.onboardingUsers,
-      workflowMode: `temporal (${workflowFixtures.length} real demo executions)`,
+      workflowMode: `temporal (1 Coordinator + ${workflowFixtures.length} real demo executions)`,
       memoryMode:
         "mock (process-scoped; source ingestion warms it when workflows execute)",
     };

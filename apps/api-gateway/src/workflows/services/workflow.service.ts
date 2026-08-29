@@ -523,8 +523,13 @@ export async function startWorkflow(
 
       const [existingRun] = await db
         .select({
+          id: workflowRuns.id,
           workflowId: workflowRuns.temporalWorkflowId,
+          status: workflowRuns.status,
+          blueprintId: workflowRuns.blueprintId,
+          blueprintVersion: workflowRuns.blueprintVersion,
           scope: workflowRuns.scope,
+          businessInput: workflowRuns.businessInput,
         })
         .from(workflowRuns)
         .where(
@@ -541,10 +546,23 @@ export async function startWorkflow(
           options.namespace,
         );
         if (existingProjection) return { ...existingProjection, reused: true };
-        throw workflowServiceError(
-          "WORKFLOW_PROJECTION_MISSING",
-          "The active workflow projection is unavailable.",
-        );
+        if (existingRun.status !== WorkflowExecutionStatus.Queued)
+          throw workflowServiceError(
+            "WORKFLOW_PROJECTION_MISSING",
+            "The active workflow projection is unavailable.",
+          );
+        if (
+          existingRun.blueprintId !== request.blueprintId ||
+          existingRun.blueprintVersion !== request.blueprintVersion ||
+          stableSerialize(existingRun.scope) !==
+            stableSerialize(request.scope ?? { ids: principal.scope }) ||
+          stableSerialize(existingRun.businessInput) !==
+            stableSerialize(request.input ?? {})
+        )
+          throw workflowServiceError(
+            "IDEMPOTENCY_CONFLICT",
+            "The queued workflow belongs to a different start request.",
+          );
       }
 
       const effectiveRequest = await resolveStoredBlueprint(
@@ -597,27 +615,54 @@ export async function startWorkflow(
           (options.workflowRunRetentionDays ?? 30) * 24 * 60 * 60 * 1000,
       );
 
-      const [workflowRun] = await db
-        .insert(workflowRuns)
-        .values({
-          organizationId: principal.organizationId,
-          definitionId: definition.id,
-          actorUserId: userId,
-          temporalNamespace: projection.namespace,
-          temporalTaskQueue: projection.taskQueue,
-          temporalWorkflowId: projection.workflowId,
-          temporalRunId: projection.runId,
-          blueprintId: command.input.blueprint?.blueprintId,
-          blueprintVersion:
-            command.input.blueprint?.version ?? command.input.blueprintVersion,
-          parentWorkflowId: command.input.parentWorkflowId,
-          trigger: command.input.trigger ?? "manual",
-          status: projection.status,
-          scope: command.input.scope,
-          businessInput: command.input.businessInput ?? {},
-          retentionUntil,
-        })
-        .returning({ id: workflowRuns.id });
+      const workflowRun = existingRun
+        ? (
+            await db
+              .update(workflowRuns)
+              .set({
+                definitionId: definition.id,
+                temporalNamespace: projection.namespace,
+                temporalTaskQueue: projection.taskQueue,
+                temporalRunId: projection.runId,
+                status: projection.status,
+                scope: command.input.scope,
+                businessInput: command.input.businessInput ?? {},
+                retentionUntil,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(workflowRuns.organizationId, principal.organizationId),
+                  eq(workflowRuns.id, existingRun.id),
+                  eq(workflowRuns.status, WorkflowExecutionStatus.Queued),
+                ),
+              )
+              .returning({ id: workflowRuns.id })
+          )[0]
+        : (
+            await db
+              .insert(workflowRuns)
+              .values({
+                organizationId: principal.organizationId,
+                definitionId: definition.id,
+                actorUserId: userId,
+                temporalNamespace: projection.namespace,
+                temporalTaskQueue: projection.taskQueue,
+                temporalWorkflowId: projection.workflowId,
+                temporalRunId: projection.runId,
+                blueprintId: command.input.blueprint?.blueprintId,
+                blueprintVersion:
+                  command.input.blueprint?.version ??
+                  command.input.blueprintVersion,
+                parentWorkflowId: command.input.parentWorkflowId,
+                trigger: command.input.trigger ?? "manual",
+                status: projection.status,
+                scope: command.input.scope,
+                businessInput: command.input.businessInput ?? {},
+                retentionUntil,
+              })
+              .returning({ id: workflowRuns.id })
+          )[0];
 
       if (workflowRun) {
         await db.insert(workflowEvents).values({
@@ -702,7 +747,17 @@ export async function getWorkflow(
       const [row] = await db
         .select({
           workflowId: workflowRuns.temporalWorkflowId,
+          workflowType: workflowDefinitions.key,
+          blueprintId: workflowRuns.blueprintId,
+          blueprintVersion: workflowRuns.blueprintVersion,
+          trigger: workflowRuns.trigger,
+          namespace: workflowRuns.temporalNamespace,
+          taskQueue: workflowRuns.temporalTaskQueue,
+          status: workflowRuns.status,
           scope: workflowRuns.scope,
+          retentionUntil: workflowRuns.retentionUntil,
+          createdAt: workflowRuns.createdAt,
+          updatedAt: workflowRuns.updatedAt,
         })
         .from(workflowRuns)
         .leftJoin(
@@ -760,7 +815,35 @@ export async function getWorkflow(
     const scope = parseExecutionScope(authorized.scope);
     return scope ? { ...synced, scope } : synced;
   }
-  return projection;
+  const scope = parseExecutionScope(authorized.scope);
+  if (
+    authorized.status === WorkflowExecutionStatus.Queued &&
+    authorized.workflowType &&
+    authorized.namespace &&
+    authorized.taskQueue
+  )
+    return {
+      workflowId: authorized.workflowId,
+      workflowType: authorized.workflowType,
+      ...(authorized.blueprintId
+        ? { blueprintId: authorized.blueprintId }
+        : {}),
+      ...(authorized.blueprintVersion
+        ? { blueprintVersion: authorized.blueprintVersion }
+        : {}),
+      ...(authorized.trigger ? { trigger: authorized.trigger } : {}),
+      namespace: authorized.namespace,
+      taskQueue: authorized.taskQueue,
+      status: WorkflowExecutionStatus.Queued,
+      organizationId: principal.organizationId,
+      ...(scope ? { scope } : {}),
+      ...(authorized.retentionUntil
+        ? { retentionUntil: authorized.retentionUntil.toISOString() }
+        : {}),
+      createdAt: authorized.createdAt.toISOString(),
+      updatedAt: authorized.updatedAt.toISOString(),
+    };
+  return null;
 }
 
 export async function getWorkflowEvents(
@@ -1042,7 +1125,17 @@ async function listAllWorkflows(
       const rows = await db
         .select({
           workflowId: workflowRuns.temporalWorkflowId,
+          workflowType: workflowDefinitions.key,
+          blueprintId: workflowRuns.blueprintId,
+          blueprintVersion: workflowRuns.blueprintVersion,
+          trigger: workflowRuns.trigger,
+          namespace: workflowRuns.temporalNamespace,
+          taskQueue: workflowRuns.temporalTaskQueue,
+          status: workflowRuns.status,
           scope: workflowRuns.scope,
+          retentionUntil: workflowRuns.retentionUntil,
+          createdAt: workflowRuns.createdAt,
+          updatedAt: workflowRuns.updatedAt,
         })
         .from(workflowRuns)
         .leftJoin(
@@ -1078,11 +1171,13 @@ async function listAllWorkflows(
             ),
           ),
         );
-      return new Set(
-        rows
-          .filter((row) => workflowScopeIsVisible(row.scope, principal.scope))
-          .map((row) => row.workflowId),
-      );
+      return [
+        ...new Map(
+          rows
+            .filter((row) => workflowScopeIsVisible(row.scope, principal.scope))
+            .map((row) => [row.workflowId, row] as const),
+        ).values(),
+      ];
     },
   );
 
@@ -1090,14 +1185,51 @@ async function listAllWorkflows(
     principal.organizationId,
     options.namespace,
   );
+  const visibleIds = new Set(visible.map((row) => row.workflowId));
   const visibleProjections = projections.filter((projection) =>
-    visible.has(projection.workflowId),
+    visibleIds.has(projection.workflowId),
   );
-  return Promise.all(
+  const temporalWorkflowIds = new Set(
+    visibleProjections.map((projection) => projection.workflowId),
+  );
+  const synced = await Promise.all(
     visibleProjections.map((projection) =>
       syncWorkflowProjection(principal.organizationId, projection),
     ),
   );
+  const queued = visible.flatMap((row): WorkflowExecutionProjection[] => {
+    if (
+      temporalWorkflowIds.has(row.workflowId) ||
+      row.status !== WorkflowExecutionStatus.Queued ||
+      !row.workflowType ||
+      !row.namespace ||
+      !row.taskQueue
+    )
+      return [];
+    const scope = parseExecutionScope(row.scope);
+    return [
+      {
+        workflowId: row.workflowId,
+        workflowType: row.workflowType,
+        ...(row.blueprintId ? { blueprintId: row.blueprintId } : {}),
+        ...(row.blueprintVersion
+          ? { blueprintVersion: row.blueprintVersion }
+          : {}),
+        ...(row.trigger ? { trigger: row.trigger } : {}),
+        namespace: row.namespace,
+        taskQueue: row.taskQueue,
+        status: WorkflowExecutionStatus.Queued,
+        organizationId: principal.organizationId,
+        ...(scope ? { scope } : {}),
+        ...(row.retentionUntil
+          ? { retentionUntil: row.retentionUntil.toISOString() }
+          : {}),
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      },
+    ];
+  });
+  return [...synced, ...queued];
 }
 
 export async function signalWorkflow(

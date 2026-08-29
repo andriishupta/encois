@@ -112,6 +112,7 @@ func main() {
 	w.RegisterActivity(activities.ExecuteBlueprintStep)
 	w.RegisterActivity(memoryActivities.ExecuteAgentMemory)
 	w.RegisterActivity(controlPlaneActivities.UpdateOnboardingStatus)
+	w.RegisterActivity(controlPlaneActivities.StartApprovedWorkflow)
 
 	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: healthServer.Handler()}
 	go func() {

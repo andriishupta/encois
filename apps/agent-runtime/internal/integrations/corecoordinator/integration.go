@@ -16,6 +16,7 @@ import (
 // Client is the narrow control-plane boundary used by Coordinator Activities.
 // Implementations call the Gateway API; they must not connect to its database.
 type Client interface {
+	StartApprovedWorkflow(context.Context, coordinator.ApprovedWorkflowStartInput) (coordinator.ApprovedWorkflowStartResult, error)
 	UpdateOnboardingStatus(context.Context, coordinator.OnboardingStatusUpdate) error
 }
 
@@ -40,6 +41,22 @@ func NewHTTPClient(baseURL, serviceToken string, audience ...string) *HTTPClient
 		serviceToken: serviceToken,
 		audience:     serviceAudience,
 	}
+}
+
+func (c *HTTPClient) StartApprovedWorkflow(ctx context.Context, request coordinator.ApprovedWorkflowStartInput) (coordinator.ApprovedWorkflowStartResult, error) {
+	if request.RequestID == "" || request.CoordinatorID == "" || request.OrganizationID == "" || request.ActorID == "" || request.PolicyVersion == "" || request.BlueprintID == "" || request.BlueprintVersion == "" || request.Key == "" || len(request.Scope) == 0 {
+		return coordinator.ApprovedWorkflowStartResult{}, fmt.Errorf("approved workflow request is incomplete")
+	}
+	body := map[string]any{
+		"workflowType":     coordinator.DynamicWorkflowType,
+		"key":              request.Key,
+		"blueprintId":      request.BlueprintID,
+		"blueprintVersion": request.BlueprintVersion,
+		"input":            request.BusinessInput,
+		"scope":            request.Scope,
+		"idempotencyKey":   request.IdempotencyKey,
+	}
+	return doJSON[coordinator.ApprovedWorkflowStartResult](c, ctx, http.MethodPost, "/api/v1/internal/coordinator/workflows", body, request.RequestID, request.ActorID, request.OrganizationID, nil)
 }
 
 func (c *HTTPClient) UpdateOnboardingStatus(ctx context.Context, update coordinator.OnboardingStatusUpdate) error {

@@ -185,11 +185,12 @@ const (
 type CoordinatorEventType string
 
 const (
-	EventWorkflowCompleted    CoordinatorEventType = "workflow-completed"
-	EventIntegrationConnected CoordinatorEventType = "integration-connected"
-	EventSourceReady          CoordinatorEventType = "source-ready"
-	EventReconcileRequested   CoordinatorEventType = "reconcile-requested"
-	EventProviderChanged      CoordinatorEventType = "provider-changed"
+	EventWorkflowStartRequested CoordinatorEventType = "workflow-start-requested"
+	EventWorkflowCompleted      CoordinatorEventType = "workflow-completed"
+	EventIntegrationConnected   CoordinatorEventType = "integration-connected"
+	EventSourceReady            CoordinatorEventType = "source-ready"
+	EventReconcileRequested     CoordinatorEventType = "reconcile-requested"
+	EventProviderChanged        CoordinatorEventType = "provider-changed"
 )
 
 type CoordinatorSignalName string

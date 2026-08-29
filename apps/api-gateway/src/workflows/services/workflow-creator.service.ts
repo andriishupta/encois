@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import {
   ContractVersion,
+  CoordinatorEventType,
   type JsonObject,
   Permission,
   parseWorkflowBlueprint,
@@ -11,6 +11,7 @@ import {
   type WorkflowCreationIntent,
   type WorkflowCreationPreview,
   type WorkflowCreationResult,
+  WorkflowExecutionStatus,
   type WorkflowProviderBindingProjection,
   WorkflowStepKind,
   type WorkflowTemplate,
@@ -26,8 +27,10 @@ import {
   withOrganizationContext,
   workflowBlueprints,
   workflowDefinitions,
+  workflowEvents,
+  workflowRuns,
 } from "@encois/database";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import {
   hasPermission,
   hasPermissions,
@@ -40,10 +43,12 @@ import {
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
 import { type ListPage, type ListQuery, listPage } from "../list-query.js";
+import { buildWorkflowId } from "../types.js";
 import {
-  startWorkflow,
-  type WorkflowServiceOptions,
-} from "./workflow.service.js";
+  coordinatorEventId,
+  enqueueCoordinatorEvent,
+} from "./coordinator-event.service.js";
+import type { WorkflowServiceOptions } from "./workflow.service.js";
 import {
   localUserId,
   stableSerialize,
@@ -782,22 +787,151 @@ export async function createWorkflowFromIntent(
   );
 
   if (!intent.start) return { blueprint };
-  const workflow = await startWorkflow(
-    principal,
-    {
-      workflowType: blueprint.workflowType,
-      key: workflowKey(intent),
-      blueprintId: blueprint.blueprintId,
-      blueprintVersion: blueprint.version,
-      scope: intent.scope,
-      input: businessInput(intent),
-      idempotencyKey: workflowKey(intent),
+  const key = workflowKey(intent);
+  const scope = {
+    ids: [...new Set(intent.scope?.ids ?? principal.scope)].sort(),
+  };
+  if (scope.ids.length === 0)
+    throw workflowServiceError(
+      "INVALID_SCOPE",
+      "Execution scope must contain at least one organization-unit id.",
+    );
+  const workflowId = buildWorkflowId({
+    organizationId: principal.organizationId,
+    organizationUnitId: scope.ids[0] ?? principal.organizationId,
+    key,
+  });
+  const input = businessInput(intent);
+  const workflow = await withOrganizationContext(
+    database,
+    principal.organizationId,
+    async (db) => {
+      if (!(await hasPermission(db, principal, Permission.WorkflowsRun)))
+        throw workflowServiceError(
+          "FORBIDDEN",
+          "The user cannot start workflows.",
+        );
+      const [definition] = await db
+        .select({ id: workflowDefinitions.id })
+        .from(workflowDefinitions)
+        .where(
+          and(
+            eq(workflowDefinitions.key, blueprint.workflowType),
+            eq(workflowDefinitions.version, "v1"),
+            eq(workflowDefinitions.status, "approved"),
+            or(
+              isNull(workflowDefinitions.organizationId),
+              eq(workflowDefinitions.organizationId, principal.organizationId),
+            ),
+          ),
+        )
+        .limit(1);
+      if (!definition)
+        throw workflowServiceError(
+          "WORKFLOW_DEFINITION_NOT_FOUND",
+          `No approved workflow definition exists for ${blueprint.workflowType}@v1.`,
+        );
+
+      const [existing] = await db
+        .select()
+        .from(workflowRuns)
+        .where(
+          and(
+            eq(workflowRuns.organizationId, principal.organizationId),
+            eq(workflowRuns.temporalWorkflowId, workflowId),
+          ),
+        )
+        .limit(1);
+      const now = new Date();
+      const retentionUntil = new Date(
+        now.getTime() +
+          (options.workflowRunRetentionDays ?? 30) * 24 * 60 * 60 * 1000,
+      );
+      const run =
+        existing ??
+        (
+          await db
+            .insert(workflowRuns)
+            .values({
+              organizationId: principal.organizationId,
+              definitionId: definition.id,
+              actorUserId: userId,
+              temporalNamespace: options.namespace,
+              temporalTaskQueue: options.taskQueue,
+              temporalWorkflowId: workflowId,
+              blueprintId: blueprint.blueprintId,
+              blueprintVersion: blueprint.version,
+              trigger: "manual",
+              status: WorkflowExecutionStatus.Queued,
+              scope,
+              businessInput: input,
+              retentionUntil,
+            })
+            .returning()
+        )[0];
+      if (!run)
+        throw workflowServiceError(
+          "WORKFLOW_DATABASE_FAILED",
+          "The queued Workflow could not be persisted.",
+        );
+      const eventId = coordinatorEventId("workflow-start", workflowId);
+      try {
+        await enqueueCoordinatorEvent(
+          db,
+          {
+            organizationId: principal.organizationId,
+            eventId,
+            eventType: CoordinatorEventType.WorkflowStartRequested,
+            actorId: principal.actorId,
+            blueprintId: blueprint.blueprintId,
+            blueprintVersion: blueprint.version,
+            workflowId,
+            key,
+            businessInput: input,
+            scope,
+            reason: "Start the approved Blueprint selected by the user.",
+          },
+          { requireReady: true },
+        );
+      } catch (error) {
+        if (error instanceof Error && error.message === "COORDINATOR_NOT_READY")
+          throw workflowServiceError(
+            "COORDINATOR_NOT_READY",
+            "The workspace Coordinator must be ready before starting a Workflow.",
+          );
+        throw error;
+      }
+      if (!existing) {
+        await db.insert(workflowEvents).values({
+          organizationId: principal.organizationId,
+          workflowRunId: run.id,
+          eventType: "workflow_start_requested",
+          status: WorkflowExecutionStatus.Queued,
+          metadata: { eventId, source: "coordinator_outbox" },
+          occurredAt: now,
+        });
+      }
+      return {
+        workflowId,
+        workflowType: blueprint.workflowType,
+        blueprintId: blueprint.blueprintId,
+        blueprintVersion: blueprint.version,
+        trigger: run.trigger ?? "manual",
+        namespace: run.temporalNamespace ?? options.namespace,
+        taskQueue: run.temporalTaskQueue ?? options.taskQueue,
+        status: run.status,
+        organizationId: principal.organizationId,
+        scope,
+        reused: Boolean(existing),
+        ...(run.retentionUntil
+          ? { retentionUntil: run.retentionUntil.toISOString() }
+          : {}),
+        createdAt: run.createdAt.toISOString(),
+        updatedAt: run.updatedAt.toISOString(),
+      };
     },
-    randomUUID(),
-    randomUUID(),
-    options,
   );
-  return { blueprint, ...(workflow ? { workflow } : {}) };
+  return { blueprint, workflow };
 }
 
 export async function listWorkflowBlueprintsForPrincipal(

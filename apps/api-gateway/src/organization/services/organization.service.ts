@@ -3,7 +3,6 @@ import {
   AccessLevel,
   ContractVersion,
   CoordinationMode,
-  type CoordinatorEvent,
   CoordinatorEventType,
   type OrganizationAccessRequestCreateRequest,
   type OrganizationAccessRequestRecord,
@@ -28,7 +27,6 @@ import {
 } from "@encois/contracts";
 import {
   auditEvents,
-  coordinatorEventOutbox,
   type DatabaseTransaction,
   membershipScopes,
   organizationAccessRequests,
@@ -67,6 +65,7 @@ import {
 } from "../../auth/authorization.js";
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
+import { enqueueCoordinatorEvent } from "../../workflows/services/coordinator-event.service.js";
 import type { WorkflowClient } from "../../workflows/temporal-client.js";
 import {
   buildCoordinatorWorkflowId,
@@ -905,11 +904,9 @@ export async function startOrganizationOnboardingForPrincipal(
       requestId,
       options,
     );
-    const event: CoordinatorEvent = {
-      contractVersion: ContractVersion.CoordinatorEvent,
+    const event = {
       eventId: `onboarding-reconcile:${principal.organizationId}:${requestId}`,
       eventType: CoordinatorEventType.ReconcileRequested,
-      coordinatorId: context.onboarding.coordinatorId,
       organizationId: principal.organizationId,
       actorId: principal.actorId,
       reason: "Initial organization onboarding reconciliation.",
@@ -937,17 +934,6 @@ export async function startOrganizationOnboardingForPrincipal(
         options.workflowClient.start(command, options.namespace),
         temporalStartTimeoutMs,
       );
-      if (projection.reused) {
-        // An active Coordinator can be reused and must be woken explicitly.
-        // A failed or terminated retry starts a new execution and does not
-        // receive a Signal because its initial reconciliation runs on start.
-        await options.workflowClient.signalCoordinator(
-          context.onboarding.coordinatorId,
-          principal.organizationId,
-          options.namespace,
-          event,
-        );
-      }
       const [definition] = await db
         .select({ id: workflowDefinitions.id })
         .from(workflowDefinitions)
@@ -1011,16 +997,7 @@ export async function startOrganizationOnboardingForPrincipal(
           },
         });
       }
-      await db
-        .insert(coordinatorEventOutbox)
-        .values({
-          organizationId: principal.organizationId,
-          eventId: event.eventId,
-          coordinatorId: event.coordinatorId,
-          eventType: event.eventType,
-          payload: event as unknown as Record<string, unknown>,
-        })
-        .onConflictDoNothing();
+      await enqueueCoordinatorEvent(db, event);
       await db.insert(auditEvents).values({
         organizationId: principal.organizationId,
         actorUserId: context.actor.userId,

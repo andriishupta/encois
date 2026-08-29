@@ -69,7 +69,7 @@
           "items": { "type": "string", "minLength": 1 }
         }
       }
-    },
+    }
   },
   "properties": {
     "contractVersion": { "const": "coordinator.v1" },

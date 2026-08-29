@@ -79,11 +79,12 @@ conflict. This database receipt is an API delivery safeguard, not a replacement
 for Temporal's Update ID or the Go Workflow's Signal deduplication.
 
 `coordinator-event.v1` is separate from a Blueprint step Signal. It carries
-tenant-scoped lifecycle notifications such as provider changes, source
-readiness, and workflow completion. The Coordinator receiver deduplicates event
+tenant-scoped lifecycle notifications such as approved Blueprint start
+requests, integration/provider changes, source readiness, and workflow
+completion. The Coordinator receiver deduplicates event
 IDs and rejects events for another organization or Coordinator. Gateway
 notifications enqueue these small events transactionally in the tenant-scoped
-outbox. Scheduler invocation and hosted delivery remain deployment work.
+outbox, and the API's dispatcher delivers them to Temporal with bounded retries.
 
 ### Organization onboarding and readiness
 
@@ -450,7 +451,9 @@ Workflow soft-deletes all revisions in that group and preserves historical
 Runs. Blueprint deletion is narrower: it soft-deletes one non-current revision
 and refuses the current revision. Workflow creation resolves a Template or an
 approved Blueprint, previews the result, and creates the approved Blueprint
-directly. A requested start then creates the Workflow from that stored snapshot.
+directly. A requested start transactionally creates a queued Run projection and
+`workflow-start-requested` outbox event; the Coordinator starts the stored
+snapshot through the private Gateway boundary.
 
 `GET /api/v1/auth/me` is the pre-membership access-resolution contract. It
 returns `active` with the local user and organization when an invite has been

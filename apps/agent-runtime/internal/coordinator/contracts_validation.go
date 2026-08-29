@@ -28,6 +28,11 @@ func ValidateCoordinatorEvent(event CoordinatorEvent) error {
 	if err := contractschemas.Validate(contractschemas.SchemaCoordinatorEvent, event); err != nil {
 		return fmt.Errorf("validate coordinator event contract: %w", err)
 	}
+	if event.EventType == string(contractschemas.EventWorkflowStartRequested) {
+		if event.ActorID == "" || event.BlueprintID == "" || event.BlueprintVersion == "" || event.WorkflowID == "" || event.Key == "" || len(event.Scope) == 0 {
+			return fmt.Errorf("workflow start event is incomplete")
+		}
+	}
 	return nil
 }
 

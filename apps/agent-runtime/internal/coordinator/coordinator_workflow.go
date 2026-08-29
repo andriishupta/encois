@@ -34,6 +34,18 @@ func coordinatorActivityOptions() workflow.ActivityOptions {
 	}
 }
 
+func coordinatorStartActivityOptions() workflow.ActivityOptions {
+	return workflow.ActivityOptions{
+		StartToCloseTimeout: time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2,
+			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:    5,
+		},
+	}
+}
+
 // CoordinatorWorkflow is the logical per-organization/project control loop.
 // Provider/model I/O and workflow creation belong in Activities or the Gateway API.
 func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) error {
@@ -60,6 +72,7 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 	approvalCh := workflow.GetSignalChannel(ctx, SignalApprovalResolved)
 	eventCh := workflow.GetSignalChannel(ctx, SignalCoordinatorEvent)
 	processedSignalIDs := make(map[string]bool, len(state.ProcessedSignalIDs))
+	pendingWorkflowStarts := make([]CoordinatorEvent, 0)
 	for _, signalID := range state.ProcessedSignalIDs {
 		processedSignalIDs[signalID] = true
 	}
@@ -161,8 +174,17 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 				switch event.EventType {
 				case "integration-connected", "source-ready":
 					state.Status = StatusBootstrapping
+				case "workflow-start-requested":
+					state.Status = StatusReconciling
+					pendingWorkflowStarts = appendCoordinatorEventUnique(pendingWorkflowStarts, event)
 				default:
 					state.Status = StatusReconciling
+				}
+				if event.EventType == "integration-connected" && event.Key != "" {
+					state.ConnectedIntegrationIDs = appendUnique(state.ConnectedIntegrationIDs, event.Key)
+				}
+				if event.EventType == "provider-changed" && event.Key != "" {
+					state.ConnectedIntegrationIDs = removeValue(state.ConnectedIntegrationIDs, event.Key)
 				}
 				if event.WorkflowID != "" && event.EventType == "workflow-completed" {
 					state.ActiveWorkflowIDs = removeValue(state.ActiveWorkflowIDs, event.WorkflowID)
@@ -180,6 +202,16 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 		}
 		state.Version++
 		state.ReconciliationCount++
+
+		if len(pendingWorkflowStarts) > 0 {
+			if err := startRequestedWorkflows(ctx, input, &state, pendingWorkflowStarts); err != nil {
+				state.Status = StatusSuspended
+				state.LastEvent = "workflow-start-failed"
+				state.LastError = err.Error()
+				continue
+			}
+			pendingWorkflowStarts = pendingWorkflowStarts[:0]
+		}
 
 		if shouldReconcile {
 			state.LastError = ""
@@ -217,6 +249,45 @@ func CoordinatorWorkflow(ctx workflow.Context, input CoordinatorStartInput) erro
 			})
 		}
 	}
+}
+
+func startRequestedWorkflows(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState, events []CoordinatorEvent) error {
+	activityCtx := workflow.WithActivityOptions(ctx, coordinatorStartActivityOptions())
+	for _, event := range events {
+		request := ApprovedWorkflowStartInput{
+			RequestID:        event.EventID,
+			CoordinatorID:    input.CoordinatorID,
+			OrganizationID:   input.OrganizationID,
+			ActorID:          event.ActorID,
+			PolicyVersion:    input.PolicyVersion,
+			Scope:            event.Scope,
+			BlueprintID:      event.BlueprintID,
+			BlueprintVersion: event.BlueprintVersion,
+			Key:              event.Key,
+			BusinessInput:    event.BusinessInput,
+			IdempotencyKey:   event.Key,
+		}
+		var result ApprovedWorkflowStartResult
+		if err := workflow.ExecuteActivity(activityCtx, CoordinatorStartWorkflowActivityName, request).Get(ctx, &result); err != nil {
+			return err
+		}
+		if result.WorkflowID == "" || result.WorkflowID != event.WorkflowID {
+			return fmt.Errorf("started workflow identity does not match request")
+		}
+		state.ActiveWorkflowIDs = appendUnique(state.ActiveWorkflowIDs, result.WorkflowID)
+	}
+	state.Status = StatusReconciling
+	state.LastEvent = "workflow-started"
+	return nil
+}
+
+func appendCoordinatorEventUnique(events []CoordinatorEvent, candidate CoordinatorEvent) []CoordinatorEvent {
+	for _, event := range events {
+		if event.EventID == candidate.EventID {
+			return events
+		}
+	}
+	return append(events, candidate)
 }
 
 func reconcileCoordinator(ctx workflow.Context, input CoordinatorStartInput, state *CoordinatorState) error {

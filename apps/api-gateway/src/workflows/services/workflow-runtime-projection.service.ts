@@ -8,11 +8,13 @@ import type {
 } from "@encois/contracts";
 import {
   ContractVersion,
+  CoordinatorEventType,
   isJsonObject,
   WorkflowExecutionStatus,
   WorkflowStatusReason,
 } from "@encois/contracts";
 import {
+  type DatabaseTransaction,
   idempotencyKeys,
   withOrganizationContext,
   workflowEvents,
@@ -29,12 +31,42 @@ import type {
   WorkflowEventProjection,
   WorkflowExecutionProjection,
 } from "../types.js";
+import {
+  coordinatorEventId,
+  enqueueCoordinatorEvent,
+} from "./coordinator-event.service.js";
 import { stableSerialize } from "./workflow-service-common.js";
 
 type RuntimeProjectionOptions = {
   workflowClient: WorkflowClient;
   namespace: string;
 };
+
+async function enqueueWorkflowCompletedEvent(
+  db: DatabaseTransaction,
+  organizationId: string,
+  workflowRunId: string,
+  workflowId: string,
+  scope: Record<string, unknown>,
+  occurredAt: Date,
+  evidenceRefs: readonly string[] = [],
+): Promise<void> {
+  const ids = Array.isArray(scope.ids)
+    ? scope.ids.filter(
+        (id): id is string => typeof id === "string" && id !== "",
+      )
+    : [];
+  await enqueueCoordinatorEvent(db, {
+    organizationId,
+    eventId: coordinatorEventId("workflow-completed", workflowRunId),
+    eventType: CoordinatorEventType.WorkflowCompleted,
+    workflowId,
+    ...(ids.length > 0 ? { scope: { ids } } : {}),
+    businessInput: { completedAt: occurredAt.toISOString() },
+    reason: "Workflow execution completed in Temporal.",
+    ...(evidenceRefs.length > 0 ? { evidenceRefs } : {}),
+  });
+}
 
 function parseDate(value: string | undefined): Date | undefined {
   if (!value) return undefined;
@@ -289,6 +321,28 @@ export async function projectRuntimeWorkflowResult(
               eq(workflowRuns.organizationId, principal.organizationId),
             ),
           );
+        if (runtimeStatus === WorkflowExecutionStatus.Completed) {
+          const [run] = await db
+            .select({ scope: workflowRuns.scope })
+            .from(workflowRuns)
+            .where(
+              and(
+                eq(workflowRuns.id, workflowRunId),
+                eq(workflowRuns.organizationId, principal.organizationId),
+              ),
+            )
+            .limit(1);
+          if (run)
+            await enqueueWorkflowCompletedEvent(
+              db,
+              principal.organizationId,
+              workflowRunId,
+              workflowId,
+              run.scope,
+              occurredAt,
+              result.steps.flatMap((step) => step.evidenceRefs),
+            );
+        }
       }
       for (const step of result.steps) {
         const projectionKey = `workflow-result:${workflowRunId}:${step.stepId}`;
@@ -471,7 +525,11 @@ export async function syncWorkflowProjection(
     organizationId,
     async (db) => {
       const [run] = await db
-        .select({ id: workflowRuns.id, status: workflowRuns.status })
+        .select({
+          id: workflowRuns.id,
+          status: workflowRuns.status,
+          scope: workflowRuns.scope,
+        })
         .from(workflowRuns)
         .where(
           and(
@@ -528,6 +586,15 @@ export async function syncWorkflowProjection(
           },
           occurredAt: updatedAt,
         });
+        if (effectiveStatus === WorkflowExecutionStatus.Completed)
+          await enqueueWorkflowCompletedEvent(
+            db,
+            organizationId,
+            run.id,
+            projection.workflowId,
+            run.scope,
+            updatedAt,
+          );
       }
       return preservePaused;
     },

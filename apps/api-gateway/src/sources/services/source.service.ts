@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   ContractVersion,
+  CoordinatorEventType,
   type ExecutionScope,
   FreshnessStatus,
   isJsonObject,
@@ -54,6 +55,10 @@ import {
   organizationScopeCovers,
   organizationScopesOverlap,
 } from "../../security/organization-scope.js";
+import {
+  coordinatorEventId,
+  enqueueCoordinatorEvent,
+} from "../../workflows/services/coordinator-event.service.js";
 import type {
   WorkflowClient,
   WorkflowResultReader,
@@ -152,7 +157,7 @@ function isSourceIngestionResult(
 }
 
 async function reconcileSourceIngestion(
-  db: QueryDatabase,
+  db: DatabaseTransaction,
   principal: AosPrincipal,
   run: typeof sourceIngestionRuns.$inferSelect,
   options: SourceServiceOptions,
@@ -267,6 +272,21 @@ async function reconcileSourceIngestion(
         eq(knowledgeSources.organizationId, principal.organizationId),
       ),
     );
+  if (completed) {
+    await enqueueCoordinatorEvent(db, {
+      organizationId: principal.organizationId,
+      eventId: coordinatorEventId("source-ready", run.id),
+      eventType: CoordinatorEventType.SourceReady,
+      workflowId: run.temporalWorkflowId,
+      key: run.sourceId,
+      businessInput: {
+        sourceRevisionId: run.sourceRevisionId,
+        factsCount: rawResult.factsCount,
+      },
+      reason: "Source ingestion completed and the revision is ready.",
+      evidenceRefs: rawResult.evidenceRefs,
+    });
+  }
 }
 
 async function projectSourceIngestionFailure(

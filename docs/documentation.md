@@ -44,7 +44,7 @@ Workflows are repeatable investigations or processes that collect scoped context
 - **Templates** — reviewed starting points for creating a workflow.
 - **Blueprints** — approved, versioned workflow definitions. A Blueprint describes the steps a workflow can execute.
 
-Creating a workflow involves selecting a Template or existing Blueprint, configuring the workflow name and organization scope, previewing the resolved Blueprint, and creating it directly. The created Blueprint can optionally start a Workflow.
+Creating a workflow involves selecting a Template or existing Blueprint, configuring the workflow name and organization scope, previewing the resolved Blueprint, and creating it directly. An optional start is queued durably through the Coordinator outbox before Temporal execution begins.
 
 ## Organization
 

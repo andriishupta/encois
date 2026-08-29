@@ -120,7 +120,9 @@ sequenceDiagram
     Runtime-->>Temporal: poll CoordinatorWorkflow
 
     User->>API: connect Jira/GitHub after onboarding
-    API->>Temporal: signal source-ready / integration-connected
+    API->>Outbox: enqueue source-ready / integration-connected
+    Outbox->>Dispatcher: claim lifecycle event
+    Dispatcher->>Temporal: signal CoordinatorWorkflow
     Temporal-->>Runtime: run BootstrapProjectWorkflow
     Runtime->>AgentGW: request approved read tools
     AgentGW->>Sources: collect source metadata and facts
@@ -225,7 +227,7 @@ CoordinatorWorkflow
   -> ask ADK/Gemini for a typed change proposal
   -> validate Blueprint version, step graph, tools, scope, budget, and approval requirements deterministically
   -> Gateway API persists the blueprint/projection
-  -> explicit change.start intent decides whether an applied snapshot is started
+  -> explicit intent.start decides whether the approved snapshot is queued
   -> Coordinator starts the approved snapshot through the private Gateway
   -> wait again
   -> Continue-As-New when history becomes large
@@ -351,7 +353,7 @@ React SPA
   -> API/MCP Integration
 ```
 
-For Workflow creation, the control path is deliberately direct:
+For Workflow creation, the control path is durable and asynchronous:
 
 ```text
 User / Workflow Creator
@@ -359,10 +361,10 @@ User / Workflow Creator
   -> resolve a provider-neutral template and provider slots
   -> preview the resolved Blueprint
   -> persist the approved Blueprint snapshot
-  -> optionally start a Workflow from that snapshot
-  -> coordinator-event.v1 via transactional outbox
+  -> optionally persist a queued Workflow projection
+  -> workflow-start-requested via transactional outbox
   -> CoordinatorWorkflow
-  -> private Gateway start Activity, only when change.start exists
+  -> private Gateway start Activity, only when intent.start is true
   -> Temporal: encois.dynamic.v1
 ```
 

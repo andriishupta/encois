@@ -25,6 +25,7 @@ const unprocessableWorkflowErrors = new Set([
 const unavailableWorkflowErrors = new Set([
   "DATABASE_UNAVAILABLE",
   "BLUEPRINT_REGISTRY_UNAVAILABLE",
+  "WORKFLOW_DATABASE_FAILED",
 ]);
 
 export function isTemporalWorkflowType(
@@ -63,6 +64,7 @@ export function workflowErrorStatus(code: string): WorkflowHttpStatus {
   if (unavailableWorkflowErrors.has(code)) return 503;
   if (code === "IDEMPOTENCY_CONFLICT") return 409;
   if (code === "WORKFLOW_BLUEPRINT_CONFLICT") return 409;
+  if (code === "COORDINATOR_NOT_READY") return 409;
   return 401;
 }
 

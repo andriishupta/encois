@@ -16,6 +16,7 @@ const (
 	SignalApprovalResolved                  = string(contracts.SignalApprovalResolved)
 	SignalCoordinatorEvent                  = string(contracts.SignalCoordinatorEvent)
 	CoordinatorOnboardingStatusActivityName = "UpdateOnboardingStatus"
+	CoordinatorStartWorkflowActivityName    = "StartApprovedWorkflow"
 	CoordinatorStateQueryName               = "coordinator-state"
 )
 
@@ -86,6 +87,26 @@ type OnboardingStatusUpdate struct {
 	OrganizationID  string `json:"organizationId"`
 	Status          string `json:"status"`
 	LastError       string `json:"lastError,omitempty"`
+}
+
+type ApprovedWorkflowStartInput struct {
+	RequestID        string         `json:"requestId"`
+	CoordinatorID    string         `json:"coordinatorId"`
+	OrganizationID   string         `json:"organizationId"`
+	ActorID          string         `json:"actorId"`
+	PolicyVersion    string         `json:"policyVersion"`
+	Scope            map[string]any `json:"scope"`
+	BlueprintID      string         `json:"blueprintId"`
+	BlueprintVersion string         `json:"blueprintVersion"`
+	Key              string         `json:"key"`
+	BusinessInput    map[string]any `json:"businessInput,omitempty"`
+	IdempotencyKey   string         `json:"idempotencyKey"`
+}
+
+type ApprovedWorkflowStartResult struct {
+	WorkflowID string `json:"workflowId"`
+	RunID      string `json:"runId,omitempty"`
+	Status     string `json:"status"`
 }
 
 // CoordinatorEvent is the cross-language lifecycle envelope used to notify a
