@@ -10,7 +10,7 @@ run with `pnpm --filter`.
 | Area | Commands |
 | --- | --- |
 | Local development | `dev`, `dev:api-gateway` (the dev servers compile required workspace packages through lifecycle hooks, without rewriting generated sources) |
-| Compose | `dev:watch:mock`, `dev:watch:mock:down`, `dev:watch:ai`, `dev:watch:ai:down`, `dev:watch:ai:rebuild`, `dev:watch:prod`, `dev:watch:prod:down`, `dev:local:prod`, `dev:local:prod:down` |
+| Compose | `local`, `local:down`, `dev:watch:ai`, `dev:watch:ai:down`, `dev:watch:ai:rebuild`, `dev:watch:prod`, `dev:watch:prod:down`, `dev:local:prod`, `dev:local:prod:down` |
 | Demo seeding | `seed:watch:ai`, `seed:watch:prod`, `seed:watch:prod:ai`, `seed:local:prod`, `seed:local:prod:ai` |
 | Workspace quality | `build`, `lint`, `typecheck`, `test`, `biome:check`, `biome:format`, `biome:write` |
 | Formatting and hooks | `format:staged`, `checks:staged`, `stage:formatted`, `go:format`, `go:check`, `hooks:install` |

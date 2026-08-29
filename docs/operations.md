@@ -26,12 +26,12 @@ Useful entry points:
 ```bash
 pnpm install
 pnpm dev
-pnpm run dev:watch:mock
-pnpm run dev:watch:mock:down
+pnpm run local
+pnpm run local:down
 ```
 
 `pnpm dev` starts only the Dashboard; run the API, Runtime, and Agent Gateway
-separately for component development. `pnpm run dev:watch:mock` is the complete
+separately for component development. `pnpm run local` is the complete
 local vertical slice: Postgres, Temporal, migrations, Auth/Storage emulators,
 seed, all four application services, and live reload.
 

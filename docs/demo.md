@@ -34,7 +34,7 @@ AI seed when those real data-plane records are required for the demo.
 Start the complete local stack:
 
 ```bash
-pnpm run dev:watch:mock
+pnpm run local
 ```
 
 The base seed runs automatically after migrations and Temporal are ready. The
@@ -60,7 +60,7 @@ Useful local identities are created only in the Firebase Auth Emulator:
 Stop and remove this stack with:
 
 ```bash
-pnpm run dev:watch:mock:down
+pnpm run local:down
 ```
 
 ## Local demo with real AI services

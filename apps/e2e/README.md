@@ -18,7 +18,7 @@ The first flow covers:
 Start the local application stack separately, for example:
 
 ```bash
-pnpm run dev:watch:mock
+pnpm run local
 ```
 
 Then use the Cypress runner visually:

@@ -31,59 +31,91 @@ The main product concepts are:
 
 ## System boundary
 
-Solid arrows are current boundaries. Dashed arrows are explicit future
-transport or deployment alternatives.
+The dashed outer box is the hosted Google Cloud deployment boundary. Solid
+arrows are current request, data, and execution paths; dotted arrows show the
+scope envelope being rechecked across trust boundaries. The local mock profile
+keeps the same application topology and replaces managed adapters explicitly.
 
 ```mermaid
-flowchart TB
-    User[User] --> Edge[HTTPS edge / load balancer]
-    Edge --> Dashboard[React Dashboard]
-    Edge --> API[Gateway API]
-    Identity[Identity Platform or local Auth emulator] --> API
-    Dashboard --> API
+flowchart LR
+    User([User])
 
-    subgraph ControlPlane[Gateway control plane]
-        API --> DB[(PostgreSQL + RLS\nproduct state and projections)]
-        API --> Outbox[(Coordinator event outbox)]
-        Outbox --> Dispatcher[Outbox dispatcher\nlease + bounded retry]
-        PrivateRoutes[Private control-plane routes\nonboarding callback + approved start]
+    subgraph External[Company systems]
+        Providers["GitHub · Jira · Google Workspace<br/>monitoring · MCP / API tools"]
     end
 
-    subgraph DurableExecution[Temporal durable execution]
-        Temporal[Temporal namespace]
-        Coordinator[CoordinatorWorkflow\nlong-lived per organization]
-        BlueprintRun[encois.dynamic.v1\nBlueprint Run]
-        SourceRun[encois.source-ingestion.v1]
-        Temporal --- Coordinator
-        Temporal --- BlueprintRun
-        Temporal --- SourceRun
+    subgraph TemporalCloud[Temporal Cloud or local Temporal]
+        Coordinator["Coordinator Workflow<br/>one long-lived execution per organization"]
+        Runs["Dynamic Blueprint Runs<br/>Source Ingestion Runs"]
     end
 
-    API -->|start / query / signal / cancel| Temporal
-    Dispatcher -->|coordinator-event.v1 Signal| Coordinator
-    Coordinator -->|StartApprovedWorkflow Activity| PrivateRoutes
-    PrivateRoutes --> API
+    subgraph GCP[Google Cloud deployment boundary]
+        Identity["Identity Platform<br/>or local Auth emulator"]
+        Edge[HTTPS load balancer / local ports]
 
-    Runtime[Go Agent Runtime\nTemporal worker + Google ADK] -. polls one task queue .-> Temporal
-    Runtime -->|private callback| PrivateRoutes
-    Runtime --> AgentGateway[Private Agent Gateway\npolicy + tool broker]
-    Runtime --> Gemini[Gemini / Vertex AI]
-    Runtime --> Memory[Agent Platform Memory Bank]
+        subgraph Services[Encois services · Cloud Run or local Compose]
+            Dashboard[React Dashboard]
+            API["TypeScript API Gateway<br/>public control plane"]
+            Dispatcher["Coordinator outbox dispatcher<br/>inside API Gateway"]
+            Runtime["Go Agent Runtime<br/>Temporal worker · Google ADK"]
+            AgentGateway["Private Agent Gateway<br/>policy · tools · provider broker"]
+            Scope["Scope envelope<br/>organization tenant + authorized unit IDs<br/>capability rechecked at every boundary"]
+        end
 
-    API -->|scoped Graph query| AgentGateway
-    API -->|scoped Memory query| Runtime
-    AgentGateway -->|credential and health control calls| PrivateRoutes
-    AgentGateway --> Providers[GitHub / Jira / Workspace / monitoring]
-    AgentGateway --> Graph[Spanner Graph]
-    AgentGateway --> Storage[Cloud Storage]
+        Postgres[("Cloud SQL PostgreSQL<br/>RLS · product state · Runs<br/>outbox · user projections")]
+        Storage[("Cloud Storage<br/>raw Source artifacts")]
+        Graph[("Organization Memory<br/>Spanner Graph<br/>structured facts + relationships")]
+        Memory[("Workflow Memory<br/>Agent Platform Memory Bank<br/>agent-specific semantic context")]
+        Gemini["Gemini on Vertex AI<br/>reasoning and synthesis"]
+        Secrets["Secret Manager<br/>provider credentials"]
+        Telemetry["Cloud Logging / Trace<br/>OpenTelemetry signals"]
+    end
 
-    API --> Telemetry[OpenTelemetry\nCloud Logging / Trace / metrics]
+    User --> Edge
+    User --> Identity
+    Edge --> Dashboard
+    Edge --> API
+    Identity -->|verified identity token| Dashboard
+    Dashboard -->|typed HTTPS API only| API
+
+    API -->|membership + permissions| Scope
+    API -->|transactional state + lifecycle event| Postgres
+    Postgres -->|leased outbox rows| Dispatcher
+    Dispatcher -->|versioned Signal| Coordinator
+    Coordinator -->|approved start callback| API
+    API -->|start · query · signal · cancel| Coordinator
+    API -->|start · query · signal · cancel| Runs
+    Runtime -. polls one task queue .-> Coordinator
+    Runtime -. polls one task queue .-> Runs
+
+    Scope -. signed execution scope .-> Runtime
+    Scope -. signed capability + scope .-> AgentGateway
+    Runtime -->|bounded tools and Source reads| AgentGateway
+    Runtime -->|distill / retrieve| Memory
+    Runtime -->|model calls| Gemini
+    Runtime -->|private status and evidence callback| API
+    API -->|read-only scoped Graph query| AgentGateway
+    API -->|read-only scoped Memory query| Runtime
+
+    Providers -->|verified webhooks| API
+    AgentGateway -->|read-only provider calls| Providers
+    AgentGateway -->|artifact read / write| Storage
+    AgentGateway -->|scoped fact upsert / query| Graph
+    AgentGateway -->|credential reference resolution| Secrets
+
+    API --> Telemetry
     Runtime --> Telemetry
     AgentGateway --> Telemetry
 
-    Outbox -. outbox relay / CDC .-> Broker[Future Pub/Sub or Kafka]
-    Broker -. idempotent consumer .-> Coordinator
+    style GCP fill:#f8fbff,stroke:#4285f4,stroke-width:2px,stroke-dasharray:8 5
+    style Services fill:#ffffff,stroke:#64748b,stroke-width:1px
+    style TemporalCloud fill:#fff8f1,stroke:#f97316,stroke-width:1px
+    style External fill:#f8fafc,stroke:#94a3b8,stroke-width:1px
 ```
+
+The current outbox dispatcher is intentionally small and runs inside API
+Gateway. A future Pub/Sub or Kafka relay may replace that delivery mechanism
+without changing the event contract or Coordinator semantics.
 
 ### Gateway API
 
