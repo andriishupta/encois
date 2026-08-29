@@ -495,44 +495,49 @@ function createTemporalWorkflowClient(
       if (!workflowIdBelongsToOrganization(workflowId, organizationId))
         return null;
 
-      const client = await getClient();
-      const handle = client.workflow.getHandle(workflowId);
-      const description = await handle.describe();
-      const timestamp = now();
-      const resolvedStatus = await resolveTemporalStatus(
-        handle,
-        description.status.name,
-        description.type,
-      );
+      try {
+        const client = await getClient();
+        const handle = client.workflow.getHandle(workflowId);
+        const description = await handle.describe();
+        const timestamp = now();
+        const resolvedStatus = await resolveTemporalStatus(
+          handle,
+          description.status.name,
+          description.type,
+        );
 
-      return {
-        workflowId,
-        runId: description.runId,
-        workflowType: description.type,
-        namespace,
-        taskQueue: description.taskQueue,
-        ...resolvedStatus,
-        organizationId,
-        blueprintId:
-          typeof description.memo?.encoisBlueprintId === "string"
-            ? description.memo.encoisBlueprintId
-            : undefined,
-        blueprintVersion:
-          typeof description.memo?.encoisBlueprintVersion === "string"
-            ? description.memo.encoisBlueprintVersion
-            : undefined,
-        ...(typeof description.memo?.encoisParentWorkflowId === "string"
-          ? { parentWorkflowId: description.memo.encoisParentWorkflowId }
-          : {}),
-        ...(typeof description.memo?.encoisTrigger === "string"
-          ? { trigger: description.memo.encoisTrigger }
-          : {}),
-        ...(description.closeTime
-          ? { completedAt: description.closeTime.toISOString() }
-          : {}),
-        createdAt: description.startTime?.toISOString() ?? timestamp,
-        updatedAt: timestamp,
-      };
+        return {
+          workflowId,
+          runId: description.runId,
+          workflowType: description.type,
+          namespace,
+          taskQueue: description.taskQueue,
+          ...resolvedStatus,
+          organizationId,
+          blueprintId:
+            typeof description.memo?.encoisBlueprintId === "string"
+              ? description.memo.encoisBlueprintId
+              : undefined,
+          blueprintVersion:
+            typeof description.memo?.encoisBlueprintVersion === "string"
+              ? description.memo.encoisBlueprintVersion
+              : undefined,
+          ...(typeof description.memo?.encoisParentWorkflowId === "string"
+            ? { parentWorkflowId: description.memo.encoisParentWorkflowId }
+            : {}),
+          ...(typeof description.memo?.encoisTrigger === "string"
+            ? { trigger: description.memo.encoisTrigger }
+            : {}),
+          ...(description.closeTime
+            ? { completedAt: description.closeTime.toISOString() }
+            : {}),
+          createdAt: description.startTime?.toISOString() ?? timestamp,
+          updatedAt: timestamp,
+        };
+      } catch (error) {
+        if (error instanceof WorkflowNotFoundError) return null;
+        throw error;
+      }
     },
 
     async GetResult(workflowId, organizationId) {

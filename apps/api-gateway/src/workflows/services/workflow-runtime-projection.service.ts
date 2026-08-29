@@ -35,7 +35,10 @@ import {
   coordinatorEventId,
   enqueueCoordinatorEvent,
 } from "./coordinator-event.service.js";
-import { stableSerialize } from "./workflow-service-common.js";
+import {
+  persistedWorkflowRunStatus,
+  stableSerialize,
+} from "./workflow-service-common.js";
 
 type RuntimeProjectionOptions = {
   workflowClient: WorkflowClient;
@@ -307,7 +310,7 @@ export async function projectRuntimeWorkflowResult(
         await db
           .update(workflowRuns)
           .set({
-            status: runtimeStatus,
+            status: persistedWorkflowRunStatus(runtimeStatus),
             ...(runtimeStatus === WorkflowExecutionStatus.Completed ||
             runtimeStatus === WorkflowExecutionStatus.Failed ||
             runtimeStatus === WorkflowExecutionStatus.Partial
@@ -565,7 +568,7 @@ export async function syncWorkflowProjection(
       await db
         .update(workflowRuns)
         .set({
-          status: effectiveStatus,
+          status: persistedWorkflowRunStatus(effectiveStatus),
           temporalRunId: projection.runId,
           ...(startedAt ? { startedAt } : {}),
           ...(completedAt ? { completedAt } : {}),

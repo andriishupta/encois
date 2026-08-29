@@ -5,7 +5,7 @@ import {
   withOrganizationContext,
 } from "@encois/database";
 import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
-import { database } from "../../database.js";
+import { database, databaseClient } from "../../database.js";
 import type { WorkflowClient } from "../temporal-client.js";
 
 export type CoordinatorEventSink = (event: CoordinatorEvent) => Promise<void>;
@@ -250,15 +250,14 @@ async function listDispatchableOrganizationIds(
   now: Date,
   maxAttempts: number,
 ): Promise<readonly string[]> {
-  if (!database) return [];
+  if (!database || !databaseClient) return [];
 
-  const rows = await database.execute<{ organizationId: string }>(sql`
-    SELECT organization_id AS "organizationId"
-    FROM public.list_dispatchable_coordinator_outbox_organizations(
+  const rows = await databaseClient<{ organizationId: string }[]>`
+    SELECT public.list_dispatchable_coordinator_outbox_organizations(
       ${now},
       ${maxAttempts}
-    )
-  `);
+    ) AS "organizationId"
+  `;
   return rows.map((row) => row.organizationId);
 }
 

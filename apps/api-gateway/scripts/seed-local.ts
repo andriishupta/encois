@@ -2120,7 +2120,7 @@ async function seedFixtures(): Promise<unknown> {
             sixthIntegration.id,
           ),
         ];
-        if (sources.length !== 16)
+        if (sources.length !== 15)
           throw new Error(
             `Organization fixture ${organizationSpec.slug} has incomplete sources.`,
           );
@@ -2139,7 +2139,6 @@ async function seedFixtures(): Promise<unknown> {
           ["completed", "graph_projected", 22],
           ["failed", "acquired", 0],
           ["running", "graph_projected", 7],
-          ["failed", "acquired", 0],
           ["failed", "acquired", 0],
         ] as const;
         for (const [index, source] of sources.entries()) {

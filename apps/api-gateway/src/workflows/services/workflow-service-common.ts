@@ -1,4 +1,8 @@
-import { isJsonObject } from "@encois/contracts";
+import {
+  isJsonObject,
+  WorkflowExecutionStatus,
+  type WorkflowExecutionStatus as WorkflowExecutionStatusValue,
+} from "@encois/contracts";
 import {
   type ApplicationError,
   applicationError,
@@ -7,6 +11,19 @@ import {
 import type { AosPrincipal } from "../../middleware/aos.js";
 
 export type WorkflowServiceError = ApplicationError;
+
+export type PersistedWorkflowRunStatus = Exclude<
+  WorkflowExecutionStatusValue,
+  "preparing"
+>;
+
+export function persistedWorkflowRunStatus(
+  status: WorkflowExecutionStatusValue,
+): PersistedWorkflowRunStatus {
+  return status === WorkflowExecutionStatus.Preparing
+    ? WorkflowExecutionStatus.Queued
+    : status;
+}
 
 export function workflowServiceError(
   code: string,

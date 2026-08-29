@@ -223,9 +223,10 @@ calls the private Gateway start route, and the Gateway starts the generic
 Blueprint Workflow in Temporal. Retries and duplicate delivery are safe
 because the event, Run, and Temporal start use stable identities.
 
-The browser therefore sees `queued` until Temporal accepts the execution, then
-observes the persisted projection synchronized from Temporal. A failed start
-is an explicit error; it is not converted to a successful or fake Run state.
+The browser therefore sees `preparing` while the queued database Run and its
+outbox request exist but Temporal has not exposed the execution, then observes
+the persisted projection synchronized from Temporal. A failed start is an
+explicit error; it is not converted to a successful or fake Run state.
 
 ### Run execution
 
@@ -293,7 +294,8 @@ execution itself.
 ### Projection consistency
 
 Workflow list/detail reads combine Temporal visibility with tenant-scoped
-PostgreSQL projections. A queued database Run is visible before Temporal start;
+PostgreSQL projections. A queued database Run is visible as `preparing` before
+Temporal start;
 after start, Temporal owns the execution status and history while the Gateway
 persists query-friendly events, evidence, retention, actor, scope, and audit
 metadata. If either side is unavailable, the API reports unavailable or stale

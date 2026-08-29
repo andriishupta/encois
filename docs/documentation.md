@@ -22,7 +22,7 @@ The Dashboard never expands your access. It only shows information returned for 
 Activity is the technical operations view. Use it when you need to inspect work that requires attention or a human decision.
 
 - **Waiting approvals** — workflow runs paused for approval.
-- **Running** — queued, running, or paused workflow runs.
+- **Running** — preparing, queued, running, or paused workflow runs.
 - **Run attention** — failed or partially completed runs.
 - **Source attention** — Sources that are degraded, failed, or need reauthorization.
 - **Integration setup** — integrations that need authorization or recovery.

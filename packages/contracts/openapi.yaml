@@ -2108,7 +2108,7 @@ components:
         blueprint: { type: object }
     WorkflowExecutionStatus:
       type: string
-      enum: [queued, running, waiting, paused, partial, failed, completed, cancelled]
+      enum: [queued, preparing, running, waiting, paused, partial, failed, completed, cancelled]
     WorkflowStatusReason:
       type: string
       enum: [temporary_error, missing_credentials, human_approval, capability_unavailable, provider_unavailable, invalid_input, degraded_evidence]

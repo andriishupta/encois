@@ -51,6 +51,7 @@ import {
 } from "./workflow-runtime-projection.service.js";
 import {
   localUserId,
+  persistedWorkflowRunStatus,
   stableSerialize,
   workflowServiceError,
 } from "./workflow-service-common.js";
@@ -624,7 +625,7 @@ export async function startWorkflow(
                 temporalNamespace: projection.namespace,
                 temporalTaskQueue: projection.taskQueue,
                 temporalRunId: projection.runId,
-                status: projection.status,
+                status: persistedWorkflowRunStatus(projection.status),
                 scope: command.input.scope,
                 businessInput: command.input.businessInput ?? {},
                 retentionUntil,
@@ -656,7 +657,7 @@ export async function startWorkflow(
                   command.input.blueprintVersion,
                 parentWorkflowId: command.input.parentWorkflowId,
                 trigger: command.input.trigger ?? "manual",
-                status: projection.status,
+                status: persistedWorkflowRunStatus(projection.status),
                 scope: command.input.scope,
                 businessInput: command.input.businessInput ?? {},
                 retentionUntil,
@@ -834,7 +835,9 @@ export async function getWorkflow(
       ...(authorized.trigger ? { trigger: authorized.trigger } : {}),
       namespace: authorized.namespace,
       taskQueue: authorized.taskQueue,
-      status: WorkflowExecutionStatus.Queued,
+      status: WorkflowExecutionStatus.Preparing,
+      statusMessage:
+        "The Coordinator is preparing the Temporal workflow execution.",
       organizationId: principal.organizationId,
       ...(scope ? { scope } : {}),
       ...(authorized.retentionUntil
@@ -1197,7 +1200,7 @@ async function listAllWorkflows(
       syncWorkflowProjection(principal.organizationId, projection),
     ),
   );
-  const queued = visible.flatMap((row): WorkflowExecutionProjection[] => {
+  const preparing = visible.flatMap((row): WorkflowExecutionProjection[] => {
     if (
       temporalWorkflowIds.has(row.workflowId) ||
       row.status !== WorkflowExecutionStatus.Queued ||
@@ -1218,7 +1221,9 @@ async function listAllWorkflows(
         ...(row.trigger ? { trigger: row.trigger } : {}),
         namespace: row.namespace,
         taskQueue: row.taskQueue,
-        status: WorkflowExecutionStatus.Queued,
+        status: WorkflowExecutionStatus.Preparing,
+        statusMessage:
+          "The Coordinator is preparing the Temporal workflow execution.",
         organizationId: principal.organizationId,
         ...(scope ? { scope } : {}),
         ...(row.retentionUntil
@@ -1229,7 +1234,7 @@ async function listAllWorkflows(
       },
     ];
   });
-  return [...synced, ...queued];
+  return [...synced, ...preparing];
 }
 
 export async function signalWorkflow(

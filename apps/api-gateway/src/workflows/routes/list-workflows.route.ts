@@ -24,6 +24,7 @@ export function listWorkflowsRoute(
         maxLimit: 100,
         statuses: [
           "queued",
+          "preparing",
           "running",
           "waiting",
           "paused",

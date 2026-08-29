@@ -38,8 +38,10 @@ Blueprint reference, scope, name, and validated configuration. It exposes
 `Preview Blueprint` and direct Blueprint creation. It does not expose internal
 Coordinator IDs or raw provider credentials.
 
-The start request is asynchronous. A successful request returns a queued Run
-projection. It does not claim that Temporal is already running the Run.
+The start request is asynchronous. A successful request returns a Run
+projection. While the persisted Run and outbox request exist but Temporal does
+not yet expose the stable Workflow ID, the API reports `preparing`; it does
+not claim that Temporal is already running the Run.
 
 Organization onboarding is a separate server-owned contract with persisted
 states `pending`, `initializing`, `ready`, and `failed`. A missing onboarding
@@ -80,9 +82,12 @@ API start commands may additionally use an idempotency key. Temporal owns
 execution history; the Gateway owns the user-facing projection and audit
 metadata.
 
-Current Run statuses are `queued`, `running`, `waiting`, `paused`, `partial`,
-`failed`, `completed`, and `cancelled`. Unknown values are contract errors and
-are not mapped to a convenient status.
+Current Run statuses are `queued`, `preparing`, `running`, `waiting`, `paused`,
+`partial`, `failed`, `completed`, and `cancelled`. `preparing` means the
+Gateway has persisted the Run, outbox request, and stable Temporal Workflow ID,
+but Temporal has not exposed the execution yet. `queued` may still be returned
+as the immediate acknowledgement of a direct Temporal start. Unknown values
+are contract errors and are not mapped to a convenient status.
 
 The start path is:
 

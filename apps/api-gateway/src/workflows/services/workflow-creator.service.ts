@@ -919,7 +919,16 @@ export async function createWorkflowFromIntent(
         trigger: run.trigger ?? "manual",
         namespace: run.temporalNamespace ?? options.namespace,
         taskQueue: run.temporalTaskQueue ?? options.taskQueue,
-        status: run.status,
+        status:
+          run.status === WorkflowExecutionStatus.Queued
+            ? WorkflowExecutionStatus.Preparing
+            : run.status,
+        ...(run.status === WorkflowExecutionStatus.Queued
+          ? {
+              statusMessage:
+                "The Coordinator is preparing the Temporal workflow execution.",
+            }
+          : {}),
         organizationId: principal.organizationId,
         scope,
         reused: Boolean(existing),

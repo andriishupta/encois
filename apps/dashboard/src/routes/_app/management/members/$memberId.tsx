@@ -1,5 +1,5 @@
 import { Permission } from "@encois/contracts/browser";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getAuthSession, hasPermission } from "@/lib/auth";
 import { OrganizationPermissionsPage } from "../permissions";
 
@@ -13,18 +13,6 @@ export const Route = createFileRoute("/_app/management/members/$memberId")({
 
 function MemberDetailPage() {
   const { memberId } = Route.useParams();
-  const navigate = useNavigate();
 
-  return (
-    <OrganizationPermissionsPage
-      memberId={memberId}
-      onMemberChange={(nextMemberId) =>
-        void navigate({
-          to: "/management/members/$memberId",
-          params: { memberId: nextMemberId },
-          search: { q: undefined, status: "all", sort: "email-asc" },
-        })
-      }
-    />
-  );
+  return <OrganizationPermissionsPage memberId={memberId} />;
 }

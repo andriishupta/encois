@@ -60,6 +60,7 @@ function fallbackWorkflowNodeStatus(
     case "cancelled":
       return "cancelled";
     case "queued":
+    case "preparing":
       return "pending";
     default:
       return "running";

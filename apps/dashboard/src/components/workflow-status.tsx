@@ -25,6 +25,7 @@ type StatusVisual = {
 
 const statusVisuals: Record<WorkflowVisualStatus, StatusVisual> = {
   queued: { icon: CircleDashed, tone: "text-muted-foreground" },
+  preparing: { icon: LoaderCircle, tone: "text-primary", animate: true },
   pending: { icon: CircleDashed, tone: "text-muted-foreground" },
   running: { icon: LoaderCircle, tone: "text-primary", animate: true },
   waiting: { icon: Clock3, tone: "text-amber-700 dark:text-amber-400" },

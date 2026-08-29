@@ -66,6 +66,7 @@ import {
 import { database } from "../../database.js";
 import type { AosPrincipal } from "../../middleware/aos.js";
 import { enqueueCoordinatorEvent } from "../../workflows/services/coordinator-event.service.js";
+import { persistedWorkflowRunStatus } from "../../workflows/services/workflow-service-common.js";
 import type { WorkflowClient } from "../../workflows/temporal-client.js";
 import {
   buildCoordinatorWorkflowId,
@@ -976,7 +977,7 @@ export async function startOrganizationOnboardingForPrincipal(
           temporalWorkflowId: projection.workflowId,
           temporalRunId: projection.runId,
           trigger: "onboarding",
-          status: projection.status,
+          status: persistedWorkflowRunStatus(projection.status),
           scope: command.input.scope,
           businessInput: {
             coordinationMode: context.onboarding.coordinationMode,

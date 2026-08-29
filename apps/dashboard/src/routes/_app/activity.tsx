@@ -172,6 +172,7 @@ function ActivityPage() {
     workflows.data?.filter(
       (workflow) =>
         workflow.status === WorkflowExecutionStatus.Queued ||
+        workflow.status === WorkflowExecutionStatus.Preparing ||
         workflow.status === WorkflowExecutionStatus.Running ||
         workflow.status === WorkflowExecutionStatus.Paused,
     ) ?? [];

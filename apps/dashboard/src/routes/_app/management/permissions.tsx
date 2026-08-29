@@ -59,10 +59,8 @@ const accessLevels: AccessLevel[] = [
 
 export function OrganizationPermissionsPage({
   memberId,
-  onMemberChange,
 }: {
   memberId?: string;
-  onMemberChange: (memberId: string) => void;
 }) {
   const {
     units,
@@ -240,21 +238,6 @@ export function OrganizationPermissionsPage({
 
       <Card className="w-full">
         <CardHeader>
-          <label
-            className="flex max-w-md flex-col gap-2 text-sm font-medium"
-            htmlFor="permission-member"
-          >
-            Member
-            <Select
-              id="permission-member"
-              value={selectedMember.id}
-              onChange={(event) => onMemberChange(event.target.value)}
-              options={members.map((member) => ({
-                value: member.id,
-                label: member.name,
-              }))}
-            />
-          </label>
           <div className="flex items-start justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-2">

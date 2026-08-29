@@ -267,6 +267,7 @@ function selectWorkflowDefinitions(
 
 const activeRunStatuses: ReadonlySet<WorkflowExecutionStatus> = new Set([
   WorkflowExecutionStatus.Queued,
+  WorkflowExecutionStatus.Preparing,
   WorkflowExecutionStatus.Running,
   WorkflowExecutionStatus.Waiting,
   WorkflowExecutionStatus.Paused,

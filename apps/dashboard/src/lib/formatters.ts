@@ -1,6 +1,7 @@
-import type {
+import {
   WorkflowExecutionStatus,
-  WorkflowStatusReason,
+  type WorkflowExecutionStatus as WorkflowExecutionStatusType,
+  type WorkflowStatusReason,
 } from "@encois/contracts/browser";
 
 export function humanizeKey(value: string): string {
@@ -21,10 +22,13 @@ export function workflowLabel(
 }
 
 export function workflowStatusLabel(
-  status: WorkflowExecutionStatus,
+  status: WorkflowExecutionStatusType,
   reason?: WorkflowStatusReason,
 ): string {
-  const label = humanizeKey(status);
+  const label =
+    status === WorkflowExecutionStatus.Preparing
+      ? "Preparing workflow"
+      : humanizeKey(status);
   return reason ? `${label} · ${humanizeKey(reason)}` : label;
 }
 

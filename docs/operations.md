@@ -71,7 +71,7 @@ It contains:
 
 - a real long-lived Coordinator execution;
 - six connected and attention-state Integrations;
-- sixteen Sources with revisions and different freshness outcomes;
+- fifteen Sources with revisions and different freshness outcomes;
 - approved Blueprint snapshots;
 - thirty real Temporal-backed demo executions: six running, six waiting, eight
   completed, five paused, and five failed;
@@ -79,7 +79,7 @@ It contains:
 
 Temporal-backed states are created through Temporal. If a fixture represents a
 not-yet-started or unavailable execution, the database must show that exact
-state and the UI must show the unavailable or queued condition. It must not
+state and the UI must show the unavailable or preparing condition. It must not
 invent a successful Temporal execution.
 
 ## Temporal inspection
@@ -88,11 +88,12 @@ Temporal is inspected through its UI/CLI and through Gateway projections. A
 Run detail page may combine the persisted Run projection with a live Temporal
 query, but the two values are not silently merged when they disagree.
 
-For a queued Run, the expected sequence is:
+For a Run being prepared, the expected sequence is:
 
 ```text
 PostgreSQL queued Run
   -> outbox row
+  -> API preparing projection with the stable Temporal Workflow ID
   -> Coordinator signal
   -> Temporal generic Workflow start
   -> Gateway projection update

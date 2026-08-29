@@ -15,6 +15,7 @@ RUN pnpm --filter @encois/api-gateway... build
 RUN cp -R apps/api-gateway/dist /server-dist
 RUN pnpm --filter @encois/api-gateway build:scripts
 RUN cp -R apps/api-gateway/dist/scripts /local-seed-scripts
+RUN cp -R apps/api-gateway/dist/src /local-seed-src
 RUN pnpm deploy --legacy --filter @encois/api-gateway --prod /out
 RUN rm -rf /out/dist && cp -R /server-dist /out/dist
 
@@ -36,6 +37,7 @@ FROM runtime AS local-seed
 
 ENV NODE_ENV=development
 COPY --from=build /local-seed-scripts /app/dist/scripts
+COPY --from=build /local-seed-src /app/dist/src
 CMD ["node", "dist/scripts/seed-local.js"]
 
 FROM runtime AS production

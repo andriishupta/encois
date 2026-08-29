@@ -731,7 +731,7 @@ function ReviewStage({
               <p className="font-medium">Blueprint is available</p>
               <p className="mt-1 text-muted-foreground">
                 {created.workflow
-                  ? "The first Workflow has been queued for start."
+                  ? "The first Workflow is being prepared for start."
                   : "You can start a Workflow from this Blueprint later."}
               </p>
             </div>

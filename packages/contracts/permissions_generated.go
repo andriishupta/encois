@@ -6,21 +6,21 @@ package contracts
 type Permission string
 
 const (
-	PermissionOnboardingManage   Permission = "onboarding:manage"
-	PermissionWorkflowsRead      Permission = "workflows:read"
-	PermissionWorkflowsRun       Permission = "workflows:run"
-	PermissionWorkflowsManage    Permission = "workflows:manage"
-	PermissionIntegrationsRead   Permission = "integrations:read"
+	PermissionOnboardingManage Permission = "onboarding:manage"
+	PermissionWorkflowsRead Permission = "workflows:read"
+	PermissionWorkflowsRun Permission = "workflows:run"
+	PermissionWorkflowsManage Permission = "workflows:manage"
+	PermissionIntegrationsRead Permission = "integrations:read"
 	PermissionIntegrationsManage Permission = "integrations:manage"
-	PermissionKnowledgeRead      Permission = "knowledge:read"
-	PermissionKnowledgeManage    Permission = "knowledge:manage"
-	PermissionContextRead        Permission = "context:read"
-	PermissionMemoryRead         Permission = "memory:read"
-	PermissionMemoryManage       Permission = "memory:manage"
-	PermissionOrganizationRead   Permission = "organization:read"
+	PermissionKnowledgeRead Permission = "knowledge:read"
+	PermissionKnowledgeManage Permission = "knowledge:manage"
+	PermissionContextRead Permission = "context:read"
+	PermissionMemoryRead Permission = "memory:read"
+	PermissionMemoryManage Permission = "memory:manage"
+	PermissionOrganizationRead Permission = "organization:read"
 	PermissionOrganizationManage Permission = "organization:manage"
-	PermissionSettingsRead       Permission = "settings:read"
-	PermissionSettingsManage     Permission = "settings:manage"
+	PermissionSettingsRead Permission = "settings:read"
+	PermissionSettingsManage Permission = "settings:manage"
 )
 
 var AllPermissions = []Permission{

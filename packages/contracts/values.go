@@ -105,6 +105,7 @@ type WorkflowExecutionStatus string
 
 const (
 	WorkflowExecutionQueued    WorkflowExecutionStatus = "queued"
+	WorkflowExecutionPreparing WorkflowExecutionStatus = "preparing"
 	WorkflowExecutionRunning   WorkflowExecutionStatus = "running"
 	WorkflowExecutionWaiting   WorkflowExecutionStatus = "waiting"
 	WorkflowExecutionPaused    WorkflowExecutionStatus = "paused"

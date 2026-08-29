@@ -137,6 +137,7 @@ export type SourceIngestionStatus =
 
 export const WorkflowExecutionStatus = {
   Queued: "queued",
+  Preparing: "preparing",
   Running: "running",
   Waiting: "waiting",
   Paused: "paused",
