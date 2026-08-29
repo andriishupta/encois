@@ -135,6 +135,41 @@ Real Gemini, Spanner Graph, and Memory Bank are opt-in; see
 [`docs/demo.md`](docs/demo.md). Local operation and troubleshooting are in
 [`docs/operations.md`](docs/operations.md).
 
+## Known limitations and planned improvements
+
+- **Organization Graph:** Source ingestion currently projects scoped,
+  provenance-linked fact nodes. Rich entity normalization and relationship
+  edges are not implemented yet, so the graph is not yet the intended connected
+  company knowledge model.
+- **Integrations:** the default demo uses synthetic provider fixtures because
+  it has no authorized access to real GitHub, Jira, Workspace, monitoring, or
+  customer data. Integrations are adapter boundaries, not the core demo source
+  of truth; production connectors still need provider authorization, webhook,
+  pagination, rate-limit, and lifecycle hardening.
+- **Coordinator delivery:** the transactional PostgreSQL outbox is durable, but
+  its dispatcher currently runs inside API Gateway. It can move to Pub/Sub or
+  Kafka for independent scaling, dead-letter handling, and operational
+  isolation without changing the event contracts or Temporal Coordinator.
+- **Graph and Workflow Memory:** Spanner Graph and Agent Platform Memory Bank
+  are implemented behind scoped adapters, but their hosted IAM, schemas,
+  retention, deletion, cost, and larger-volume behavior still need production
+  validation.
+- **Blueprint lifecycle:** approved Blueprint snapshots are immutable, but
+  explicit revisions, promotion, diffing, deprecation, and rollback are future
+  lifecycle work.
+- **Authorization:** organization membership and hierarchical unit scope work
+  today; persisted explicit grants, restrictions, and richer hierarchy
+  administration remain deferred.
+- **External actions:** agent tools are read-only by default. Any future write
+  action needs a separate approval, authorization, audit, idempotency, and
+  recovery boundary.
+- **Operations:** completion projection, CI security scanning, load/cost tests,
+  disaster recovery, and formal customer-data retention/export policies need
+  additional production hardening.
+
+The detailed current/future matrix is in
+[`docs/architecture.md`](docs/architecture.md#current-implementation-and-future-direction).
+
 ## Repository
 
 ```text
