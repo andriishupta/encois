@@ -1,12 +1,10 @@
-# {{PRODUCT_NAME}} Documentation
-
-_Last updated: 2026-08-23_
+# Encois product guide
 
 ## What {{PRODUCT_NAME}} is
 
-{{PRODUCT_NAME}} connects the systems your organization uses and turns their activity into shared, scope-aware context. It helps people understand what changed, investigate risks, review workflow results, and make decisions with evidence.
+Encois connects the systems your organization uses and turns their activity into shared, scope-aware context. It helps people understand what changed, investigate risks, review workflow results, and make decisions with evidence.
 
-{{PRODUCT_NAME}} is read-oriented by default. A workflow or assistant may recommend something, but actions that change an external system require the appropriate permission and an explicit approval step.
+Encois is read-oriented by default. A workflow or assistant may recommend something, but actions that change an external system require the appropriate permission and an explicit approval step.
 
 ## Start with the Dashboard
 
@@ -15,7 +13,7 @@ The Dashboard is your daily entry point. It is designed to give you useful conte
 - **Good morning** shows the signed-in account and active workspace.
 - **Run workflow** opens the Workflows page so you can start an available workflow.
 - **What changed recently** shows real workflow events visible in your current scope.
-- **Pel AI** is the planned workspace assistant for questions, briefings, text chat, and voice. These surfaces are marked **Coming soon** until the assistant is connected to the product API.
+- **Pel AI** is an optional assistant surface. It remains **Coming soon** until connected to the product API.
 
 The Dashboard never expands your access. It only shows information returned for the organization and organization unit you are allowed to see.
 
@@ -60,7 +58,7 @@ Organization pages describe the company context that {{PRODUCT_NAME}} uses.
 
 ## Organization units and scope
 
-{{PRODUCT_NAME}} organizes access as a tree, for example:
+Encois organizes access as a tree, for example:
 
 `Organization → Department → Team → Project`
 
@@ -99,7 +97,7 @@ An organization-level integration can support multiple organization units. The s
 - **Integration** — an authorized connection to an external provider.
 - **Source** — a document or connected provider resource that supplies context within an organization-unit scope.
 - **Organization Memory Graph** — the organization’s visible entities and relationships.
-- **Pel AI** — the planned {{PRODUCT_NAME}} workspace assistant for natural-language questions and personalized briefings.
+- **Pel AI** — the optional Encois workspace assistant for natural-language questions and personalized briefings.
 - **Run** — one execution of a Workflow.
 - **Scope** — the organization and organization units a user or resource is allowed to access.
 - **Template** — a reviewed starting pattern for creating a Workflow.

@@ -36,21 +36,13 @@ docs/          product, architecture, security, and flow documentation
 
 Architecture references:
 
-- [`docs/architecture.md`](docs/architecture.md) — system boundaries, runtime, memory, authorization, and deployment.
-- [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state diagram with service boundaries and execution flow.
-- [`docs/infra.md`](docs/infra.md) — initial GCP/Terraform deployment blueprint, state, IAM, and rollout procedure.
-- [`docs/CI-CD.md`](docs/CI-CD.md) — proposed local/manual, GitHub Actions, and GCP-native CI/CD approaches.
-- [`docs/flows.md`](docs/flows.md) — user, integration, investigation, query, permission, recovery, and mandatory onboarding flows.
-- [`docs/flows.md#onboarding-readiness-states`](docs/flows.md#onboarding-readiness-states) — canonical onboarding states, route gate, and Coordinator transitions.
-- [`docs/contracts.md`](docs/contracts.md) — OpenAPI, JSON Schema, shared DTO rules, and TypeScript/Go boundaries.
-- [`docs/contracts.md#organization-onboarding-and-readiness`](docs/contracts.md#organization-onboarding-and-readiness) — onboarding status and API error contract.
-- [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint and MCP/ADK/Temporal communication model.
+- [`docs/architecture.md`](docs/architecture.md) — product idea, current system, lifecycle, deployment, and future event delivery.
+- [`docs/contracts.md`](docs/contracts.md) — OpenAPI, JSON Schema, Blueprint, Temporal, Agent Gateway, and Coordinator boundaries.
+- [`docs/operations.md`](docs/operations.md) — local Compose, demo seed, Temporal inspection, GCP, and CI/CD.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
-- [`docs/memory.md`](docs/memory.md) — current Graph/Workflow Memory/artifact boundaries, scope semantics, and provider-neutral future adapters.
-- [`docs/GCP.md`](docs/GCP.md) — selected Google Cloud services, Cloud SQL/Drizzle, Identity Platform, storage, and deferred infrastructure decisions.
-- [`docs/local.md`](docs/local.md) — complete local Compose, Auth Emulator, and onboarding flow.
+- [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
+- [`docs/documentation.md`](docs/documentation.md) — user-facing product guide.
 - [`docs/scripts.md`](docs/scripts.md) — supported root commands and script ownership rules.
-- [`docs/dictionary.md`](docs/dictionary.md) — canonical meanings for Worker, Workflow, Activity, Agent, Integration, MCP, and related terms.
 
 ## Prerequisites
 
@@ -139,7 +131,7 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `owner@local.test` / `local-password-1234`. Compose uses the local Temporal
 stack for workflow execution; the seed script requires that Temporal server
 and fails closed if it is unavailable.
-See [`docs/local.md`](docs/local.md) for the onboarding and local flow. Follow
+See [`docs/operations.md`](docs/operations.md) for the onboarding and local flow. Follow
 service logs with
 `docker compose -f compose.watch.mock.yaml logs -f`.
 
@@ -153,10 +145,6 @@ file path, and run `pnpm run dev:watch:ai`. This uses real Spanner Graph,
 Gemini through Agent Platform, and Agent Platform Memory Bank; Postgres, Temporal, Firebase Auth and
 Storage emulators, and provider fixtures remain local. Stop it with
 `pnpm run dev:watch:ai:down`.
-
-To reset only the known fixture organizations and Auth Emulator accounts, use
-the scoped reset command documented in [`docs/local.md`](docs/local.md). It
-does not remove Docker volumes or unrelated local data.
 
 To run the same four service images against managed production-like
 dependencies, copy `.env.local.prod.example` to `.env.local.prod`, fill in
@@ -198,7 +186,7 @@ pnpm -r test
 ```
 
 Application-specific environment variables and local startup details live in
-the relevant app `.env.example` files and [`docs/local.md`](docs/local.md).
+the relevant app `.env.example` files and [`docs/operations.md`](docs/operations.md).
 Never commit generated env files or cloud credentials.
 
 ## Development expectations
@@ -215,7 +203,7 @@ See [`AGENTS.md`](AGENTS.md) for the full contribution and engineering guide.
 
 ## Deployment scaffold
 
-The initial infrastructure blueprint lives in [`infra/`](infra/) and is intentionally opt-in. It does not contact GCP or deploy anything until Terraform is explicitly initialized and applied with project-specific variables. Start with [`docs/infra.md`](docs/infra.md), then use `infra/bootstrap/` for the remote state bucket and dedicated infrastructure deployer.
+The initial infrastructure blueprint lives in [`infra/`](infra/) and is intentionally opt-in. It does not contact GCP or deploy anything until Terraform is explicitly initialized and applied with project-specific variables. Infrastructure and deployment guidance lives in [`docs/operations.md`](docs/operations.md); use `infra/bootstrap/` for the remote state bucket and dedicated infrastructure deployer.
 
 ## License
 

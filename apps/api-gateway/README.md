@@ -73,9 +73,9 @@ The Coordinator's versioned `coordinator.v1` callback persists `ready` or
 Blueprint revision, Workflow, Run, or Temporal IDs. Service readiness at
 `GET /health/ready` is independent from this tenant-level onboarding gate.
 
-See the full [onboarding flow and state matrix](../../docs/flows.md#onboarding-readiness-states),
-[contract rules](../../docs/contracts.md#organization-onboarding-and-readiness),
-and [local lifecycle test](../../docs/local.md#authentication-and-onboarding-test).
+See the full [architecture and onboarding lifecycle](../../docs/architecture.md#canonical-lifecycle),
+[contract rules](../../docs/contracts.md#public-api-rules),
+and [local operations guide](../../docs/operations.md#local-stack).
 
 Current blueprint routes:
 
@@ -120,7 +120,7 @@ Current blueprint routes:
 Workflow Templates are stored in the Gateway control plane as searchable
 metadata plus immutable JSONB versions. They use logical capabilities and
 provider slots, so a template can resolve to GitHub or GitLab, Jira or Linear,
-and Slack or Teams. Workflow Creator later maps a selected template to a
+and Slack or Teams. Workflow Creator maps a selected template to a
 validated tenant Blueprint; the Go Runtime does not read this catalog.
 Sources are a separate control-plane model. Templates do not create
 Sources, revisions, or ingestion runs.

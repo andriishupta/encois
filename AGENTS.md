@@ -9,17 +9,17 @@ project. Access for bots, reviewers, and hackathon judges is limited to the
 approved evaluation purpose; do not copy, fork, redistribute, reuse, or create
 derivative work from the Repository. See [`LICENSE`](LICENSE).
 
-This file is the working guide for contributors and coding agents. The source of truth for product intent, the first architecture baseline, and the competition constraints is:
+This file is the working guide for contributors and coding agents. The source
+of truth for product intent, architecture, contracts, operations, and security
+is:
 
-- [`docs/idea.md`](docs/idea.md) — product vision, users, MVP, and positioning.
-- [`docs/architecture.md`](docs/architecture.md) — proposed system boundaries, runtime, state, and deployment.
-- [`docs/flows.md`](docs/flows.md) — proposed product and runtime flows.
+- [`docs/architecture.md`](docs/architecture.md) — product idea, system boundaries, runtime, lifecycle, and deployment direction.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI/JSON Schema boundaries and cross-language type generation.
-- [`docs/protocols.md`](docs/protocols.md) — generic Workflow Blueprint, MCP-shaped tools, ADK, and Temporal communication model.
+- [`docs/operations.md`](docs/operations.md) — local operation, demo seed, GCP, and CI/CD.
 - [`docs/security.md`](docs/security.md) — repository-wide security baseline, trust boundaries, and security invariants.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
-- [`docs/system-diagram.md`](docs/system-diagram.md) — living current-state service and execution diagram.
-- [`docs/hackaton.md`](docs/hackaton.md) — the local digest of the All Things Agentic hackathon requirements.
+- [`docs/documentation.md`](docs/documentation.md) — user-facing product guide.
+- [`docs/scripts.md`](docs/scripts.md) — supported repository scripts.
 
 Do not invent product requirements that conflict with those documents. If implementation reveals a meaningful architectural decision, update the relevant document or add a decision record rather than hiding the decision in code. The architecture documents are a baseline and should evolve with the first working vertical slice.
 
@@ -86,9 +86,7 @@ agent runtime, persistence, contracts, seed data, and shared UI components.
 - If the user asks to test, test only the requested scope and do not add broad exploratory checks unless the user asks for them.
 - Higher-priority safety or environment checks that are required to execute the requested change may still be performed, but must remain narrowly scoped and be reported.
 
-## Hackathon constraints
-
-The project must remain eligible for the All Things Agentic hackathon. The current requirements are summarized in [`docs/hackaton.md`](docs/hackaton.md); the official rules remain authoritative if they change.
+## Product and platform constraints
 
 The implementation must visibly use:
 
@@ -306,7 +304,8 @@ A vertical slice is ready when it:
 - includes tests for the highest-risk boundaries; and
 - leaves explicit TODOs for important deferred production work.
 
-Before submission, also verify the checklist in [`docs/hackaton.md`](docs/hackaton.md), including the architecture diagram, README spin-up instructions, and the time-limited English demo video.
+Keep the architecture, README, deployment path, and user-facing documentation
+current when these constraints or the deployed services change.
 
 ## Known deferred work
 

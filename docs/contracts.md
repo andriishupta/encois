@@ -1,522 +1,217 @@
-# Encois Contracts and Cross-Language Boundaries
+# Encois contracts
 
-**Status:** minimal generic protocol implemented; provider expansion pending
-
-This document defines the data contracts between the TypeScript control plane,
-Go Agent Runtime, private Agent Gateway, React SPA, and integrations. The
-contracts are generic: a company-specific workflow is represented by a
-validated Workflow Blueprint, not by a new platform-level DTO or Go workflow
-type.
-
-`packages/contracts` contains the TypeScript contract types, canonical JSON
-Schema sources, and a small Go validator package. The TypeScript API validates
-the public Blueprint, Signal, and update payloads with Ajv-2020, then applies
-semantic authorization and workflow checks. Go services embed and validate the
-same schema files at the Blueprint, tool request, tool
-result, artifact reference, and workflow result boundaries. Generated DTOs remain optional
-follow-up work; validation does not require sharing TypeScript source with Go.
-
-## Permission contract
-
-`packages/contracts/permissions.json` is the single source of truth for
-organization capabilities. `pnpm --filter @encois/contracts generate:permissions`
-generates the TypeScript `Permission` constants used by the dashboard and
-Gateway, plus Go constants used by the Runtime and Agent Gateway. Each
-permission declares its implied read capabilities; the backend remains the
-enforcement boundary, while the dashboard uses the same keys for route guards,
-navigation, and component visibility. UI checks are guidance and never replace
-the API authorization check.
-
-The tool names in examples are protocol examples, not a promise that those
-providers are already connected. The current Agent Gateway fixture catalog is
-`jira.project_tasks` and `github.project_activity`. Its entries now validate
-against the canonical `tool-manifest.v1` schema; persisted connector grants,
-live manifests, and production connector lifecycle wiring remain deployment
-and control-plane work; the hosted GitHub/Jira adapters are already behind the
-same boundary.
-
-The Agent Gateway mock and hosted adapters are substitutable implementations of
-the same `ArtifactStore`, `GraphStore`, and `ProviderToolRegistry` boundaries.
-They preserve the same request validation, success statuses, result schemas,
-scope checks, and failure classes. Mock data is selected explicitly by the
-deployment profile; it does not turn unknown artifact references or unsupported
-Graph queries into successful fixture responses.
+This document defines the boundaries between the Dashboard, Gateway API,
+Temporal, Go Agent Runtime, Agent Gateway, and control-plane persistence.
+Schemas in `packages/contracts` and the OpenAPI document are authoritative;
+this document explains their ownership and use.
 
 ## Contract ownership
 
-| Boundary | Source of truth | Generated consumers |
-|---|---|---|
-| Browser and public HTTP API | OpenAPI document | React client and TypeScript API validators/types |
-| Workflow start, Signals, Updates, Coordinator events, and results | Versioned JSON Schema | TypeScript Gateway API and Go Runtime |
-| Workflow Blueprint | Versioned JSON Schema | Coordinator, Creator, Gateway API, Go Runtime, UI builder |
-| Workflow creation | Versioned JSON Schema | Dashboard, Gateway API, and Go Runtime execution boundary |
-| Agent Gateway tool catalog and invocation | MCP-shaped JSON Schema plus Encois execution envelope | Go Runtime, Agent Gateway, integration adapters |
-| Artifact write/reference boundary | Versioned JSON Schema plus Encois execution envelope | Go Agent Gateway and future Runtime/storage adapters |
-| Source and ingestion | Versioned JSON Schemas plus Encois execution envelope | Gateway API, Go Runtime, source adapters, Graph/Memory projection |
-| Integration manifests and evidence events | Versioned JSON Schema | registry, adapters, graph/memory pipeline |
-| Control-plane database | SQL migrations owned by Gateway API | Gateway API only |
-| Temporal command receipts | Gateway-owned tenant-scoped SQL table | TypeScript Gateway API only; never sent to Go or Temporal |
+| Boundary | Format | Owner |
+| --- | --- | --- |
+| Dashboard ↔ Gateway API | OpenAPI | Gateway API |
+| Gateway API ↔ PostgreSQL | Drizzle schema and migrations | Gateway API |
+| Gateway API ↔ Temporal | Temporal SDK payloads plus versioned JSON Schema | shared contracts |
+| Runtime ↔ private Gateway | versioned JSON Schema and authenticated HTTP | shared contracts |
+| Coordinator events | `coordinator-event.v1` JSON Schema | shared contracts |
+| Blueprint execution | `workflow-blueprint.v1` JSON Schema | shared contracts |
+| Provider tools and evidence | typed Agent Gateway contracts | Agent Gateway/shared contracts |
 
-OpenAPI describes the public application API. JSON Schema describes the
-cross-language objects that must be validated independently by TypeScript and
-Go. The API validates `workflow-update.v1` before calling Temporal; the Go
-Workflow receives only the validated update payload and applies it
-deterministically. MCP supplies the industry-standard shape for tool discovery
-and invocation; it is not used as the durable workflow contract.
+The Go Runtime and Agent Gateway do not import TypeScript or connect directly
+to the control-plane database. Cross-language payloads use generated or
+manually mirrored types validated at both boundaries.
 
-Execution correlation uses the public `requestId`, a propagated `traceId`, the
-stable logical `workflowId`, and the Temporal `runId` once a concrete execution
-exists. The Go Runtime obtains that `runId` from Temporal and includes it in
-Activity/tool requests; correlation IDs are not trusted as authorization input.
-Approval Signals also carry a caller-generated `signalId`, which the Workflow
-uses for duplicate suppression.
+OpenAPI describes public/private HTTP payloads. JSON Schema describes
+cross-language Temporal, Blueprint, Source, memory, graph, artifact, and tool
+payloads. Temporal Workflow/Signal/Update names are versioned contract values.
+MCP is a tool-shape option behind Agent Gateway policy, not the application API
+or the execution engine.
 
-The Gateway also persists a tenant-scoped receipt for each Signal and Update.
-It claims the command before calling Temporal, records `accepted` only after
-the Temporal call and audit event succeed, and may replay `in_flight` commands
-after a process crash. A different payload under the same command ID is a
-conflict. This database receipt is an API delivery safeguard, not a replacement
-for Temporal's Update ID or the Go Workflow's Signal deduplication.
+## Public API rules
 
-`coordinator-event.v1` is separate from a Blueprint step Signal. It carries
-tenant-scoped lifecycle notifications such as approved Blueprint start
-requests, integration/provider changes, source readiness, and workflow
-completion. The Coordinator receiver deduplicates event
-IDs and rejects events for another organization or Coordinator. Gateway
-notifications enqueue these small events transactionally in the tenant-scoped
-outbox, and the API's dispatcher delivers them to Temporal with bounded retries.
+Every public request is authenticated, organization-scoped, validated, and
+authorized before data is loaded. Responses are projections, not raw Temporal,
+provider, or database objects. Errors use a stable code and a request ID.
 
-### Organization onboarding and readiness
+The public workflow creation contract accepts a Template or an existing
+Blueprint reference, scope, name, and validated configuration. It exposes
+`Preview Blueprint` and direct Blueprint creation. It does not expose internal
+Coordinator IDs or raw provider credentials.
 
-The organization projection includes the tenant-scoped
-`organization_onboarding` record. Its externally visible status is one of
-`pending`, `initializing`, `ready`, or `failed`; a missing row is not a status
-and is reported as the technical error `ORGANIZATION_ONBOARDING_NOT_FOUND`
-with HTTP `503`. Reads do not create a missing row. The migration/backfill or
-an explicit repair flow owns that correction.
+The start request is asynchronous. A successful request returns a queued Run
+projection. It does not claim that Temporal is already running the Run.
 
-`PATCH /api/v1/organization/onboarding` is limited to `onboarding:manage` and
-persists the selected coordination mode and workflow catalog references. The
-Gateway accepts only active Template keys or current approved organization
-Blueprints and rejects unknown selections before changing state.
-The initial onboarding browser flow does not call this endpoint with workflow
-selections; it uploads one organization context document and starts onboarding
-with an empty workflow selection. This update endpoint remains available for
-explicit post-onboarding or administrative workflow configuration.
-`POST /api/v1/organization/onboarding/start` starts the stable organization
-Coordinator Workflow through the existing Gateway WorkflowClient, persists the
-Coordinator run projection, and enqueues a `reconcile-requested`
-`coordinator-event.v1` in the durable outbox. A successful start changes
-`pending` to `initializing`; it cannot change the organization directly to
-`ready`.
+Organization onboarding is a separate server-owned contract with persisted
+states `pending`, `initializing`, `ready`, and `failed`. A missing onboarding
+row produces `ORGANIZATION_ONBOARDING_NOT_FOUND`; it is not another state.
+Only the private Coordinator callback can complete `initializing` as `ready`
+or `failed`, and it must match the organization and Coordinator identity.
 
-Only a versioned, service-authenticated `coordinator.v1` status callback may
-persist the `ready` or `failed` transition after the Coordinator has performed
-its initial reconciliation. The callback must be organization-scoped and
-match the active Coordinator identity. `POST
-/api/v1/organization/onboarding/reset` is an explicit administrator recovery
-operation: it terminates the previous Coordinator execution when present,
-marks its control-plane run as `cancelled`, clears the selected workflow
-references and failure message, and returns the organization to `pending`.
-The administrator then completes onboarding again and
-`POST /api/v1/organization/onboarding/start` creates the next initialization
-attempt.
+## Blueprint model
 
-While the status is not `ready`, ordinary tenant product routes return
-`ORGANIZATION_ONBOARDING_REQUIRED` with HTTP `409`. The exceptions are the
-organization projection, onboarding update/start/reset, onboarding Source
-upload and ingestion, and active Template/current approved Blueprint catalog
-reads. Existing authentication and permission checks still apply to those
-exceptions. A user without `onboarding:manage` can inspect progress but cannot
-update or reset onboarding. `GET /health/ready` is service readiness, not
-organization onboarding readiness. See the complete route matrix in
-[`flows.md`](flows.md#onboarding-readiness-states) and the runtime boundary in
-[`architecture.md`](architecture.md#45-organization-onboarding-and-coordinator).
+A Blueprint is the executable, organization-scoped configuration of a generic
+Workflow. It contains:
 
-The browser never supplies a Coordinator, Blueprint revision, Workflow, Run,
-or Temporal runtime ID. The selected coordination mode and catalog references
-are included in the Coordinator start contract and persisted run business
-input when explicitly configured. The initial onboarding start uses the
-persisted defaults and an empty workflow selection. The persisted Coordinator
-run is a control-plane record, not a user Run: ordinary workflow list/detail,
-event, and control routes exclude it,
-while onboarding and future admin surfaces address it through their own
-permission boundary.
+- contract version and Blueprint identity;
+- source Template or Blueprint lineage;
+- resolved provider capabilities and source bindings;
+- ordered or dependency-linked steps;
+- typed step inputs and bounded output references;
+- scope requirements and execution policy;
+- immutable resolved configuration used by a Run.
 
-## Repository layout
+The browser submits references and user configuration. The Gateway resolves
+provider slots, validates capabilities and scope, and persists the resolved
+snapshot. A future Blueprint revision is another immutable snapshot with an
+explicit revision identity; it is not a mutable in-place edit.
+
+## Workflow and Run contract
+
+The product distinguishes:
 
 ```text
-packages/contracts/
-  go.mod
-  go.sum
-  schema.go
-  schema_test.go
-  src/index.ts
-  src/scope.ts
-  src/values.ts
-  src/validation.ts
-  src/permissions.generated.ts
-  permissions.json
-  permissions_generated.go
-  scripts/generate-permissions.mjs
-  test-contracts.mjs
-  openapi.yaml
-  schemas/
-    workflow-blueprint.v1.json
-    blueprint-workflow-result.v1.json
-    workflow-signal.v1.json
-    execution-context.v1.json
-    tool-request.v1.json
-    tool-result.v1.json
-    artifact-write.v1.json
-    artifact-write-result.v1.json
-    graph-query.v1.json
-    graph-query-result.v1.json
-    agent-memory.v1.json
-    agent-memory-result.v1.json
-    tool-manifest.v1.json
-    workflow-update.v1.json
-    coordinator-event.v1.json
-    knowledge-source.v1.json
-    source-revision.v1.json
-    source-ingestion.v1.json
-    source-ingestion-result.v1.json
-  # canonical schemas are consumed by both TypeScript and Go
+Template -> Blueprint -> Workflow -> Run -> Temporal execution
 ```
 
-The schemas are edited as the source. TypeScript types currently live in
-`packages/contracts/src/index.ts`, and the public TypeScript boundary uses the
-runtime validators in `src/validation.ts`. The Go package in `schema.go`
-embeds the same `schemas/*.json` files and uses `jsonschema-go` for runtime
-validation; Go DTOs remain local to each service. Generated Go/TypeScript
-types and schema-drift checks in CI are follow-up work; neither language
-becomes the schema owner. Raw model text never crosses the Go Runtime boundary.
+The Workflow is the named product object. The Run contains the selected
+Blueprint reference, scope, business input, actor, stable Temporal Workflow
+identity, timestamps, and the Gateway projection of Temporal state. Explicit
+API start commands may additionally use an idempotency key. Temporal owns
+execution history; the Gateway owns the user-facing projection and audit
+metadata.
 
-The shared values also define organization-unit types, scope-rule modes,
-freshness states, workflow status reasons, artifact retention classes, and
-memory redaction states. `resolveEffectiveScope` is a pure helper used by the
-Gateway to expand direct membership roots; it does not read the database or
-make authorization decisions from model output.
+Current Run statuses are `queued`, `running`, `waiting`, `paused`, `partial`,
+`failed`, `completed`, and `cancelled`. Unknown values are contract errors and
+are not mapped to a convenient status.
 
-This pre-production baseline uses `v1` for all shared application contracts and
-`1.0.0` for TypeScript package and OpenAPI metadata. Database migrations remain
-independently numbered and are not reset or collapsed. An incompatible
-application contract will receive a new version only after a stable release
-requires compatibility.
-
-Tool, graph, memory, and artifact results carry optional freshness, provenance,
-retention, or redaction metadata. Generic Blueprint step results additionally
-carry optional bounded confidence and redacted runtime trace attributes
-(duration, attempt, outcome, provider, model, and budget when known). This keeps
-the data-quality, observability, and privacy boundaries explicit. Graph and
-Memory Bank have typed local/GCP adapter boundaries; Cloud Storage and hosted
-provider wiring still require deployment configuration and smoke verification.
-The current cross-language contracts carry organization and execution scope,
-but provider-specific hierarchy mapping is intentionally not hidden in the
-contract. The current Agent Platform Memory Bank adapter does not yet provide complete
-Encois unit-level memory partitioning; future `visibilityScope` contract work
-must be versioned and tested before changing provider writes. See
-[`memory.md`](memory.md).
-
-## Generic workflow model
-
-The platform has one generic execution contract. A company-specific scenario
-is data:
+The start path is:
 
 ```text
-Workflow Start Request
-  -> immutable Workflow Blueprint snapshot
-  -> generic Temporal Workflow: encois.dynamic.v1
-  -> typed steps: agent, tool, transform, condition, wait, approval
-  -> structured result and evidence references
+workflow-start-requested
+  -> Coordinator event
+  -> Coordinator Activity
+  -> private Gateway start route
+  -> generic Blueprint Temporal Workflow
 ```
 
-The platform-owned workflow types include the long-lived Coordinator and
-bootstrap/reconciliation workflows plus the short-lived generic
-`encois.source-ingestion.v1` source/revision pipeline. A user-created or
-company-created workflow uses the registered generic Temporal Workflow.
-Release readiness
-is only an example Blueprint, not a required Encois workflow type.
+The private start route accepts only an approved Blueprint registry reference,
+the organization and scope, validated business input, and a stable idempotency
+key. It rechecks the Blueprint, Workflow, actor, and scope before starting or
+returning the existing execution.
 
-### Source contracts
+## Coordinator event envelope
 
-`Source` is the organization-unit-level logical origin of knowledge.
-`uploaded_document`, `manual`, and `media` are direct Source kinds; an
-integration Source references an organization-level `Integration` and its
-provider resource selection. `Source Revision` is immutable and carries an
-artifact or provider-object reference; it does not carry raw bytes or
-credentials. The API owns Integration, Source, and revision registration. The
-Runtime receives `source-ingestion.v1`, validates the source/revision identity
-and scope, and returns
-`source-ingestion-result.v1` with a stage, status, fact count, and evidence
-references. Provider acquisition, parsing, PII filtering, normalized Graph
-writes, and optional Memory distillation are Activities/adapters behind that
-stable envelope. The wire schema names remain `KnowledgeSource*` and
-`knowledge-source.v1` for compatibility with generated consumers.
+`coordinator-event.v1` contains a small bounded envelope. Its required fields
+are:
 
-### Workflow start request
+- contract version;
+- event ID and event type;
+- organization ID;
+- Coordinator ID.
 
-```json
-{
-  "contractVersion": "workflow-start.v1",
-  "requestId": "req_123",
-  "workflowId": "workflow:acme:release-readiness:checkout:aug-30",
-  "organizationId": "acme",
-  "actorId": "user-123",
-  "scope": {
-    "ids": ["unit:platform", "unit:checkout"]
-  },
-  "policyVersion": "policy-17",
-  "blueprintId": "release-readiness",
-  "blueprintVersion": "2.1.0",
-  "input": {
-    "releaseName": "August checkout release",
-    "releaseKey": "aug-30"
-  }
-}
-```
+Optional fields are `actorId`, `approved`, `blueprintId`,
+`blueprintVersion`, `workflowId`, `key`, `businessInput`, `scope`, `reason`,
+and `evidenceRefs`. The event ID is the delivery deduplication identity; the
+schema does not carry a separate idempotency key or event timestamp.
 
-The Gateway API authenticates the caller, computes the effective scope, loads
-the approved Blueprint, validates the input against that Blueprint's schema,
-and sends an immutable Blueprint snapshot with the Temporal start request.
-The Go Runtime does not query the control-plane database.
+Current event types:
 
-### Workflow Blueprint
+| Event | Producer | Coordinator responsibility |
+| --- | --- | --- |
+| `reconcile-requested` | onboarding/control plane | reconcile workspace state |
+| `integration-connected` | Integration service | add or reconcile provider capability |
+| `provider-changed` | Integration service | reconcile changed/disabled provider |
+| `source-ready` | Source ingestion | make new source context available |
+| `workflow-start-requested` | Workflow Creator | start the approved Blueprint Run |
+| `workflow-completed` | Runtime projection | update coordination context and history |
 
-```json
-{
-  "contractVersion": "workflow-blueprint.v1",
-  "blueprintId": "release-readiness",
-  "version": "2.1.0",
-  "name": "Company release readiness",
-  "workflowType": "encois.dynamic.v1",
-  "inputSchemaRef": "schema://release-readiness/input.v1",
-  "outputSchemaRef": "schema://release-readiness/output.v1",
-  "requiredScopes": ["project:checkout"],
-  "allowedTools": [
-    "jira.search_issues",
-    "github.search_pull_requests",
-    "monitoring.query_errors"
-  ],
-  "steps": [
-    {
-      "id": "jira",
-      "kind": "tool",
-      "tool": "jira.search_issues",
-      "input": { "query": "release context" }
-    },
-    {
-      "id": "github",
-      "kind": "tool",
-      "tool": "github.search_pull_requests"
-    },
-    {
-      "id": "synthesis",
-      "kind": "agent",
-      "agentDefinition": "context-synthesizer@1",
-      "dependsOn": ["jira", "github"]
-    }
-  ],
-  "requiresApproval": false
-}
-```
+Every event is validated against the schema, checked against the current
+organization and Coordinator, deduplicated by event ID, and processed with
+bounded retries. `workflow-start-requested` additionally requires an approved
+Blueprint reference, Workflow ID, business key, scope, and business input.
+Unknown event types fail closed.
 
-The Blueprint is configuration, not executable code. The deterministic
-validator must reject unknown step kinds, unknown tools, invalid dependencies,
-cycles, undeclared scopes, unsafe input mappings, and unsupported versions.
-The generic Temporal Workflow interprets only the validated step kinds and
-calls registered Activities.
+## Transactional outbox
 
-## MCP-shaped tool contract
+For events that originate with a control-plane state change, the producer
+updates its PostgreSQL record and inserts the outbox row in one transaction.
+The row includes a lease, attempt count, next-attempt time, last error, and
+delivery status.
 
-MCP standardizes tool discovery and invocation. Each Integration Pack may
-provide an MCP server or a typed API adapter mapped into the same internal tool
-catalog. The cross-language manifest uses `tool-manifest.v1` and follows the
-MCP concepts:
+Only the dispatcher owns the Temporal Signal adapter. It claims rows with a
+lease, delivers the versioned event to the Coordinator, and retries transient
+failures with backoff. Duplicate delivery is expected and must be harmless.
 
-```json
-{
-  "name": "jira.search_issues",
-  "title": "Search Jira issues",
-  "description": "Read issues visible in the authorized project scope",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "query": { "type": "string" },
-      "status": { "type": "string" }
-    },
-    "required": ["query"]
-  },
-  "outputSchema": {
-    "type": "object",
-    "required": ["items", "observedAt"]
-  },
-  "annotations": {
-    "readOnlyHint": true,
-    "destructiveHint": false,
-    "idempotentHint": true,
-    "openWorldHint": false
-  },
-  "requiredScope": ["ids"],
-  "available": true,
-  "approvalRequired": false,
-  "contractVersion": "tool-manifest.v1",
-  "version": "1.0.0",
-  "kind": "tool",
-  "sideEffects": "read-only"
-}
-```
+The outbox can later be relayed to Google Pub/Sub or Kafka without changing the
+event contract. The broker is a transport; PostgreSQL remains the durable
+producer record until the relay has acknowledged the message, and Temporal
+remains the execution source of truth.
 
-The Go Agent Gateway embeds and validates the same manifest schema before
-returning its catalog. This is still an HTTP/JSON MCP-shaped catalog rather
-than a full MCP JSON-RPC transport.
+## Temporal contracts
 
-The runtime adds an Encois execution envelope around the MCP-shaped call:
+Temporal Workflow types are stable contract values, including:
 
-```json
-{
-  "contractVersion": "tool-request.v1",
-  "requestId": "req_123",
-  "workflowId": "workflow:acme:release-readiness:checkout:aug-30",
-  "organizationId": "acme",
-  "actorId": "user-123",
-  "scope": { "ids": ["unit:checkout"] },
-  "policyVersion": "policy-17",
-  "capability": "<API-issued internal execution capability>",
-  "tool": "jira.search_issues",
-  "arguments": { "query": "release context" }
-}
-```
+- the long-lived `CoordinatorWorkflow`;
+- the generic Blueprint Workflow;
+- Source ingestion workflows;
+- bounded specialist or integration workflows where present.
 
-The Agent Gateway validates the envelope and the tool schema, re-checks
-current policy, resolves credentials, calls MCP or the API adapter, validates
-the result, and returns minimum required structured content plus data
-references. MCP annotations are hints, not authorization. The Agent Gateway
-remains the final policy boundary.
+Signals and Queries are versioned names. Workflow IDs are generated by the
+server from organization and resource identity. Run IDs and Temporal IDs are
+technical identifiers shown only in technical detail views.
 
-## Generic agent step
+Current Workflow types are `CoordinatorWorkflow`, `encois.dynamic.v1`,
+`encois.source-ingestion.v1`, and `BootstrapProjectWorkflow`. The Runtime polls
+one configured task queue—`encois-agent-runtime` by default—and registers these
+Workflow types and their Activities in one worker deployment.
 
-An `agent` step is also generic. Its Blueprint selects an approved
-`agentDefinition`, input/output schemas, model profile, tool allowlist, budget,
-and retry policy. ADK runs the agent reasoning loop and adapts registered tools
-into the ADK tool abstraction. Temporal owns the durable Workflow and Activity
-boundaries around that execution.
+Activities must have explicit input/output types, timeouts, bounded retries,
+and idempotency behavior. Activities do not use hidden database access to
+reconstruct missing application state.
 
-An agent may call a tool, but it cannot select a new organization, widen scope,
-invent a tool, or bypass the Agent Gateway. A specialist such as Jira or GitHub
-is therefore a registered capability or Agent Definition, not a platform-level
-Workflow type.
+## Source and evidence contracts
 
-## Coordinator and Blueprint creation
+A Source identifies a provider resource or uploaded document and includes:
 
-The Coordinator is the product-specific long-lived control loop. It discovers
-available context and reports scoped onboarding readiness. The Gateway owns the
-simple creation flow:
-the user selects a Template or an existing approved Blueprint, chooses a name
-and scope, previews the resolved Blueprint, and creates that Blueprint directly.
-When requested, the Gateway starts the Workflow from the stored Blueprint
-snapshot in the same operation. Blueprint revisions can be added later as a
-separate versioned capability.
+- organization and visibility scope;
+- Integration reference when provider-backed;
+- provider/type metadata;
+- ingestion policy;
+- latest Source Revision and freshness information.
 
-## Public and internal API boundaries
+A Source Revision is immutable. Ingestion preserves source record IDs, observed
+time, ingestion time, transformation version, and a bounded provenance link.
 
-The public Gateway API exposes application concepts, not raw MCP or Temporal
-details. The currently implemented browser-facing routes are mounted under
-`/api/v1`:
+Evidence passed through Runtime and Gateway contracts includes the minimum
+source reference needed to inspect a claim. Missing provider metadata remains
+missing; consumers must not convert it into a fabricated timestamp,
+confidence, or healthy state.
 
-```text
-GET  /api/v1/auth/me
-POST /api/v1/public/waitlist
-POST /api/v1/workflows
-GET  /api/v1/workflows
-GET  /api/v1/workflows/{workflowId}
-GET  /api/v1/workflows/{workflowId}/events
-GET  /api/v1/workflows/activity
-GET  /api/v1/workflows/templates
-GET  /api/v1/workflows/blueprints
-DELETE /api/v1/workflows/definitions/{workflowId}
-DELETE /api/v1/workflows/blueprints/{blueprintId}/{version}
-POST /api/v1/workflows/{workflowId}/signals
-POST /api/v1/workflows/{workflowId}/updates
-GET  /api/v1/integrations
-POST /api/v1/integrations/{integrationId}
-POST /api/v1/workflows/blueprints/preview
-POST /api/v1/workflows/blueprints/from-intent
-```
+## Agent and tool contracts
 
-The Dashboard presents a Workflow definition as the existing organization-
-scoped Blueprint registry rows grouped by stable `blueprintId`; it does not
-invent a second runtime entity or persist browser-only state. Deleting a
-Workflow soft-deletes all revisions in that group and preserves historical
-Runs. Blueprint deletion is narrower: it soft-deletes one non-current revision
-and refuses the current revision. Workflow creation resolves a Template or an
-approved Blueprint, previews the result, and creates the approved Blueprint
-directly. A requested start transactionally creates a queued Run projection and
-`workflow-start-requested` outbox event; the Coordinator starts the stored
-snapshot through the private Gateway boundary.
+An agent has a narrow role, typed input/output, a tool allowlist, timeout,
+retry limit, budget, and organization scope. Model output is untrusted and is
+validated before it becomes a persisted result or a command.
 
-`GET /api/v1/auth/me` is the pre-membership access-resolution contract. It
-returns `active` with the local user and organization when an invite has been
-accepted, or `pending` when the verified Identity Platform identity has no
-active Encois membership. Invalid tokens remain `401`; provider or persistence
-database configuration failures remain `503`. `POST /api/v1/public/waitlist` is the
-unauthenticated contact form for pending/unknown visitors. It requires a
-plausible work email, company name, and at least one company website or company
-LinkedIn URL. It stores only that bounded contact context and never creates an
-account or grants access. Work-email validation is a heuristic; mailbox
-ownership verification is a later step.
+An Agent Gateway tool declares:
 
-The Dashboard currently consumes authenticated workflow list/start/detail/events,
-integration/source, overview/review, organization-permission, graph, memory,
-and investigation projections. Activity/evidence history and runtime trace
-attributes are projected from persisted events or terminal Blueprint results;
-missing provider/model/budget metadata must remain explicitly unavailable rather
-than being synthesized in the UI. Common graph filters are pushed down at the
-Agent Gateway boundary; visibility-array indexing, multi-hop graph paths,
-question/query execution, and distributed live event streaming remain target
-extensions.
+- purpose and side effects;
+- input and output schema;
+- required capability and effective scope;
+- provider or data source;
+- redaction and retention behavior.
 
-For the generic workflow, the start request may carry an inline validated
-Blueprint or reference an approved registry snapshot:
-
-```json
-{
-  "workflowType": "encois.dynamic.v1",
-  "blueprintId": "release-readiness",
-  "blueprintVersion": "1.0.0",
-  "key": "checkout-aug-30",
-  "input": { "releaseKey": "checkout-aug-30" }
-}
-```
-
-The Gateway resolves the snapshot and sends the complete Blueprint in the
-versioned Temporal input. The Go Runtime does not query the registry.
-
-The private Agent Gateway exposes an authenticated internal tool boundary. For
-the MVP it may use HTTP/JSON with MCP-shaped payloads; a full MCP JSON-RPC
-transport can be added as an adapter if external MCP clients need direct
-access. The public API must not forward arbitrary tool calls from a user or
-model to the private gateway.
+Tools are read-only by default. External writes require a separate approval
+boundary and are not implied by a Blueprint or an agent recommendation.
 
 ## Compatibility rules
 
-- Every cross-language payload has a contract version.
-- Additive fields are optional first; changing field meaning requires a new major version.
-- Consumers reject unknown contract versions and tolerate unknown optional fields.
-- Validate JSON at both sides of every trust boundary.
-- Tool results must conform to their declared output schema.
-- Error responses include a stable code, human-safe message, request ID, and retryability classification.
-- Provider-specific fields stay inside the adapter; normalized evidence and references cross the boundary.
-- Temporal payloads contain IDs, scope, Blueprint snapshots, and references, not secrets or large raw data.
-- Never use model output as the source of authorization, workflow identity, or tool permissions.
-
-## What is deliberately not shared
-
-- Postgres/Drizzle models are owned by the Gateway API.
-- Temporal Workflow implementation code is owned by the Go Runtime.
-- Google ADK, Temporal SDK, provider SDKs, and MCP client objects remain implementation details.
-- Secrets, OAuth tokens, raw unrestricted company data, and chain-of-thought never cross as general-purpose DTOs.
-
-Protobuf/gRPC can be introduced later for the private boundary if service count
-or throughput justifies it. It is not needed before the generic JSON Schema
-and MCP-shaped contracts stabilize.
+- Version contracts when their meaning or required fields change.
+- Reject invalid or unknown payloads at the receiving boundary.
+- Do not add silent aliases, legacy names, or fallback state mappings.
+- Keep provider-specific payloads behind adapters.
+- Keep organization ID, scope, actor, correlation ID, and idempotency metadata
+  through asynchronous boundaries.
+- Keep schemas in `packages/contracts/schemas`, TypeScript values/types in
+  `packages/contracts/src`, and Go mirrors in `packages/contracts`.
+- Update OpenAPI, JSON Schema, TypeScript, Go, and documentation together.

@@ -1,6 +1,6 @@
 # Encois Security Baseline
 
-**Status:** proposed repository-wide security baseline  
+**Status:** canonical repository-wide security baseline
 **Scope:** product architecture, application code, agent execution, integrations, data, and Google Cloud deployment
 
 This document defines the security properties Encois must preserve as it grows. It is intentionally provider-agnostic where possible. Concrete libraries, IAM roles, database policies, and deployment settings must implement these properties rather than replace them.
@@ -53,7 +53,9 @@ It must not:
 
 The private Agent Gateway is an internal policy and tool broker. It is not browser-facing and must not have public ingress. It receives requests from an authenticated Agent Runtime identity, validates the execution context and tool policy, obtains a scoped credential, calls an allowlisted provider/API/MCP endpoint, validates the result, and returns the minimum required data or references.
 
-The first implementation may be in-process inside the Go Runtime, but it must use the same explicit interface and policy checks as the future internal service. Extraction into a separate service must reduce, not expand, its trust boundary.
+The Agent Gateway is a separate internal Go service. Local and hosted wiring
+must preserve the same authenticated interface and policy checks; deployment
+changes must reduce, not expand, its trust boundary.
 
 ### Agent Runtime and Temporal
 

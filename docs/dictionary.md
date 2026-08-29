@@ -1,6 +1,6 @@
 # Encois Architecture Dictionary
 
-**Status:** proposed implementation vocabulary
+This is the canonical vocabulary for the product and runtime.
 
 This document is the naming reference for the architecture and runtime flows. The terms below should not be used interchangeably.
 
@@ -26,7 +26,9 @@ Agent Plane is not one process and is not the name of the Go binary. For the MVP
 
 An independently deployable process or container with its own lifecycle, configuration, scaling, and operational boundary.
 
-In the MVP, the Gateway API and the Go Agent Runtime Worker are services. The target architecture also allows a private Agent Gateway service. A Jira specialist, Activity, or repository run is not automatically a microservice.
+The current deployable application services are the Dashboard, Gateway API,
+Go Agent Runtime, and private Agent Gateway. A Jira specialist, Activity, or
+repository Run is not automatically a microservice.
 
 ### Worker Deployment
 
@@ -45,8 +47,8 @@ Temporal Cloud does not execute Encois Go code. Encois Workers connect to it and
 A client connection used by an application to communicate with Temporal Cloud.
 
 - The Gateway API uses a client to start, signal, query, describe, and cancel
-  Workflows. Cancellation is currently reached through an approved cancel-only
-  `workflow-signal.v1`; a direct public cancel route remains future work.
+  Workflows. The permission-gated public cancel route delegates to this client
+  and persists its audit/projection changes.
 - The Go Agent Runtime uses a client to create a Worker and may use it for child Workflows or Signals.
 
 ### Temporal Namespace
@@ -67,9 +69,7 @@ In Encois, the primary Worker is a Go application in apps/agent-runtime.
 A named Temporal queue from which Workers receive Workflow or Activity tasks. Examples:
 
 ~~~text
-encois.dynamic.v1
-integration-activities
-synthesis
+encois-agent-runtime
 ~~~
 
 Task queues are used to route work to compatible Worker deployments.
@@ -124,14 +124,9 @@ Activities have timeouts, retry policies, idempotency rules, and optional heartb
 
 An external message that changes or advances a running Workflow. Signals are used for human input, approvals, provider events, release context, and capability installation.
 
-Examples:
-
-~~~text
-release-context-provided
-approval-granted
-github-capability-enabled
-provider-status-updated
-~~~
+Current generic Workflow Signals include `blueprint-approval`,
+`workflow-pause`, and `workflow-resume`. The Coordinator also receives its
+separate `coordinator-event.v1` lifecycle envelope through a Temporal Signal.
 
 ### Query
 
@@ -230,7 +225,7 @@ Canonical onboarding statuses:
 A missing `organization_onboarding` row is not `pending` and is not a user
 onboarding state. It is a control-plane data or migration error. The API must
 return `ORGANIZATION_ONBOARDING_NOT_FOUND`, and neither the API nor dashboard
-may fabricate a fallback state. See the [onboarding flow and route policy](flows.md#onboarding-readiness-states).
+may fabricate a fallback state. See the [architecture and onboarding policy](architecture.md#canonical-lifecycle).
 
 ### Workflow Blueprint
 
@@ -249,14 +244,11 @@ bounded execution policy.
 
 ### Workflow Creator
 
-The Coordinator capability that proposes and reconciles Workflow Blueprints.
-It may use Gemini/ADK for discovery and proposal, but deterministic validation,
-registry rules, authorization, and the Gateway API decide whether a blueprint
-can be persisted or started.
-
-The Coordinator and Workflow Creator use the high-reasoning model profile;
-specialists may use a lower-latency profile. This is a model-routing policy,
-not an authorization decision.
+The Gateway application service that resolves a selected Template or approved
+Blueprint against scope, Integration capabilities, and user configuration. It
+previews the resolved Blueprint, persists it directly, and can enqueue the
+first Run through the Coordinator outbox. It does not require a separate
+deployable service or model call.
 
 ### Specialist Agent
 
@@ -266,7 +258,10 @@ A specialist is a logical role and code/configuration inside Agent Runtime. It i
 
 ### Agent Runtime
 
-The Go application that hosts Temporal Workers, Workflows, Activities, ADK agents, and integration clients. It calls the private Agent Gateway for policy-checked external access. The first vertical slice may keep the gateway implementation in-process behind the same interface; it is not a reason to couple the runtime to the control-plane database.
+The Go application that hosts Temporal Workers, Workflows, Activities, ADK
+agents, and integration clients. It calls the separately deployable private
+Agent Gateway for policy-checked external access and never connects directly
+to the control-plane database.
 
 Typical location:
 
@@ -393,7 +388,12 @@ The public application API for people, the React SPA, and future public MCP clie
 
 ### Agent Gateway
 
-The private east-west policy and tool broker between the Go Agent Runtime and external systems. It validates the registered tool, actor, organization scope, agent policy, connector grant, host, method, timeout, and payload before routing to an API Adapter or MCP Server. It resolves short-lived credentials and performs the final policy check immediately before the external call. It is a separate internal service in the target architecture and may be in-process for the first slice; it is never browser-facing.
+The private east-west Go service and policy/tool broker between the Agent
+Runtime and external systems. It validates the registered tool, actor,
+organization scope, agent policy, connector grant, host, method, timeout, and
+payload before routing to an API Adapter or MCP Server. It resolves short-lived
+credentials and performs the final policy check immediately before the
+external call. It is never browser-facing.
 
 ### Read Tool
 
