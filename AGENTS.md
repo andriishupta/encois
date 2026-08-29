@@ -15,7 +15,8 @@ is:
 
 - [`docs/architecture.md`](docs/architecture.md) — product idea, system boundaries, runtime, lifecycle, and deployment direction.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI/JSON Schema boundaries and cross-language type generation.
-- [`docs/operations.md`](docs/operations.md) — local operation, demo seed, GCP, and CI/CD.
+- [`docs/operations.md`](docs/operations.md) — local operation, GCP, and CI/CD.
+- [`docs/demo.md`](docs/demo.md) — local and hosted demo setup, seed sequence, and user invitation.
 - [`docs/security.md`](docs/security.md) — repository-wide security baseline, trust boundaries, and security invariants.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
 - [`docs/documentation.md`](docs/documentation.md) — user-facing product guide.

@@ -108,45 +108,55 @@ export async function queryMemoryForPrincipal(
   const projectId = input.projectId?.trim();
   const maxResults = Math.min(Math.max(input.maxResults ?? 10, 1), 20);
   const baseWorkflowId = `workflow:${principal.organizationId}:dashboard-memory:${requestId}`;
-  const requests: AgentMemoryRequest[] = agentDefinitions.map(
-    (agentDefinition) => {
-      const workflowId = `${baseWorkflowId}:${agentDefinition}`;
-      return {
-        contractVersion: ContractVersion.AgentMemory,
-        requestId,
-        traceId,
-        workflowId,
-        organizationId: principal.organizationId,
-        actorId: principal.actorId,
-        policyVersion: options.policyVersion,
-        scope,
-        capability: createExecutionCapability({
-          secret: capabilitySecret,
-          organizationId: principal.organizationId,
+  // Memory Bank scope maps are exact-match boundaries. Ingestion stores each
+  // memory under one canonical organization-unit scope, so a broad Dashboard
+  // read must query each authorized unit independently and merge the results.
+  const requests: AgentMemoryRequest[] = agentDefinitions.flatMap(
+    (agentDefinition) =>
+      scope.ids.map((scopeId) => {
+        const requestScope = { ids: [scopeId] };
+        const workflowId = `${baseWorkflowId}:${agentDefinition}:${scopeId}`;
+        return {
+          contractVersion: ContractVersion.AgentMemory,
+          requestId,
+          traceId,
           workflowId,
+          organizationId: principal.organizationId,
           actorId: principal.actorId,
           policyVersion: options.policyVersion,
-          scope,
-          ttlMs: options.capabilityTtlMs,
-        }),
-        agentDefinition,
-        operation: "retrieve",
-        memoryScope: {
+          scope: requestScope,
+          capability: createExecutionCapability({
+            secret: capabilitySecret,
+            organizationId: principal.organizationId,
+            workflowId,
+            actorId: principal.actorId,
+            policyVersion: options.policyVersion,
+            scope: requestScope,
+            ttlMs: options.capabilityTtlMs,
+          }),
           agentDefinition,
-          ...(projectId ? { projectId } : {}),
-        },
-        ...(query ? { query } : {}),
-        maxResults,
-      };
-    },
+          operation: "retrieve",
+          memoryScope: {
+            agentDefinition,
+            ...(projectId ? { projectId } : {}),
+          },
+          ...(query ? { query } : {}),
+          maxResults,
+        };
+      }),
   );
 
   try {
     const results = await Promise.all(
       requests.map((request) => client.query(request)),
     );
-    const memories = results
-      .flatMap((result) => result.memories)
+    const memories = [
+      ...new Map(
+        results
+          .flatMap((result) => result.memories)
+          .map((memory) => [memory.id, memory] as const),
+      ).values(),
+    ]
       .sort((left, right) => right.observedAt.localeCompare(left.observedAt))
       .slice(0, maxResults);
     const status = results.some((result) => result.status === "failed")

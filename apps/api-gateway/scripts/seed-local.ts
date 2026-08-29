@@ -42,26 +42,48 @@ import { buildCoordinatorWorkflowId } from "../src/workflows/types.js";
 const projectId =
   process.env.IDENTITY_PLATFORM_PROJECT_ID?.trim() || "demo-encois";
 const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST?.trim();
-const databaseUrl = process.env.DATABASE_MIGRATION_URL?.trim();
+const databaseUrl =
+  process.env.DATABASE_SEED_URL?.trim() ||
+  process.env.DATABASE_MIGRATION_URL?.trim();
+const identityMode =
+  process.env.DEMO_SEED_IDENTITY_MODE?.trim() ||
+  (emulatorHost ? "emulator" : "none");
+const allowManagedSeed = process.env.DEMO_SEED_ALLOW_MANAGED === "true";
+const demoOrganizationSlug =
+  process.env.SEED_ORGANIZATION_SLUG?.trim() || "organization-sun";
+const demoOrganizationName =
+  process.env.DEMO_SEED_ORGANIZATION_NAME?.trim() || "Sun Inc";
+const managedOwnerEmail =
+  process.env.DEMO_SEED_OWNER_EMAIL?.trim().toLowerCase() || undefined;
 const ownerEmail =
   process.env.LOCAL_AUTH_EMAIL?.trim().toLowerCase() || "owner@local.test";
 const ownerPassword =
   process.env.LOCAL_AUTH_PASSWORD?.trim() || "local-password-1234";
 const ownerUid = process.env.LOCAL_AUTH_UID?.trim() || "local-owner";
-const controlPlaneServiceUserId = "00000000-0000-4000-8000-000000000010";
+const controlPlaneServiceUserId =
+  process.env.CONTROL_PLANE_SERVICE_USER_ID?.trim() ||
+  "00000000-0000-4000-8000-000000000010";
 
-if (process.env.NODE_ENV === "production")
-  throw new Error("The local auth seed cannot run in production.");
-if (!emulatorHost)
+if (identityMode !== "emulator" && identityMode !== "none")
+  throw new Error("DEMO_SEED_IDENTITY_MODE must be emulator or none.");
+if (identityMode === "emulator" && !emulatorHost)
   throw new Error(
-    "FIREBASE_AUTH_EMULATOR_HOST is required for the local auth seed.",
+    "FIREBASE_AUTH_EMULATOR_HOST is required when DEMO_SEED_IDENTITY_MODE=emulator.",
+  );
+if (identityMode === "none" && !allowManagedSeed)
+  throw new Error(
+    "DEMO_SEED_ALLOW_MANAGED=true is required when seeding without the Firebase Auth Emulator.",
   );
 if (!databaseUrl)
   throw new Error(
-    "DATABASE_MIGRATION_URL is required for the local auth seed.",
+    "DATABASE_SEED_URL or DATABASE_MIGRATION_URL is required for the demo seed.",
   );
-if (ownerPassword.length < 6)
+if (identityMode === "emulator" && ownerPassword.length < 6)
   throw new Error("LOCAL_AUTH_PASSWORD must contain at least six characters.");
+if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(demoOrganizationSlug))
+  throw new Error(
+    "SEED_ORGANIZATION_SLUG must be a lowercase kebab-case slug.",
+  );
 
 type OrganizationFixture = {
   slug: string;
@@ -76,8 +98,8 @@ type OrganizationFixture = {
 
 const organizationsFixture: readonly OrganizationFixture[] = [
   {
-    slug: "organization-sun",
-    name: "Sun Inc",
+    slug: demoOrganizationSlug,
+    name: demoOrganizationName,
     units: [
       {
         slug: "engineering",
@@ -138,7 +160,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     email: ownerEmail,
     password: ownerPassword,
     displayName: "John Smith",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     roleKey: "organization_admin",
     unitSlug: "root",
     access: "admin",
@@ -149,7 +171,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     email: "manager@local.test",
     password: "local-manager-1234",
     displayName: "Sarah Johnson",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     roleKey: "manager",
     unitSlug: "engineering",
     access: "manager",
@@ -160,7 +182,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     email: "dev@local.test",
     password: "local-dev-1234",
     displayName: "Devin Brooks",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     roleKey: "manager",
     unitSlug: "development",
     access: "manager",
@@ -171,7 +193,7 @@ const activeUsers: readonly ActiveUserFixture[] = [
     email: "viewer@local.test",
     password: "local-viewer-1234",
     displayName: "Alex Carter",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     roleKey: "viewer",
     unitSlug: "checkout",
     access: "viewer",
@@ -194,7 +216,7 @@ const onboardingUsers: readonly OnboardingFixture[] = [
     password: "local-onboarding-1",
     displayName: "Taylor Reed",
     uid: "local-onboarding-1",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     unitSlug: "root",
     roleKey: "organization_admin",
   },
@@ -203,7 +225,7 @@ const onboardingUsers: readonly OnboardingFixture[] = [
     password: "local-onboarding-2",
     displayName: "Morgan Lee",
     uid: "local-onboarding-2",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     unitSlug: "engineering",
     roleKey: "organization_admin",
   },
@@ -212,17 +234,16 @@ const onboardingUsers: readonly OnboardingFixture[] = [
     password: "local-onboarding-3",
     displayName: "Jordan Kim",
     uid: "local-onboarding-3",
-    organizationSlug: "organization-sun",
+    organizationSlug: demoOrganizationSlug,
     unitSlug: "checkout",
     roleKey: "organization_admin",
   },
 ];
 
-const firebaseApp = initializeApp(
-  { projectId },
-  `local-auth-seed-${projectId}`,
-);
-const auth = getAuth(firebaseApp);
+const auth =
+  identityMode === "emulator"
+    ? getAuth(initializeApp({ projectId }, `local-auth-seed-${projectId}`))
+    : undefined;
 const database = createDatabase({ url: databaseUrl });
 
 type FixtureUnit = { id: string; slug: string };
@@ -399,6 +420,8 @@ function demoBlueprint(fixture: WorkflowFixture): WorkflowBlueprint {
 }
 
 async function waitForAuthEmulator(): Promise<void> {
+  if (!auth)
+    throw new Error("Firebase Auth Emulator is not configured for this seed.");
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
       await auth.listUsers(1);
@@ -418,6 +441,8 @@ async function ensureAuthUser(
   password: string,
   displayName: string,
 ): Promise<UserRecord> {
+  if (!auth)
+    throw new Error("Firebase Auth Emulator is not configured for this seed.");
   try {
     const existing = await auth.getUserByEmail(email);
     return auth.updateUser(existing.uid, {
@@ -531,9 +556,18 @@ async function ensureControlPlaneServiceUser(
     await tx.insert(users).values({
       id: controlPlaneServiceUserId,
       identityProvider: "identity-platform",
-      identitySubject: "local-control-plane",
-      email: "control-plane@local.test",
-      displayName: "Local Control Plane",
+      identitySubject:
+        identityMode === "emulator"
+          ? "local-control-plane"
+          : "demo-control-plane-service",
+      email:
+        identityMode === "emulator"
+          ? "control-plane@local.test"
+          : "control-plane@system.invalid",
+      displayName:
+        identityMode === "emulator"
+          ? "Local Control Plane"
+          : "Demo Control Plane Service",
     });
   }
   const role = await systemRole(tx, "organization_admin");
@@ -794,7 +828,7 @@ async function ensureActiveFixtureUser(
 async function ensurePendingInvite(
   tx: DatabaseTransaction,
   organization: FixtureOrganization,
-  spec: OnboardingFixture,
+  spec: Pick<OnboardingFixture, "email" | "unitSlug" | "roleKey">,
 ): Promise<void> {
   const unit = organization.units.get(spec.unitSlug);
   if (!unit)
@@ -1599,7 +1633,7 @@ async function seedTemporalWorkflowFixtures(
             blueprint,
             businessInput: {
               fixture: true,
-              workspace: "organization-sun",
+              workspace: demoOrganizationSlug,
               activity: fixture.activityName,
             },
             idempotencyKey: `seed-local:${fixture.key}`,
@@ -1659,7 +1693,7 @@ async function seedTemporalWorkflowFixtures(
       scope: { ids: [unit.id] },
       businessInput: {
         fixture: true,
-        workspace: "organization-sun",
+        workspace: demoOrganizationSlug,
         activity: fixture.activityName,
       },
       inputRef: `artifact://local/${organization.id}/workflows/${fixture.key}/input.json`,
@@ -1857,18 +1891,20 @@ async function ensureWebhookFixture(
 }
 
 async function seedFixtures(): Promise<unknown> {
-  await waitForAuthEmulator();
   const identities = new Map<string, UserRecord>();
-  for (const spec of [...activeUsers, ...onboardingUsers])
-    identities.set(
-      spec.email,
-      await ensureAuthUser(
-        spec.uid,
+  if (identityMode === "emulator") {
+    await waitForAuthEmulator();
+    for (const spec of [...activeUsers, ...onboardingUsers])
+      identities.set(
         spec.email,
-        spec.password,
-        spec.displayName,
-      ),
-    );
+        await ensureAuthUser(
+          spec.uid,
+          spec.email,
+          spec.password,
+          spec.displayName,
+        ),
+      );
+  }
 
   const temporal = await connectTemporal();
   try {
@@ -1882,23 +1918,42 @@ async function seedFixtures(): Promise<unknown> {
         );
 
       const usersByKey = new Map<string, FixtureUser>();
-      for (const spec of activeUsers) {
-        const organization = organizationsBySlug.get(spec.organizationSlug);
-        const identity = identities.get(spec.email);
-        if (!organization || !identity)
-          throw new Error(`Active fixture ${spec.key} is incomplete.`);
-        usersByKey.set(
-          spec.key,
-          await ensureActiveFixtureUser(tx, organization, identity, spec),
-        );
-      }
-      for (const spec of onboardingUsers) {
-        const organization = organizationsBySlug.get(spec.organizationSlug);
+      if (identityMode === "emulator") {
+        for (const spec of activeUsers) {
+          const organization = organizationsBySlug.get(spec.organizationSlug);
+          const identity = identities.get(spec.email);
+          if (!organization || !identity)
+            throw new Error(`Active fixture ${spec.key} is incomplete.`);
+          usersByKey.set(
+            spec.key,
+            await ensureActiveFixtureUser(tx, organization, identity, spec),
+          );
+        }
+        for (const spec of onboardingUsers) {
+          const organization = organizationsBySlug.get(spec.organizationSlug);
+          if (!organization)
+            throw new Error(
+              `Onboarding fixture ${spec.email} has no organization.`,
+            );
+          await ensurePendingInvite(tx, organization, spec);
+        }
+      } else {
+        const serviceActor = {
+          id: controlPlaneServiceUserId,
+          email: "control-plane@system.invalid",
+        };
+        for (const spec of activeUsers) usersByKey.set(spec.key, serviceActor);
+        const organization = organizationsBySlug.get(demoOrganizationSlug);
         if (!organization)
           throw new Error(
-            `Onboarding fixture ${spec.email} has no organization.`,
+            `Demo organization ${demoOrganizationSlug} was not created.`,
           );
-        await ensurePendingInvite(tx, organization, spec);
+        if (managedOwnerEmail)
+          await ensurePendingInvite(tx, organization, {
+            email: managedOwnerEmail,
+            unitSlug: "root",
+            roleKey: "organization_admin",
+          });
       }
 
       const outputOrganizations: unknown[] = [];
@@ -2191,25 +2246,31 @@ async function seedFixtures(): Promise<unknown> {
       }
       return {
         organizations: outputOrganizations,
-        activeUsers: activeUsers.map((user) => ({
-          email: user.email,
-          password: user.password,
-          organization: user.organizationSlug,
-          role: user.roleKey,
-          scope: user.unitSlug,
-        })),
-        onboardingUsers: onboardingUsers.map((user) => ({
-          email: user.email,
-          password: user.password,
-          organization: user.organizationSlug,
-          scope: user.unitSlug,
-        })),
-        seedOrganization: organizationsBySlug.get("organization-sun"),
+        activeUsers:
+          identityMode === "emulator"
+            ? activeUsers.map((user) => ({
+                email: user.email,
+                password: user.password,
+                organization: user.organizationSlug,
+                role: user.roleKey,
+                scope: user.unitSlug,
+              }))
+            : [],
+        onboardingUsers:
+          identityMode === "emulator"
+            ? onboardingUsers.map((user) => ({
+                email: user.email,
+                password: user.password,
+                organization: user.organizationSlug,
+                scope: user.unitSlug,
+              }))
+            : [],
+        seedOrganization: organizationsBySlug.get(demoOrganizationSlug),
         seedUsersByKey: usersByKey,
       };
     });
     if (!seeded.seedOrganization)
-      throw new Error("Local organization fixture was not created.");
+      throw new Error("Demo organization fixture was not created.");
     await seedTemporalCoordinator(
       temporal.client,
       seeded.seedOrganization,
@@ -2222,11 +2283,13 @@ async function seedFixtures(): Promise<unknown> {
     );
     return {
       organizations: seeded.organizations,
+      identityMode,
+      ownerInviteEmail: managedOwnerEmail,
       activeUsers: seeded.activeUsers,
       onboardingUsers: seeded.onboardingUsers,
       workflowMode: `temporal (1 Coordinator + ${workflowFixtures.length} real demo executions)`,
       memoryMode:
-        "mock (process-scoped; source ingestion warms it when workflows execute)",
+        "not seeded (run the separate manual AI demo seed for Spanner and Memory Bank)",
     };
   } finally {
     await temporal.connection.close();

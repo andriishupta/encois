@@ -33,12 +33,15 @@ ENV ENCOIS_VERSION=${ENCOIS_VERSION}
 USER node
 EXPOSE 8080
 
-FROM runtime AS local-seed
+FROM runtime AS seed
 
-ENV NODE_ENV=development
 COPY --from=build /local-seed-scripts /app/dist/scripts
 COPY --from=build /local-seed-src /app/dist/src
 CMD ["node", "dist/scripts/seed-local.js"]
+
+FROM seed AS local-seed
+
+ENV NODE_ENV=development
 
 FROM runtime AS production
 

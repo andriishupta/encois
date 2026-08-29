@@ -63,24 +63,12 @@ pnpm dev:watch:prod:down
 Never commit generated environment files, credentials, service-account keys,
 or local database files.
 
-## Demo seed
+## Demo environments and seeding
 
-The local seed is the demo workspace, not a separate fake product mode. It
-uses the same API models and Temporal Workflow types as ordinary local use.
-It contains:
-
-- a real long-lived Coordinator execution;
-- six connected and attention-state Integrations;
-- fifteen Sources with revisions and different freshness outcomes;
-- approved Blueprint snapshots;
-- thirty real Temporal-backed demo executions: six running, six waiting, eight
-  completed, five paused, and five failed;
-- activity and evidence projections linked to the seeded resources.
-
-Temporal-backed states are created through Temporal. If a fixture represents a
-not-yet-started or unavailable execution, the database must show that exact
-state and the UI must show the unavailable or preparing condition. It must not
-invent a successful Temporal execution.
+The local seed is the populated demo workspace, not a browser fallback or a
+parallel product mode. It uses the real API models and Temporal Workflow types.
+The base control-plane seed, optional real-AI ingestion, local accounts, hosted
+jobs, and invitation flow are documented in [`demo.md`](demo.md).
 
 ## Temporal inspection
 

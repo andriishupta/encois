@@ -109,7 +109,7 @@ services:
       AGENT_GATEWAY_DATA_MODE: mock
       AGENT_GATEWAY_STORAGE_MODE: gcs
       GCP_STORAGE_BUCKET: demo-encois.appspot.com
-      STORAGE_EMULATOR_HOST: firebase-auth:9199
+      STORAGE_EMULATOR_HOST: http://firebase-auth:9199
       GIN_MODE: debug
     ports:
       - "8080:8080"

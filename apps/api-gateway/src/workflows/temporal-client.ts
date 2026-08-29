@@ -25,6 +25,7 @@ import {
 } from "./types.js";
 
 export type WorkflowClient = {
+  close?(): Promise<void>;
   start(
     command: WorkflowStartCommand,
     namespace: string,
@@ -373,6 +374,13 @@ function createTemporalWorkflowClient(
   };
 
   return {
+    async close() {
+      const activeConnection = connectionPromise;
+      clientPromise = undefined;
+      connectionPromise = undefined;
+      if (activeConnection) await (await activeConnection).close();
+    },
+
     async start(command, namespace) {
       assertWorkflowCommandTenant(command);
       const client = await getClient();

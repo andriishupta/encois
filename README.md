@@ -38,7 +38,8 @@ Architecture references:
 
 - [`docs/architecture.md`](docs/architecture.md) — product idea, current system, lifecycle, deployment, and future event delivery.
 - [`docs/contracts.md`](docs/contracts.md) — OpenAPI, JSON Schema, Blueprint, Temporal, Agent Gateway, and Coordinator boundaries.
-- [`docs/operations.md`](docs/operations.md) — local Compose, demo seed, Temporal inspection, GCP, and CI/CD.
+- [`docs/operations.md`](docs/operations.md) — local Compose, Temporal inspection, GCP, and CI/CD.
+- [`docs/demo.md`](docs/demo.md) — local and hosted demo setup, seed order, AI context population, and user invitation.
 - [`docs/security.md`](docs/security.md) — multi-tenant security, trust boundaries, agent policy, secrets, and execution-scoped capabilities.
 - [`docs/dictionary.md`](docs/dictionary.md) — canonical architecture and runtime vocabulary.
 - [`docs/documentation.md`](docs/documentation.md) — user-facing product guide.
@@ -123,7 +124,7 @@ Vite-served dashboard through `compose.watch.mock.yaml`. The local Runtime uses
 no Gemini key or Google Cloud credentials are required. The dashboard uses the
 API Gateway and Temporal for workflow execution. Local fixture data is created
 by an explicit seed script; it also creates thirty real Temporal-backed demo
-executions and sixteen Source fixtures in the demo workspace.
+executions and fifteen Source fixtures in the demo workspace.
 The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `http://localhost:5173`; the Firebase Emulator UI is at
 `http://localhost:4000`; and the API health endpoints are at
@@ -131,7 +132,8 @@ The Temporal UI is available at `http://localhost:8233`; the dashboard is at
 `owner@local.test` / `local-password-1234`. Compose uses the local Temporal
 stack for workflow execution; the seed script requires that Temporal server
 and fails closed if it is unavailable.
-See [`docs/operations.md`](docs/operations.md) for the onboarding and local flow. Follow
+See [`docs/demo.md`](docs/demo.md) for demo accounts, seeding, and the hosted
+flow. Follow
 service logs with
 `docker compose -f compose.watch.mock.yaml logs -f`.
 
@@ -145,6 +147,10 @@ file path, and run `pnpm run dev:watch:ai`. This uses real Spanner Graph,
 Gemini through Agent Platform, and Agent Platform Memory Bank; Postgres, Temporal, Firebase Auth and
 Storage emulators, and provider fixtures remain local. Stop it with
 `pnpm run dev:watch:ai:down`.
+
+The base seed does not invoke the real AI/data-plane adapters. After the stack
+is ready, run `pnpm run seed:watch:ai` to manually start the separate AI seed;
+it reuses the existing artifact and Source Ingestion pipeline.
 
 To run the same four service images against managed production-like
 dependencies, copy `.env.local.prod.example` to `.env.local.prod`, fill in
@@ -171,6 +177,12 @@ mode, and does not start local emulators, local Postgres, Temporal dev server,
 or mock data-plane services. Stop it with
 `pnpm dev:watch:prod:down`.
 
+To manually run the AI seed against the configured demo organization, use
+`pnpm run seed:watch:prod` followed by `pnpm run seed:watch:prod:ai` after the
+managed services are ready. Set `DEMO_SEED_OWNER_EMAIL` to create an invite
+that links a verified real Google/Firebase identity on first sign-in; the seed
+does not create a hosted Firebase user itself.
+
 Terraform does not run the application locally. It provisions cloud resources
 and references container images; Docker Compose is the local orchestration
 layer. The four deployable services have Dockerfiles, while Postgres and
@@ -186,7 +198,8 @@ pnpm -r test
 ```
 
 Application-specific environment variables and local startup details live in
-the relevant app `.env.example` files and [`docs/operations.md`](docs/operations.md).
+the relevant app `.env.example` files, [`docs/operations.md`](docs/operations.md),
+and [`docs/demo.md`](docs/demo.md).
 Never commit generated env files or cloud credentials.
 
 ## Development expectations

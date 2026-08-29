@@ -96,6 +96,48 @@ services:
         condition: service_completed_successfully
     restart: "no"
 
+  local-ai-seed:
+    profiles: ["manual"]
+    image: encois-watch-ai/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+      target: local-seed
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    command: ["node", "dist/scripts/seed-local-ai.js"]
+    environment:
+      NODE_ENV: development
+      DATABASE_SEED_URL: postgresql://postgres:postgres@postgres:5432/encois
+      DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@postgres:5432/encois
+      FIREBASE_STORAGE_EMULATOR_HOST: firebase-auth:9199
+      STORAGE_EMULATOR_HOST: http://firebase-auth:9199
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
+      SOURCE_ARTIFACT_BUCKET: demo-encois.appspot.com
+      IDENTITY_PLATFORM_PROJECT_ID: demo-encois
+      CONTROL_PLANE_SERVICE_USER_ID: 00000000-0000-4000-8000-000000000010
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
+      AGENT_GATEWAY_CAPABILITY_SECRET: local-execution-capability-secret
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-encois}
+      TEMPORAL_TASK_QUEUE: encois-agent-runtime
+      LOCAL_AI_SEED_SOURCE_LIMIT: ${LOCAL_AI_SEED_SOURCE_LIMIT:-5}
+      LOCAL_AI_SEED_REVISION: ${LOCAL_AI_SEED_REVISION:-ai-demo-v1}
+      SEED_ORGANIZATION_SLUG: ${SEED_ORGANIZATION_SLUG:-organization-sun}
+    depends_on:
+      local-auth-seed:
+        condition: service_completed_successfully
+      api-gateway:
+        condition: service_started
+      agent-runtime:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+
   agent-gateway:
     image: encois-watch-ai/agent-gateway:${ENCOIS_VERSION:-1.0.0}
     build:
@@ -112,7 +154,7 @@ services:
       AGENT_GATEWAY_DATA_MODE: hybrid
       AGENT_GATEWAY_STORAGE_MODE: gcs
       GCP_STORAGE_BUCKET: demo-encois.appspot.com
-      STORAGE_EMULATOR_HOST: firebase-auth:9199
+      STORAGE_EMULATOR_HOST: http://firebase-auth:9199
       SPANNER_DATABASE: ${SPANNER_DATABASE:?set SPANNER_DATABASE}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}
       GIN_MODE: debug

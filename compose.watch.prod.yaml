@@ -130,6 +130,83 @@ services:
       - agent-gateway
       - api-gateway
 
+  demo-seed:
+    profiles: ["manual"]
+    image: encois-watch-prod/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/api-gateway", "exec", "tsx", "scripts/seed-local.ts"]
+    environment:
+      NODE_ENV: development
+      DATABASE_SEED_URL: ${DATABASE_SEED_URL:?set DATABASE_SEED_URL to an operator/seed connection}
+      DEMO_SEED_IDENTITY_MODE: none
+      DEMO_SEED_ALLOW_MANAGED: "true"
+      DEMO_SEED_OWNER_EMAIL: ${DEMO_SEED_OWNER_EMAIL:-}
+      DEMO_SEED_ORGANIZATION_NAME: ${DEMO_SEED_ORGANIZATION_NAME:-Sun Inc}
+      SEED_ORGANIZATION_SLUG: ${SEED_ORGANIZATION_SLUG:-organization-sun}
+      CONTROL_PLANE_SERVICE_USER_ID: ${CONTROL_PLANE_SERVICE_USER_ID:?set CONTROL_PLANE_SERVICE_USER_ID}
+      AGENT_GATEWAY_POLICY_VERSION: ${AGENT_GATEWAY_POLICY_VERSION:?set AGENT_GATEWAY_POLICY_VERSION}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?set TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:?set TEMPORAL_NAMESPACE}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-encois-agent-runtime}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:?set TEMPORAL_API_KEY}
+    depends_on:
+      - agent-runtime
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+      - /workspace/apps/api-gateway/node_modules
+      - /workspace/packages/contracts/node_modules
+      - /workspace/packages/database/node_modules
+
+  local-ai-seed:
+    profiles: ["manual"]
+    image: encois-watch-prod/api-gateway:${ENCOIS_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile.dev
+      args:
+        ENCOIS_VERSION: ${ENCOIS_VERSION:-1.0.0}
+    working_dir: /workspace
+    command: ["pnpm", "--filter", "@encois/api-gateway", "exec", "tsx", "scripts/seed-local-ai.ts"]
+    environment:
+      NODE_ENV: development
+      DATABASE_SEED_URL: ${DATABASE_SEED_URL:?set DATABASE_SEED_URL to an operator/seed connection}
+      DATABASE_RUNTIME_URL: ${DATABASE_RUNTIME_URL:?set DATABASE_RUNTIME_URL}
+      SOURCE_ARTIFACT_BUCKET: ${SOURCE_ARTIFACT_BUCKET:?set SOURCE_ARTIFACT_BUCKET}
+      IDENTITY_PLATFORM_PROJECT_ID: ${IDENTITY_PLATFORM_PROJECT_ID:?set IDENTITY_PLATFORM_PROJECT_ID}
+      CONTROL_PLANE_SERVICE_USER_ID: ${CONTROL_PLANE_SERVICE_USER_ID:?set CONTROL_PLANE_SERVICE_USER_ID}
+      AGENT_GATEWAY_URL: http://agent-gateway:8080
+      AGENT_GATEWAY_POLICY_VERSION: ${AGENT_GATEWAY_POLICY_VERSION:?set AGENT_GATEWAY_POLICY_VERSION}
+      AGENT_GATEWAY_CAPABILITY_SECRET: ${AGENT_GATEWAY_CAPABILITY_SECRET:?set AGENT_GATEWAY_CAPABILITY_SECRET}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:?set TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:?set TEMPORAL_NAMESPACE}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-encois-agent-runtime}
+      TEMPORAL_API_KEY: ${TEMPORAL_API_KEY:?set TEMPORAL_API_KEY}
+      LOCAL_AI_SEED_SOURCE_LIMIT: ${LOCAL_AI_SEED_SOURCE_LIMIT:-5}
+      LOCAL_AI_SEED_REVISION: ${LOCAL_AI_SEED_REVISION:-ai-demo-v1}
+      SEED_ORGANIZATION_SLUG: ${SEED_ORGANIZATION_SLUG:-organization-sun}
+      GOOGLE_APPLICATION_CREDENTIALS: /var/run/secrets/google/application_default_credentials.json
+    depends_on:
+      demo-seed:
+        condition: service_completed_successfully
+      agent-runtime:
+        condition: service_started
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+      - /workspace/apps/api-gateway/node_modules
+      - /workspace/packages/contracts/node_modules
+      - /workspace/packages/database/node_modules
+      - type: bind
+        source: ${GOOGLE_APPLICATION_CREDENTIALS:?set GOOGLE_APPLICATION_CREDENTIALS to an ADC JSON file}
+        target: /var/run/secrets/google/application_default_credentials.json
+        read_only: true
+
   dashboard:
     image: encois-watch-prod/dashboard:${ENCOIS_VERSION:-1.0.0}
     build:
