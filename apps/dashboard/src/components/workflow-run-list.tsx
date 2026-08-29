@@ -145,7 +145,11 @@ function WorkflowRunCard({
 }: {
   workflow: WorkflowExecutionProjection;
 }) {
-  const label = workflowLabel(workflow.blueprintId, workflow.workflowType);
+  const label = workflowLabel(
+    workflow.blueprintId,
+    workflow.workflowType,
+    workflow.name,
+  );
   const Icon =
     workflow.status === WorkflowExecutionStatus.Completed
       ? Activity
@@ -169,8 +173,10 @@ function WorkflowRunCard({
             <div className="flex min-w-0 flex-col gap-1.5">
               <CardTitle className="truncate">{label}</CardTitle>
               <CardDescription className="truncate">
-                {workflow.statusMessage ??
-                  "Current workflow run status and progress."}
+                Blueprint:{" "}
+                {workflow.blueprintName ??
+                  workflow.blueprintId ??
+                  "Not recorded"}
               </CardDescription>
             </div>
           </div>

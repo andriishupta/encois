@@ -78,6 +78,7 @@ export const workflowRuns = pgTable(
     temporalTaskQueue: text("temporal_task_queue"),
     temporalWorkflowId: text("temporal_workflow_id").notNull(),
     temporalRunId: text("temporal_run_id"),
+    name: text("name").notNull(),
     blueprintId: text("blueprint_id"),
     blueprintVersion: text("blueprint_version"),
     parentWorkflowId: text("parent_workflow_id"),

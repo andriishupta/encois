@@ -260,9 +260,7 @@ function selectWorkflowDefinitions(
     )
       definitions.set(blueprint.blueprintId, blueprint);
   }
-  return [...definitions.values()].sort((left, right) =>
-    left.name.localeCompare(right.name),
-  );
+  return [...definitions.values()];
 }
 
 const activeRunStatuses: ReadonlySet<WorkflowExecutionStatus> = new Set([

@@ -2223,8 +2223,11 @@ components:
         workflowId: { type: string }
         runId: { type: string }
         workflowType: { type: string }
+        name: { type: string }
         blueprintId: { type: string }
+        blueprintName: { type: string }
         blueprintVersion: { type: string }
+        pendingApprovalStepId: { type: string }
         parentWorkflowId: { type: string }
         trigger: { type: string }
         namespace: { type: string }

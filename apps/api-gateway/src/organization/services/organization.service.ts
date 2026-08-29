@@ -976,6 +976,7 @@ export async function startOrganizationOnboardingForPrincipal(
           temporalTaskQueue: projection.taskQueue,
           temporalWorkflowId: projection.workflowId,
           temporalRunId: projection.runId,
+          name: "Organization Coordinator",
           trigger: "onboarding",
           status: persistedWorkflowRunStatus(projection.status),
           scope: command.input.scope,

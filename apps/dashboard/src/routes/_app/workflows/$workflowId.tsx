@@ -216,6 +216,7 @@ function WorkflowDetailPage() {
             ? workflowLabel(
                 workflow.data.blueprintId,
                 workflow.data.workflowType,
+                workflow.data.name,
               )
             : "Workflow run"
         }
@@ -247,7 +248,7 @@ function WorkflowDetailPage() {
                 onClick={() => approval.mutate()}
                 disabled={approval.isPending}
               >
-                {approval.isPending ? "Approving…" : "Approve current pause"}
+                {approval.isPending ? "Approving…" : "Approve current step"}
               </Button>
             ) : null}
             {canRun &&
@@ -932,8 +933,15 @@ function RunDetailsCard({
       <CardContent className="flex flex-col gap-4">
         <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <DetailField
+            label="Workflow"
+            value={workflow.name ?? "Not recorded"}
+          />
+          <DetailField
             label="Blueprint"
-            value={workflowLabel(workflow.blueprintId, workflow.workflowType)}
+            value={
+              workflow.blueprintName ??
+              workflowLabel(workflow.blueprintId, workflow.workflowType)
+            }
           />
           <DetailField
             label="Revision"
@@ -1005,6 +1013,7 @@ function RunDetailsCard({
               </div>
               <div>Workflow type: {semanticWorkflowType}</div>
               <div>Temporal type: {workflow.workflowType}</div>
+              <div>Workflow name: {workflow.name ?? "not available"}</div>
               <div>Run ID: {workflow.runId ?? "not available"}</div>
               <details className="mt-2">
                 <summary className="cursor-pointer font-sans underline underline-offset-2">
@@ -1012,7 +1021,12 @@ function RunDetailsCard({
                 </summary>
                 <div className="mt-2">Workflow ID: {workflowId}</div>
               </details>
-              <div>Blueprint: {workflow.blueprintId ?? "not available"}</div>
+              <div>
+                Blueprint:{" "}
+                {workflow.blueprintName ??
+                  workflow.blueprintId ??
+                  "not available"}
+              </div>
               <div>
                 Revision: {workflow.blueprintVersion ?? "not available"}
               </div>

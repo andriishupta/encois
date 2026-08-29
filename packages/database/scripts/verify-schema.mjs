@@ -117,8 +117,8 @@ try {
       VALUES (${definitionId}, ${organizationId}, 'receipt-verification', '1.0.0', 'approved')
     `;
     await sql`
-      INSERT INTO workflow_runs (id, organization_id, definition_id, temporal_workflow_id, status, scope)
-      VALUES (${workflowRunId}, ${organizationId}, ${definitionId}, ${workflowId}, 'waiting', '{"ids":["verification"]}'::jsonb)
+      INSERT INTO workflow_runs (id, organization_id, definition_id, temporal_workflow_id, name, status, scope)
+      VALUES (${workflowRunId}, ${organizationId}, ${definitionId}, ${workflowId}, 'Receipt verification', 'waiting', '{"ids":["verification"]}'::jsonb)
     `;
 
     const receiptInsert = () => sql`

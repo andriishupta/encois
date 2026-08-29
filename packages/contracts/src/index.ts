@@ -483,8 +483,11 @@ export type WorkflowExecutionProjection = {
   workflowId: string;
   runId?: string;
   workflowType: string;
+  name?: string;
   blueprintId?: string;
+  blueprintName?: string;
   blueprintVersion?: string;
+  pendingApprovalStepId?: string;
   parentWorkflowId?: string;
   trigger?: string;
   namespace: string;

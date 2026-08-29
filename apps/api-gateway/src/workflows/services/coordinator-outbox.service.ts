@@ -1,10 +1,16 @@
-import { type CoordinatorEvent, validateContract } from "@encois/contracts";
+import {
+  type CoordinatorEvent,
+  CoordinatorEventType,
+  validateContract,
+} from "@encois/contracts";
 import {
   coordinatorEventOutbox,
   type DatabaseTransaction,
   withOrganizationContext,
+  workflowEvents,
+  workflowRuns,
 } from "@encois/database";
-import { and, asc, eq, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, lte, or, sql } from "drizzle-orm";
 import { database, databaseClient } from "../../database.js";
 import type { WorkflowClient } from "../temporal-client.js";
 
@@ -26,7 +32,7 @@ export type CoordinatorOutboxDispatchResult = {
 };
 
 const defaultLeaseMs = 30_000;
-const defaultMaxAttempts = 8;
+const defaultMaxAttempts = 3;
 
 export function createCoordinatorEventSink(
   workflowClient: WorkflowClient,
@@ -111,18 +117,21 @@ async function markFailed(
   db: DatabaseTransaction,
   tenantId: string,
   eventId: string,
+  eventType: string,
+  payload: Record<string, unknown>,
   attempts: number,
   now: Date,
   error: unknown,
   maxAttempts: number,
 ): Promise<void> {
   const terminal = attempts >= maxAttempts;
+  const errorMessage = boundedError(error);
   await db
     .update(coordinatorEventOutbox)
     .set({
       status: "failed",
       leaseUntil: null,
-      lastError: boundedError(error),
+      lastError: errorMessage,
       availableAt: terminal
         ? now
         : new Date(now.getTime() + retryDelayMs(attempts)),
@@ -134,6 +143,43 @@ async function markFailed(
         eq(coordinatorEventOutbox.eventId, eventId),
       ),
     );
+
+  if (terminal && eventType === CoordinatorEventType.WorkflowStartRequested) {
+    const workflowId = payload.workflowId;
+    if (typeof workflowId !== "string" || workflowId.length === 0) return;
+
+    const [failedRun] = await db
+      .update(workflowRuns)
+      .set({
+        status: "failed",
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.organizationId, tenantId),
+          eq(workflowRuns.temporalWorkflowId, workflowId),
+          eq(workflowRuns.status, "queued"),
+        ),
+      )
+      .returning({ id: workflowRuns.id });
+
+    if (failedRun) {
+      await db.insert(workflowEvents).values({
+        organizationId: tenantId,
+        workflowRunId: failedRun.id,
+        eventType: "workflow_start_failed",
+        status: "failed",
+        metadata: {
+          source: "coordinator_outbox",
+          eventId,
+          attempts,
+          error: errorMessage,
+        },
+        occurredAt: now,
+      });
+    }
+  }
 }
 
 async function dispatchCoordinatorOutboxForOrganization(
@@ -179,7 +225,10 @@ async function dispatchCoordinatorOutboxForOrganization(
             ),
           ),
         )
-        .orderBy(asc(coordinatorEventOutbox.availableAt))
+        .orderBy(
+          desc(coordinatorEventOutbox.updatedAt),
+          desc(coordinatorEventOutbox.createdAt),
+        )
         .limit(limit),
   );
 
@@ -206,6 +255,8 @@ async function dispatchCoordinatorOutboxForOrganization(
           db,
           tenantId,
           claimed.eventId,
+          claimed.eventType,
+          claimed.payload,
           claimed.attempts,
           now,
           `invalid coordinator event: ${validation.errors.join(", ")}`,
@@ -228,6 +279,8 @@ async function dispatchCoordinatorOutboxForOrganization(
           db,
           tenantId,
           claimed.eventId,
+          claimed.eventType,
+          claimed.payload,
           claimed.attempts,
           now,
           error,
@@ -252,9 +305,10 @@ async function listDispatchableOrganizationIds(
 ): Promise<readonly string[]> {
   if (!database || !databaseClient) return [];
 
+  const nowIso = now.toISOString();
   const rows = await databaseClient<{ organizationId: string }[]>`
     SELECT public.list_dispatchable_coordinator_outbox_organizations(
-      ${now},
+      ${nowIso}::timestamptz,
       ${maxAttempts}
     ) AS "organizationId"
   `;
@@ -280,7 +334,10 @@ export async function dispatchCoordinatorOutbox(
   const now = options.now ?? new Date();
   const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
   const leaseMs = Math.max(1_000, options.leaseMs ?? defaultLeaseMs);
-  const maxAttempts = Math.max(1, options.maxAttempts ?? defaultMaxAttempts);
+  const maxAttempts = Math.min(
+    defaultMaxAttempts,
+    Math.max(1, options.maxAttempts ?? defaultMaxAttempts),
+  );
 
   let organizationIds: readonly string[];
   try {

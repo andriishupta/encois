@@ -205,9 +205,11 @@ func graphEvidenceReferences(request domain.GraphQueryRequest, nodes []domain.Gr
 		}
 	}
 	for _, node := range nodes {
+		add(node.ID)
 		addProvenance(node.Provenance)
 	}
 	for _, edge := range edges {
+		add(edge.ID)
 		addProvenance(edge.Provenance)
 	}
 	return refs

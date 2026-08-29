@@ -52,9 +52,11 @@ func (c *HTTPClient) StartApprovedWorkflow(ctx context.Context, request coordina
 		"key":              request.Key,
 		"blueprintId":      request.BlueprintID,
 		"blueprintVersion": request.BlueprintVersion,
-		"input":            request.BusinessInput,
 		"scope":            request.Scope,
 		"idempotencyKey":   request.IdempotencyKey,
+	}
+	if request.BusinessInput != nil {
+		body["input"] = request.BusinessInput
 	}
 	return doJSON[coordinator.ApprovedWorkflowStartResult](c, ctx, http.MethodPost, "/api/v1/internal/coordinator/workflows", body, request.RequestID, request.ActorID, request.OrganizationID, nil)
 }

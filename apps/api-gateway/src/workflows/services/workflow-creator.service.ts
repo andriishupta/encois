@@ -859,6 +859,7 @@ export async function createWorkflowFromIntent(
               temporalNamespace: options.namespace,
               temporalTaskQueue: options.taskQueue,
               temporalWorkflowId: workflowId,
+              name: intent.name.trim(),
               blueprintId: blueprint.blueprintId,
               blueprintVersion: blueprint.version,
               trigger: "manual",
@@ -914,7 +915,9 @@ export async function createWorkflowFromIntent(
       return {
         workflowId,
         workflowType: blueprint.workflowType,
+        name: run.name,
         blueprintId: blueprint.blueprintId,
+        blueprintName: blueprint.name,
         blueprintVersion: blueprint.version,
         trigger: run.trigger ?? "manual",
         namespace: run.temporalNamespace ?? options.namespace,

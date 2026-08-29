@@ -1686,6 +1686,7 @@ async function seedTemporalWorkflowFixtures(
       temporalTaskQueue,
       temporalWorkflowId: workflowId,
       temporalRunId: description.runId,
+      name: blueprint.name,
       blueprintId: blueprint.blueprintId,
       blueprintVersion: blueprint.version,
       trigger: "local-demo-seed",

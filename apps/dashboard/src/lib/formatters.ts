@@ -16,8 +16,9 @@ export function humanizeKey(value: string): string {
 export function workflowLabel(
   blueprintId?: string,
   workflowType?: string,
+  workflowName?: string,
 ): string {
-  const source = blueprintId || workflowType || "Workflow run";
+  const source = workflowName || blueprintId || workflowType || "Workflow run";
   return humanizeKey(source.replace(/-blueprint$/u, ""));
 }
 

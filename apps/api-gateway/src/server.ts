@@ -13,6 +13,9 @@ console.info(
     event: "api_gateway.starting",
     host: config.host,
     port: config.port,
+    databaseConfigured: Boolean(process.env.DATABASE_RUNTIME_URL),
+    temporalConfigured: Boolean(config.temporalAddress),
+    coordinatorDispatcher: true,
   }),
 );
 

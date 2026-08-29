@@ -153,13 +153,18 @@ type TemporalStatusHandle = {
 type TemporalRuntimeStatus = {
   status: WorkflowRunStatus;
   statusReason?: WorkflowStatusReason;
+  pendingApprovalStepId?: string;
 };
 
 function parseTemporalRuntimeStatus(
   value: unknown,
 ): TemporalRuntimeStatus | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const record = value as { status?: unknown; statusReason?: unknown };
+  const record = value as {
+    status?: unknown;
+    statusReason?: unknown;
+    pendingApprovalStepId?: unknown;
+  };
   if (
     record.status !== WorkflowExecutionStatus.Running &&
     record.status !== WorkflowExecutionStatus.Waiting &&
@@ -171,7 +176,16 @@ function parseTemporalRuntimeStatus(
   )
     ? (record.statusReason as WorkflowStatusReason)
     : undefined;
-  return { status: record.status, ...(statusReason ? { statusReason } : {}) };
+  const pendingApprovalStepId =
+    typeof record.pendingApprovalStepId === "string" &&
+    record.pendingApprovalStepId.trim().length > 0
+      ? record.pendingApprovalStepId
+      : undefined;
+  return {
+    status: record.status,
+    ...(statusReason ? { statusReason } : {}),
+    ...(pendingApprovalStepId ? { pendingApprovalStepId } : {}),
+  };
 }
 
 export function parseTemporalResultStatus(
@@ -240,6 +254,7 @@ async function resolveTemporalStatus(
 ): Promise<{
   status: WorkflowRunStatus;
   statusReason?: WorkflowStatusReason;
+  pendingApprovalStepId?: string;
   statusMessage?: string;
 }> {
   const describedStatus = temporalStatus(statusName);
@@ -256,6 +271,9 @@ async function resolveTemporalStatus(
     status,
     ...(runtimeStatus?.statusReason
       ? { statusReason: runtimeStatus.statusReason }
+      : {}),
+    ...(runtimeStatus?.pendingApprovalStepId
+      ? { pendingApprovalStepId: runtimeStatus.pendingApprovalStepId }
       : {}),
     ...(statusMessage ? { statusMessage } : {}),
   };

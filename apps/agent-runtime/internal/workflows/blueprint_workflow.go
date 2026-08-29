@@ -95,8 +95,9 @@ type BlueprintContextUpdateResult struct {
 const BlueprintWorkflowStatusQueryName = "workflow-status"
 
 type BlueprintWorkflowStatus struct {
-	Status       string                         `json:"status"`
-	StatusReason contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
+	Status                string                         `json:"status"`
+	StatusReason          contracts.WorkflowStatusReason `json:"statusReason,omitempty"`
+	PendingApprovalStepID string                         `json:"pendingApprovalStepId,omitempty"`
 }
 
 // DynamicBlueprintWorkflow is one generic executable for user-created
@@ -162,6 +163,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 	processedSignalIDs := make(map[string]bool)
 	paused := false
 	waiting := false
+	pendingApprovalStepID := ""
 	if err := workflow.SetQueryHandler(ctx, BlueprintWorkflowStatusQueryName, func() (BlueprintWorkflowStatus, error) {
 		status := "running"
 		var statusReason contracts.WorkflowStatusReason
@@ -171,7 +173,11 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			status = "waiting"
 			statusReason = contracts.ReasonHumanApproval
 		}
-		return BlueprintWorkflowStatus{Status: status, StatusReason: statusReason}, nil
+		return BlueprintWorkflowStatus{
+			Status:                status,
+			StatusReason:          statusReason,
+			PendingApprovalStepID: pendingApprovalStepID,
+		}, nil
 	}); err != nil {
 		return BlueprintWorkflowResult{}, fmt.Errorf("register workflow status query: %w", err)
 	}
@@ -248,6 +254,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 			case "approval":
 				approval, ok := pendingApprovals[step.ID]
 				waiting = true
+				pendingApprovalStepID = step.ID
 				for !ok {
 					waitForBlueprintResume(ctx, controlChannel, &paused, processedSignalIDs)
 					var received BlueprintApprovalSignal
@@ -277,6 +284,7 @@ func DynamicBlueprintWorkflow(ctx workflow.Context, args converter.EncodedValues
 					pendingApprovals[received.StepID] = received
 				}
 				waiting = false
+				pendingApprovalStepID = ""
 				delete(pendingApprovals, step.ID)
 				if !approval.Approved {
 					return BlueprintWorkflowResult{}, fmt.Errorf("approval denied for step %q: %s", step.ID, approval.Reason)

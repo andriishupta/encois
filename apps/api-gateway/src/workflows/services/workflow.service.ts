@@ -526,6 +526,7 @@ export async function startWorkflow(
         .select({
           id: workflowRuns.id,
           workflowId: workflowRuns.temporalWorkflowId,
+          name: workflowRuns.name,
           status: workflowRuns.status,
           blueprintId: workflowRuns.blueprintId,
           blueprintVersion: workflowRuns.blueprintVersion,
@@ -546,7 +547,12 @@ export async function startWorkflow(
           principal.organizationId,
           options.namespace,
         );
-        if (existingProjection) return { ...existingProjection, reused: true };
+        if (existingProjection)
+          return {
+            ...existingProjection,
+            ...(existingRun.name ? { name: existingRun.name } : {}),
+            reused: true,
+          };
         if (existingRun.status !== WorkflowExecutionStatus.Queued)
           throw workflowServiceError(
             "WORKFLOW_PROJECTION_MISSING",
@@ -651,6 +657,10 @@ export async function startWorkflow(
                 temporalTaskQueue: projection.taskQueue,
                 temporalWorkflowId: projection.workflowId,
                 temporalRunId: projection.runId,
+                name:
+                  command.input.blueprint?.name ??
+                  request.key ??
+                  request.workflowType,
                 blueprintId: command.input.blueprint?.blueprintId,
                 blueprintVersion:
                   command.input.blueprint?.version ??
@@ -749,7 +759,9 @@ export async function getWorkflow(
         .select({
           workflowId: workflowRuns.temporalWorkflowId,
           workflowType: workflowDefinitions.key,
+          name: workflowRuns.name,
           blueprintId: workflowRuns.blueprintId,
+          blueprintName: workflowBlueprints.name,
           blueprintVersion: workflowRuns.blueprintVersion,
           trigger: workflowRuns.trigger,
           namespace: workflowRuns.temporalNamespace,
@@ -764,6 +776,15 @@ export async function getWorkflow(
         .leftJoin(
           workflowDefinitions,
           eq(workflowDefinitions.id, workflowRuns.definitionId),
+        )
+        .leftJoin(
+          workflowBlueprints,
+          and(
+            eq(workflowBlueprints.organizationId, workflowRuns.organizationId),
+            eq(workflowBlueprints.blueprintId, workflowRuns.blueprintId),
+            eq(workflowBlueprints.version, workflowRuns.blueprintVersion),
+            isNull(workflowBlueprints.deletedAt),
+          ),
         )
         .innerJoin(
           organizationMemberships,
@@ -814,11 +835,19 @@ export async function getWorkflow(
       projection,
     );
     const scope = parseExecutionScope(authorized.scope);
-    return scope ? { ...synced, scope } : synced;
+    const decorated = {
+      ...synced,
+      ...(authorized.name ? { name: authorized.name } : {}),
+      ...(authorized.blueprintName
+        ? { blueprintName: authorized.blueprintName }
+        : {}),
+    };
+    return scope ? { ...decorated, scope } : decorated;
   }
   const scope = parseExecutionScope(authorized.scope);
   if (
-    authorized.status === WorkflowExecutionStatus.Queued &&
+    (authorized.status === WorkflowExecutionStatus.Queued ||
+      authorized.status === WorkflowExecutionStatus.Failed) &&
     authorized.workflowType &&
     authorized.namespace &&
     authorized.taskQueue
@@ -826,8 +855,12 @@ export async function getWorkflow(
     return {
       workflowId: authorized.workflowId,
       workflowType: authorized.workflowType,
+      ...(authorized.name ? { name: authorized.name } : {}),
       ...(authorized.blueprintId
         ? { blueprintId: authorized.blueprintId }
+        : {}),
+      ...(authorized.blueprintName
+        ? { blueprintName: authorized.blueprintName }
         : {}),
       ...(authorized.blueprintVersion
         ? { blueprintVersion: authorized.blueprintVersion }
@@ -835,9 +868,14 @@ export async function getWorkflow(
       ...(authorized.trigger ? { trigger: authorized.trigger } : {}),
       namespace: authorized.namespace,
       taskQueue: authorized.taskQueue,
-      status: WorkflowExecutionStatus.Preparing,
+      status:
+        authorized.status === WorkflowExecutionStatus.Failed
+          ? WorkflowExecutionStatus.Failed
+          : WorkflowExecutionStatus.Preparing,
       statusMessage:
-        "The Coordinator is preparing the Temporal workflow execution.",
+        authorized.status === WorkflowExecutionStatus.Failed
+          ? "The Coordinator could not prepare the Temporal workflow execution."
+          : "The Coordinator is preparing the Temporal workflow execution.",
       organizationId: principal.organizationId,
       ...(scope ? { scope } : {}),
       ...(authorized.retentionUntil
@@ -1039,7 +1077,11 @@ export async function listWorkflowActivity(
           ...workflowEventProjection(row),
           workflowId,
           workflowLabel:
-            workflow?.blueprintId ?? workflow?.workflowType ?? "Workflow",
+            workflow?.name ??
+            workflow?.blueprintName ??
+            workflow?.blueprintId ??
+            workflow?.workflowType ??
+            "Workflow",
         } satisfies WorkflowRecentActivityProjection;
       });
     },
@@ -1066,7 +1108,9 @@ export async function listWorkflowsPage(
     return [
       workflow.workflowId,
       workflow.workflowType,
+      workflow.name,
       workflow.blueprintId,
+      workflow.blueprintName,
       workflow.status,
       workflow.statusMessage,
       workflow.trigger,
@@ -1078,8 +1122,16 @@ export async function listWorkflowsPage(
     if (query.sort === "updated-asc")
       return left.updatedAt.localeCompare(right.updatedAt);
     if (query.sort === "name-asc")
-      return (left.blueprintId ?? left.workflowType).localeCompare(
-        right.blueprintId ?? right.workflowType,
+      return (
+        left.name ??
+        left.blueprintName ??
+        left.blueprintId ??
+        left.workflowType
+      ).localeCompare(
+        right.name ??
+          right.blueprintName ??
+          right.blueprintId ??
+          right.workflowType,
       );
     if (query.sort === "status")
       return (
@@ -1129,7 +1181,9 @@ async function listAllWorkflows(
         .select({
           workflowId: workflowRuns.temporalWorkflowId,
           workflowType: workflowDefinitions.key,
+          name: workflowRuns.name,
           blueprintId: workflowRuns.blueprintId,
+          blueprintName: workflowBlueprints.name,
           blueprintVersion: workflowRuns.blueprintVersion,
           trigger: workflowRuns.trigger,
           namespace: workflowRuns.temporalNamespace,
@@ -1144,6 +1198,15 @@ async function listAllWorkflows(
         .leftJoin(
           workflowDefinitions,
           eq(workflowDefinitions.id, workflowRuns.definitionId),
+        )
+        .leftJoin(
+          workflowBlueprints,
+          and(
+            eq(workflowBlueprints.organizationId, workflowRuns.organizationId),
+            eq(workflowBlueprints.blueprintId, workflowRuns.blueprintId),
+            eq(workflowBlueprints.version, workflowRuns.blueprintVersion),
+            isNull(workflowBlueprints.deletedAt),
+          ),
         )
         .innerJoin(
           organizationMemberships,
@@ -1196,14 +1259,26 @@ async function listAllWorkflows(
     visibleProjections.map((projection) => projection.workflowId),
   );
   const synced = await Promise.all(
-    visibleProjections.map((projection) =>
-      syncWorkflowProjection(principal.organizationId, projection),
-    ),
+    visibleProjections.map(async (projection) => {
+      const syncedProjection = await syncWorkflowProjection(
+        principal.organizationId,
+        projection,
+      );
+      const row = visible.find(
+        (candidate) => candidate.workflowId === projection.workflowId,
+      );
+      return {
+        ...syncedProjection,
+        ...(row?.name ? { name: row.name } : {}),
+        ...(row?.blueprintName ? { blueprintName: row.blueprintName } : {}),
+      };
+    }),
   );
   const preparing = visible.flatMap((row): WorkflowExecutionProjection[] => {
     if (
       temporalWorkflowIds.has(row.workflowId) ||
-      row.status !== WorkflowExecutionStatus.Queued ||
+      (row.status !== WorkflowExecutionStatus.Queued &&
+        row.status !== WorkflowExecutionStatus.Failed) ||
       !row.workflowType ||
       !row.namespace ||
       !row.taskQueue
@@ -1214,16 +1289,23 @@ async function listAllWorkflows(
       {
         workflowId: row.workflowId,
         workflowType: row.workflowType,
+        ...(row.name ? { name: row.name } : {}),
         ...(row.blueprintId ? { blueprintId: row.blueprintId } : {}),
+        ...(row.blueprintName ? { blueprintName: row.blueprintName } : {}),
         ...(row.blueprintVersion
           ? { blueprintVersion: row.blueprintVersion }
           : {}),
         ...(row.trigger ? { trigger: row.trigger } : {}),
         namespace: row.namespace,
         taskQueue: row.taskQueue,
-        status: WorkflowExecutionStatus.Preparing,
+        status:
+          row.status === WorkflowExecutionStatus.Failed
+            ? WorkflowExecutionStatus.Failed
+            : WorkflowExecutionStatus.Preparing,
         statusMessage:
-          "The Coordinator is preparing the Temporal workflow execution.",
+          row.status === WorkflowExecutionStatus.Failed
+            ? "The Coordinator could not prepare the Temporal workflow execution."
+            : "The Coordinator is preparing the Temporal workflow execution.",
         organizationId: principal.organizationId,
         ...(scope ? { scope } : {}),
         ...(row.retentionUntil
@@ -1276,6 +1358,22 @@ export async function signalWorkflow(
       "WORKFLOW_NOT_SIGNALABLE",
       `Workflow is ${visible.status} and cannot accept a Signal.`,
     );
+  }
+  let effectiveRequest = request;
+  if (request.signalName === "blueprint-approval") {
+    if (!visible.pendingApprovalStepId) {
+      throw workflowServiceError(
+        "WORKFLOW_NOT_SIGNALABLE",
+        "The active approval step is not available yet. Refresh the workflow and try again.",
+      );
+    }
+    effectiveRequest = {
+      ...request,
+      payload: {
+        ...request.payload,
+        stepId: visible.pendingApprovalStepId,
+      },
+    };
   }
   let workflowRunId: string | undefined;
   if (database) {
@@ -1339,7 +1437,7 @@ export async function signalWorkflow(
     workflowRunId = canSignal;
   }
 
-  const commandHash = workflowCommandHash(request);
+  const commandHash = workflowCommandHash(effectiveRequest);
   let commandClaim: WorkflowCommandClaim = "send";
   if (database && workflowRunId) {
     commandClaim = await withOrganizationContext(
@@ -1352,7 +1450,7 @@ export async function signalWorkflow(
           workflowRunId,
           workflowId,
           "signal",
-          request.signalId,
+          effectiveRequest.signalId,
           commandHash,
           "WORKFLOW_SIGNAL_CONFLICT",
         ),
@@ -1362,14 +1460,20 @@ export async function signalWorkflow(
 
   try {
     const runtimeRequest: WorkflowSignalRequest =
-      request.signalName === "blueprint-approval"
+      effectiveRequest.signalName === "blueprint-approval"
         ? {
-            ...request,
-            payload: { ...request.payload, signalId: request.signalId },
+            ...effectiveRequest,
+            payload: {
+              ...effectiveRequest.payload,
+              signalId: effectiveRequest.signalId,
+            },
           }
         : {
-            ...request,
-            payload: { ...request.payload, signalId: request.signalId },
+            ...effectiveRequest,
+            payload: {
+              ...effectiveRequest.payload,
+              signalId: effectiveRequest.signalId,
+            },
           };
     await options.workflowClient.signal(
       workflowId,
@@ -1387,7 +1491,7 @@ export async function signalWorkflow(
           principal.organizationId,
           workflowId,
           "signal",
-          request.signalId,
+          effectiveRequest.signalId,
           message,
         ),
       ).catch(() => undefined);
@@ -1401,9 +1505,9 @@ export async function signalWorkflow(
       principal.organizationId,
       async (db) => {
         const controlStatus =
-          request.signalName === "workflow-pause"
+          effectiveRequest.signalName === "workflow-pause"
             ? WorkflowExecutionStatus.Paused
-            : request.signalName === "workflow-resume"
+            : effectiveRequest.signalName === "workflow-resume"
               ? WorkflowExecutionStatus.Running
               : undefined;
         if (controlStatus) {
@@ -1422,7 +1526,7 @@ export async function signalWorkflow(
           principal.organizationId,
           workflowId,
           "signal",
-          request.signalId,
+          effectiveRequest.signalId,
         );
         await db.insert(workflowEvents).values({
           organizationId: principal.organizationId,
@@ -1430,17 +1534,17 @@ export async function signalWorkflow(
           eventType: "workflow_signal_sent",
           status: visible.status,
           metadata: {
-            signalId: request.signalId,
-            signalName: request.signalName,
-            ...(request.signalName === "blueprint-approval"
+            signalId: effectiveRequest.signalId,
+            signalName: effectiveRequest.signalName,
+            ...(effectiveRequest.signalName === "blueprint-approval"
               ? {
-                  stepId: request.payload.stepId,
-                  approved: request.payload.approved,
+                  stepId: effectiveRequest.payload.stepId,
+                  approved: effectiveRequest.payload.approved,
                 }
               : {}),
-            ...(request.signalName !== "blueprint-approval" &&
-            request.payload.reason
-              ? { reason: request.payload.reason }
+            ...(effectiveRequest.signalName !== "blueprint-approval" &&
+            effectiveRequest.payload.reason
+              ? { reason: effectiveRequest.payload.reason }
               : {}),
             actorId: principal.actorId,
           },

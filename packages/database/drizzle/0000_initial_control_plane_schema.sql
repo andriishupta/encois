@@ -504,6 +504,7 @@ CREATE TABLE "workflow_runs" (
 	"temporal_task_queue" text,
 	"temporal_workflow_id" text NOT NULL,
 	"temporal_run_id" text,
+	"name" text NOT NULL,
 	"status" "workflow_run_status" DEFAULT 'queued' NOT NULL,
 	"scope" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"input_ref" text,
