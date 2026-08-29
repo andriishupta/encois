@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -292,6 +293,7 @@ jobs:
 
   containers:
     name: Build ${{ matrix.name }} image
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [node-quality, node-build, go-quality, drizzle-integration, terraform, compose-config, local-smoke]
     runs-on: ubuntu-latest
     strategy:
