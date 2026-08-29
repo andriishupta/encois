@@ -5,6 +5,7 @@ locals {
     "cloudtrace.googleapis.com",
     "compute.googleapis.com",
     "cloudscheduler.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "identitytoolkit.googleapis.com",

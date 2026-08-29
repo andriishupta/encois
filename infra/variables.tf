@@ -313,19 +313,19 @@ variable "agent_gateway_image" {
 }
 
 variable "api_service_url" {
-  description = "Stable Cloud Run or internal load-balancer URL used by private services to call the Gateway API."
+  description = "Optional Gateway API URL override. Empty derives the stable Cloud Run run.app URL from the project number."
   type        = string
   default     = ""
 }
 
 variable "agent_runtime_service_url" {
-  description = "Stable Cloud Run or internal load-balancer URL used by the Gateway API to call the Agent Runtime."
+  description = "Optional Agent Runtime URL override. Empty derives the stable Cloud Run run.app URL from the project number."
   type        = string
   default     = ""
 }
 
 variable "agent_gateway_service_url" {
-  description = "Stable Cloud Run or internal load-balancer URL used by the Gateway API and Agent Runtime to call the Agent Gateway."
+  description = "Optional Agent Gateway URL override. Empty derives the stable Cloud Run run.app URL from the project number."
   type        = string
   default     = ""
 }

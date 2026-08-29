@@ -1,4 +1,4 @@
-name: Publish production images (manual)
+name: Publish production images (disabled)
 
 on:
   workflow_dispatch:
@@ -19,15 +19,18 @@ permissions:
 
 jobs:
   publish:
-    name: Build and publish production images
-    if: ${{ inputs.confirm == 'PUBLISH' }}
+    name: DISABLED - build and publish production images
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
       GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY || 'containers' }}
+      GCP_NAME_PREFIX: ${{ vars.GCP_NAME_PREFIX || 'encois-production' }}
       IMAGE_TAG: ${{ inputs.image_tag }}
+      PRODUCTION_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+      DASHBOARD_BASE_PATH: ${{ vars.DASHBOARD_BASE_PATH || '/' }}
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
@@ -75,10 +78,13 @@ jobs:
         run: |
           set -euo pipefail
           image_root="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REGISTRY_REPOSITORY}"
+          project_number="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+          api_base_url="${PRODUCTION_API_BASE_URL:-https://${GCP_NAME_PREFIX}-api-${project_number}.${GCP_REGION}.run.app/api/v1}"
 
           docker build \
             --build-arg ENCOIS_VERSION="$VERSION" \
-            --build-arg VITE_BASE_PATH=/dashboard/ \
+            --build-arg VITE_BASE_PATH="$DASHBOARD_BASE_PATH" \
+            --build-arg VITE_API_BASE_URL="$api_base_url" \
             --build-arg VITE_FIREBASE_API_KEY="$VITE_FIREBASE_API_KEY" \
             --build-arg VITE_FIREBASE_AUTH_DOMAIN="$VITE_FIREBASE_AUTH_DOMAIN" \
             --build-arg VITE_FIREBASE_PROJECT_ID="$VITE_FIREBASE_PROJECT_ID" \

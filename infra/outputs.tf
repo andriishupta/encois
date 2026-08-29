@@ -13,6 +13,26 @@ output "public_url" {
   value       = local.edge_enabled ? "https://${var.domain_name}" : null
 }
 
+output "dashboard_url" {
+  description = "Dashboard URL. Uses the custom edge when enabled, otherwise the standard Cloud Run run.app URL."
+  value       = var.enable_dashboard ? local.dashboard_application_url : null
+}
+
+output "api_url" {
+  description = "Gateway API URL. Uses the custom edge when enabled, otherwise the standard Cloud Run run.app URL."
+  value       = var.enable_api ? local.api_public_url : null
+}
+
+output "agent_runtime_url" {
+  description = "IAM-protected Agent Runtime Cloud Run URL."
+  value       = var.enable_agent_runtime ? local.agent_runtime_service_url : null
+}
+
+output "agent_gateway_url" {
+  description = "IAM-protected Agent Gateway Cloud Run URL."
+  value       = var.enable_agent_gateway ? local.agent_gateway_service_url : null
+}
+
 output "service_accounts" {
   description = "Application service accounts; these are not Terraform deployer identities."
   value = {

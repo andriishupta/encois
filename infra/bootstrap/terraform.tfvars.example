@@ -1,4 +1,4 @@
 project_id         = "replace-with-gcp-project-id"
 state_bucket_name  = "replace-with-globally-unique-terraform-state-bucket"
 deployer_account_id = "encois-infra-deployer"
-
+github_repository  = "replace-with-owner/replace-with-repository"

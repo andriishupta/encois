@@ -5,8 +5,8 @@ go 1.26.6
 replace github.com/andriishupta/encois/packages/contracts => ../../packages/contracts
 
 require (
-	github.com/dslipak/pdf v0.0.2
 	github.com/andriishupta/encois/packages/contracts v0.0.0
+	github.com/dslipak/pdf v0.0.2
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.43.0
 	go.opentelemetry.io/otel/sdk v1.43.0

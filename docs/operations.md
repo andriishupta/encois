@@ -98,7 +98,7 @@ The hosted shape uses:
 
 | Service | Responsibility |
 | --- | --- |
-| Global HTTPS load balancer | `/dashboard/*` and `/api/*` routing |
+| Optional global HTTPS load balancer | custom-domain `/dashboard/*` and `/api/*` routing |
 | Cloud Run services | Dashboard, Gateway API, Agent Runtime, and Agent Gateway |
 | Cloud Run jobs / Cloud Scheduler | migrations, retention, and Integration health dispatch |
 | Cloud SQL for PostgreSQL | Gateway control plane |
@@ -111,9 +111,12 @@ The hosted shape uses:
 | Cloud Logging / Trace | structured logs and traces |
 | Temporal Cloud | durable execution |
 
-The browser reaches only the public Dashboard/API edge. Agent Gateway routes
-are private and require service authentication, organization scope, and policy
-checks. Runtime and Agent Gateway service accounts use least privilege.
+Without a custom domain, the browser uses the standard Dashboard and API
+Cloud Run `run.app` URLs. With the optional edge enabled, it uses the shared
+custom hostname instead. Agent Runtime and Agent Gateway are network-reachable
+through `run.app` for service-to-service calls but reject unauthenticated
+invocation; their application routes additionally require service identity,
+organization scope, and policy checks.
 
 Terraform in `infra/` is an explicit infrastructure adapter. It does not
 create a project, manage Temporal Cloud, start local services, or deploy
@@ -122,15 +125,17 @@ must run before the API relies on the corresponding schema.
 
 ## CI/CD
 
-The repository already contains:
+`ci.yml` is the active GitHub Actions workflow. It runs Node/Go quality checks,
+database integration checks, Terraform validation, Compose validation, local
+smoke checks, and container builds without publishing or deploying anything.
 
-- `ci.yml` for Node/Go quality checks, database integration checks, Terraform
-  validation, Compose validation, local smoke checks, and container builds;
-- manual immutable production image publishing;
-- manual production Terraform deployment with Workload Identity Federation;
-- separate manual production migration and retention workflows.
+Production mutation workflows are currently disabled while the first hosted
+deployment is performed manually. The production plan workflow is read-only:
+it can authenticate, refresh the remote state, validate configuration, and
+create a Terraform plan, but it does not run `terraform apply`. Image publish,
+database migration, and retention workflows are disabled as well.
 
-The delivery boundary keeps these stages separate:
+The eventual delivery boundary keeps these stages separate:
 
 1. Pull request checks: formatting, typechecking, lint, contract checks, and
    targeted tests.
@@ -147,6 +152,56 @@ GitHub Actions uses Workload Identity Federation/OIDC rather than a long-lived
 service-account key. Cloud Build/Cloud Deploy remains a future replacement
 when GCP-native promotion and staged rollout become useful. It must preserve
 immutable images, approval gates, restricted logs, and a rollback path.
+
+### First production deployment
+
+For the current first deployment, use the documented manual Terraform,
+container, Secret Manager, and Cloud Run commands. Do not run the disabled
+production mutation workflows from GitHub Actions.
+
+When GitHub deployment is intentionally enabled later, the existing bootstrap
+can add GitHub WIF to the same state bucket and deployer account:
+
+```bash
+terraform -chdir=infra/bootstrap init
+terraform -chdir=infra/bootstrap apply \
+  -var="project_id=YOUR_PROJECT_ID" \
+  -var="state_bucket_name=YOUR_EXISTING_STATE_BUCKET" \
+  -var="github_repository=andriishupta/encois"
+terraform -chdir=infra/bootstrap output
+```
+
+Configure the GitHub `production` environment with:
+
+- variables: `GCP_PROJECT_ID`, `GCP_REGION`, `TF_STATE_BUCKET`, and optionally
+  `GCP_NAME_PREFIX`;
+- secrets: `GCP_WIF_PROVIDER` from
+  `github_workload_identity_provider`, `GCP_DEPLOYER_SERVICE_ACCOUNT` from
+  `github_deployer_service_account`, and the complete `PRODUCTION_TFVARS`;
+- public Firebase build variables used by the Dashboard image.
+
+Identity Platform's Google OAuth client is created in Google Cloud Console,
+not by this Terraform stack. A custom domain is not required: leave
+`domain_name = ""` and `enable_edge = false`; Terraform authorizes the
+Dashboard `run.app` hostname.
+
+The eventual GitHub release order is deliberately split so images have a
+repository and an API revision cannot start against an empty schema:
+
+1. Run `Deploy production` with phase `registry`; its image-tag input is
+   ignored. This creates Artifact Registry and the non-runtime foundation.
+2. Run `Publish production images` with an immutable tag.
+3. Run `Deploy production` with phase `foundation` and the same tag.
+4. Add current Secret Manager versions for every configured secret, including
+   the three Cloud SQL URLs and Temporal/service credentials.
+5. Run `Run production database migrations` with that tag.
+6. Run `Deploy production` with phase `application` and that tag.
+7. Read the emitted Dashboard/API URLs and complete the hosted demo seed.
+
+The `registry` and `foundation` phases are first-deploy-only and fail before a
+plan that would remove Cloud SQL or application Cloud Run services. Later
+releases publish a new immutable tag, run migrations when required, and apply
+only the `application` phase.
 
 ## Secrets and data
 

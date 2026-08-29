@@ -17,7 +17,8 @@ tmp
 terraform.tfstate*
 infra/.terraform
 .github
-docs
+docs/*
+!docs/documentation.md
 infra
 compose*.yaml
 **/compose*.yaml

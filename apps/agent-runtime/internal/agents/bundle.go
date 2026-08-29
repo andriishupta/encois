@@ -106,7 +106,7 @@ func NewBundle(ctx context.Context, cfg Config) (*Bundle, error) {
 // scheduled; this method does not let model output create capabilities.
 func (b *Bundle) RunAgentStep(ctx context.Context, sessionID, definition string, input map[string]any) (string, error) {
 	if b != nil && b.Mode == ModeMock {
-		return localmock.AgentStepJSON(definition)
+		return localmock.AgentStepJSON(definition, input)
 	}
 	if b == nil || b.AgentModel == nil {
 		return "", fmt.Errorf("agent model is not configured")

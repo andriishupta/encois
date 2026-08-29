@@ -57,14 +57,6 @@ resource "terraform_data" "application_requirements" {
       error_message = "retention_secret_name must name one of the secret_names when Cloud SQL is enabled."
     }
     precondition {
-      condition     = var.environment != "production" || length(var.retention_organization_ids) > 0
-      error_message = "Production requires an explicit retention cleanup schedule target for every organization."
-    }
-    precondition {
-      condition     = var.environment != "production" || !var.enable_api || !var.enable_agent_gateway || length(var.integration_health_organization_ids) > 0
-      error_message = "Production requires an explicit integration health schedule target for every organization when the API and Agent Gateway are enabled."
-    }
-    precondition {
       condition     = !var.enable_api || var.environment != "production" || var.enable_agent_gateway
       error_message = "A production API requires enable_agent_gateway for provider, graph, and tool execution boundaries."
     }
@@ -85,12 +77,23 @@ resource "terraform_data" "application_requirements" {
       error_message = "enable_agent_runtime requires temporal_namespace for the hosted Temporal Cloud namespace."
     }
     precondition {
-      condition     = !(var.enable_dashboard && var.enable_api) || var.enable_edge
-      error_message = "enable_dashboard and enable_api together require enable_edge for /dashboard and /api path routing."
-    }
-    precondition {
       condition     = !var.enable_identity_platform || var.domain_name != "" || length(var.identity_authorized_domains) > 0
       error_message = "Identity Platform requires domain_name or at least one identity_authorized_domains entry."
+    }
+  }
+}
+
+resource "terraform_data" "background_runtime_requirements" {
+  count = var.environment == "production" ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_api || var.api_min_instances >= 1
+      error_message = "Production Gateway API requires api_min_instances >= 1 so the Coordinator outbox dispatcher remains active."
+    }
+    precondition {
+      condition     = !var.enable_agent_runtime || var.agent_runtime_min_instances >= 1
+      error_message = "Production Agent Runtime requires agent_runtime_min_instances >= 1 so Temporal polling remains active."
     }
   }
 }

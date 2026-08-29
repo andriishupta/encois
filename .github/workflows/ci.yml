@@ -203,6 +203,7 @@ jobs:
         env:
           DATABASE_RUNTIME_URL: postgresql://api_gateway_runtime:api_gateway@127.0.0.1:5432/encois
           DATABASE_TEST_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/encois
+          AGENT_GATEWAY_POLICY_VERSION: policy-read-only-fixture-v1
         run: pnpm --filter @encois/api-gateway verify:command-receipts
 
   terraform:

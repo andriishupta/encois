@@ -20,6 +20,34 @@ variable "deployer_account_id" {
   default     = "encois-infra-deployer"
 }
 
+variable "github_repository" {
+  description = "GitHub repository allowed to impersonate the deployer, in owner/repository form."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must use owner/repository format."
+  }
+}
+
+variable "github_branch" {
+  description = "Protected GitHub branch allowed to deploy production."
+  type        = string
+  default     = "main"
+}
+
+variable "github_workload_identity_pool_id" {
+  description = "Workload Identity Pool ID used by GitHub Actions."
+  type        = string
+  default     = "encois-github"
+}
+
+variable "github_workload_identity_provider_id" {
+  description = "OIDC provider ID inside the GitHub Workload Identity Pool."
+  type        = string
+  default     = "encois-repository"
+}
+
 variable "deployer_roles" {
   description = "Project roles for the dedicated infrastructure deployer. Review and reduce this list as the stack stabilizes."
   type        = set(string)

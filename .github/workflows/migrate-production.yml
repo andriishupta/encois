@@ -1,4 +1,4 @@
-name: Run production database migrations (manual)
+name: Run production database migrations (disabled)
 
 on:
   workflow_dispatch:
@@ -19,8 +19,8 @@ permissions:
 
 jobs:
   migrate:
-    name: Execute protected Cloud SQL migration job
-    if: ${{ inputs.confirm == 'MIGRATE' }}
+    name: DISABLED - execute protected Cloud SQL migration job
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     env:

@@ -3,7 +3,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
 
   name                = "${local.name_prefix}-dashboard"
   location            = var.region
-  ingress             = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  ingress             = local.edge_enabled ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
   deletion_protection = true
   labels              = local.common_labels
 
@@ -53,7 +53,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
 
       env {
         name  = "PUBLIC_BASE_PATH"
-        value = "/dashboard"
+        value = local.edge_enabled ? "/dashboard" : "/"
       }
     }
   }
@@ -85,7 +85,7 @@ resource "google_cloud_run_v2_service" "api" {
 
   name                = "${local.name_prefix}-api"
   location            = var.region
-  ingress             = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  ingress             = local.edge_enabled ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
   deletion_protection = true
   labels              = local.common_labels
 
@@ -116,6 +116,8 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       resources {
+        cpu_idle = false
+
         limits = {
           cpu    = "1"
           memory = "512Mi"
@@ -149,7 +151,7 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "CORS_ORIGINS"
-        value = var.domain_name == "" ? "" : "https://${var.domain_name}"
+        value = local.edge_enabled ? "https://${var.domain_name}" : local.dashboard_service_url
       }
 
       env {
@@ -192,7 +194,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         content {
           name  = "AGENT_GATEWAY_URL"
-          value = var.agent_gateway_service_url
+          value = local.agent_gateway_service_url
         }
       }
 
@@ -210,7 +212,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         content {
           name  = "AGENT_GATEWAY_AUDIENCE"
-          value = var.agent_gateway_service_url
+          value = local.agent_gateway_service_url
         }
       }
 
@@ -248,29 +250,29 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
-        for_each = var.enable_api && var.domain_name != "" ? [true] : []
+        for_each = var.enable_api ? [true] : []
 
         content {
           name  = "ENCOIS_INTEGRATION_OAUTH_CALLBACK_URL"
-          value = "https://${var.domain_name}/api/v1/integrations/authorization/callback"
+          value = "${local.api_public_url}/api/v1/integrations/authorization/callback"
         }
       }
 
       dynamic "env" {
-        for_each = var.enable_api && var.domain_name != "" ? [true] : []
+        for_each = var.enable_api ? [true] : []
 
         content {
           name  = "ENCOIS_PUBLIC_BASE_URL"
-          value = "https://${var.domain_name}"
+          value = local.api_public_url
         }
       }
 
       dynamic "env" {
-        for_each = var.enable_api && var.domain_name != "" ? [true] : []
+        for_each = var.enable_api ? [true] : []
 
         content {
           name  = "ENCOIS_INTEGRATION_OAUTH_SUCCESS_URL"
-          value = "/dashboard/integrations/{integrationId}?authorization=complete"
+          value = "${local.dashboard_application_url}/integrations/{integrationId}?authorization=complete"
         }
       }
 
@@ -366,7 +368,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         content {
           name  = "AGENT_RUNTIME_URL"
-          value = var.agent_runtime_service_url
+          value = local.agent_runtime_service_url
         }
       }
 
@@ -375,7 +377,7 @@ resource "google_cloud_run_v2_service" "api" {
 
         content {
           name  = "AGENT_RUNTIME_AUDIENCE"
-          value = var.agent_runtime_service_url
+          value = local.agent_runtime_service_url
         }
       }
 
@@ -467,11 +469,11 @@ resource "google_cloud_run_v2_service" "api" {
       error_message = "agent_runtime_secret_name must name one of the secret_names when the API calls the Agent Runtime."
     }
     precondition {
-      condition     = !var.enable_api || !var.enable_agent_gateway || var.agent_gateway_service_url != ""
+      condition     = !var.enable_api || !var.enable_agent_gateway || local.agent_gateway_service_url != ""
       error_message = "agent_gateway_service_url must be set when the API calls the Agent Gateway."
     }
     precondition {
-      condition     = !var.enable_api || !var.enable_agent_runtime || var.agent_runtime_service_url != ""
+      condition     = !var.enable_api || !var.enable_agent_runtime || local.agent_runtime_service_url != ""
       error_message = "agent_runtime_service_url must be set when the API calls the Agent Runtime."
     }
     precondition {
@@ -508,7 +510,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
 
   name                = "${local.name_prefix}-runtime"
   location            = var.region
-  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = true
   labels              = local.common_labels
 
@@ -530,6 +532,8 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       }
 
       resources {
+        cpu_idle = false
+
         limits = {
           cpu    = "1"
           memory = "1Gi"
@@ -624,7 +628,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
 
         content {
           name  = "AGENT_GATEWAY_URL"
-          value = var.agent_gateway_service_url
+          value = local.agent_gateway_service_url
         }
       }
 
@@ -648,7 +652,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
 
         content {
           name  = "CONTROL_PLANE_URL"
-          value = var.api_service_url
+          value = local.api_service_url
         }
       }
 
@@ -657,7 +661,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
 
         content {
           name  = "CONTROL_PLANE_AUDIENCE"
-          value = var.api_service_url
+          value = local.api_service_url
         }
       }
 
@@ -681,7 +685,7 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
 
         content {
           name  = "AGENT_GATEWAY_AUDIENCE"
-          value = var.agent_gateway_service_url
+          value = local.agent_gateway_service_url
         }
       }
 
@@ -745,11 +749,11 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       error_message = "control_plane_service_user_id is required when the Runtime calls a Cloud SQL-backed API control plane."
     }
     precondition {
-      condition     = !var.enable_agent_runtime || !var.enable_agent_gateway || var.agent_gateway_service_url != ""
+      condition     = !var.enable_agent_runtime || !var.enable_agent_gateway || local.agent_gateway_service_url != ""
       error_message = "agent_gateway_service_url must be set when the Runtime calls the Agent Gateway."
     }
     precondition {
-      condition     = !var.enable_agent_runtime || !var.enable_api || var.api_service_url != ""
+      condition     = !var.enable_agent_runtime || !var.enable_api || local.api_service_url != ""
       error_message = "api_service_url must be set when the Runtime calls the Gateway API."
     }
   }
@@ -805,7 +809,7 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
 
   name                = "${local.name_prefix}-gateway"
   location            = var.region
-  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = true
   labels              = local.common_labels
 
@@ -950,7 +954,7 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
 
         content {
           name  = "CONTROL_PLANE_URL"
-          value = var.api_service_url
+          value = local.api_service_url
         }
       }
 
@@ -959,7 +963,7 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
 
         content {
           name  = "CONTROL_PLANE_AUDIENCE"
-          value = var.api_service_url
+          value = local.api_service_url
         }
       }
 
@@ -1019,7 +1023,7 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       error_message = "control_plane_secret_name must name one of the secret_names when the hosted Agent Gateway is enabled."
     }
     precondition {
-      condition     = !var.enable_api || var.api_service_url != ""
+      condition     = !var.enable_api || local.api_service_url != ""
       error_message = "api_service_url must be set when the Agent Gateway calls the Gateway API."
     }
   }

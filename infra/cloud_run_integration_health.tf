@@ -22,12 +22,12 @@ resource "google_cloud_run_v2_job" "integration_health" {
 
         env {
           name  = "CONTROL_PLANE_URL"
-          value = var.api_service_url
+          value = local.api_service_url
         }
 
         env {
           name  = "CONTROL_PLANE_AUDIENCE"
-          value = var.api_service_url
+          value = local.api_service_url
         }
 
         env {
@@ -50,7 +50,7 @@ resource "google_cloud_run_v2_job" "integration_health" {
       error_message = "api_image must be set when the integration health dispatcher is enabled."
     }
     precondition {
-      condition     = var.api_service_url != ""
+      condition     = local.api_service_url != ""
       error_message = "api_service_url must be set when the integration health dispatcher is enabled."
     }
     precondition {

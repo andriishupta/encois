@@ -2,8 +2,8 @@ project_id                  = "replace-with-gcp-project-id"
 region                      = "us-east1"
 google_cloud_location       = "us-east1"
 google_cloud_model_location = "us"
-environment                 = "demo"
-domain_name                 = "encois.com"
+environment                 = "production"
+domain_name                 = ""
 
 # Hosted Identity Platform uses Google-only sign-in. Supply the OAuth client
 # secret through TF_VAR_google_oauth_client_secret or a protected CI secret.
@@ -39,6 +39,7 @@ secret_names = [
   "cloud-sql-retention-url",
   "temporal-client-credentials",
   "agent-gateway-service-token",
+  "agent-runtime-service-token",
   "execution-capability-secret",
   "control-plane-service-token",
   "integration-oauth-config",
@@ -59,10 +60,8 @@ retention_image                     = "us-east1-docker.pkg.dev/replace-with-gcp-
 retention_organization_ids          = []
 integration_health_organization_ids = []
 
-# These stable URLs are intentionally explicit to avoid a Terraform dependency
-# cycle between mutually private Cloud Run services. Populate them with the
-# deployed service URLs (or the internal load-balancer URL) before wiring the
-# next revision.
-api_service_url           = "https://encois-demo-api-REPLACE.run.app"
-agent_runtime_service_url = "https://encois-demo-runtime-REPLACE.run.app"
-agent_gateway_service_url = "https://encois-demo-gateway-REPLACE.run.app"
+# Leave these empty to use deterministic Cloud Run run.app URLs derived from
+# the project number. Set an override only when routing through another edge.
+api_service_url           = ""
+agent_runtime_service_url = ""
+agent_gateway_service_url = ""

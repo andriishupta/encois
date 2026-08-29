@@ -9,6 +9,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/dashboard apps/dashboard
 COPY packages/contracts packages/contracts
+COPY docs/documentation.md docs/documentation.md
 ARG VITE_BASE_PATH=/
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 ARG VITE_API_BASE_URL=/api/v1

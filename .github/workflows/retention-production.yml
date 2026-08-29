@@ -1,4 +1,4 @@
-name: Run production retention cleanup (manual)
+name: Run production retention cleanup (disabled)
 
 on:
   workflow_dispatch:
@@ -23,8 +23,8 @@ permissions:
 
 jobs:
   cleanup:
-    name: Execute protected retention cleanup job
-    if: ${{ inputs.confirm == 'CLEANUP' }}
+    name: DISABLED - execute protected retention cleanup job
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     env:
