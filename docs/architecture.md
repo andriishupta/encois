@@ -381,7 +381,9 @@ product state model.
 | Company context | tenant-keyed Spanner Graph projection | richer connected entity/relationship graph with the same provenance and scope rules |
 | Workflow Memory | local adapter or Agent Platform Memory Bank adapter | provider-neutral `MemoryStore` or customer-owned memory API |
 | Deployment | shared GCP services with organization isolation | dedicated customer GCP/Temporal profile where residency or isolation requires it |
-| Assistant | Dashboard and operational product surfaces | scoped Pel AI briefings/questions over the same API, evidence, and permission boundaries |
+| Product UX | resource and operational-state Dashboard | smaller intelligence-first briefings, conversational exploration, and voice interaction |
+| Setup | users configure Sources, Templates, Blueprints, and Workflows | agents propose scoped configuration that an authorized user reviews and approves |
+| Client protocols | typed HTTP API and private service APIs | scoped MCP server alongside HTTP, using the same contracts, authorization, and approval boundaries |
 | External actions | read-only tools by default | separately approved write tools with authorization, audit, idempotency, and recovery |
 
 ### Event transport evolution

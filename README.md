@@ -170,6 +170,30 @@ Real Gemini, Spanner Graph, and Memory Bank are opt-in; see
 The detailed current/future matrix is in
 [`docs/architecture.md`](docs/architecture.md#current-implementation-and-future-direction).
 
+## Future product ideas
+
+- **Simpler intelligence-first Dashboard:** move from a control-plane-oriented
+  UI that closely reflects stored resources and states toward a smaller daily
+  surface focused on briefings, decisions, evidence, and the few items that
+  require attention.
+- **Conversational and voice UX:** let users explore organization context,
+  start investigations, review evidence, and approve bounded actions through
+  text or voice while preserving the same identity, scope, and audit trail.
+- **Agent-assisted setup:** agents could propose Sources, Templates,
+  Blueprints, and Workflow configurations from observed organization context.
+  Proposed changes would remain reviewable and require the appropriate user
+  permission or approval before becoming active.
+- **MCP access alongside HTTP:** expose selected Encois capabilities through a
+  versioned MCP server, either as an API Gateway adapter or a separate service.
+  MCP must use the same organization authorization, scope enforcement,
+  contracts, read-only defaults, and approval boundaries as the HTTP API.
+- **Proactive intelligence:** scoped agents could prepare scheduled briefings,
+  detect meaningful changes, and recommend new investigations without turning
+  model output into unreviewed product state or external actions.
+- **Multiple clients:** the Dashboard, voice surfaces, MCP clients, and future
+  assistants can share one control plane instead of implementing separate
+  authorization or workflow systems.
+
 ## Repository
 
 ```text
