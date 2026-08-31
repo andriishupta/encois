@@ -366,6 +366,12 @@ variable "agent_platform_memory_reasoning_engine" {
   default     = ""
 }
 
+variable "gemini_model" {
+  description = "Gemini model used by the hosted Agent Runtime."
+  type        = string
+  default     = "gemini-3.7-flash"
+}
+
 variable "google_cloud_model_location" {
   description = "Gemini model endpoint location. Use the supported multi-region us, eu, or global endpoint independently of the infrastructure region."
   type        = string

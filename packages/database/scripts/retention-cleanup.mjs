@@ -1,6 +1,7 @@
 import postgres from "postgres";
 
 const databaseUrl = process.env.DATABASE_RETENTION_URL;
+const databaseSocketPath = process.env.DATABASE_RETENTION_SOCKET_PATH?.trim();
 const organizationId = process.env.RETENTION_ORGANIZATION_ID?.trim();
 const batchSize = Number(process.env.RETENTION_CLEANUP_BATCH_SIZE ?? "500");
 const dryRun = process.env.RETENTION_DRY_RUN === "true";
@@ -22,7 +23,19 @@ if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
   );
 }
 
-const sql = postgres(databaseUrl, { max: 1, prepare: false });
+const parsedDatabaseUrl = databaseSocketPath
+  ? new URL(databaseUrl)
+  : undefined;
+const sql = databaseSocketPath
+  ? postgres({
+      host: databaseSocketPath,
+      user: decodeURIComponent(parsedDatabaseUrl?.username ?? ""),
+      password: decodeURIComponent(parsedDatabaseUrl?.password ?? ""),
+      database: decodeURIComponent(parsedDatabaseUrl?.pathname.slice(1) ?? ""),
+      max: 1,
+      prepare: false,
+    })
+  : postgres(databaseUrl, { max: 1, prepare: false });
 
 try {
   const result = await sql.begin(async (transaction) => {

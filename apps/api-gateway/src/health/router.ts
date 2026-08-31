@@ -146,7 +146,10 @@ export function createReadinessProbe(
         config.agentGatewayCapabilitySecret,
         required,
       ),
-      oauth: { state: oauthConfigured ? "ok" : "not_configured", required },
+      oauth: {
+        state: oauthConfigured ? "ok" : "not_configured",
+        required: false,
+      },
       artifactStore: configured(config.sourceArtifactBucket, required),
       agentGateway: { state: agentGatewayState, required },
       agentRuntime: { state: agentRuntimeState, required },

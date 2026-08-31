@@ -7,6 +7,8 @@ import {
 } from "@encois/database";
 import { asc, eq } from "drizzle-orm";
 import { loadConfig } from "../src/config.js";
+import { databaseClient } from "../src/database.js";
+import { fetchCloudRunIdentityToken } from "../src/security/cloud-run-identity-token.js";
 import { createSourceArtifactStore } from "../src/sources/artifact-store.js";
 import {
   createSourceRevision,
@@ -70,13 +72,22 @@ function sleep(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-async function waitForAgentGateway(baseUrl: string): Promise<void> {
+async function waitForAgentGateway(
+  baseUrl: string,
+  audience?: string,
+): Promise<void> {
   const readinessUrl = `${baseUrl.replace(/\/$/u, "")}/health/ready`;
   const deadline = Date.now() + readinessTimeoutMs;
   let lastFailure = "not ready";
   while (Date.now() < deadline) {
     try {
+      const identityToken = audience
+        ? await fetchCloudRunIdentityToken(audience, fetch)
+        : undefined;
       const response = await fetch(readinessUrl, {
+        headers: identityToken
+          ? { Authorization: `Bearer ${identityToken}` }
+          : undefined,
         signal: AbortSignal.timeout(5_000),
       });
       if (response.ok) return;
@@ -149,7 +160,10 @@ async function seedAiSources(): Promise<void> {
   const config = loadConfig();
   if (!config.agentGatewayUrl)
     throw new Error("AGENT_GATEWAY_URL is required for the AI demo seed.");
-  await waitForAgentGateway(config.agentGatewayUrl);
+  await waitForAgentGateway(
+    config.agentGatewayUrl,
+    config.agentGatewayAudience,
+  );
   const workflowClient = createWorkflowClient(config);
   const artifactStore = createSourceArtifactStore({
     bucketName: config.sourceArtifactBucket,
@@ -299,6 +313,7 @@ async function seedAiSources(): Promise<void> {
       );
   } finally {
     await seedDatabase.client.end({ timeout: 5 });
+    await databaseClient?.end({ timeout: 5 });
     await workflowClient.close?.();
   }
 }

@@ -7,6 +7,7 @@ locals {
   # Service account IDs are limited to 30 characters; the longest suffix is
   # "-dashboard", so keep the shared prefix below that limit.
   service_id = substr(local.name_prefix, 0, 19)
+  iam_role_id_prefix = replace(local.service_id, "-", "_")
 
   spanner_enabled           = var.enable_spanner || var.use_existing_spanner
   spanner_instance_id       = var.use_existing_spanner ? var.spanner_instance_id : "${local.name_prefix}-context"

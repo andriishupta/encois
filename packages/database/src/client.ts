@@ -10,6 +10,7 @@ export type DatabaseTransaction = Parameters<
 
 export type DatabaseClientOptions = {
   maxConnections?: number;
+  socketPath?: string;
   url?: string;
 };
 
@@ -26,10 +27,23 @@ export function createDatabase(options: DatabaseClientOptions = {}): {
     );
   }
 
-  const client = postgres(url, {
-    max: options.maxConnections ?? 5,
-    prepare: false,
-  });
+  const socketPath =
+    options.socketPath ?? process.env.DATABASE_RUNTIME_SOCKET_PATH?.trim();
+  const parsedUrl = socketPath ? new URL(url) : undefined;
+
+  const client = socketPath
+    ? postgres({
+        host: socketPath,
+        user: decodeURIComponent(parsedUrl?.username ?? ""),
+        password: decodeURIComponent(parsedUrl?.password ?? ""),
+        database: decodeURIComponent(parsedUrl?.pathname.slice(1) ?? ""),
+        max: options.maxConnections ?? 5,
+        prepare: false,
+      })
+    : postgres(url, {
+        max: options.maxConnections ?? 5,
+        prepare: false,
+      });
 
   return {
     client,

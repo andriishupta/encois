@@ -32,6 +32,11 @@ resource "google_cloud_run_v2_job" "retention" {
         }
 
         env {
+          name  = "DATABASE_RETENTION_SOCKET_PATH"
+          value = "/cloudsql/${google_sql_database_instance.control_plane[0].connection_name}"
+        }
+
+        env {
           name  = "RETENTION_CLEANUP_BATCH_SIZE"
           value = tostring(var.retention_cleanup_batch_size)
         }

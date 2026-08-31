@@ -12,6 +12,7 @@ resource "google_sql_database_instance" "control_plane" {
   # exposing any direct database network path.
 
   settings {
+    edition           = "ENTERPRISE"
     tier              = var.cloud_sql_tier
     availability_type = "ZONAL"
     disk_type         = "PD_SSD"

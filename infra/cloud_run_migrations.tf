@@ -28,6 +28,11 @@ resource "google_cloud_run_v2_job" "migrations" {
           }
         }
 
+        env {
+          name  = "DATABASE_MIGRATION_SOCKET_PATH"
+          value = "/cloudsql/${google_sql_database_instance.control_plane[0].connection_name}"
+        }
+
         volume_mounts {
           name       = "cloudsql"
           mount_path = "/cloudsql"

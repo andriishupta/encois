@@ -82,6 +82,16 @@ resource "google_cloud_run_v2_service_iam_member" "dashboard_invoker" {
 
 resource "google_cloud_run_v2_service" "api" {
   count = var.enable_api ? 1 : 0
+  depends_on = [
+    google_secret_manager_secret_iam_member.api_gateway_accessor,
+    google_secret_manager_secret_iam_member.api_oauth_config_accessor,
+    google_secret_manager_secret_iam_member.api_oauth_state_accessor,
+    google_secret_manager_secret_iam_member.api_execution_capability_accessor,
+    google_secret_manager_secret_iam_member.api_database_accessor,
+    google_secret_manager_secret_iam_member.api_temporal_accessor,
+    google_secret_manager_secret_iam_member.control_plane_accessor,
+    google_secret_manager_secret_iam_member.api_runtime_accessor,
+  ]
 
   name                = "${local.name_prefix}-api"
   location            = var.region
@@ -130,7 +140,7 @@ resource "google_cloud_run_v2_service" "api" {
         timeout_seconds   = 5
 
         http_get {
-          path = "/health/ready"
+          path = "/health/live"
         }
       }
 
@@ -150,6 +160,11 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "ENCOIS_VERSION"
+        value = "1.0.0"
+      }
+
+      env {
         name  = "CORS_ORIGINS"
         value = local.edge_enabled ? "https://${var.domain_name}" : local.dashboard_service_url
       }
@@ -157,11 +172,6 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "HOST"
         value = "0.0.0.0"
-      }
-
-      env {
-        name  = "PORT"
-        value = "8080"
       }
 
       env {
@@ -419,6 +429,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+
+      dynamic "env" {
+        for_each = var.enable_cloud_sql ? [true] : []
+
+        content {
+          name  = "DATABASE_RUNTIME_SOCKET_PATH"
+          value = "/cloudsql/${google_sql_database_instance.control_plane[0].connection_name}"
+        }
+      }
     }
 
     dynamic "volumes" {
@@ -507,6 +526,14 @@ resource "google_cloud_run_v2_service_iam_member" "integration_health_job_invoke
 
 resource "google_cloud_run_v2_service" "agent_runtime" {
   count = var.enable_agent_runtime ? 1 : 0
+  depends_on = [
+    google_secret_manager_secret_iam_member.runtime_service_token_accessor,
+    google_secret_manager_secret_iam_member.runtime_temporal_accessor,
+    google_secret_manager_secret_iam_member.runtime_gateway_accessor,
+    google_secret_manager_secret_iam_member.runtime_control_plane_accessor,
+    google_cloud_run_v2_service_iam_member.api_runtime_invoker,
+    google_cloud_run_v2_service_iam_member.agent_gateway_invoker,
+  ]
 
   name                = "${local.name_prefix}-runtime"
   location            = var.region
@@ -573,6 +600,21 @@ resource "google_cloud_run_v2_service" "agent_runtime" {
       env {
         name  = "GOOGLE_GENAI_USE_AGENT_PLATFORM"
         value = "true"
+      }
+
+      env {
+        name  = "AGENT_AI_MODE"
+        value = "gemini"
+      }
+
+      env {
+        name  = "AGENT_SOURCE_MODE"
+        value = "gateway"
+      }
+
+      env {
+        name  = "GEMINI_MODEL"
+        value = var.gemini_model
       }
 
       env {
@@ -806,6 +848,12 @@ resource "google_cloud_run_v2_service_iam_member" "api_agent_gateway_invoker" {
 
 resource "google_cloud_run_v2_service" "agent_gateway" {
   count = var.enable_agent_gateway ? 1 : 0
+  depends_on = [
+    google_secret_manager_secret_iam_member.gateway_accessor,
+    google_secret_manager_secret_iam_member.gateway_execution_capability_accessor,
+    google_secret_manager_secret_iam_member.gateway_oauth_config_accessor,
+    google_secret_manager_secret_iam_member.gateway_control_plane_accessor,
+  ]
 
   name                = "${local.name_prefix}-gateway"
   location            = var.region
@@ -875,6 +923,11 @@ resource "google_cloud_run_v2_service" "agent_gateway" {
       env {
         name  = "GIN_MODE"
         value = "release"
+      }
+
+      env {
+        name  = "ENCOIS_VERSION"
+        value = "1.0.0"
       }
 
       dynamic "env" {

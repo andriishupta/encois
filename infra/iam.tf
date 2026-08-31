@@ -101,7 +101,7 @@ resource "google_project_iam_custom_role" "api_connector_secret_broker" {
   count = var.enable_api ? 1 : 0
 
   project     = var.project_id
-  role_id     = "${local.service_id}_connector_secret_broker"
+  role_id     = "${local.iam_role_id_prefix}_connector_secret_broker"
   title       = "Encois connector secret broker"
   description = "Create connector and webhook Secret Manager containers, add versions, and grant the private Agent Gateway access to the specific connector container."
   permissions = [
@@ -118,7 +118,7 @@ resource "google_project_iam_custom_role" "operations_job_runner" {
   count = length(var.retention_organization_ids) > 0 || length(var.integration_health_organization_ids) > 0 ? 1 : 0
 
   project     = var.project_id
-  role_id     = "${local.service_id}_ops_job_runner"
+  role_id     = "${local.iam_role_id_prefix}_ops_job_runner"
   title       = "Encois operations job runner"
   description = "Run only the explicitly managed Cloud Run operations jobs with tenant environment overrides."
   permissions = [
