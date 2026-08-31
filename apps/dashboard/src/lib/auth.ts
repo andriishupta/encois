@@ -7,7 +7,7 @@ import {
 import { initializeApp } from "firebase/app";
 import {
   type Auth,
-  browserSessionPersistence,
+  browserLocalPersistence,
   connectAuthEmulator,
   GoogleAuthProvider,
   getAuth,
@@ -19,7 +19,7 @@ import {
 } from "firebase/auth";
 
 export type AuthSession = {
-  /** The access token is kept in memory/session storage for API authentication. */
+  /** Hosted auth stores only a Firebase sentinel; bearer tokens are resolved in memory. */
   accessToken: string;
   userId?: string;
   organizationId?: string;
@@ -90,7 +90,7 @@ const authStateReady = new Promise<void>((resolve) => {
   authStateReadyResolve = resolve;
 });
 const persistenceReady = firebaseAuth
-  ? setPersistence(firebaseAuth, browserSessionPersistence)
+  ? setPersistence(firebaseAuth, browserLocalPersistence)
   : Promise.resolve();
 
 if (firebaseAuth) {
@@ -105,7 +105,7 @@ if (firebaseAuth) {
 
 function storedOrganizationId(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  const organizationId = window.sessionStorage
+  const organizationId = window.localStorage
     .getItem(AUTH_ORGANIZATION_KEY)
     ?.trim();
   return organizationId || undefined;
@@ -120,7 +120,7 @@ function storedPermissions(): PermissionKey[] {
   if (typeof window === "undefined") return [];
   try {
     return parsePermissions(
-      JSON.parse(window.sessionStorage.getItem(AUTH_PERMISSIONS_KEY) ?? "[]"),
+      JSON.parse(window.localStorage.getItem(AUTH_PERMISSIONS_KEY) ?? "[]"),
     );
   } catch {
     return [];
@@ -138,7 +138,7 @@ export function getAuthSession(): AuthSession | null {
 
   try {
     const value: unknown = JSON.parse(
-      window.sessionStorage.getItem(AUTH_SESSION_KEY) ?? "null",
+      window.localStorage.getItem(AUTH_SESSION_KEY) ?? "null",
     );
     if (
       isJsonObject(value) &&
@@ -206,13 +206,10 @@ export async function getAuthSessionToken(
 export function setAuthSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
 
-  window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+  window.localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
   if (session.organizationId)
-    window.sessionStorage.setItem(
-      AUTH_ORGANIZATION_KEY,
-      session.organizationId,
-    );
-  window.sessionStorage.setItem(
+    window.localStorage.setItem(AUTH_ORGANIZATION_KEY, session.organizationId);
+  window.localStorage.setItem(
     AUTH_PERMISSIONS_KEY,
     JSON.stringify(session.permissions),
   );
@@ -226,12 +223,12 @@ export function setAuthOrganizationId(
 ): void {
   if (typeof window === "undefined") return;
 
-  window.sessionStorage.setItem(AUTH_ORGANIZATION_KEY, organizationId);
-  window.sessionStorage.setItem(
+  window.localStorage.setItem(AUTH_ORGANIZATION_KEY, organizationId);
+  window.localStorage.setItem(
     AUTH_PERMISSIONS_KEY,
     JSON.stringify(permissions),
   );
-  window.sessionStorage.setItem(
+  window.localStorage.setItem(
     AUTH_SESSION_KEY,
     JSON.stringify({
       accessToken: FIREBASE_AUTH_SENTINEL,
@@ -250,9 +247,9 @@ export function setAuthOrganizationId(
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
 
-  window.sessionStorage.removeItem(AUTH_SESSION_KEY);
-  window.sessionStorage.removeItem(AUTH_ORGANIZATION_KEY);
-  window.sessionStorage.removeItem(AUTH_PERMISSIONS_KEY);
+  window.localStorage.removeItem(AUTH_SESSION_KEY);
+  window.localStorage.removeItem(AUTH_ORGANIZATION_KEY);
+  window.localStorage.removeItem(AUTH_PERMISSIONS_KEY);
   if (firebaseAuth?.currentUser) void signOut(firebaseAuth);
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
 }
